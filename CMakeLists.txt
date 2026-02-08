@@ -38,6 +38,16 @@ gb_external_libraries()
 set(GB_INCLUDE_DIRS "${CURRENT_DIR}")
 
 ###############################################################################
+# Reaper configuration
+###############################################################################
+
+if(NOT DEFINED ENV{REAPER_EXTENSION_SDK})
+  message(FATAL_ERROR "REAPER_EXTENSION_SDK environment variable not defined.")
+endif()
+file(TO_CMAKE_PATH "$ENV{REAPER_EXTENSION_SDK}" REAPER_EXTENSION_SDK)
+set(REAPER_PLUGINS_DIR "$ENV{APPDATA}/REAPER/UserPlugins")
+
+###############################################################################
 ## Sub Directories
 ###############################################################################
 
