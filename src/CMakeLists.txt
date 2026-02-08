@@ -12,4 +12,4 @@ set(jprsurf_DEPS
   gb_parse
 )
 
-gb_add_executable(jprsurf)
+gb_add_shared_library(jprsurf)

@@ -11,6 +11,7 @@ bin/Debug/
 bin/Release/
 bin/MinSizeRel/
 bin/RelWithDebInfo/
+bin/*.dll
 bin/*.exe
 bin/*.pdb
 bin/*.ilk
