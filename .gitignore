@@ -1,0 +1,19 @@
+# Wiki
+wiki/
+
+# Build directories
+build/
+.vs/
+out/
+
+# Output directories
+bin/Debug/
+bin/Release/
+bin/MinSizeRel/
+bin/RelWithDebInfo/
+bin/*.exe
+bin/*.pdb
+bin/*.ilk
+
+# Local files
+*.sublime-workspace
