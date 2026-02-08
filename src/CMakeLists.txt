@@ -15,8 +15,6 @@ set(jprsurf_SOURCE
 )
 
 set(jprsurf_DEPS
-  gb_file
-  gb_parse
   reaper_sdk
 )
 
