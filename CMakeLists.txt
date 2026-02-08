@@ -54,4 +54,4 @@ set(REAPER_PLUGINS_DIR "$ENV{APPDATA}/REAPER/UserPlugins")
 enable_testing()
 add_subdirectory(src)
 
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT jprsurf)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT reaper_jprsurf)

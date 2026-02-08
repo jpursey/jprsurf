@@ -9,20 +9,22 @@ set(reaper_sdk_SOURCE
 gb_add_library(reaper_sdk)
 target_include_directories(reaper_sdk PUBLIC "${REAPER_EXTENSION_SDK}/sdk")
 
-set(jprsurf_SOURCE
+set(reaper_jprsurf_SOURCE
   plugin_load.cc
   jprsurf.cc
 )
 
-set(jprsurf_DEPS
+set(reaper_jprsurf_DEPS
+  absl::log
+  absl::log_initialize
   reaper_sdk
 )
 
-gb_add_shared_library(jprsurf)
+gb_add_shared_library(reaper_jprsurf)
 
-add_custom_command(TARGET jprsurf POST_BUILD
+add_custom_command(TARGET reaper_jprsurf POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    $<TARGET_FILE:jprsurf>
-    "${REAPER_PLUGINS_DIR}/jprsurf.dll"
+    $<TARGET_FILE:reaper_jprsurf>
+    "${REAPER_PLUGINS_DIR}/reaper_jprsurf.dll"
     COMMENT "Deploying plugin to Reaper..."
 )

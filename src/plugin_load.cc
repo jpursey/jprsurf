@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
+#include "absl/log/log.h"
 #include "reaper_plugin_functions.h"
 
 namespace jpr {
@@ -20,6 +21,7 @@ bool OnPluginLoad(reaper_plugin_info_t* plugin_info) {
   if (REAPERAPI_LoadAPI(plugin_info->GetFunc) != 0) {
     return false;
   }
+  LOG(INFO) << "Plugin loaded successfully.";
   return true;
 }
 
