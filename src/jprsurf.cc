@@ -88,10 +88,6 @@ void Initialize() {
     g_file_sink = std::make_unique<FileSink>(log_path);
     absl::AddLogSink(g_file_sink.get());
     absl::SetMinLogLevel(absl::LogSeverityAtLeast::kInfo);
-
-    LOG(INFO) << ">>>>>>>> reaper_jprsurf extension loaded.";
-  } else {
-    LOG(ERROR) << "Failed to get APPDATA directory for logging.";
   }
 }
 
@@ -99,7 +95,6 @@ void Shutdown() {
   if (g_file_sink != nullptr) {
     absl::RemoveLogSink(g_file_sink.get());
     g_file_sink = nullptr;
-    LOG(INFO) << "<<<<<<<< reaper_jprsurf extension unloaded.";
   }
 }
 
