@@ -29,9 +29,8 @@ IReaperControlSurface* ControlSurface::Create(const char* type_string,
                                               const char* config_string,
                                               int* err_stats) {
   LOG(INFO) << "REAPER: Create(type_string="
-            << (type_string ? type_string : "(null)")
-            << ", config_string=" << (config_string ? config_string : "(null)")
-            << ")";
+            << (type_string ? type_string : "(null)") << ", config_string=\""
+            << (config_string ? config_string : "") << "\")";
   return new ControlSurface(type_string != nullptr ? type_string : "",
                             config_string != nullptr ? config_string : "");
 }
@@ -40,8 +39,8 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
                                 const char* init_config_string) {
   LOG(INFO) << "REAPER: ShowConfig(type_string="
             << (type_string ? type_string : "(null)") << ", parent=" << parent
-            << ", init_config_string="
-            << (init_config_string ? init_config_string : "(null)");
+            << ", init_config_string=\""
+            << (init_config_string ? init_config_string : "") << "\")";
   return 0;
 }
 
@@ -58,7 +57,10 @@ const char* ControlSurface::GetTypeString() { return "JPRSurf"; }
 
 const char* ControlSurface::GetDescString() { return kDescString; }
 
-const char* ControlSurface::GetConfigString() { return config_string_.c_str(); }
+const char* ControlSurface::GetConfigString() {
+  LOG(INFO) << "REAPER: GetConfigString() -> \"" << config_string_ << "\"";
+  return config_string_.c_str();
+}
 
 void ControlSurface::Run() {
   // TODO: Called ~30x/sec, poll and sync control surface state here
@@ -108,8 +110,8 @@ void ControlSurface::SetRepeatState(bool rep) {
 }
 
 void ControlSurface::SetTrackTitle(MediaTrack* track_id, const char* title) {
-  LOG(INFO) << "REAPER: SetTrackTitle(track_id=" << track_id
-            << ", title=" << (title ? title : "(null)") << ")";
+  LOG(INFO) << "REAPER: SetTrackTitle(track_id=" << track_id << ", title=\""
+            << (title != nullptr ? title : "(null)") << "\")";
 }
 
 bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
