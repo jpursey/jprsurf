@@ -10,6 +10,7 @@ gb_add_library(reaper_sdk)
 target_include_directories(reaper_sdk PUBLIC "${REAPER_EXTENSION_SDK}/sdk")
 
 set(reaper_jprsurf_SOURCE
+  control_surface.cc control_surface.h
   plugin_load.cc
   jprsurf.cc
 )
