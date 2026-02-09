@@ -11,7 +11,7 @@ target_include_directories(reaper_sdk PUBLIC "${REAPER_EXTENSION_SDK}/sdk")
 
 set(reaper_jprsurf_SOURCE
   control_surface.cc control_surface.h
-  plugin_load.cc
+  plugin.cc plugin.h
   jprsurf.cc
 )
 
