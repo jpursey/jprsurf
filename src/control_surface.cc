@@ -8,6 +8,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "gb/config/text_config.h"
 
 namespace jpr {
 
@@ -46,8 +47,15 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
 
 ControlSurface::ControlSurface(std::string type_string,
                                std::string config_string)
-    : type_string_(std::move(type_string)),
-      config_string_(std::move(config_string)) {
+    : type_string_(std::move(type_string)) {
+  if (!config_string.empty()) {
+    auto config = gb::ReadConfigFromText(config_string);
+    if (!config.ok()) {
+      LOG(ERROR) << "Failed to parse control surface config: "
+                 << config.status();
+      LOG(ERROR) << config_string;
+    }
+  }
   LOG(INFO) << "ControlSurface created";
 }
 
@@ -58,6 +66,7 @@ const char* ControlSurface::GetTypeString() { return "JPRSurf"; }
 const char* ControlSurface::GetDescString() { return kDescString; }
 
 const char* ControlSurface::GetConfigString() {
+  config_string_ = gb::WriteConfigToText(config_, gb::kCompactTextConfig);
   LOG(INFO) << "REAPER: GetConfigString() -> \"" << config_string_ << "\"";
   return config_string_.c_str();
 }

@@ -18,6 +18,7 @@ set(reaper_jprsurf_SOURCE
 set(reaper_jprsurf_DEPS
   absl::log
   absl::log_initialize
+  gb_config
   reaper_sdk
 )
 

@@ -9,6 +9,7 @@
 #include <string>
 
 #include "absl/types/span.h"
+#include "gb/config/config.h"
 #include "reaper_plugin.h"
 
 namespace jpr {
@@ -91,6 +92,7 @@ class ControlSurface final : private IReaperControlSurface {
 
   // State
   std::string type_string_;
+  gb::Config config_;
   std::string config_string_;
 };
 
