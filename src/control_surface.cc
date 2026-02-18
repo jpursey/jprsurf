@@ -476,7 +476,7 @@ void ControlSurface::OnTrackFxPresetChanged(MediaTrack* track_id, int fx_idx) {
 }
 
 bool ControlSurface::OnSupportsExtendedTouch() {
-  LOG(INFO) << "REAPER: OnSupportsExtendedTouch";
+  LOG(INFO) << "REAPER: OnSupportsExtendedTouch() -> false";
   return false;
 }
 
