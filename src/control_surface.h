@@ -9,6 +9,7 @@
 #include <string>
 
 #include "absl/types/span.h"
+#include "gb/base/flags.h"
 #include "gb/config/config.h"
 #include "reaper_plugin.h"
 
@@ -25,6 +26,22 @@ class ControlSurface final : private IReaperControlSurface {
   ~ControlSurface() override;
 
  private:
+  enum class TrackFlag {
+    kSelected,
+    kSolo,
+    kMute,
+    kRecArm,
+  };
+  using TrackFlags = gb::Flags<TrackFlag>;
+
+  struct TrackState {
+    MediaTrack* track_id;
+    std::string name;
+    TrackFlags flags;
+    double volume = 0.0;
+    double pan = 0.0;
+  };
+
   // Registration functions
   static IReaperControlSurface* Create(const char* type_string,
                                        const char* config_string,
@@ -90,10 +107,19 @@ class ControlSurface final : private IReaperControlSurface {
   bool OnSupportsExtendedTouch();
   void OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx);
 
+  // Implementation
+  TrackState* GetTrackState(MediaTrack* track_id);
+  void RebuildTracks();
+
   // State
   std::string type_string_;
   gb::Config config_;
   std::string config_string_;
+
+  // All tracks in order, not including the master track.
+  std::vector<TrackState> tracks_;
+  absl::flat_hash_map<MediaTrack*, int> track_indexes_;
+  MediaTrack* master_track_ = nullptr;
 };
 
 }  // namespace jpr
