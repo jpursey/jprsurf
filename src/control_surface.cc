@@ -79,7 +79,7 @@ const char* ControlSurface::GetConfigString() {
 }
 
 void ControlSurface::Run() {
-  // TODO: Called ~30x/sec, poll and sync control surface state here
+  runner_.Run();
 }
 
 void ControlSurface::SetTrackListChange() {

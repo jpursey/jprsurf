@@ -12,6 +12,7 @@
 #include "gb/base/flags.h"
 #include "gb/config/config.h"
 #include "reaper_plugin.h"
+#include "runner.h"
 
 namespace jpr {
 
@@ -115,6 +116,7 @@ class ControlSurface final : private IReaperControlSurface {
   std::string type_string_;
   gb::Config config_;
   std::string config_string_;
+  Runner runner_;
 
   // All tracks in order, not including the master track.
   std::vector<TrackState> tracks_;

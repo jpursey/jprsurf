@@ -13,6 +13,7 @@ set(reaper_jprsurf_SOURCE
   control_surface.cc control_surface.h
   plugin.cc plugin.h
   jprsurf.cc
+  runner.cc runner.h
 )
 
 set(reaper_jprsurf_DEPS
