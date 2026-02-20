@@ -109,6 +109,7 @@ class ControlSurface final : private IReaperControlSurface {
   void OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx);
 
   // Implementation
+  void ConnectDevices();
   TrackState* GetTrackState(MediaTrack* track_id);
   void RebuildTracks();
 

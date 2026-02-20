@@ -9,6 +9,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "gb/config/text_config.h"
+#include "midi_port.h"
 #include "reaper_plugin_functions.h"
 
 namespace jpr {
@@ -64,6 +65,8 @@ ControlSurface::ControlSurface(std::string type_string,
     }
   }
   LOG(INFO) << "ControlSurface created";
+
+  ConnectDevices();
 }
 
 ControlSurface::~ControlSurface() { LOG(INFO) << "ControlSurface destroyed"; }
@@ -554,6 +557,14 @@ void ControlSurface::OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx) {
 //------------------------------------------------------------------------------
 // Implementation
 //------------------------------------------------------------------------------
+
+void ControlSurface::ConnectDevices() {
+  auto ports = MidiIn::GetPorts();
+  for (const auto& port : MidiIn::GetPorts()) {
+    LOG(INFO) << "MIDI Input Port: " << port->GetName() << " (index "
+              << port->GetIndex() << ")";
+  }
+}
 
 ControlSurface::TrackState* ControlSurface::GetTrackState(
     MediaTrack* track_id) {
