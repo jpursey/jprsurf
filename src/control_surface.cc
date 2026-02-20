@@ -21,7 +21,7 @@ constexpr const char kDescString[] = "Jovian Path Control Surface";
 }  // namespace
 
 #if 0
-#define LOG_REAPER() LOG_REAPER() << ""
+#define LOG_REAPER() LOG(INFO) << "REAPER: "
 #else
 #define LOG_REAPER() VLOG(1) << "REAPER: "
 #endif
@@ -68,6 +68,10 @@ ControlSurface::ControlSurface(std::string type_string,
 
 ControlSurface::~ControlSurface() { LOG(INFO) << "ControlSurface destroyed"; }
 
+//------------------------------------------------------------------------------
+// Reaper callbacks
+//------------------------------------------------------------------------------
+
 const char* ControlSurface::GetTypeString() { return "JPRSurf"; }
 
 const char* ControlSurface::GetDescString() { return kDescString; }
@@ -78,44 +82,11 @@ const char* ControlSurface::GetConfigString() {
   return config_string_.c_str();
 }
 
-void ControlSurface::Run() {
-  runner_.Run();
-}
+void ControlSurface::Run() { runner_.Run(); }
 
 void ControlSurface::SetTrackListChange() {
   LOG_REAPER() << "SetTrackListChange";
   RebuildTracks();
-}
-
-ControlSurface::TrackState* ControlSurface::GetTrackState(
-    MediaTrack* track_id) {
-  auto it = track_indexes_.find(track_id);
-  if (it != track_indexes_.end()) {
-    return &tracks_[it->second];
-  }
-  return nullptr;
-}
-
-void ControlSurface::RebuildTracks() {
-  tracks_.clear();
-  track_indexes_.clear();
-
-  // Retrieve the master track first. It is not included in the track count.
-  master_track_ = GetMasterTrack(nullptr);
-
-  // Get all tracks in the project.
-  int track_count = CountTracks(nullptr);
-  LOG(INFO) << "RebuildTracks: Track count = " << track_count;
-  tracks_.reserve(track_count);
-  for (int i = 0; i < track_count; ++i) {
-    TrackState& track = tracks_.emplace_back();
-    track.track_id = GetTrack(nullptr, i);
-    track.name = GetTrackInfo(i, nullptr);
-    if (track.name.empty()) {
-      track.name = absl::StrCat(i + 1);
-    }
-    track_indexes_[track.track_id] = i;
-  }
 }
 
 void ControlSurface::SetSurfaceVolume(MediaTrack* track_id, double volume) {
@@ -578,6 +549,41 @@ bool ControlSurface::OnSupportsExtendedTouch() {
 void ControlSurface::OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx) {
   LOG_REAPER() << "OnMidiDeviceRemap(is_out=" << is_out
                << ", old_idx=" << old_idx << ", new_idx=" << new_idx << ")";
+}
+
+//------------------------------------------------------------------------------
+// Implementation
+//------------------------------------------------------------------------------
+
+ControlSurface::TrackState* ControlSurface::GetTrackState(
+    MediaTrack* track_id) {
+  auto it = track_indexes_.find(track_id);
+  if (it != track_indexes_.end()) {
+    return &tracks_[it->second];
+  }
+  return nullptr;
+}
+
+void ControlSurface::RebuildTracks() {
+  tracks_.clear();
+  track_indexes_.clear();
+
+  // Retrieve the master track first. It is not included in the track count.
+  master_track_ = GetMasterTrack(nullptr);
+
+  // Get all tracks in the project.
+  int track_count = CountTracks(nullptr);
+  LOG(INFO) << "RebuildTracks: Track count = " << track_count;
+  tracks_.reserve(track_count);
+  for (int i = 0; i < track_count; ++i) {
+    TrackState& track = tracks_.emplace_back();
+    track.track_id = GetTrack(nullptr, i);
+    track.name = GetTrackInfo(i, nullptr);
+    if (track.name.empty()) {
+      track.name = absl::StrCat(i + 1);
+    }
+    track_indexes_[track.track_id] = i;
+  }
 }
 
 }  // namespace jpr
