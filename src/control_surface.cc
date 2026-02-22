@@ -8,6 +8,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "child_track_iterator.h"
 #include "gb/config/text_config.h"
 #include "midi_port.h"
 #include "reaper_plugin_functions.h"
@@ -630,8 +631,7 @@ void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
   // Find the first track index relative to the parent track, if specified. If
   // the parent track is not found, reset the parent track and index to show all
   // tracks from the top.
-  int first_track = 0;
-  int view_track_depth = 0;
+  MediaTrack* parent_track_id = nullptr;
   if (track_list_view.parent_track.has_value()) {
     if (auto it = track_guid_to_id_.find(
             GuidToKey(track_list_view.parent_track.value()));
@@ -639,53 +639,29 @@ void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
       track_list_view.parent_track.reset();
       track_list_view.index = 0;
     } else {
-      MediaTrack* parent_track_id = it->second;
-
-      // If the parent track has children, this will be 1, otherwise it will be
-      // less than one. We set this to be one less, so that we won't find any
-      // tracks if there are no children of the parent, otherwise we will
-      // iterate until the folder depth goes below zero.
-      view_track_depth =
-          (int)GetMediaTrackInfo_Value(parent_track_id, "I_FOLDERDEPTH") - 1;
-
-      // The track number is 1-based, and we want the track index immediately
-      // following the parent track, so getting the track number of the parent
-      // track is this index (parent track index plus one).
-      first_track =
-          (int)GetMediaTrackInfo_Value(parent_track_id, "IP_TRACKNUMBER");
+      parent_track_id = it->second;
     }
   }
 
   // Get all tracks in the project until the view is full.
-  const int track_count = CountTracks(nullptr);
   int view_index = 0;
-  int child_index = 0;
-  for (int track_index = first_track;
-       view_track_depth >= 0 && track_index < track_count &&
-       view_index < track_view_count;
-       ++track_index) {
-    MediaTrack* track_id = GetTrack(nullptr, track_index);
-
-    if (view_track_depth == 0) {
-      if (child_index >= track_list_view.index) {
-        TrackView& track_view = track_views[view_index];
-        const GUID& track_guid = *GetTrackGUID(track_id);
-        if (track_guid != track_view.GetGuid() ||
-            track_view.state->track_id != track_id) {
-          LOG(INFO) << "Track view at index " << view_index
-                    << " changed, resetting to track index " << track_index;
-          RebuildTrackView(track_view, track_guid, track_id, track_index);
-        } else {
-          LOG(INFO) << "Track view at index " << view_index
-                    << " unchanged with track index " << track_index;
-        }
-        ++view_index;
+  for (ChildTrackIterator child(parent_track_id);
+       !child.AtEnd() && view_index < track_view_count; child.Next()) {
+    if (child.GetChildIndex() >= track_list_view.index) {
+      TrackView& track_view = track_views[view_index];
+      const GUID& track_guid = *GetTrackGUID(child.GetTrackId());
+      if (track_guid != track_view.GetGuid() ||
+          track_view.state->track_id != child.GetTrackId()) {
+        LOG(INFO) << "Track view at index " << view_index
+                  << " changed, resetting to track index " << child.GetIndex();
+        RebuildTrackView(track_view, track_guid, child.GetTrackId(),
+                         child.GetIndex());
+      } else {
+        LOG(INFO) << "Track view at index " << view_index
+                  << " unchanged with track index " << child.GetIndex();
       }
-      ++child_index;
+      ++view_index;
     }
-
-    // Update the view track depth based on folder depth change value.
-    view_track_depth += (int)GetMediaTrackInfo_Value(track_id, "I_FOLDERDEPTH");
   }
 
   // Any remaining views need to be reset, as they are no longer showing valid
@@ -736,40 +712,14 @@ void ControlSurface::RebuildTracks() {
 
 int ControlSurface::GetChildTrackIndex(MediaTrack* child_track_id) {
   MediaTrack* parent_track_id = GetParentTrack(child_track_id);
-
-  int first_track = 0;
-  int track_depth = 0;
-  if (parent_track_id != nullptr) {
-    // If the parent track has children, this will be 1, otherwise it will be
-    // less than one. We set this to be one less, so that we won't find any
-    // tracks if there are no children of the parent, otherwise we will
-    // iterate until the folder depth goes below zero.
-    track_depth =
-        (int)GetMediaTrackInfo_Value(parent_track_id, "I_FOLDERDEPTH") - 1;
-
-    // The track number is 1-based, and we want the track index immediately
-    // following the parent track, so getting the track number of the parent
-    // track is this index (parent track index plus one).
-    first_track =
-        (int)GetMediaTrackInfo_Value(parent_track_id, "IP_TRACKNUMBER");
-  }
-
-  const int track_count = CountTracks(nullptr);
-  int child_index = 0;
-  for (int track_index = first_track;
-       track_depth >= 0 && track_index < track_count; ++track_index) {
-    MediaTrack* track_id = GetTrack(nullptr, track_index);
-    if (track_id == child_track_id) {
-      return child_index;
+  for (ChildTrackIterator child(parent_track_id); !child.AtEnd();
+       child.Next()) {
+    if (child.GetTrackId() == child_track_id) {
+      return child.GetChildIndex();
     }
-    if (track_depth == 0) {
-      ++child_index;
-    }
-    track_depth += (int)GetMediaTrackInfo_Value(track_id, "I_FOLDERDEPTH");
   }
-
-  // Should never get here, since the track should have been found in the track
-  // list
+  // It will only get here if the child track ID does not exist in the track
+  // list at all, which would be a coding error.
   LOG(ERROR) << "Failed to find child track index for track_id="
              << child_track_id;
   return 0;
