@@ -10,6 +10,7 @@
 #include "absl/strings/str_join.h"
 #include "child_track_iterator.h"
 #include "control_input_midi.h"
+#include "control_output_midi.h"
 #include "gb/config/text_config.h"
 #include "midi_port.h"
 #include "reaper_plugin_functions.h"
@@ -140,17 +141,24 @@ void ControlSurface::SetSurfaceMute(MediaTrack* track_id, bool mute) {
 void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
   LOG_REAPER() << "SetSurfaceSelected(track_id=" << track_id
                << ", selected=" << selected << ")";
-  if (TrackState* track = GetTrackState(track_id);
-      track != nullptr &&
-      track->flags.IsSet(TrackFlag::kSelected) != selected) {
-    LOG(INFO) << "Track \"" << track->name << "\": Selected "
-              << track->flags.IsSet(TrackFlag::kSelected) << " -> " << selected;
-    if (selected) {
-      track->flags.Set(TrackFlag::kSelected);
-    } else {
-      track->flags.Clear(TrackFlag::kSelected);
-    }
+  TrackView* track_view = GetTrackView(track_id);
+  if (track_view == nullptr) {
+    return;
   }
+  auto& track = track_view->state;
+  if (!track.has_value() ||
+      track->flags.IsSet(TrackFlag::kSelected) == selected) {
+    return;
+  }
+
+  LOG(INFO) << "Track \"" << track->name << "\": Selected "
+            << track->flags.IsSet(TrackFlag::kSelected) << " -> " << selected;
+  if (selected) {
+    track->flags.Set(TrackFlag::kSelected);
+  } else {
+    track->flags.Clear(TrackFlag::kSelected);
+  }
+  track_view->select_output->SetValue(selected ? 1 : 0);
 }
 
 void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
@@ -582,13 +590,26 @@ ControlSurface::GuidKey ControlSurface::GuidToKey(const GUID& guid) {
 }
 
 void ControlSurface::ConnectDevices() {
-  auto ports = MidiIn::GetPorts();
   for (auto& port : MidiIn::GetPorts()) {
     LOG(INFO) << "MIDI Input Port: " << port->GetName() << " (index "
               << port->GetIndex() << ")";
     if (port->GetName() == "X-Touch") {
       xtouch_in_ = std::move(port);
-      xtouch_in_->Open(runner_);
+      if (!xtouch_in_->Open(runner_)) {
+        LOG(ERROR) << "Failed to open MIDI input port for X-Touch";
+        xtouch_in_.reset();
+      }
+    }
+  }
+  for (auto& port : MidiOut::GetPorts()) {
+    LOG(INFO) << "MIDI Output Port: " << port->GetName() << " (index "
+              << port->GetIndex() << ")";
+    if (port->GetName() == "X-Touch") {
+      xtouch_out_ = std::move(port);
+      if (!xtouch_out_->Open(runner_)) {
+        LOG(ERROR) << "Failed to open MIDI output port for X-Touch";
+        xtouch_out_.reset();
+      }
     }
   }
 }
@@ -604,18 +625,34 @@ void ControlSurface::InitViews() {
     LOG(WARNING)
         << "X-Touch MIDI input port not found, no tracks will be shown";
   }
-  uint8_t data1 = 0x18;  // First select button on the X-Touch.
+  uint8_t note = 0x18;  // First select button on the X-Touch.
   int view_index = 0;
   for (TrackView& track_view : track_list_view_.track_views) {
     track_view.select_input = std::make_unique<ControlPressInputMidiMsg>(
-        xtouch_in_.get(),
-        MidiMessage{.status = 0x90, .data1 = data1++, .data2 = 0x7F});
+        xtouch_in_.get(), MidiNoteOn(0, note, 0x7F));
     track_view.select_input->SetListener(
         [this, view_index](ControlPressInput* input) {
           OnTrackViewSelectPressed(track_list_view_.track_views[view_index]);
         });
+    track_view.select_output = std::make_unique<ControlDValueOutputMidiNote>(
+        xtouch_out_.get(), /*channel=*/0, note, /*use_note_off=*/false);
+    ++note;
     ++view_index;
   }
+}
+
+ControlSurface::TrackView* ControlSurface::GetTrackView(MediaTrack* track_id) {
+  if (master_track_view_.state.has_value() &&
+      master_track_view_.state->track_id == track_id) {
+    return &master_track_view_;
+  }
+  for (TrackView& track_view : track_list_view_.track_views) {
+    if (track_view.state.has_value() &&
+        track_view.state->track_id == track_id) {
+      return &track_view;
+    }
+  }
+  return nullptr;
 }
 
 ControlSurface::TrackState* ControlSurface::GetTrackState(
@@ -636,12 +673,37 @@ ControlSurface::TrackState* ControlSurface::GetTrackState(
 void ControlSurface::RebuildTrackView(TrackView& track_view,
                                       const GUID& track_guid,
                                       MediaTrack* track_id, int track_index) {
+  int flags = 0;
   track_view.state = TrackState{.guid = track_guid,
                                 .track_id = track_id,
-                                .name = GetTrackInfo(track_index, nullptr)};
+                                .name = GetTrackInfo(track_index, &flags)};
   if (track_view.state->name.empty()) {
     track_view.state->name = absl::StrCat("Track ", track_index + 1);
   }
+
+  bool selected = ((flags & 2) != 0);
+  if (selected) {
+    track_view.state->flags.Set(TrackFlag::kSelected);
+  }
+  if (track_view.select_output != nullptr) {
+    track_view.select_output->SetValue(selected ? 1 : 0);
+  }
+
+  bool mute = false;
+  GetTrackUIMute(track_id, &mute);
+  if (mute) {
+    track_view.state->flags.Set(TrackFlag::kMute);
+  }
+
+  if ((flags & 16) != 0) {
+    track_view.state->flags.Set(TrackFlag::kSolo);
+  }
+
+  if ((flags & 64) != 0) {
+    track_view.state->flags.Set(TrackFlag::kRecArm);
+  }
+
+  GetTrackUIVolPan(track_id, &track_view.state->volume, &track_view.state->pan);
 }
 
 void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
@@ -693,6 +755,7 @@ void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
       LOG(INFO) << "Track view at index " << view_index
                 << " changed, resetting to empty";
       track_view.state.reset();
+      track_view.select_output->SetValue(0);
     } else {
       LOG(INFO) << "Track view at index " << view_index
                 << " unchanged as empty";
@@ -798,6 +861,9 @@ void ControlSurface::OnTrackViewSelectPressed(TrackView& track_view) {
     state.flags.Set(TrackFlag::kSelected);
   }
   const bool selected = state.flags.IsSet(TrackFlag::kSelected);
+  if (track_view.select_output) {
+    track_view.select_output->SetValue(selected ? 1 : 0);
+  }
   SetTrackSelected(state.track_id, selected);
   LOG(INFO) << "OnTrackViewSelectPressed: track \"" << state.name << "\" ("
             << state.track_id << ") -> " << (selected ? "true" : "false");

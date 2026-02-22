@@ -10,6 +10,7 @@
 
 #include "absl/types/span.h"
 #include "control_input.h"
+#include "control_output.h"
 #include "gb/base/flags.h"
 #include "gb/config/config.h"
 #include "midi_port.h"
@@ -60,6 +61,7 @@ class ControlSurface final : private IReaperControlSurface {
 
     // TODO: Add control mappings that can are synchronized with the state.
     std::unique_ptr<ControlPressInput> select_input;
+    std::unique_ptr<ControlDValueOutput> select_output;
   };
 
   // This holds a set of consecutive track views, that are treated as a
@@ -147,6 +149,7 @@ class ControlSurface final : private IReaperControlSurface {
   GuidKey GuidToKey(const GUID& guid);
   void ConnectDevices();
   void InitViews();
+  TrackView* GetTrackView(MediaTrack* track_id);
   TrackState* GetTrackState(MediaTrack* track_id);
   void RebuildTrackView(TrackView& track_view, const GUID& track_guid,
                         MediaTrack* track_id, int track_index);
@@ -163,6 +166,7 @@ class ControlSurface final : private IReaperControlSurface {
   std::string config_string_;
   Runner runner_;
   std::unique_ptr<MidiIn> xtouch_in_;
+  std::unique_ptr<MidiOut> xtouch_out_;
 
   // Cached track state, updated whenever MediaTrack* pointers may be
   // invalidated (on a reset or track list change event).
