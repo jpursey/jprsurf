@@ -217,6 +217,14 @@ void ControlSurface::ResetCachedVolPanStates() {
 
 void ControlSurface::OnTrackSelection(MediaTrack* track_id) {
   LOG_REAPER() << "OnTrackSelection(track_id=" << track_id << ")";
+
+  int flags = 0;
+  const char* track_name =
+      GetTrackInfo(reinterpret_cast<INT_PTR>(track_id), &flags);
+  if (flags & 2) {
+    LOG(INFO) << "Track \"" << track_name << "\" selected";
+    EnsureTrackIsInView(track_list_view_, track_id);
+  }
 }
 
 bool ControlSurface::IsKeyDown(int key) {
@@ -651,6 +659,7 @@ void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
   // Get all tracks in the project until the view is full.
   const int track_count = CountTracks(nullptr);
   int view_index = 0;
+  int child_index = 0;
   for (int track_index = first_track;
        view_track_depth >= 0 && track_index < track_count &&
        view_index < track_view_count;
@@ -658,18 +667,21 @@ void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
     MediaTrack* track_id = GetTrack(nullptr, track_index);
 
     if (view_track_depth == 0) {
-      TrackView& track_view = track_views[view_index];
-      const GUID& track_guid = *GetTrackGUID(track_id);
-      if (track_guid != track_view.GetGuid() ||
-          track_view.state->track_id != track_id) {
-        LOG(INFO) << "Track view at index " << view_index
-                  << " changed, resetting to track index " << track_index;
-        RebuildTrackView(track_view, track_guid, track_id, track_index);
-      } else {
-        LOG(INFO) << "Track view at index " << view_index
-                  << " unchanged with track index " << track_index;
+      if (child_index >= track_list_view.index) {
+        TrackView& track_view = track_views[view_index];
+        const GUID& track_guid = *GetTrackGUID(track_id);
+        if (track_guid != track_view.GetGuid() ||
+            track_view.state->track_id != track_id) {
+          LOG(INFO) << "Track view at index " << view_index
+                    << " changed, resetting to track index " << track_index;
+          RebuildTrackView(track_view, track_guid, track_id, track_index);
+        } else {
+          LOG(INFO) << "Track view at index " << view_index
+                    << " unchanged with track index " << track_index;
+        }
+        ++view_index;
       }
-      ++view_index;
+      ++child_index;
     }
 
     // Update the view track depth based on folder depth change value.
@@ -720,6 +732,88 @@ void ControlSurface::RebuildTracks() {
 
   // Refresh all the track list views.
   RefreshTrackListView(track_list_view_);
+}
+
+int ControlSurface::GetChildTrackIndex(MediaTrack* child_track_id) {
+  MediaTrack* parent_track_id = GetParentTrack(child_track_id);
+
+  int first_track = 0;
+  int track_depth = 0;
+  if (parent_track_id != nullptr) {
+    // If the parent track has children, this will be 1, otherwise it will be
+    // less than one. We set this to be one less, so that we won't find any
+    // tracks if there are no children of the parent, otherwise we will
+    // iterate until the folder depth goes below zero.
+    track_depth =
+        (int)GetMediaTrackInfo_Value(parent_track_id, "I_FOLDERDEPTH") - 1;
+
+    // The track number is 1-based, and we want the track index immediately
+    // following the parent track, so getting the track number of the parent
+    // track is this index (parent track index plus one).
+    first_track =
+        (int)GetMediaTrackInfo_Value(parent_track_id, "IP_TRACKNUMBER");
+  }
+
+  const int track_count = CountTracks(nullptr);
+  int child_index = 0;
+  for (int track_index = first_track;
+       track_depth >= 0 && track_index < track_count; ++track_index) {
+    MediaTrack* track_id = GetTrack(nullptr, track_index);
+    if (track_id == child_track_id) {
+      return child_index;
+    }
+    if (track_depth == 0) {
+      ++child_index;
+    }
+    track_depth += (int)GetMediaTrackInfo_Value(track_id, "I_FOLDERDEPTH");
+  }
+
+  // Should never get here, since the track should have been found in the track
+  // list
+  LOG(ERROR) << "Failed to find child track index for track_id="
+             << child_track_id;
+  return 0;
+}
+
+void ControlSurface::EnsureTrackIsInView(TrackListView& track_list_view,
+                                         MediaTrack* track_id) {
+  // First see if the track is already in view, and if so, nothing to do.
+  if (GetTrackState(track_id) != nullptr) {
+    return;
+  }
+
+  // First make sure the view parent is the track's parent.
+  MediaTrack* parent_track_id = GetParentTrack(track_id);
+  const GUID& parent_track_guid =
+      parent_track_id != nullptr ? *GetTrackGUID(parent_track_id) : kEmptyGuid;
+  const GUID& view_parent_guid = track_list_view.parent_track.has_value()
+                                     ? track_list_view.parent_track.value()
+                                     : kEmptyGuid;
+  int view_count = track_list_view.track_views.size();
+  int track_index = GetChildTrackIndex(track_id);
+  if (parent_track_guid != view_parent_guid) {
+    // The track's parent is different from the view's parent, so update the
+    // parent and set the selected track as far to the right as possible.
+    if (parent_track_id == nullptr) {
+      track_list_view.parent_track = std::nullopt;
+    } else {
+      track_list_view.parent_track = parent_track_guid;
+    }
+    track_list_view.index = std::max(0, track_index - view_count + 1);
+    RefreshTrackListView(track_list_view);
+    return;
+  }
+
+  // The track's parent is the same as the view's parent, so just need to make
+  // sure the track is within the view index range, and if not, update the index
+  // to show the track.
+  if (track_index < track_list_view.index) {
+    track_list_view.index = track_index;
+    RefreshTrackListView(track_list_view);
+  } else if (track_index >= track_list_view.index + view_count) {
+    track_list_view.index = track_index - view_count + 1;
+    RefreshTrackListView(track_list_view);
+  }
 }
 
 }  // namespace jpr

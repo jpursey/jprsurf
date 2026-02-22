@@ -149,6 +149,9 @@ class ControlSurface final : private IReaperControlSurface {
                         MediaTrack* track_id, int track_index);
   void RefreshTrackListView(TrackListView& track_list_view);
   void RebuildTracks();
+  int GetChildTrackIndex(MediaTrack* track_id);
+  void EnsureTrackIsInView(TrackListView& track_list_view,
+                           MediaTrack* track_id);
 
   // State
   std::string type_string_;
