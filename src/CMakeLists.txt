@@ -11,6 +11,8 @@ target_include_directories(reaper_sdk PUBLIC "${REAPER_EXTENSION_SDK}/sdk")
 
 set(reaper_jprsurf_SOURCE
   child_track_iterator.cc child_track_iterator.h
+  control_input.cc control_input.h
+  control_input_midi.cc control_input_midi.h
   control_surface.cc control_surface.h
   midi_port.cc midi_port.h
   plugin.cc plugin.h
