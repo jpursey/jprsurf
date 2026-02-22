@@ -162,10 +162,9 @@ bool IsSupportedCc(uint8_t cc) {
          (cc >= 89 && cc <= 97) || (cc >= 102 && cc <= 119);
 }
 
-// Note: We explicitly do NOT treat note-on with velocity 0 as note-off.
-// This is an intentional simplification that may be revisited later.
+// A note-on with velocity 0 is treated as a note-off per the MIDI spec.
 bool IsNoteOn(const MidiMessage& message) {
-  return (message.status & 0xF0) == 0x90;
+  return (message.status & 0xF0) == 0x90 && message.data2 != 0;
 }
 
 // State key encoding: type_id (2 bits) | channel (4 bits) | value (8 bits),
