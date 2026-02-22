@@ -9,6 +9,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "child_track_iterator.h"
+#include "control_input_midi.h"
 #include "gb/config/text_config.h"
 #include "midi_port.h"
 #include "reaper_plugin_functions.h"
@@ -582,9 +583,13 @@ ControlSurface::GuidKey ControlSurface::GuidToKey(const GUID& guid) {
 
 void ControlSurface::ConnectDevices() {
   auto ports = MidiIn::GetPorts();
-  for (const auto& port : MidiIn::GetPorts()) {
+  for (auto& port : MidiIn::GetPorts()) {
     LOG(INFO) << "MIDI Input Port: " << port->GetName() << " (index "
               << port->GetIndex() << ")";
+    if (port->GetName() == "X-Touch") {
+      xtouch_in_ = std::move(port);
+      xtouch_in_->Open(runner_);
+    }
   }
 }
 
@@ -595,6 +600,22 @@ void ControlSurface::InitViews() {
 
   // TODO: Just starting with the main X-Touch for now, which has 8 tracks.
   track_list_view_.track_views.resize(8);
+  if (xtouch_in_ == nullptr) {
+    LOG(WARNING)
+        << "X-Touch MIDI input port not found, no tracks will be shown";
+  }
+  uint8_t data1 = 0x18;  // First select button on the X-Touch.
+  int view_index = 0;
+  for (TrackView& track_view : track_list_view_.track_views) {
+    track_view.select_input = std::make_unique<ControlPressInputMidiMsg>(
+        xtouch_in_.get(),
+        MidiMessage{.status = 0x90, .data1 = data1++, .data2 = 0x7F});
+    track_view.select_input->SetListener(
+        [this, view_index](ControlPressInput* input) {
+          OnTrackViewSelectPressed(track_list_view_.track_views[view_index]);
+        });
+    ++view_index;
+  }
 }
 
 ControlSurface::TrackState* ControlSurface::GetTrackState(
@@ -764,6 +785,22 @@ void ControlSurface::EnsureTrackIsInView(TrackListView& track_list_view,
     track_list_view.index = track_index - view_count + 1;
     RefreshTrackListView(track_list_view);
   }
+}
+
+void ControlSurface::OnTrackViewSelectPressed(TrackView& track_view) {
+  if (!track_view.state.has_value()) {
+    return;
+  }
+  auto& state = *track_view.state;
+  if (state.flags.IsSet(TrackFlag::kSelected)) {
+    state.flags.Clear(TrackFlag::kSelected);
+  } else {
+    state.flags.Set(TrackFlag::kSelected);
+  }
+  const bool selected = state.flags.IsSet(TrackFlag::kSelected);
+  SetTrackSelected(state.track_id, selected);
+  LOG(INFO) << "OnTrackViewSelectPressed: track \"" << state.name << "\" ("
+            << state.track_id << ") -> " << (selected ? "true" : "false");
 }
 
 }  // namespace jpr

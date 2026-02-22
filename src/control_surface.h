@@ -9,8 +9,10 @@
 #include <string>
 
 #include "absl/types/span.h"
+#include "control_input.h"
 #include "gb/base/flags.h"
 #include "gb/config/config.h"
+#include "midi_port.h"
 #include "reaper_plugin.h"
 #include "runner.h"
 
@@ -57,6 +59,7 @@ class ControlSurface final : private IReaperControlSurface {
     std::optional<TrackState> state;
 
     // TODO: Add control mappings that can are synchronized with the state.
+    std::unique_ptr<ControlPressInput> select_input;
   };
 
   // This holds a set of consecutive track views, that are treated as a
@@ -152,12 +155,14 @@ class ControlSurface final : private IReaperControlSurface {
   int GetChildTrackIndex(MediaTrack* track_id);
   void EnsureTrackIsInView(TrackListView& track_list_view,
                            MediaTrack* track_id);
+  void OnTrackViewSelectPressed(TrackView& track_view);
 
   // State
   std::string type_string_;
   gb::Config config_;
   std::string config_string_;
   Runner runner_;
+  std::unique_ptr<MidiIn> xtouch_in_;
 
   // Cached track state, updated whenever MediaTrack* pointers may be
   // invalidated (on a reset or track list change event).
