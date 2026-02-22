@@ -20,7 +20,7 @@ ControlDValueOutputMidiNote::ControlDValueOutputMidiNote(MidiOut* midi_out,
 ControlDValueOutputMidiNote::~ControlDValueOutputMidiNote() = default;
 
 void ControlDValueOutputMidiNote::OnValueChanged(int value) {
-  midi_out_->QueueMessage(messages_[value]);
+  midi_out_->UpdateState(messages_[value]);
 }
 
 }  // namespace jpr
