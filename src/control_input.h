@@ -10,8 +10,6 @@
 
 namespace jpr {
 
-class ControlInput;
-
 //==============================================================================
 // ControlInput
 //==============================================================================
@@ -23,8 +21,16 @@ class ControlInput {
   // The type of input, which defines the behavior of the control. This directly
   // corresponds to a derived class which implements the input.
   enum class Type {
+    // Continusous absolute value in the range [0.0, 1.0]. Implemented by
+    // ControlValueInput.
     kValue,
+
+    // Relative value which can be positive or negative. Implemented by
+    // ControlDeltaInput.
     kDelta,
+
+    // Value that can be pressed and optionally released. Implemented by
+    // ControlPressInput.
     kPress,
   };
 
