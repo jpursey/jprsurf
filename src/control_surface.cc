@@ -16,6 +16,7 @@ namespace jpr {
 
 namespace {
 
+const GUID kEmptyGuid = {};
 constexpr const char kTypeString[] = "JPRSurf";
 constexpr const char kDescString[] = "Jovian Path Control Surface";
 
@@ -26,6 +27,10 @@ constexpr const char kDescString[] = "Jovian Path Control Surface";
 #else
 #define LOG_REAPER() VLOG(1) << "REAPER: "
 #endif
+
+const GUID& ControlSurface::TrackView::GetGuid() const {
+  return state.has_value() ? state->guid : kEmptyGuid;
+}
 
 reaper_csurf_reg_t* ControlSurface::GetControlSurfaceReg() {
   static reaper_csurf_reg_t reg = {kTypeString, kDescString,
@@ -67,6 +72,7 @@ ControlSurface::ControlSurface(std::string type_string,
   LOG(INFO) << "ControlSurface created";
 
   ConnectDevices();
+  InitViews();
 }
 
 ControlSurface::~ControlSurface() { LOG(INFO) << "ControlSurface destroyed"; }
@@ -558,6 +564,13 @@ void ControlSurface::OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx) {
 // Implementation
 //------------------------------------------------------------------------------
 
+ControlSurface::GuidKey ControlSurface::GuidToKey(const GUID& guid) {
+  GuidKey key;
+  static_assert(sizeof(GuidKey) == sizeof(GUID));
+  std::memcpy(key.data(), &guid, sizeof(GUID));
+  return key;
+}
+
 void ControlSurface::ConnectDevices() {
   auto ports = MidiIn::GetPorts();
   for (const auto& port : MidiIn::GetPorts()) {
@@ -566,35 +579,147 @@ void ControlSurface::ConnectDevices() {
   }
 }
 
+void ControlSurface::InitViews() {
+  // Note: For now we are just hard-coding views to my development setup, which
+  // is an X-Touch and X-Touch Extender, with the X-Touch extender to the left
+  // of the X-Touch.
+
+  // TODO: Just starting with the main X-Touch for now, which has 8 tracks.
+  track_list_view_.track_views.resize(8);
+}
+
 ControlSurface::TrackState* ControlSurface::GetTrackState(
     MediaTrack* track_id) {
-  auto it = track_indexes_.find(track_id);
-  if (it != track_indexes_.end()) {
-    return &tracks_[it->second];
+  if (master_track_view_.state.has_value() &&
+      master_track_view_.state->track_id == track_id) {
+    return &master_track_view_.state.value();
+  }
+  for (auto& track_view : track_list_view_.track_views) {
+    if (track_view.state.has_value() &&
+        track_view.state->track_id == track_id) {
+      return &track_view.state.value();
+    }
   }
   return nullptr;
 }
 
-void ControlSurface::RebuildTracks() {
-  tracks_.clear();
-  track_indexes_.clear();
-
-  // Retrieve the master track first. It is not included in the track count.
-  master_track_ = GetMasterTrack(nullptr);
-
-  // Get all tracks in the project.
-  int track_count = CountTracks(nullptr);
-  LOG(INFO) << "RebuildTracks: Track count = " << track_count;
-  tracks_.reserve(track_count);
-  for (int i = 0; i < track_count; ++i) {
-    TrackState& track = tracks_.emplace_back();
-    track.track_id = GetTrack(nullptr, i);
-    track.name = GetTrackInfo(i, nullptr);
-    if (track.name.empty()) {
-      track.name = absl::StrCat(i + 1);
-    }
-    track_indexes_[track.track_id] = i;
+void ControlSurface::RebuildTrackView(TrackView& track_view,
+                                      const GUID& track_guid,
+                                      MediaTrack* track_id, int track_index) {
+  track_view.state = TrackState{.guid = track_guid,
+                                .track_id = track_id,
+                                .name = GetTrackInfo(track_index, nullptr)};
+  if (track_view.state->name.empty()) {
+    track_view.state->name = absl::StrCat("Track ", track_index + 1);
   }
+}
+
+void ControlSurface::RefreshTrackListView(TrackListView& track_list_view) {
+  auto& track_views = track_list_view.track_views;
+  const int track_view_count = track_views.size();
+  LOG(INFO) << "RefreshTrackListView: view count = " << track_view_count;
+
+  // Find the first track index relative to the parent track, if specified. If
+  // the parent track is not found, reset the parent track and index to show all
+  // tracks from the top.
+  int first_track = 0;
+  int view_track_depth = 0;
+  if (track_list_view.parent_track.has_value()) {
+    if (auto it = track_guid_to_id_.find(
+            GuidToKey(track_list_view.parent_track.value()));
+        it == track_guid_to_id_.end()) {
+      track_list_view.parent_track.reset();
+      track_list_view.index = 0;
+    } else {
+      MediaTrack* parent_track_id = it->second;
+
+      // If the parent track has children, this will be 1, otherwise it will be
+      // less than one. We set this to be one less, so that we won't find any
+      // tracks if there are no children of the parent, otherwise we will
+      // iterate until the folder depth goes below zero.
+      view_track_depth =
+          (int)GetMediaTrackInfo_Value(parent_track_id, "I_FOLDERDEPTH") - 1;
+
+      // The track number is 1-based, and we want the track index immediately
+      // following the parent track, so getting the track number of the parent
+      // track is this index (parent track index plus one).
+      first_track =
+          (int)GetMediaTrackInfo_Value(parent_track_id, "IP_TRACKNUMBER");
+    }
+  }
+
+  // Get all tracks in the project until the view is full.
+  const int track_count = CountTracks(nullptr);
+  int view_index = 0;
+  for (int track_index = first_track;
+       view_track_depth >= 0 && track_index < track_count &&
+       view_index < track_view_count;
+       ++track_index) {
+    MediaTrack* track_id = GetTrack(nullptr, track_index);
+
+    if (view_track_depth == 0) {
+      TrackView& track_view = track_views[view_index];
+      const GUID& track_guid = *GetTrackGUID(track_id);
+      if (track_guid != track_view.GetGuid() ||
+          track_view.state->track_id != track_id) {
+        LOG(INFO) << "Track view at index " << view_index
+                  << " changed, resetting to track index " << track_index;
+        RebuildTrackView(track_view, track_guid, track_id, track_index);
+      } else {
+        LOG(INFO) << "Track view at index " << view_index
+                  << " unchanged with track index " << track_index;
+      }
+      ++view_index;
+    }
+
+    // Update the view track depth based on folder depth change value.
+    view_track_depth += (int)GetMediaTrackInfo_Value(track_id, "I_FOLDERDEPTH");
+  }
+
+  // Any remaining views need to be reset, as they are no longer showing valid
+  // tracks.
+  for (; view_index < track_view_count; ++view_index) {
+    TrackView& track_view = track_views[view_index];
+    if (track_view.state.has_value()) {
+      LOG(INFO) << "Track view at index " << view_index
+                << " changed, resetting to empty";
+      track_view.state.reset();
+    } else {
+      LOG(INFO) << "Track view at index " << view_index
+                << " unchanged as empty";
+    }
+  }
+}
+
+void ControlSurface::RebuildTracks() {
+  const int track_count = CountTracks(nullptr);
+  LOG(INFO) << "RebuildTracks: Track count = " << track_count;
+
+  // All MediaTrack* IDs may no longer be valid, so we need to rebuild the
+  // entire map of MediaTrack* to GUID.
+  track_guid_to_id_.clear();
+  for (int i = 0; i < track_count; ++i) {
+    MediaTrack* track_id = GetTrack(nullptr, i);
+    if (track_id == nullptr) {
+      LOG(ERROR) << "GetTrack returned null for index " << i;
+    } else {
+      track_guid_to_id_[GuidToKey(*GetTrackGUID(track_id))] = track_id;
+    }
+  }
+  MediaTrack* master_track_id = GetMasterTrack(nullptr);
+  const GUID& master_guid = *GetTrackGUID(master_track_id);
+  track_guid_to_id_[GuidToKey(master_guid)] = master_track_id;
+
+  // Update the master track state, if needed
+  const GUID& old_master_guid = master_track_view_.GetGuid();
+  if (master_guid != old_master_guid ||
+      master_track_view_.state->track_id != master_track_id) {
+    LOG(INFO) << "Master track changed, resetting";
+    RebuildTrackView(master_track_view_, master_guid, master_track_id, -1);
+  }
+
+  // Refresh all the track list views.
+  RefreshTrackListView(track_list_view_);
 }
 
 }  // namespace jpr
