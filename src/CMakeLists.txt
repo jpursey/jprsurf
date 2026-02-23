@@ -17,6 +17,7 @@ set(reaper_jprsurf_SOURCE
   control_output.cc control_output.h
   control_output_midi.cc control_output_midi.h
   control_surface.cc control_surface.h
+  device.cc device.h
   midi_message.h
   midi_port.cc midi_port.h
   plugin.cc plugin.h
