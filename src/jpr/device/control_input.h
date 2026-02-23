@@ -6,7 +6,7 @@
 #pragma once
 
 #include "absl/functional/any_invocable.h"
-#include "reaper_plugin.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 

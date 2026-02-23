@@ -12,7 +12,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/types/span.h"
-#include "control.h"
+#include "jpr/device/control.h"
 
 namespace jpr {
 

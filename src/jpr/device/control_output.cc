@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "control_output.h"
+#include "jpr/device/control_output.h"
 
 #include <algorithm>
 

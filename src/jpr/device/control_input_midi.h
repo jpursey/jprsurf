@@ -7,8 +7,8 @@
 
 #include <optional>
 
-#include "control_input.h"
-#include "midi_port.h"
+#include "jpr/common/midi_port.h"
+#include "jpr/device/control_input.h"
 
 namespace jpr {
 

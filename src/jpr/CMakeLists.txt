@@ -3,10 +3,6 @@
 ## Use of this source code is governed by an MIT-style License that can be found
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-set(reaper_sdk_SOURCE
-  reaper_sdk.cc
-)
-gb_add_library(reaper_sdk)
-target_include_directories(reaper_sdk PUBLIC "${REAPER_EXTENSION_SDK}")
-
-add_subdirectory(jpr)
+add_subdirectory(common)
+add_subdirectory(device)
+add_subdirectory(plugin)

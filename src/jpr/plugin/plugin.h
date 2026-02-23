@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "reaper_plugin.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 

@@ -4,4 +4,4 @@
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 #define REAPERAPI_IMPLEMENT
-#include "reaper_plugin_functions.h"
+#include "sdk/reaper_plugin_functions.h"

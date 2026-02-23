@@ -9,9 +9,9 @@
 #include <optional>
 #include <vector>
 
-#include "midi_message.h"
-#include "reaper_plugin.h"
-#include "runner.h"
+#include "jpr/common/midi_message.h"
+#include "jpr/common/runner.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 

@@ -9,8 +9,8 @@
 #include <string>
 #include <string_view>
 
-#include "control_input.h"
-#include "control_output.h"
+#include "jpr/device/control_input.h"
+#include "jpr/device/control_output.h"
 
 namespace jpr {
 

@@ -3,9 +3,9 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "runner.h"
+#include "jpr/common/runner.h"
 
-#include "reaper_plugin_functions.h"
+#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 

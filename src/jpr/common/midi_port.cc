@@ -3,12 +3,12 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "midi_port.h"
+#include "jpr/common/midi_port.h"
 
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
-#include "reaper_plugin_functions.h"
+#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 

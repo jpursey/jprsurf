@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "control_output.h"
-#include "midi_port.h"
+#include "jpr/common/midi_port.h"
+#include "jpr/device/control_output.h"
 
 namespace jpr {
 

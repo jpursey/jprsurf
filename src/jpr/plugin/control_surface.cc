@@ -3,17 +3,17 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "control_surface.h"
+#include "jpr/plugin/control_surface.h"
 
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
-#include "child_track_iterator.h"
-#include "control_input_midi.h"
-#include "control_output_midi.h"
 #include "gb/config/text_config.h"
-#include "midi_port.h"
-#include "reaper_plugin_functions.h"
+#include "jpr/common/child_track_iterator.h"
+#include "jpr/common/midi_port.h"
+#include "jpr/device/control_input_midi.h"
+#include "jpr/device/control_output_midi.h"
+#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 

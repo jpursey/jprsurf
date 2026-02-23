@@ -9,13 +9,13 @@
 #include <string>
 
 #include "absl/types/span.h"
-#include "control_input.h"
-#include "control_output.h"
 #include "gb/base/flags.h"
 #include "gb/config/config.h"
-#include "midi_port.h"
-#include "reaper_plugin.h"
-#include "runner.h"
+#include "jpr/common/midi_port.h"
+#include "jpr/common/runner.h"
+#include "jpr/device/control_input.h"
+#include "jpr/device/control_output.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 

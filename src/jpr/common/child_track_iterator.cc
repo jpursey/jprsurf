@@ -3,10 +3,10 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "child_track_iterator.h"
+#include "jpr/common/child_track_iterator.h"
 
 #include "absl/log/log.h"
-#include "reaper_plugin_functions.h"
+#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 
