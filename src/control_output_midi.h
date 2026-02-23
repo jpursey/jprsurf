@@ -10,6 +10,13 @@
 
 namespace jpr {
 
+// This control output is an on/off discrete value that maps to a MIDI note
+// on/off message.
+//
+// The value 0 corresponds to note off (or note on with velocity 0), and the
+// value 1 corresponds to note on with velocity 127. This is generally used for
+// controls that only have two states, such as an indicator LED, but can be
+// used for any control that can be represented with a discrete value.
 class ControlDValueOutputMidiNote : public ControlDValueOutput {
  public:
   ControlDValueOutputMidiNote(MidiOut* midi_out, uint8_t channel, uint8_t note,
