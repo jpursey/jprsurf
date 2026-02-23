@@ -14,8 +14,40 @@
 
 namespace jpr {
 
+//==============================================================================
+// Control
+//==============================================================================
+
+// A control represents a single physical control on a device, such as a button,
+// a fader, a knob, or a display.
+//
+// It defines the inputs and outputs of the control, and the behavior of the
+// outputs relative to the inputs. A control may have multiple inputs and
+// outputs, but it should be configured with the minimum set of inputs and
+// outputs that best describes the hardware control.
+//
+// Examples:
+//   - A simple button that doesn't light up would be a control with a Press
+//     input and no outputs.
+//   - A simple button with an indicator light would be a control with a Press
+//     input and a DValue output for the light.
+//   - A motorized touch knob or fader would be a control with a Value input and
+//     a Press input for the touch signal, and a Value output for the motorized
+//     feedback.
+//   - An endless encoder with a light ring would be a control with a single
+//     Delta input and a DValue output for the light ring.
+//   - A text screen display would be a control with a Text output and no
+//     inputs.
 class Control {
  public:
+  //----------------------------------------------------------------------------
+  // Options
+  //----------------------------------------------------------------------------
+
+  // The output mode for a control defines how the output(s) of the control
+  // behave relative to the inputs. This is important for controls that have
+  // outputs that directly affect the physical control and/or the hardware input
+  // state.
   enum class OutputMode {
     // The output is completely independent of the input, and can be set at any
     // time without affecting the physical control or subsequent input values.
@@ -24,8 +56,8 @@ class Control {
     kIndependent,
 
     // The output is directly tied to the input, and setting the output will
-    // affect the input value. If a press_input is present, the ouptut will only
-    // be updated when it is not pressed. If no press_input is present, the
+    // affect the input value. If a Press input is present, the output will only
+    // be updated when it is not pressed. If no Press input is present, the
     // output will be delayed until after input events have stopped for several
     // frames.
     kDependent,
@@ -33,7 +65,7 @@ class Control {
     // The output is directly tied to the input, and setting the output will
     // affect the input value. This is typically used for motorized faders or
     // other feedback-driven controls. This is behaviorly the same as
-    // kDependent, except that if a press_input is not present, a much longer
+    // kDependent, except that if a Press input is not present, a much longer
     // delay is used after input events have stopped.
     kMotorized,
   };
@@ -57,13 +89,13 @@ class Control {
     //   - Only one input set: This is the most common case, the input describes
     //     the hardware capabilities. A pot or fader is a usually value input,
     //     an endless encoder is a delta input, and a button is a press input.
-    //   - If both a value and delta input are specified, then the control
+    //   - If both a Value and Delta input are specified, then the control
     //     supports both an absolute min/max value and it can emulate an encoder
     //     delta. For instance, some endless encoders have an internal "value"
     //     tracked on the hardware, but also will continue sending the min or
     //     max value when twisted farther. This allows delta motion to be
     //     emulated.
-    //   - If a press input is specified along with either a value or delta
+    //   - If a Press input is specified along with either a Value or Delta
     //     input, then the control may be touched or pressed. This configuration
     //     is recommended only in combination with the kDependent or kMotorized
     //     output modes, and only when it is a true capacitive touch control.
@@ -75,8 +107,8 @@ class Control {
     // Control mappings from Reaper parameters and actions can generally work
     // with any input type, but will choose the input(s) that best maps to the
     // Reaper parameter being mapped. For instance, the "pan" mapping will
-    // prefer a value input over a delta input, over a press input. The "play"
-    // action however will prefer press over delta over value. In both cases,
+    // prefer a Value input over a Delta input, over a Press input. The "play"
+    // action however will prefer Press over Delta over Value. In both cases,
     // they will all work however.
     std::unique_ptr<ControlValueInput> value_input;
     std::unique_ptr<ControlDeltaInput> delta_input;
@@ -97,7 +129,7 @@ class Control {
     // configured with the minimum set of outputs that best describes the
     // hardware control.
     //
-    // Control mappings from Reaper parameters and actions with status values
+    // Control mappings from Reaper parameters and actions (with status values)
     // will generally work with any output type. However, each control mapping
     // will choose the output that best maps to what is being mapped. For
     // instance, numeric value mappings will always prefer a DValue over a
@@ -114,11 +146,19 @@ class Control {
     std::unique_ptr<ControlColorOutput> color_output;
   };
 
+  //----------------------------------------------------------------------------
+  // Construction / Destruction
+  //----------------------------------------------------------------------------
+
   // Constructs a control with the given options.
   explicit Control(Options options) : options_(std::move(options)) {}
   Control(const Control&) = delete;
   Control& operator=(const Control&) = delete;
   virtual ~Control() = default;
+
+  //----------------------------------------------------------------------------
+  // Accessors
+  //----------------------------------------------------------------------------
 
   // Access to configuration options for this control.
   std::string_view GetName() const { return options_.name; }
