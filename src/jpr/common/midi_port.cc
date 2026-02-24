@@ -281,6 +281,10 @@ void MidiOut::QueueMessage(const MidiMessage& message) {
   }
 }
 
+bool MidiOut::IsStateMessage(const MidiMessage& message) const {
+  return GetStateInfo(message).has_value();
+}
+
 void MidiOut::UpdateState(const MidiMessage& message) {
   if (!run_handle_.IsRegistered()) {
     return;

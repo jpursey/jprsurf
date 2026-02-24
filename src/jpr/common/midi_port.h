@@ -157,6 +157,13 @@ class MidiOut final {
   // sent.
   void QueueMessage(const MidiMessage& message);
 
+  // Returns true if the given MIDI message corresponds to a supported state
+  // type that can be tracked by UpdateState().
+  //
+  // Callers can use this to determine whether to use UpdateState() or
+  // QueueMessage() for a given message.
+  bool IsStateMessage(const MidiMessage& message) const;
+
   // Updates the internal state of a MIDI note or control value.
   //
   // This does nothing if the port is not currently open.
