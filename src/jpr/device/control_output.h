@@ -7,6 +7,8 @@
 
 #include <string_view>
 
+#include "jpr/common/color.h"
+
 namespace jpr {
 
 //==============================================================================
@@ -150,14 +152,6 @@ class ControlTextOutput : public ControlOutput {
 //==============================================================================
 // ControlColorOutput
 //==============================================================================
-
-// This struct represents a color value, with 8 bits for each of red, green, and
-// blue.
-struct Color {
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-};
 
 // This control output type represents a color value.
 //
