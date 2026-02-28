@@ -12,7 +12,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/device.h"
-#include "jpr/view/view.h"
+#include "jpr/scene/view.h"
 
 namespace jpr {
 

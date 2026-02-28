@@ -3,12 +3,12 @@
 ## Use of this source code is governed by an MIT-style License that can be found
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-set(jpr_view_SOURCE
+set(jpr_scene_SOURCE
   scene.cc scene.h
   view.cc view.h
 )
 
-set(jpr_view_DEPS
+set(jpr_scene_DEPS
   absl::log
   absl::log_initialize
   gb_config
@@ -17,5 +17,5 @@ set(jpr_view_DEPS
   reaper_sdk
 )
 
-gb_add_library(jpr_view)
-target_include_directories(jpr_view PUBLIC "../..")
+gb_add_library(jpr_scene)
+target_include_directories(jpr_scene PUBLIC "../..")

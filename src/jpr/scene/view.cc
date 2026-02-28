@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "jpr/view/view.h"
+#include "jpr/scene/view.h"
 
 #include "absl/log/check.h"
 #include "absl/memory/memory.h"

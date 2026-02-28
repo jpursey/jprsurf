@@ -6,4 +6,4 @@
 add_subdirectory(common)
 add_subdirectory(device)
 add_subdirectory(plugin)
-add_subdirectory(view)
+add_subdirectory(scene)
