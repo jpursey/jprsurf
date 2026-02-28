@@ -111,8 +111,6 @@ class ViewProperty {
   // Current active mappings for this property. This will be empty if the
   // property is not currently mapped by any active views.
   const Mappings& GetMappings() const { return mappings_; }
-  void AddMapping(ViewMapping* mapping);
-  void RemoveMapping(ViewMapping* mapping);
 
  protected:
   // Derived classes should override these to read and write the value that is
@@ -129,6 +127,13 @@ class ViewProperty {
   virtual void WriteColor(const Color& value) {}
 
  private:
+  friend class ViewMapping;
+
+  // ViewMapping will call these when the mapping is activated or deactivated to
+  // keep track of the active mappings for this property.
+  void AddMapping(ViewMapping* mapping);
+  void RemoveMapping(ViewMapping* mapping);
+
   std::string name_;
   Type type_;
   Mappings mappings_;

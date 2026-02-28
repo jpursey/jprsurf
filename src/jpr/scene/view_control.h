@@ -37,10 +37,15 @@ class ViewControl final {
   // Current active mappings for this control. This will be empty if the control
   // is not currently mapped by any active views.
   const Mappings& GetMappings() const { return mappings_; }
+
+ private:
+  friend class ViewMapping;
+
+  // ViewMapping will call these when the mapping is activated or deactivated to
+  // keep track of the active mappings for this control.
   void AddMapping(ViewMapping* mapping);
   void RemoveMapping(ViewMapping* mapping);
 
- private:
   Control* control_;
   std::string name_;
   Mappings mappings_;
