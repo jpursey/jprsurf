@@ -10,6 +10,7 @@ set(jpr_device_SOURCE
   control_output.cc control_output.h
   control_output_midi.cc control_output_midi.h
   device.cc device.h
+  device_xtouch.cc device_xtouch.h
 )
 
 set(jpr_device_DEPS
