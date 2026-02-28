@@ -5,9 +5,13 @@
 
 #include "jpr/view/scene.h"
 
+#include "absl/memory/memory.h"
+
 namespace jpr {
 
-Scene::Scene(std::string_view name) : name_(name) {}
+Scene::Scene(std::string_view name) : name_(name) {
+  root_view_ = absl::WrapUnique(new View(this, nullptr, "root"));
+}
 
 Scene::~Scene() = default;
 

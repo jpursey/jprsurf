@@ -5,6 +5,7 @@
 
 set(jpr_view_SOURCE
   scene.cc scene.h
+  view.cc view.h
 )
 
 set(jpr_view_DEPS

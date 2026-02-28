@@ -5,12 +5,14 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <string_view>
 
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/device.h"
+#include "jpr/view/view.h"
 
 namespace jpr {
 
@@ -42,6 +44,7 @@ class Scene final {
   // State
   std::string name_;
   absl::flat_hash_map<std::string, std::unique_ptr<Device>> devices_;
+  std::unique_ptr<View> root_view_;
   RunHandle run_handle_;
 };
 
