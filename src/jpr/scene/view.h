@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "jpr/scene/view_mapping.h"
 
 namespace jpr {
 
@@ -46,6 +47,13 @@ class View final {
   View* GetChildViewAt(int index) const { return child_views_[index].get(); }
   View* GetChildView(std::string_view name) const;
 
+  // Adds a mapping to this view.
+  //
+  // This will return false if the mapping is invalid, for instance if the
+  // named control or property doesn't exist in the scene.
+  bool AddMapping(ViewMapping::Type type, std::string_view property_name,
+                  std::string_view control_name);
+
   // Activation and deactivation. An active view will update the REAPER state
   // and hardware controls according to its mappings.
   bool IsActive() const { return active_; }
@@ -63,9 +71,12 @@ class View final {
   View* parent_view_;
   std::string name_;
 
-  // Hierarchy
+  // View hierarchy
   std::vector<std::unique_ptr<View>> child_views_;
   absl::flat_hash_map<std::string, View*> child_views_by_name_;
+
+  // Mappings for this view.
+  std::vector<std::unique_ptr<ViewMapping>> mappings_;
 
   // Current state
   bool active_ = false;

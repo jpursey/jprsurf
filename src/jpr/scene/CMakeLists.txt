@@ -6,6 +6,9 @@
 set(jpr_scene_SOURCE
   scene.cc scene.h
   view.cc view.h
+  view_control.cc view_control.h
+  view_mapping.cc view_mapping.h
+  view_property.cc view_property.h
 )
 
 set(jpr_scene_DEPS

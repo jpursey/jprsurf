@@ -32,7 +32,11 @@ class Scene final {
   std::string_view GetName() const { return name_; }
 
   // Devices
-  void AddDevice(std::string_view name, std::unique_ptr<Device> device);
+  void AddDevice(std::string_view device_name, std::unique_ptr<Device> device);
+
+  // Controls and Properties
+  ViewControl* GetControl(std::string_view name) const;
+  ViewProperty* GetProperty(std::string_view name) const;
 
   // Activation and deactivation
   void Activate(RunRegistry& registry);
@@ -44,6 +48,8 @@ class Scene final {
   // State
   std::string name_;
   absl::flat_hash_map<std::string, std::unique_ptr<Device>> devices_;
+  absl::flat_hash_map<std::string, std::unique_ptr<ViewControl>> controls_;
+  absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
   std::unique_ptr<View> root_view_;
   RunHandle run_handle_;
 };

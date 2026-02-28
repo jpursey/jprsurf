@@ -7,6 +7,7 @@
 
 #include "absl/log/check.h"
 #include "absl/memory/memory.h"
+#include "jpr/scene/scene.h"
 
 namespace jpr {
 
@@ -23,6 +24,24 @@ View* View::AddChildView(std::string_view name) {
 View* View::GetChildView(std::string_view name) const {
   auto it = child_views_by_name_.find(name);
   return it != child_views_by_name_.end() ? it->second : nullptr;
+}
+
+bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
+                      std::string_view control_name) {
+  if (scene_ == nullptr) {
+    return false;
+  }
+  ViewProperty* property = scene_->GetProperty(property_name);
+  if (property == nullptr) {
+    return false;
+  }
+  ViewControl* control = scene_->GetControl(control_name);
+  if (control == nullptr) {
+    return false;
+  }
+  mappings_.push_back(
+      absl::WrapUnique(new ViewMapping(type, property, control)));
+  return true;
 }
 
 void View::Activate() { active_ = true; }
