@@ -6,6 +6,7 @@
 set(jpr_common_SOURCE
   child_track_iterator.cc child_track_iterator.h
   color.h
+  guid.cc guid.h
   midi_message.h
   midi_port.cc midi_port.h
   runner.cc runner.h
