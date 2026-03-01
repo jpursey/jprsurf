@@ -47,7 +47,7 @@ class TrackCache final {
   void Refresh();
 
   // Returns the track with the given GUID, or nullptr if no such track exists.
-  MediaTrack* GetTrack(const Guid& guid) const;
+  MediaTrack* GetTrackId(const Guid& guid) const;
 
   // Subscribes to track changes for a track with the given GUID.
   //

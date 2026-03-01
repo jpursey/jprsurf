@@ -68,7 +68,7 @@ void TrackCache::Refresh() {
   }
 }
 
-MediaTrack* TrackCache::GetTrack(const Guid& guid) const {
+MediaTrack* TrackCache::GetTrackId(const Guid& guid) const {
   auto it = track_map_.find(guid);
   return it != track_map_.end() ? it->second.track_id : nullptr;
 }
