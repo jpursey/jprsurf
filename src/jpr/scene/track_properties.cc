@@ -1,0 +1,31 @@
+// Copyright (c) 2026 John Pursey
+//
+// Use of this source code is governed by an MIT-style License that can be found
+// in the LICENSE file or at https://opensource.org/licenses/MIT.
+
+#include "jpr/scene/track_properties.h"
+
+#include "absl/log/log.h"
+#include "sdk/reaper_plugin_functions.h"
+
+namespace jpr {
+
+TrackProperties::TrackProperties(MediaTrack* track_id) {
+  TrackCache::Get().Subscribe(track_id_, this);
+}
+
+TrackProperties::~TrackProperties() { TrackCache::Get().Unsubscribe(this); }
+
+ViewProperty* TrackProperties::GetProperty(std::string_view name) {
+  auto it = properties_.find(name);
+
+  // TODO: Auto-create properties on demand for valid property names, if it
+  // doesn't already exist.
+  return it != properties_.end() ? it->second.get() : nullptr;
+}
+
+void TrackProperties::OnTrackChanged(const Guid& guid, MediaTrack* track_id) {
+  track_id_ = track_id;
+}
+
+}  // namespace jpr

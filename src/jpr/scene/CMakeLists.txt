@@ -5,6 +5,7 @@
 
 set(jpr_scene_SOURCE
   scene.cc scene.h
+  track_properties.cc track_properties.h
   view.cc view.h
   view_control.cc view_control.h
   view_mapping.cc view_mapping.h
