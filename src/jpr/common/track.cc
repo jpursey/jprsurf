@@ -15,11 +15,12 @@ Track::Track(const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
 }
 
-void Track::Refresh() { DoRefresh(TrackCache::Get().GetTrackId(guid_)); }
+void Track::Refresh() { DoRefresh(track_id_); }
 
 void Track::DoRefresh(MediaTrack* track_id) {
+  bool changed = (track_id_ != track_id);
   track_id_ = track_id;
-  if (track_id_ == nullptr) {
+  if (track_id == nullptr) {
     name_.clear();
     volume_ = 0.0;
     pan_ = 0.0;
@@ -27,26 +28,50 @@ void Track::DoRefresh(MediaTrack* track_id) {
     mute_ = false;
     solo_ = false;
     rec_arm_ = false;
+    if (changed) {
+      NotifyListeners();
+    }
     return;
   }
 
   int flags = 0;
   const char* name = GetTrackState(track_id_, &flags);
   if (name == nullptr) {
+    changed = changed || !name_.empty();
     LOG(ERROR) << "Failed to get name for valid track " << guid_;
     name_.clear();
   } else {
     name_ = name;
   }
-  selected_ = (flags & 2) != 0;
-  mute_ = (flags & 8) != 0;
-  solo_ = (flags & 16) != 0;
-  rec_arm_ = (flags & 64) != 0;
+  bool selected = (flags & 2) != 0;
+  bool mute = (flags & 8) != 0;
+  bool solo = (flags & 16) != 0;
+  bool rec_arm = (flags & 64) != 0;
+  changed = changed || (selected_ != selected) || (mute_ != mute) ||
+            (solo_ != solo) || (rec_arm_ != rec_arm);
+  selected_ = selected;
+  mute_ = mute;
+  solo_ = solo;
 
-  if (!GetTrackUIVolPan(track_id_, &volume_, &pan_)) {
+  double volume = 0.0;
+  double pan = 0.0;
+  if (!GetTrackUIVolPan(track_id_, &volume, &pan)) {
+    changed = changed || (volume_ != 0.0) || (pan_ != 0.0);
     LOG(ERROR) << "Failed to get volume and pan for valid track " << guid_;
     volume_ = 0.0;
     pan_ = 0.0;
+  } else {
+    volume_ = volume;
+    pan_ = pan;
+  }
+  if (changed) {
+    NotifyListeners();
+  }
+}
+
+void Track::NotifyListeners() {
+  for (TrackListener* listener : listeners_) {
+    listener->OnTrackChanged(this);
   }
 }
 
@@ -60,7 +85,11 @@ void Track::SetName(std::string_view name) {
     LOG(ERROR) << "Failed to set name for valid track " << guid_;
     return;
   }
+  bool changed = (name_ != name_str);
   name_ = std::move(name_str);
+  if (changed) {
+    NotifyListeners();
+  }
 }
 
 void Track::SetVolume(double volume) {
@@ -71,7 +100,11 @@ void Track::SetVolume(double volume) {
     LOG(ERROR) << "Failed to set volume for valid track " << guid_;
     return;
   }
+  bool changed = (volume_ != volume);
   volume_ = volume;
+  if (changed) {
+    NotifyListeners();
+  }
 }
 
 void Track::SetPan(double pan) {
@@ -82,7 +115,11 @@ void Track::SetPan(double pan) {
     LOG(ERROR) << "Failed to set pan for valid track " << guid_;
     return;
   }
+  bool changed = (pan_ != pan);
   pan_ = pan;
+  if (changed) {
+    NotifyListeners();
+  }
 }
 
 void Track::SetSelected(bool selected) {
@@ -90,7 +127,11 @@ void Track::SetSelected(bool selected) {
     return;
   }
   SetTrackSelected(track_id_, selected);
+  bool changed = (selected_ != selected);
   selected_ = selected;
+  if (changed) {
+    NotifyListeners();
+  }
 }
 
 void Track::SetMute(bool mute) {
@@ -101,7 +142,11 @@ void Track::SetMute(bool mute) {
     LOG(ERROR) << "Failed to set mute for valid track " << guid_;
     return;
   }
+  bool changed = (mute_ != mute);
   mute_ = mute;
+  if (changed) {
+    NotifyListeners();
+  }
 }
 
 void Track::SetSolo(bool solo) {
@@ -119,7 +164,11 @@ void Track::SetSolo(bool solo) {
     LOG(ERROR) << "Failed to set solo for valid track " << guid_;
     return;
   }
+  bool changed = (solo_ != solo);
   solo_ = solo;
+  if (changed) {
+    NotifyListeners();
+  }
 }
 
 void Track::SetRecArm(bool rec_arm) {
@@ -131,7 +180,15 @@ void Track::SetRecArm(bool rec_arm) {
     LOG(ERROR) << "Failed to set record arm for valid track " << guid_;
     return;
   }
+  bool changed = (rec_arm_ != rec_arm);
   rec_arm_ = rec_arm;
+  if (changed) {
+    NotifyListeners();
+  }
 }
+
+void Track::Subscribe(TrackListener* listener) { listeners_.insert(listener); }
+
+void Track::Unsubscribe(TrackListener* listener) { listeners_.erase(listener); }
 
 }  // namespace jpr

@@ -5,16 +5,32 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <string_view>
 
+#include "absl/container/flat_hash_set.h"
 #include "jpr/common/color.h"
 #include "jpr/common/guid.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
 
+class Track;
 class TrackCache;
+
+// This is a listener interface for track changes.
+//
+// This can be subscribed to the TrackCache, and then will be called whenever
+// the underlying MediaTrack* changes (including to null and back again).
+class TrackListener {
+ public:
+  virtual ~TrackListener() = default;
+
+  // This will be called whenever the underlying MediaTrack* changes (including
+  // changing to null).
+  virtual void OnTrackChanged(Track* track) = 0;
+};
 
 // Represents a track in REAPER, identified by a GUID.
 //
@@ -26,11 +42,15 @@ class TrackCache;
 // longer exist (but may come back, for instance through an undo action or
 // project load). In the latter case, all properties will return to default
 // values and setting new values will have no effect.
-class Track final {
+class Track final : private std::enable_shared_from_this<Track> {
  public:
   Track(const Track&) = delete;
   Track& operator=(const Track&) = delete;
   ~Track() = default;
+
+  // Strong and weak pointer references to the track.
+  std::shared_ptr<Track> GetShared() { return shared_from_this(); }
+  std::weak_ptr<Track> GetWeak() { return shared_from_this(); }
 
   // Attributes
   Guid GetGuid() const { return guid_; }
@@ -65,6 +85,16 @@ class Track final {
   void SetSolo(bool solo);
   void SetRecArm(bool record);
 
+  // Subscribes to track changes for this track.
+  //
+  // This will be called whenever the underlying MediaTrack* changes (including
+  // changing to null and back). It also will be called if any of the cached
+  // properties of the track change, such as its name, volume, pan, etc.
+  void Subscribe(TrackListener* listener);
+
+  // Unsubscribes from track changes for the previously registered listener.
+  void Unsubscribe(TrackListener* listener);
+
  private:
   friend class TrackCache;
 
@@ -74,6 +104,9 @@ class Track final {
   // Performs the actual refresh logic to update both the track ID and the
   // corresponding cached state for this track.
   void DoRefresh(MediaTrack* track_id);
+
+  // Notifies all listeners subscribed to this track of a change.
+  void NotifyListeners();
 
   // Track identification. The Guid may be empty and the track_id may be null.
   Guid guid_;
@@ -88,6 +121,9 @@ class Track final {
   bool mute_ = false;
   bool solo_ = false;
   bool rec_arm_ = false;
+
+  // Listeners subscribed to this track for changes.
+  absl::flat_hash_set<TrackListener*> listeners_;
 };
 
 }  // namespace jpr

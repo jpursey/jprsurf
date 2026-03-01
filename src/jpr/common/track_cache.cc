@@ -18,8 +18,11 @@ TrackCache& TrackCache::Get() {
 void TrackCache::Refresh() {
   // Clear the cache and retain the old_track_map to find changes and notify
   // listeners.
-  absl::flat_hash_map<Guid, Track> old_track_map;
+  TrackMap old_track_map;
   std::swap(track_map_, old_track_map);
+
+  // Reset the track ID map, and recreate it as we iterate over the tracks.
+  track_id_map_.clear();
 
   // Iterate over all tracks to build the new cache.
   const int track_count = CountTracks(nullptr);
@@ -29,78 +32,51 @@ void TrackCache::Refresh() {
       continue;
     }
     Guid guid(GetTrackGUID(track_id));
-    Track& new_track = track_map_[guid];
+    std::shared_ptr<Track>& new_track = track_map_[guid];
 
     auto it = old_track_map.find(guid);
     if (it == old_track_map.end()) {
       // Track is new and doesn't exist in the old cache, so just initialize it.
-      new_track.track_id = track_id;
+      new_track = (new Track(guid, track_id))->GetShared();
+      track_id_map_[track_id] = new_track.get();
       continue;
     }
 
     // Move the old track to the new cache.
     new_track = std::move(it->second);
     old_track_map.erase(it);
+    track_id_map_[track_id] = new_track.get();
 
     // If the underlying track pointer hasn't changed, then we don't need to
     // notify listeners.
-    if (new_track.track_id == track_id) {
+    if (new_track->GetTrackId() == track_id) {
       continue;
     }
 
     // The underlying track pointer has changed, so update the cache and notify
     // listeners.
-    new_track.track_id = track_id;
-    for (TrackListener* listener : new_track.listeners) {
-      listener->OnTrackChanged(guid, track_id);
-    }
+    new_track->DoRefresh(track_id);
   }
 
-  // Now notify listeners for any tracks that were removed. We also keep these
-  // in the new cache, so we can restore them if they come back.
+  // Now clear the ID for the remaining tracks from the old cache, as they no
+  // longer exist in REAPER. We keep the track however, as it may come back
+  // through an undo action or project load, and we want to retain the cached
+  // state and listeners for that track.
   for (auto& [guid, old_track] : old_track_map) {
-    Track& new_track = track_map_[guid];
+    std::shared_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
-    new_track.track_id = nullptr;
-    for (TrackListener* listener : new_track.listeners) {
-      listener->OnTrackChanged(guid, nullptr);
-    }
+    new_track->DoRefresh(nullptr);
   }
 }
 
-MediaTrack* TrackCache::GetTrackId(const Guid& guid) const {
+Track* TrackCache::GetTrack(const Guid& guid) const {
   auto it = track_map_.find(guid);
-  return it != track_map_.end() ? it->second.track_id : nullptr;
+  return it != track_map_.end() ? it->second.get() : nullptr;
 }
 
-void TrackCache::Subscribe(const Guid& guid, TrackListener* listener) {
-  if (guid.IsEmpty() || listener == nullptr) {
-    return;
-  }
-  Track& track = track_map_[guid];
-  track.listeners.insert(listener);
-  listener_map_[listener] = guid;
-  listener->OnTrackChanged(guid, track.track_id);
-}
-
-void TrackCache::Subscribe(MediaTrack* track_id, TrackListener* listener) {
-  if (track_id == nullptr) {
-    return;
-  }
-  Subscribe(Guid(GetTrackGUID(track_id)), listener);
-}
-
-void TrackCache::Unsubscribe(TrackListener* listener) {
-  auto it = listener_map_.find(listener);
-  if (it == listener_map_.end()) {
-    return;
-  }
-  const Guid& guid = it->second;
-  auto track_it = track_map_.find(guid);
-  if (track_it != track_map_.end()) {
-    track_it->second.listeners.erase(listener);
-  }
-  listener_map_.erase(it);
+Track* TrackCache::GetTrack(MediaTrack* track_id) {
+  auto it = track_id_map_.find(track_id);
+  return it != track_id_map_.end() ? it->second : nullptr;
 }
 
 }  // namespace jpr

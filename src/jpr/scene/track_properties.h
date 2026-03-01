@@ -29,7 +29,7 @@ class TrackProperties final : private TrackListener {
   //
   // TrackProperties are bound to the track GUID. So once created it will remain
   // bound to the same track, even if underlying the MediaTrack* changes.
-  explicit TrackProperties(MediaTrack* track_id);
+  explicit TrackProperties(std::shared_ptr<Track> track);
   TrackProperties(const TrackProperties&) = delete;
   TrackProperties& operator=(const TrackProperties&) = delete;
   ~TrackProperties();
@@ -39,10 +39,10 @@ class TrackProperties final : private TrackListener {
   ViewProperty* GetProperty(std::string_view name);
 
  private:
-  void OnTrackChanged(const Guid& guid, MediaTrack* track_id) override;
+  void OnTrackChanged(Track* track) override;
 
   // State
-  MediaTrack* track_id_ = nullptr;
+  std::shared_ptr<Track> track_;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
 };
 

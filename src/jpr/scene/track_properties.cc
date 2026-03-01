@@ -5,16 +5,18 @@
 
 #include "jpr/scene/track_properties.h"
 
-#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 
-TrackProperties::TrackProperties(MediaTrack* track_id) {
-  TrackCache::Get().Subscribe(track_id_, this);
+TrackProperties::TrackProperties(std::shared_ptr<Track> track)
+    : track_(std::move(track)) {
+  DCHECK(track_ != nullptr);
+  track_->Subscribe(this);
 }
 
-TrackProperties::~TrackProperties() { TrackCache::Get().Unsubscribe(this); }
+TrackProperties::~TrackProperties() { track_->Unsubscribe(this); }
 
 ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   auto it = properties_.find(name);
@@ -24,8 +26,8 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   return it != properties_.end() ? it->second.get() : nullptr;
 }
 
-void TrackProperties::OnTrackChanged(const Guid& guid, MediaTrack* track_id) {
-  track_id_ = track_id;
+void TrackProperties::OnTrackChanged(Track* track) {
+  // TODO: Handle updates to the track properties.
 }
 
 }  // namespace jpr
