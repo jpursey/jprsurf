@@ -6,6 +6,7 @@
 #include "jpr/common/track_cache.h"
 
 #include "absl/base/no_destructor.h"
+#include "absl/log/log.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -25,6 +26,26 @@ void TrackCache::Refresh() {
   // over the tracks.
   track_id_map_.clear();
   top_level_tracks_.clear();
+
+  // Update the master track, this is a special track that is not included in
+  // the track list in REAPER and so needs to be queried independently.
+  MediaTrack* master_track_id = ::GetTrack(nullptr, -1);
+  if (master_track_id == nullptr) {
+    LOG(ERROR) << "Failed to get master track!";
+    master_track_ = nullptr;
+  } else {
+    Guid master_guid(GetTrackGUID(master_track_id));
+    auto it = old_track_map.find(master_guid);
+    if (it == old_track_map.end()) {
+      master_track_ =
+          (new Track(master_guid, master_track_id))->GetShared().get();
+    } else {
+      master_track_ = it->second.get();
+      old_track_map.erase(it);
+    }
+    track_id_map_[master_track_id] = master_track_;
+    master_track_->DoRefresh(master_track_id);
+  }
 
   // This helper adds the given track to its parent track's child track list, if
   // it has a parent track. This is used to maintain the child track lists for

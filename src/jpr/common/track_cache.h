@@ -36,6 +36,8 @@ class TrackCache final {
   // list changes.
   void Refresh();
 
+  Track* GetMasterTrack() const { return master_track_; }
+
   // Returns the track with the given GUID, or nullptr if no such track exists.
   Track* GetTrack(const Guid& guid) const;
 
@@ -63,6 +65,7 @@ class TrackCache final {
   TrackMap track_map_;
   TrackIdMap track_id_map_;
   std::vector<Track*> top_level_tracks_;
+  Track* master_track_ = nullptr;
 };
 
 }  // namespace jpr
