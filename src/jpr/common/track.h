@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/color.h"
@@ -85,6 +86,13 @@ class Track final : private std::enable_shared_from_this<Track> {
   void SetSolo(bool solo);
   void SetRecArm(bool record);
 
+  // Immediate child tracks of this track in order. These are updated whenever
+  // Refresh() is called, or when the track hierarchy changes in REAPER.
+  int GetChildTrackCount() const {
+    return static_cast<int>(child_tracks_.size());
+  }
+  absl::Span<Track* const> GetChildTracks() const { return child_tracks_; }
+
   // Subscribes to track changes for this track.
   //
   // This will be called whenever the underlying MediaTrack* changes (including
@@ -121,6 +129,9 @@ class Track final : private std::enable_shared_from_this<Track> {
   bool mute_ = false;
   bool solo_ = false;
   bool rec_arm_ = false;
+
+  // Child tracks
+  std::vector<Track*> child_tracks_;
 
   // Listeners subscribed to this track for changes.
   absl::flat_hash_set<TrackListener*> listeners_;

@@ -21,8 +21,26 @@ void TrackCache::Refresh() {
   TrackMap old_track_map;
   std::swap(track_map_, old_track_map);
 
-  // Reset the track ID map, and recreate it as we iterate over the tracks.
+  // Reset the track ID map and top level tracks, and recreate it as we iterate
+  // over the tracks.
   track_id_map_.clear();
+  top_level_tracks_.clear();
+
+  // This helper adds the given track to its parent track's child track list, if
+  // it has a parent track. This is used to maintain the child track lists for
+  // all tracks as we refresh the cache.
+  auto add_to_parent = [this](Track* track) {
+    MediaTrack* parent_id = GetParentTrack(track->GetTrackId());
+    if (parent_id == nullptr) {
+      top_level_tracks_.push_back(track);
+      return;
+    }
+    Track* parent_track = GetTrack(parent_id);
+    if (parent_track == nullptr) {
+      return;
+    }
+    parent_track->child_tracks_.push_back(track);
+  };
 
   // Iterate over all tracks to build the new cache.
   const int track_count = CountTracks(nullptr);
@@ -39,6 +57,7 @@ void TrackCache::Refresh() {
       // Track is new and doesn't exist in the old cache, so just initialize it.
       new_track = (new Track(guid, track_id))->GetShared();
       track_id_map_[track_id] = new_track.get();
+      add_to_parent(new_track.get());
       continue;
     }
 
@@ -46,6 +65,12 @@ void TrackCache::Refresh() {
     new_track = std::move(it->second);
     old_track_map.erase(it);
     track_id_map_[track_id] = new_track.get();
+    add_to_parent(new_track.get());
+
+    // Clear child tracks. They will be added back in as we iterate over the
+    // tracks, and this ensures that any tracks that are no longer children will
+    // be removed.
+    new_track->child_tracks_.clear();
 
     // If the underlying track pointer hasn't changed, then we don't need to
     // notify listeners.
@@ -65,6 +90,7 @@ void TrackCache::Refresh() {
   for (auto& [guid, old_track] : old_track_map) {
     std::shared_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
+    new_track->child_tracks_.clear();
     new_track->DoRefresh(nullptr);
   }
 }

@@ -43,6 +43,15 @@ class TrackCache final {
   // exists.
   Track* GetTrack(MediaTrack* track_id);
 
+  // The top level tracks in the project, in order. These are tracks that have
+  // no parent track, and are the roots of the track hierarchy in REAPER.
+  int GetTopLevelTrackCount() const {
+    return static_cast<int>(top_level_tracks_.size());
+  }
+  absl::Span<Track* const> GetTopLevelTracks() const {
+    return top_level_tracks_;
+  }
+
  private:
   friend class absl::NoDestructor<TrackCache>;
 
@@ -53,6 +62,7 @@ class TrackCache final {
 
   TrackMap track_map_;
   TrackIdMap track_id_map_;
+  std::vector<Track*> top_level_tracks_;
 };
 
 }  // namespace jpr
