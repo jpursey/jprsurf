@@ -11,6 +11,10 @@
 
 namespace jpr {
 
+void View::Activate() { active_ = true; }
+
+void View::Deactivate() { active_ = false; }
+
 View* View::AddChildView(std::string_view name) {
   if (child_views_by_name_.contains(name)) {
     return nullptr;
@@ -24,6 +28,58 @@ View* View::AddChildView(std::string_view name) {
 View* View::GetChildView(std::string_view name) const {
   auto it = child_views_by_name_.find(name);
   return it != child_views_by_name_.end() ? it->second : nullptr;
+}
+
+void View::SetContext(Context context) { context_ = std::move(context); }
+
+void View::SetChildContext(ContextType context_type, int context_index) {
+  child_context_type_ = context_type;
+  child_context_index_ = context_index;
+  switch (context_type) {
+    case ContextType::kNone:
+      return;
+    case ContextType::kTrack:
+      SetChildTracks();
+      break;
+  }
+}
+
+void View::SetChildContextIndex(int context_index) {
+  if (child_context_index_ == context_index) {
+    return;
+  }
+  child_context_index_ = context_index;
+  if (child_context_type_ == ContextType::kTrack) {
+    SetChildTracks();
+  }
+}
+
+void View::SetChildTracks() {
+  CHECK(scene_ != nullptr);
+  absl::Span<Track* const> child_tracks;
+  if (GetContextType() == ContextType::kNone) {
+    child_tracks = TrackCache::Get().GetTopLevelTracks();
+  } else if (GetContextType() == ContextType::kTrack) {
+    auto& parent_track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(context_);
+    DCHECK(parent_track_properties != nullptr);
+    child_tracks = parent_track_properties->GetTrack()->GetChildTracks();
+  }
+
+  int index = child_context_index_;
+  for (auto& child_view : child_views_) {
+    if (child_view->GetContextType() != ContextType::kTrack) {
+      continue;
+    }
+    auto& child_track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(child_view->context_);
+    if (index < child_tracks.size()) {
+      child_track_properties->SetTrack(child_tracks[index]);
+    } else {
+      child_track_properties->SetTrack(TrackCache::Get().GetStubTrack());
+    }
+    ++index;
+  }
 }
 
 bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
@@ -43,9 +99,5 @@ bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
       absl::WrapUnique(new ViewMapping(type, property, control)));
   return true;
 }
-
-void View::Activate() { active_ = true; }
-
-void View::Deactivate() { active_ = false; }
 
 }  // namespace jpr
