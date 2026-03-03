@@ -35,9 +35,9 @@ class ViewProperty {
     // return std::monostate.
     kAction,
 
-    // A property that corresponds to a REAPER toggle action. This has a binary
-    // state (on or off), and so can be mapped to control inputs and outputs
-    // that represent a binary value.
+    // A property that corresponds to a REAPER boolean property or action with a
+    // state. This has a binary state (on or off), and so can be mapped to
+    // control inputs and outputs that represent a binary value.
     //
     // The underlying value is a bool, with true representing the on state and
     // false representing the off state.
@@ -66,7 +66,7 @@ class ViewProperty {
     //
     // The underlying value is a double, with 0 representing the minimum value
     // of the parameter, 1 representing the maximum value of the parameter.
-    kValue,
+    kNormalized,
 
     // A property that corresponds to a REAPER parameter that has a text value
     // (like track title). This has a text value of arbitrary length.
@@ -101,12 +101,34 @@ class ViewProperty {
   // Reads and returns the current value of the property from REAPER.
   Value GetValue() const;
 
+  // Adapter functions that read and write the value of the property as a
+  // specific type. These will reinterpret the underlying value of the property
+  // as the specified type (for instance mapping a toggle property to a double
+  // 0.0 or 1.0 for off and on, respectively).
+  bool GetBool() const;
+  double GetPan() const;         // Returns in range [-1,1]
+  double GetVolume() const;      // Returns in range [0,inf)
+  double GetNormalized() const;  // Returns in range [0,1]
+  std::string GetText() const;
+  Color GetColor() const;
+
   // Sets the value of the property in REAPER.
   //
   // The value must be of the correct type for the property or it will have no
   // effect (see the documentation for each Type for details). Values will be
   // clamped to the valid range for the property if they are out of range.
   void SetValue(const Value& value);
+
+  // Adapter functions that set the value of the property as a specific type.
+  // These will reinterpret the passed in value as the underlying type of the
+  // property (for instance mapping a double value greater than 0.5 to an on
+  // state for a toggle property).
+  void SetBool(bool value);
+  void SetPan(double value);         // Input clamped to [-1,1]
+  void SetVolume(double value);      // Input clamped to [0,inf)
+  void SetNormalized(double value);  // Input clamped to [0,1]
+  void SetText(std::string_view value);
+  void SetColor(const Color& value);
 
   // Current active mappings for this property. This will be empty if the
   // property is not currently mapped by any active views.
