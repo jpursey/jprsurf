@@ -14,6 +14,34 @@
 
 namespace jpr {
 
+class TrackProperties;
+
+//==============================================================================
+// TrackProperty
+//==============================================================================
+
+// This class represents a single property of a track in REAPER. It is owned by
+// the TrackProperties class.
+class TrackProperty : public ViewProperty {
+ public:
+  Track* GetTrack() const { return track_; }
+
+ protected:
+  explicit TrackProperty(std::string_view name, Type type, Track* track)
+      : ViewProperty(name, type), track_(track) {}
+
+  void SetTrack(Track* track) { track_ = track; }
+
+ private:
+  friend class TrackProperties;
+
+  Track* track_;
+};
+
+//==============================================================================
+// TrackProperties
+//==============================================================================
+
 // This class represents a set of ViewProperties that are associated with a
 // single track in REAPER.
 //
@@ -25,6 +53,14 @@ namespace jpr {
 //   or no views are mapped to the track anymore.
 class TrackProperties final : private TrackListener {
  public:
+  static constexpr std::string_view kName = "track_name";
+  static constexpr std::string_view kSelected = "track_selected";
+  static constexpr std::string_view kMute = "track_mute";
+  static constexpr std::string_view kSolo = "track_solo";
+  static constexpr std::string_view kRecArm = "track_recarm";
+  static constexpr std::string_view kPan = "track_pan";
+  static constexpr std::string_view kVolume = "track_volume";
+
   // The track that these properties are tied to.
   //
   // TrackProperties are bound to the track GUID. So once created it will remain
@@ -50,7 +86,7 @@ class TrackProperties final : private TrackListener {
  private:
   // State
   std::shared_ptr<Track> track_;
-  absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
+  absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>> properties_;
 };
 
 }  // namespace jpr
