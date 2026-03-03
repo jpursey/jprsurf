@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace jpr {
 
 // This represents a 24-bit RGB color value.
@@ -13,5 +15,7 @@ struct Color {
   uint8_t g;
   uint8_t b;
 };
+
+double GetLuminance(Color color);
 
 }  // namespace jpr
