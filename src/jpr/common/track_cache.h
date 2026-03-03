@@ -36,7 +36,13 @@ class TrackCache final {
   // list changes.
   void Refresh();
 
-  Track* GetMasterTrack() const { return master_track_; }
+  // Returns the stub track, which is a special non-null track that represents
+  // no track at all. The track GUID is empty and the track ID is null, and it
+  // holds all default values.
+  Track* GetStubTrack() const { return stub_track_.get(); }
+
+  // Returns the master track. This always exists in REAPER.
+  Track* GetMasterTrack() const { return master_track_.get(); }
 
   // Returns the track with the given GUID, or nullptr if no such track exists.
   Track* GetTrack(const Guid& guid) const;
@@ -60,12 +66,13 @@ class TrackCache final {
   using TrackMap = absl::flat_hash_map<Guid, std::shared_ptr<Track>>;
   using TrackIdMap = absl::flat_hash_map<MediaTrack*, Track*>;
 
-  TrackCache() = default;
+  TrackCache();
 
   TrackMap track_map_;
   TrackIdMap track_id_map_;
   std::vector<Track*> top_level_tracks_;
-  Track* master_track_ = nullptr;
+  std::shared_ptr<Track> master_track_;
+  std::shared_ptr<Track> stub_track_;
 };
 
 }  // namespace jpr

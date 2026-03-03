@@ -16,6 +16,15 @@ TrackCache& TrackCache::Get() {
   return *instance;
 }
 
+TrackCache::TrackCache() {
+  // The stub track is a special track that represents no track at all. It has
+  // an empty GUID and a null track ID, and it holds all default values. This is
+  // used as a placeholder for tracks that have been deleted in REAPER, but may
+  // still be referenced by listeners or through undo actions.
+  stub_track_ = (new Track(Guid(), nullptr))->GetShared();
+  track_id_map_[nullptr] = stub_track_.get();
+}
+
 void TrackCache::Refresh() {
   // Clear the cache and retain the old_track_map to find changes and notify
   // listeners.
@@ -27,6 +36,9 @@ void TrackCache::Refresh() {
   track_id_map_.clear();
   top_level_tracks_.clear();
 
+  // Add the stub track to the null ID.
+  track_id_map_[nullptr] = stub_track_.get();
+
   // Update the master track, this is a special track that is not included in
   // the track list in REAPER and so needs to be queried independently.
   MediaTrack* master_track_id = ::GetTrack(nullptr, -1);
@@ -35,15 +47,10 @@ void TrackCache::Refresh() {
     master_track_ = nullptr;
   } else {
     Guid master_guid(GetTrackGUID(master_track_id));
-    auto it = old_track_map.find(master_guid);
-    if (it == old_track_map.end()) {
-      master_track_ =
-          (new Track(master_guid, master_track_id))->GetShared().get();
-    } else {
-      master_track_ = it->second.get();
-      old_track_map.erase(it);
+    if (master_track_ == nullptr || master_track_->GetGuid() != master_guid) {
+      master_track_ = (new Track(master_guid, master_track_id))->GetShared();
     }
-    track_id_map_[master_track_id] = master_track_;
+    track_id_map_[master_track_id] = master_track_.get();
     master_track_->DoRefresh(master_track_id);
   }
 
