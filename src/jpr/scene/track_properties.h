@@ -29,18 +29,25 @@ class TrackProperties final : private TrackListener {
   //
   // TrackProperties are bound to the track GUID. So once created it will remain
   // bound to the same track, even if underlying the MediaTrack* changes.
-  explicit TrackProperties(std::shared_ptr<Track> track);
+  explicit TrackProperties(Track* track);
   TrackProperties(const TrackProperties&) = delete;
   TrackProperties& operator=(const TrackProperties&) = delete;
   ~TrackProperties();
+
+  // Returns the track that these properties are tied to.
+  Track* GetTrack() const { return track_.get(); }
+
+  // Sets the track that these properties are tied to.
+  //
+  // This will update the internal state of the properties to reflect the new
+  // track.
+  void SetTrack(Track* track);
 
   // Returns property scoped to this track with the given name, or nullptr if no
   // such property exists.
   ViewProperty* GetProperty(std::string_view name);
 
  private:
-  void OnTrackChanged(Track* track) override;
-
   // State
   std::shared_ptr<Track> track_;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;

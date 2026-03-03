@@ -10,13 +10,16 @@
 
 namespace jpr {
 
-TrackProperties::TrackProperties(std::shared_ptr<Track> track)
-    : track_(std::move(track)) {
-  DCHECK(track_ != nullptr);
-  track_->Subscribe(this);
-}
+TrackProperties::TrackProperties(Track* track)
+    : track_(track->GetShared()) {}
 
-TrackProperties::~TrackProperties() { track_->Unsubscribe(this); }
+TrackProperties::~TrackProperties() = default;
+
+void TrackProperties::SetTrack(Track* track) {
+  track_ = track->GetShared();
+
+  // TODO: Update internal state of properties to reflect the new track.
+}
 
 ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   auto it = properties_.find(name);
@@ -24,10 +27,6 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   // TODO: Auto-create properties on demand for valid property names, if it
   // doesn't already exist.
   return it != properties_.end() ? it->second.get() : nullptr;
-}
-
-void TrackProperties::OnTrackChanged(Track* track) {
-  // TODO: Handle updates to the track properties.
 }
 
 }  // namespace jpr
