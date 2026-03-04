@@ -59,10 +59,21 @@ class ViewMapping final {
   using SyncFunction = void(ViewProperty&, ViewControl&);
 
   void InitReadControl();
+  void InitReadActionSyncFunction();
   void InitReadToggleSyncFunction();
+  void InitReadPanSyncFunction();
+  void InitReadVolumeSyncFunction();
+  void InitReadNormalizedSyncFunction();
+  void InitReadTextSyncFunction();
+  void InitReadColorSyncFunction();
 
   void InitWriteControl();
   void InitWriteToggleSyncFunction();
+  void InitWritePanSyncFunction();
+  void InitWriteVolumeSyncFunction();
+  void InitWriteNormalizedSyncFunction();
+  void InitWriteTextSyncFunction();
+  void InitWriteColorSyncFunction();
 
   TypeFlags type_;
   ViewProperty* property_;
