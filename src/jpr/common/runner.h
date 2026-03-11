@@ -48,6 +48,8 @@ class RunHandle final {
 // class.
 class RunRegistry {
  public:
+  // A Runnable is a function that will be called when Run() is called on the
+  // Runner. It takes the current time as an input.
   using Runnable = absl::AnyInvocable<void(const RunTime& time)>;
 
   RunRegistry(const RunRegistry&) = delete;
