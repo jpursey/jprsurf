@@ -23,6 +23,8 @@ double GetOutputDelay(Control::OutputMode output_mode) {
     case Control::OutputMode::kMotorized:
       return kMotorizedOutputDelay;
   }
+  // Should never reach here, but return zero to avoid compiler warning.
+  return 0.0;
 }
 
 }  // namespace
