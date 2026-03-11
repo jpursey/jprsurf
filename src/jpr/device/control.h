@@ -11,6 +11,7 @@
 #include <string_view>
 #include <variant>
 
+#include "absl/container/flat_hash_set.h"
 #include "gb/base/flags.h"
 #include "jpr/common/color.h"
 #include "jpr/common/runner.h"
@@ -215,6 +216,19 @@ class Control final {
   void SetColor(Color color);
 
   //----------------------------------------------------------------------------
+  // Input change notifications
+  //----------------------------------------------------------------------------
+
+  // Registers a boolean flag to be set to true whenever the specified input
+  // type changes. The flag pointer must remain valid until it is unregistered.
+  //
+  // When the first flag is registered for an input type, the Control will
+  // begin listening for changes on that input. When the last flag is
+  // unregistered, the listener is removed.
+  void RegisterInputFlag(ControlInput::Type input_type, bool* flag);
+  void UnregisterInputFlag(ControlInput::Type input_type, bool* flag);
+
+  //----------------------------------------------------------------------------
   // Operations
   //----------------------------------------------------------------------------
 
@@ -224,6 +238,9 @@ class Control final {
   void OnRun(const RunTime& time);
   void ResetInputs();
   void SendPendingOutput();
+  void SetInputListener(ControlInput::Type input_type);
+  void ClearInputListener(ControlInput::Type input_type);
+  void NotifyInputFlags(ControlInput::Type input_type);
 
   // Constructed state.
   RunRegistry& run_registry_;
@@ -245,6 +262,9 @@ class Control final {
   double last_run_time_;
   std::optional<double> last_input_time_;
   std::optional<OutputValue> pending_output_;
+  absl::flat_hash_set<bool*> value_input_flags_;
+  absl::flat_hash_set<bool*> delta_input_flags_;
+  absl::flat_hash_set<bool*> press_input_flags_;
 };
 
 }  // namespace jpr

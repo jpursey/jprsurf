@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "gb/base/flags.h"
 #include "jpr/device/control.h"
 #include "jpr/scene/view_property.h"
@@ -80,6 +82,7 @@ class ViewMapping final {
   Control* control_;
   SyncFunction* read_control_;
   SyncFunction* write_control_;
+  std::optional<ControlInput::Type> input_type_;
   bool active_ = false;
   bool control_changed_ = false;
   bool property_changed_ = false;

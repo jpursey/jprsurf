@@ -144,6 +144,109 @@ void Control::SetColor(Color color) {
   }
 }
 
+void Control::RegisterInputFlag(ControlInput::Type input_type, bool* flag) {
+  absl::flat_hash_set<bool*>* flags = nullptr;
+  switch (input_type) {
+    case ControlInput::Type::kValue:
+      flags = &value_input_flags_;
+      break;
+    case ControlInput::Type::kDelta:
+      flags = &delta_input_flags_;
+      break;
+    case ControlInput::Type::kPress:
+      flags = &press_input_flags_;
+      break;
+  }
+  bool was_empty = flags->empty();
+  flags->insert(flag);
+  if (was_empty) {
+    SetInputListener(input_type);
+  }
+}
+
+void Control::UnregisterInputFlag(ControlInput::Type input_type, bool* flag) {
+  absl::flat_hash_set<bool*>* flags = nullptr;
+  switch (input_type) {
+    case ControlInput::Type::kValue:
+      flags = &value_input_flags_;
+      break;
+    case ControlInput::Type::kDelta:
+      flags = &delta_input_flags_;
+      break;
+    case ControlInput::Type::kPress:
+      flags = &press_input_flags_;
+      break;
+  }
+  flags->erase(flag);
+  if (flags->empty()) {
+    ClearInputListener(input_type);
+  }
+}
+
+void Control::SetInputListener(ControlInput::Type input_type) {
+  switch (input_type) {
+    case ControlInput::Type::kValue:
+      if (value_input_ != nullptr) {
+        value_input_->SetListener([this](ControlValueInput*) {
+          NotifyInputFlags(ControlInput::Type::kValue);
+        });
+      }
+      break;
+    case ControlInput::Type::kDelta:
+      if (delta_input_ != nullptr) {
+        delta_input_->SetListener([this](ControlDeltaInput*) {
+          NotifyInputFlags(ControlInput::Type::kDelta);
+        });
+      }
+      break;
+    case ControlInput::Type::kPress:
+      if (press_input_ != nullptr) {
+        press_input_->SetListener([this](ControlPressInput*) {
+          NotifyInputFlags(ControlInput::Type::kPress);
+        });
+      }
+      break;
+  }
+}
+
+void Control::ClearInputListener(ControlInput::Type input_type) {
+  switch (input_type) {
+    case ControlInput::Type::kValue:
+      if (value_input_ != nullptr) {
+        value_input_->SetListener(nullptr);
+      }
+      break;
+    case ControlInput::Type::kDelta:
+      if (delta_input_ != nullptr) {
+        delta_input_->SetListener(nullptr);
+      }
+      break;
+    case ControlInput::Type::kPress:
+      if (press_input_ != nullptr) {
+        press_input_->SetListener(nullptr);
+      }
+      break;
+  }
+}
+
+void Control::NotifyInputFlags(ControlInput::Type input_type) {
+  const absl::flat_hash_set<bool*>* flags = nullptr;
+  switch (input_type) {
+    case ControlInput::Type::kValue:
+      flags = &value_input_flags_;
+      break;
+    case ControlInput::Type::kDelta:
+      flags = &delta_input_flags_;
+      break;
+    case ControlInput::Type::kPress:
+      flags = &press_input_flags_;
+      break;
+  }
+  for (bool* flag : *flags) {
+    *flag = true;
+  }
+}
+
 void Control::OnRun(const RunTime& time) {
   last_run_time_ = time.precise;
   ResetInputs();

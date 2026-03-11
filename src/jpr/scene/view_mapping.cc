@@ -65,6 +65,7 @@ void ViewMapping::InitReadActionSyncFunction() {
 
   // Only press inputs make sense for triggering actions.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_type_ = ControlInput::Type::kPress;
     // If there is a press input, we trigger the action on every press event.
     read_control_ = [](ViewProperty& property, Control& control) {
       if (control.GetPressCount() > 0) {
@@ -80,6 +81,7 @@ void ViewMapping::InitReadToggleSyncFunction() {
 
   // If there is a press input, we toggle the property on each press event.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_type_ = ControlInput::Type::kPress;
     read_control_ = [](ViewProperty& property, Control& control) {
       if (control.GetPressCount() % 2 != 0) {
         property.SetBool(!property.GetBool());
@@ -91,6 +93,7 @@ void ViewMapping::InitReadToggleSyncFunction() {
   // If there is a delta input, we set the property to false when the delta is
   // negative, and true when the delta is positive.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_type_ = ControlInput::Type::kDelta;
     read_control_ = [](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
@@ -103,6 +106,7 @@ void ViewMapping::InitReadToggleSyncFunction() {
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
+    input_type_ = ControlInput::Type::kValue;
     read_control_ = [](ViewProperty& property, Control& control) {
       property.SetNormalized(control.GetValue());
     };
@@ -116,6 +120,7 @@ void ViewMapping::InitReadPanSyncFunction() {
   // The value input is preferred for pan controls, if it is available, which
   // maps [0,1] to [-1,1].
   if (inputs.IsSet(ControlInput::Type::kValue)) {
+    input_type_ = ControlInput::Type::kValue;
     read_control_ = [](ViewProperty& property, Control& control) {
       double value = control.GetValue();
       property.SetPan(value * 2.0 - 1.0);
@@ -125,6 +130,7 @@ void ViewMapping::InitReadPanSyncFunction() {
 
   // If there is a delta input, we add the delta to the current pan value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_type_ = ControlInput::Type::kDelta;
     read_control_ = [](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
@@ -137,6 +143,7 @@ void ViewMapping::InitReadPanSyncFunction() {
   // If there is a press input, we alternate between left, center, and right pan
   // on each press.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_type_ = ControlInput::Type::kPress;
     read_control_ = [](ViewProperty& property, Control& control) {
       // Get the current press count.
       int press_count = control.GetPressCount() % 3;
@@ -173,6 +180,7 @@ void ViewMapping::InitReadVolumeSyncFunction() {
   // The value input is preferred for volume controls, if it is available, which
   // maps [0,1] to [0,kMaxVolume].
   if (inputs.IsSet(ControlInput::Type::kValue)) {
+    input_type_ = ControlInput::Type::kValue;
     read_control_ = [](ViewProperty& property, Control& control) {
       double value = control.GetValue();
       property.SetVolume(value * kMaxVolume);
@@ -182,6 +190,7 @@ void ViewMapping::InitReadVolumeSyncFunction() {
 
   // If there is a delta input, we add the delta to the current volume value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_type_ = ControlInput::Type::kDelta;
     read_control_ = [](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
@@ -193,6 +202,7 @@ void ViewMapping::InitReadVolumeSyncFunction() {
 
   // If there is a press input, we toggle between silence and unity gain.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_type_ = ControlInput::Type::kPress;
     read_control_ = [](ViewProperty& property, Control& control) {
       int press_count = control.GetPressCount() % 2;
       if (press_count == 0) {
@@ -210,6 +220,7 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
+    input_type_ = ControlInput::Type::kValue;
     read_control_ = [](ViewProperty& property, Control& control) {
       property.SetNormalized(control.GetValue());
     };
@@ -218,6 +229,7 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
 
   // If there is a delta input, we add the delta to the current value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_type_ = ControlInput::Type::kDelta;
     read_control_ = [](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
@@ -229,6 +241,7 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
 
   // If there is a press input, we toggle between the minimum and maximum value.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_type_ = ControlInput::Type::kPress;
     read_control_ = [](ViewProperty& property, Control& control) {
       int press_count = control.GetPressCount() % 2;
       if (press_count == 0) {
@@ -241,12 +254,13 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
 }
 
 void ViewMapping::InitReadTextSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+Control::Inputs inputs = control_->GetInputs();
 
-  // If there is a value input, we just set the value and let the property
-  // handle the conversion.
-  if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, Control& control) {
+// If there is a value input, we just set the value and let the property
+// handle the conversion.
+if (inputs.IsSet(ControlInput::Type::kValue)) {
+  input_type_ = ControlInput::Type::kValue;
+  read_control_ = [](ViewProperty& property, Control& control) {
       property.SetNormalized(control.GetValue());
     };
     return;
@@ -257,32 +271,35 @@ void ViewMapping::InitReadTextSyncFunction() {
 }
 
 void ViewMapping::InitReadColorSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+Control::Inputs inputs = control_->GetInputs();
 
-  // If there is a value input, we just set the value and let the property
-  // handle the conversion.
-  if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, Control& control) {
-      property.SetNormalized(control.GetValue());
-    };
-    return;
-  }
+// If there is a value input, we just set the value and let the property
+// handle the conversion.
+if (inputs.IsSet(ControlInput::Type::kValue)) {
+  input_type_ = ControlInput::Type::kValue;
+  read_control_ = [](ViewProperty& property, Control& control) {
+    property.SetNormalized(control.GetValue());
+  };
+  return;
+}
 
-  // For a delta input, we let the property convert it to and from a normalized
-  // value.
-  if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    read_control_ = [](ViewProperty& property, Control& control) {
-      double delta = control.GetDelta();
-      if (delta != 0) {
-        property.SetNormalized(property.GetNormalized() + delta);
-      }
-    };
-    return;
-  }
+// For a delta input, we let the property convert it to and from a normalized
+// value.
+if (inputs.IsSet(ControlInput::Type::kDelta)) {
+  input_type_ = ControlInput::Type::kDelta;
+  read_control_ = [](ViewProperty& property, Control& control) {
+    double delta = control.GetDelta();
+    if (delta != 0) {
+      property.SetNormalized(property.GetNormalized() + delta);
+    }
+  };
+  return;
+}
 
-  // For a press input, we let the property convert it to and from a boolean
-  // value.
-  if (inputs.IsSet(ControlInput::Type::kPress)) {
+// For a press input, we let the property convert it to and from a boolean
+// value.
+if (inputs.IsSet(ControlInput::Type::kPress)) {
+  input_type_ = ControlInput::Type::kPress;
     read_control_ = [](ViewProperty& property, Control& control) {
       int press_count = control.GetPressCount() % 2;
       if (press_count == 1) {
@@ -718,6 +735,9 @@ void ViewMapping::Activate() {
   active_ = true;
   property_changed_ = type_.IsSet(kWriteControl);
   property_->AddMapping(this);
+  if (input_type_.has_value()) {
+    control_->RegisterInputFlag(input_type_.value(), &control_changed_);
+  }
 }
 
 void ViewMapping::Deactivate() {
@@ -726,6 +746,9 @@ void ViewMapping::Deactivate() {
   }
   active_ = false;
   property_->RemoveMapping(this);
+  if (input_type_.has_value()) {
+    control_->UnregisterInputFlag(input_type_.value(), &control_changed_);
+  }
 }
 
 void ViewMapping::Sync() {
