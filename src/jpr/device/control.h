@@ -236,6 +236,7 @@ class Control final {
   using OutputValue = std::variant<double, int, std::string, Color>;
 
   void OnRun(const RunTime& time);
+  void UpdateRunHandle();
   void ResetInputs();
   void SendPendingOutput();
   void SetInputListener(ControlInput::Type input_type);

@@ -105,7 +105,11 @@ void Control::SetCValue(double value) {
     return;
   }
   if (output_mode_ != OutputMode::kIndependent) {
+    bool had_pending = pending_output_.has_value();
     pending_output_ = value;
+    if (!had_pending) {
+      UpdateRunHandle();
+    }
   } else {
     cvalue_output_->SetValue(value);
   }
@@ -116,7 +120,11 @@ void Control::SetDValue(int value) {
     return;
   }
   if (output_mode_ != OutputMode::kIndependent) {
+    bool had_pending = pending_output_.has_value();
     pending_output_ = value;
+    if (!had_pending) {
+      UpdateRunHandle();
+    }
   } else {
     dvalue_output_->SetValue(value);
   }
@@ -127,7 +135,11 @@ void Control::SetText(std::string_view text) {
     return;
   }
   if (output_mode_ != OutputMode::kIndependent) {
+    bool had_pending = pending_output_.has_value();
     pending_output_ = std::string(text);
+    if (!had_pending) {
+      UpdateRunHandle();
+    }
   } else {
     text_output_->SetText(text);
   }
@@ -138,7 +150,11 @@ void Control::SetColor(Color color) {
     return;
   }
   if (output_mode_ != OutputMode::kIndependent) {
+    bool had_pending = pending_output_.has_value();
     pending_output_ = color;
+    if (!had_pending) {
+      UpdateRunHandle();
+    }
   } else {
     color_output_->SetColor(color);
   }
@@ -161,6 +177,9 @@ void Control::RegisterInputFlag(ControlInput::Type input_type, bool* flag) {
   flags->insert(flag);
   if (was_empty) {
     SetInputListener(input_type);
+    if (input_type != ControlInput::Type::kValue) {
+      UpdateRunHandle();
+    }
   }
 }
 
@@ -180,6 +199,9 @@ void Control::UnregisterInputFlag(ControlInput::Type input_type, bool* flag) {
   flags->erase(flag);
   if (flags->empty()) {
     ClearInputListener(input_type);
+    if (input_type != ControlInput::Type::kValue) {
+      UpdateRunHandle();
+    }
   }
 }
 
@@ -247,10 +269,22 @@ void Control::NotifyInputFlags(ControlInput::Type input_type) {
   }
 }
 
+void Control::UpdateRunHandle() {
+  bool need_run = !delta_input_flags_.empty() || !press_input_flags_.empty() ||
+                  pending_output_.has_value();
+  if (need_run && !run_handle_.IsRegistered()) {
+    run_handle_ =
+        run_registry_.AddRunnable([this](const RunTime& time) { OnRun(time); });
+  } else if (!need_run && run_handle_.IsRegistered()) {
+    run_handle_ = {};
+  }
+}
+
 void Control::OnRun(const RunTime& time) {
   last_run_time_ = time.precise;
   ResetInputs();
   SendPendingOutput();
+  UpdateRunHandle();
 }
 
 void Control::ResetInputs() {
