@@ -91,7 +91,7 @@ bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
   if (property == nullptr) {
     return false;
   }
-  ViewControl* control = scene_->GetControl(control_name);
+  Control* control = scene_->GetControl(control_name);
   if (control == nullptr) {
     return false;
   }

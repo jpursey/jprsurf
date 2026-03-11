@@ -5,14 +5,13 @@
 
 #include "jpr/scene/view_mapping.h"
 
-#include "jpr/scene/view_control.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
 
 namespace {
 
-void NoOpSyncFunction(ViewProperty& property, ViewControl& control) {}
+void NoOpSyncFunction(ViewProperty& property, Control& control) {}
 
 // 10dB above unity gain, which matches the X-Touch faders.
 constexpr double kMaxVolume = 3.16228;
@@ -20,7 +19,7 @@ constexpr double kMaxVolume = 3.16228;
 }  // namespace
 
 ViewMapping::ViewMapping(TypeFlags type, ViewProperty* property,
-                         ViewControl* control)
+Control* control)
     : type_(type),
       property_(property),
       control_(control),
@@ -62,13 +61,13 @@ void ViewMapping::InitReadControl() {
 }
 
 void ViewMapping::InitReadActionSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // Only press inputs make sense for triggering actions.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     // If there is a press input, we trigger the action on every press event.
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      if (control.GetControl()->GetPressCount() > 0) {
+    read_control_ = [](ViewProperty& property, Control& control) {
+      if (control.GetPressCount() > 0) {
         property.TriggerAction();
       }
     };
@@ -77,12 +76,12 @@ void ViewMapping::InitReadActionSyncFunction() {
 }
 
 void ViewMapping::InitReadToggleSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // If there is a press input, we toggle the property on each press event.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      if (control.GetControl()->GetPressCount() % 2 != 0) {
+    read_control_ = [](ViewProperty& property, Control& control) {
+      if (control.GetPressCount() % 2 != 0) {
         property.SetBool(!property.GetBool());
       }
     };
@@ -92,8 +91,8 @@ void ViewMapping::InitReadToggleSyncFunction() {
   // If there is a delta input, we set the property to false when the delta is
   // negative, and true when the delta is positive.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double delta = control.GetControl()->GetDelta();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double delta = control.GetDelta();
       if (delta != 0) {
         property.SetBool(delta > 0);
       }
@@ -104,21 +103,21 @@ void ViewMapping::InitReadToggleSyncFunction() {
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      property.SetNormalized(control.GetControl()->GetValue());
+    read_control_ = [](ViewProperty& property, Control& control) {
+      property.SetNormalized(control.GetValue());
     };
     return;
   }
 }
 
 void ViewMapping::InitReadPanSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // The value input is preferred for pan controls, if it is available, which
   // maps [0,1] to [-1,1].
   if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double value = control.GetControl()->GetValue();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double value = control.GetValue();
       property.SetPan(value * 2.0 - 1.0);
     };
     return;
@@ -126,8 +125,8 @@ void ViewMapping::InitReadPanSyncFunction() {
 
   // If there is a delta input, we add the delta to the current pan value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double delta = control.GetControl()->GetDelta();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double delta = control.GetDelta();
       if (delta != 0) {
         property.SetPan(property.GetPan() + delta);
       }
@@ -138,9 +137,9 @@ void ViewMapping::InitReadPanSyncFunction() {
   // If there is a press input, we alternate between left, center, and right pan
   // on each press.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
+    read_control_ = [](ViewProperty& property, Control& control) {
       // Get the current press count.
-      int press_count = control.GetControl()->GetPressCount() % 3;
+      int press_count = control.GetPressCount() % 3;
       if (press_count == 0) {
         return;
       }
@@ -169,13 +168,13 @@ void ViewMapping::InitReadPanSyncFunction() {
 }
 
 void ViewMapping::InitReadVolumeSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // The value input is preferred for volume controls, if it is available, which
   // maps [0,1] to [0,kMaxVolume].
   if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double value = control.GetControl()->GetValue();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double value = control.GetValue();
       property.SetVolume(value * kMaxVolume);
     };
     return;
@@ -183,8 +182,8 @@ void ViewMapping::InitReadVolumeSyncFunction() {
 
   // If there is a delta input, we add the delta to the current volume value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double delta = control.GetControl()->GetDelta();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double delta = control.GetDelta();
       if (delta != 0) {
         property.SetVolume(property.GetVolume() + delta);
       }
@@ -194,8 +193,8 @@ void ViewMapping::InitReadVolumeSyncFunction() {
 
   // If there is a press input, we toggle between silence and unity gain.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      int press_count = control.GetControl()->GetPressCount() % 2;
+    read_control_ = [](ViewProperty& property, Control& control) {
+      int press_count = control.GetPressCount() % 2;
       if (press_count == 0) {
         return;
       }
@@ -206,21 +205,21 @@ void ViewMapping::InitReadVolumeSyncFunction() {
 }
 
 void ViewMapping::InitReadNormalizedSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      property.SetNormalized(control.GetControl()->GetValue());
+    read_control_ = [](ViewProperty& property, Control& control) {
+      property.SetNormalized(control.GetValue());
     };
     return;
   }
 
   // If there is a delta input, we add the delta to the current value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double delta = control.GetControl()->GetDelta();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double delta = control.GetDelta();
       if (delta != 0) {
         property.SetNormalized(property.GetNormalized() + delta);
       }
@@ -230,8 +229,8 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
 
   // If there is a press input, we toggle between the minimum and maximum value.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      int press_count = control.GetControl()->GetPressCount() % 2;
+    read_control_ = [](ViewProperty& property, Control& control) {
+      int press_count = control.GetPressCount() % 2;
       if (press_count == 0) {
         return;
       }
@@ -242,13 +241,13 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
 }
 
 void ViewMapping::InitReadTextSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      property.SetNormalized(control.GetControl()->GetValue());
+    read_control_ = [](ViewProperty& property, Control& control) {
+      property.SetNormalized(control.GetValue());
     };
     return;
   }
@@ -258,13 +257,13 @@ void ViewMapping::InitReadTextSyncFunction() {
 }
 
 void ViewMapping::InitReadColorSyncFunction() {
-  Control::Inputs inputs = control_->GetControl()->GetInputs();
+  Control::Inputs inputs = control_->GetInputs();
 
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      property.SetNormalized(control.GetControl()->GetValue());
+    read_control_ = [](ViewProperty& property, Control& control) {
+      property.SetNormalized(control.GetValue());
     };
     return;
   }
@@ -272,8 +271,8 @@ void ViewMapping::InitReadColorSyncFunction() {
   // For a delta input, we let the property convert it to and from a normalized
   // value.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      double delta = control.GetControl()->GetDelta();
+    read_control_ = [](ViewProperty& property, Control& control) {
+      double delta = control.GetDelta();
       if (delta != 0) {
         property.SetNormalized(property.GetNormalized() + delta);
       }
@@ -284,8 +283,8 @@ void ViewMapping::InitReadColorSyncFunction() {
   // For a press input, we let the property convert it to and from a boolean
   // value.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
-    read_control_ = [](ViewProperty& property, ViewControl& control) {
-      int press_count = control.GetControl()->GetPressCount() % 2;
+    read_control_ = [](ViewProperty& property, Control& control) {
+      int press_count = control.GetPressCount() % 2;
       if (press_count == 1) {
         property.SetBool(!property.GetBool());
       }
@@ -325,15 +324,14 @@ void ViewMapping::InitWriteControl() {
 }
 
 void ViewMapping::InitWriteToggleSyncFunction() {
-  Control* control = control_->GetControl();
-  Control::Outputs outputs = control->GetOutputs();
+  Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a dvalue output, we set it to the max value when the property
   // is true, and 0 when the property is false.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      int max_value = control.GetControl()->GetDValueMaxValue();
-      control.GetControl()->SetDValue(property.GetBool() ? max_value : 0);
+    write_control_ = [](ViewProperty& property, Control& control) {
+      int max_value = control.GetDValueMaxValue();
+      control.SetDValue(property.GetBool() ? max_value : 0);
     };
     return;
   }
@@ -341,8 +339,8 @@ void ViewMapping::InitWriteToggleSyncFunction() {
   // If there is a cvalue output, we set it to 1.0 when the property is true,
   // and 0.0 when the property is false.
   if (outputs.IsSet(ControlOutput::Type::kCValue)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetCValue(property.GetNormalized());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetCValue(property.GetNormalized());
     };
     return;
   }
@@ -350,8 +348,8 @@ void ViewMapping::InitWriteToggleSyncFunction() {
   // If there is a text output, we set it to "On" when the property is true, and
   // "Off" when the property is false.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetText(property.GetText());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetText(property.GetText());
     };
     return;
   }
@@ -359,8 +357,8 @@ void ViewMapping::InitWriteToggleSyncFunction() {
   // If there is a color output, we set it to white when the property is true,
   // and black when the property is false.
   if (outputs.IsSet(ControlOutput::Type::kColor)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetColor(property.GetColor());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetColor(property.GetColor());
     };
     return;
   }
@@ -429,31 +427,30 @@ int MapPanToOddRange(double pan, int max) {
 }  // namespace
 
 void ViewMapping::InitWritePanSyncFunction() {
-  Control* control = control_->GetControl();
-  Control::Outputs outputs = control->GetOutputs();
+  Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a dvalue output, we clamp the pan value hard left, center, and
   // hard right to explicit values if possible, and then interpolate for values
   // in between.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control->GetDValueMaxValue();
+    int max_value = control_->GetDValueMaxValue();
     if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(MapPanToTwoStates(property.GetPan()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapPanToTwoStates(property.GetPan()));
       };
     } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(MapPanToThreeStates(property.GetPan()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapPanToThreeStates(property.GetPan()));
       };
     } else if (max_value % 2 == 1) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(MapPanToEvenRange(
-            property.GetPan(), control.GetControl()->GetDValueMaxValue()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapPanToEvenRange(property.GetPan(),
+                                           control.GetDValueMaxValue()));
       };
     } else {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(MapPanToOddRange(
-            property.GetPan(), control.GetControl()->GetDValueMaxValue()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapPanToOddRange(property.GetPan(),
+                                          control.GetDValueMaxValue()));
       };
     }
     return;
@@ -461,16 +458,16 @@ void ViewMapping::InitWritePanSyncFunction() {
 
   // If there is a cvalue output, we map the pan value from [-1,1] to [0,1].
   if (outputs.IsSet(ControlOutput::Type::kCValue)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetCValue(property.GetNormalized());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetCValue(property.GetNormalized());
     };
     return;
   }
 
   // If there is a text output, let the property convert the pan value to text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetText(property.GetText());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetText(property.GetText());
     };
     return;
   }
@@ -478,8 +475,8 @@ void ViewMapping::InitWritePanSyncFunction() {
   // If there is a color output, let the property convert the pan value to a
   // color.
   if (outputs.IsSet(ControlOutput::Type::kColor)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetColor(property.GetColor());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetColor(property.GetColor());
     };
     return;
   }
@@ -516,27 +513,24 @@ int MapVolumeToRange(double volume, int max) {
 }  // namespace
 
 void ViewMapping::InitWriteVolumeSyncFunction() {
-  Control* control = control_->GetControl();
-  Control::Outputs outputs = control->GetOutputs();
+  Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a dvalue output, we map the volume value from [0,kMaxVolume] to
   // discrete steps based on the max value.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control->GetDValueMaxValue();
+    int max_value = control_->GetDValueMaxValue();
     if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapVolumeToTwoStates(property.GetVolume()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapVolumeToTwoStates(property.GetVolume()));
       };
     } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapVolumeToThreeStates(property.GetVolume()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapVolumeToThreeStates(property.GetVolume()));
       };
     } else {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(MapVolumeToRange(
-            property.GetVolume(), control.GetControl()->GetDValueMaxValue()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapVolumeToRange(property.GetVolume(),
+                                          control.GetDValueMaxValue()));
       };
     }
     return;
@@ -545,10 +539,10 @@ void ViewMapping::InitWriteVolumeSyncFunction() {
   // If there is a cvalue output, we map the volume value from [0,kMaxVolume] to
   // [0,1].
   if (outputs.IsSet(ControlOutput::Type::kCValue)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
+    write_control_ = [](ViewProperty& property, Control& control) {
       double volume = property.GetVolume();
       double normalized_volume = std::clamp(volume / kMaxVolume, 0.0, 1.0);
-      control.GetControl()->SetCValue(normalized_volume);
+      control.SetCValue(normalized_volume);
     };
     return;
   }
@@ -556,8 +550,8 @@ void ViewMapping::InitWriteVolumeSyncFunction() {
   // If there is a text output, let the property convert the volume value to
   // text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetText(property.GetText());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetText(property.GetText());
     };
     return;
   }
@@ -565,8 +559,8 @@ void ViewMapping::InitWriteVolumeSyncFunction() {
   // If there is a color output, let the property convert the volume value to a
   // color.
   if (outputs.IsSet(ControlOutput::Type::kColor)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetColor(property.GetColor());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetColor(property.GetColor());
     };
     return;
   }
@@ -599,28 +593,24 @@ int MapNormalizedToRange(double value, int max) {
 }  // namespace
 
 void ViewMapping::InitWriteNormalizedSyncFunction() {
-  Control* control = control_->GetControl();
-  Control::Outputs outputs = control->GetOutputs();
+  Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a dvalue output, we map the normalized value from [0,1] to
   // to discrete steps depending on the max value.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control->GetDValueMaxValue();
+    int max_value = control_->GetDValueMaxValue();
     if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapNormalizedToTwoStates(property.GetNormalized()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()));
       };
     } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapNormalizedToThreeStates(property.GetNormalized()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()));
       };
     } else {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapNormalizedToRange(property.GetNormalized(),
-                                 control.GetControl()->GetDValueMaxValue()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapNormalizedToRange(property.GetNormalized(),
+                                              control.GetDValueMaxValue()));
       };
     }
     return;
@@ -629,8 +619,8 @@ void ViewMapping::InitWriteNormalizedSyncFunction() {
   // If there is a cvalue output, we just set the value and let the control
   // handle the conversion.
   if (outputs.IsSet(ControlOutput::Type::kCValue)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetCValue(property.GetNormalized());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetCValue(property.GetNormalized());
     };
     return;
   }
@@ -638,8 +628,8 @@ void ViewMapping::InitWriteNormalizedSyncFunction() {
   // If there is a text output, let the property convert the normalized value to
   // text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetText(property.GetText());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetText(property.GetText());
     };
     return;
   }
@@ -647,20 +637,20 @@ void ViewMapping::InitWriteNormalizedSyncFunction() {
   // If there is a color output, let the property convert the normalized value
   // to a color.
   if (outputs.IsSet(ControlOutput::Type::kColor)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetColor(property.GetColor());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetColor(property.GetColor());
     };
     return;
   }
 }
 
 void ViewMapping::InitWriteTextSyncFunction() {
-  Control::Outputs outputs = control_->GetControl()->GetOutputs();
+  Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a text output, use it.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetText(property.GetText());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetText(property.GetText());
     };
     return;
   }
@@ -670,13 +660,12 @@ void ViewMapping::InitWriteTextSyncFunction() {
 }
 
 void ViewMapping::InitWriteColorSyncFunction() {
-  Control* control = control_->GetControl();
-  Control::Outputs outputs = control->GetOutputs();
+  Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a color output, use it.
   if (outputs.IsSet(ControlOutput::Type::kColor)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetColor(property.GetColor());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetColor(property.GetColor());
     };
     return;
   }
@@ -684,8 +673,8 @@ void ViewMapping::InitWriteColorSyncFunction() {
   // If there is a text output, let the property convert the color value to
   // text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetText(property.GetText());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetText(property.GetText());
     };
     return;
   }
@@ -693,8 +682,8 @@ void ViewMapping::InitWriteColorSyncFunction() {
   // If there is a cvalue output, let the property convert the color value to a
   // normalized value.
   if (outputs.IsSet(ControlOutput::Type::kCValue)) {
-    write_control_ = [](ViewProperty& property, ViewControl& control) {
-      control.GetControl()->SetCValue(property.GetNormalized());
+    write_control_ = [](ViewProperty& property, Control& control) {
+      control.SetCValue(property.GetNormalized());
     };
     return;
   }
@@ -703,22 +692,19 @@ void ViewMapping::InitWriteColorSyncFunction() {
   // normalized value, and make it discrete in the same way as the normalized
   // property.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control->GetDValueMaxValue();
+    int max_value = control_->GetDValueMaxValue();
     if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapNormalizedToTwoStates(property.GetNormalized()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()));
       };
     } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapNormalizedToThreeStates(property.GetNormalized()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()));
       };
     } else {
-      write_control_ = [](ViewProperty& property, ViewControl& control) {
-        control.GetControl()->SetDValue(
-            MapNormalizedToRange(property.GetNormalized(),
-                                 control.GetControl()->GetDValueMaxValue()));
+      write_control_ = [](ViewProperty& property, Control& control) {
+        control.SetDValue(MapNormalizedToRange(property.GetNormalized(),
+                                              control.GetDValueMaxValue()));
       };
     }
     return;
@@ -732,7 +718,6 @@ void ViewMapping::Activate() {
   active_ = true;
   property_changed_ = type_.IsSet(kWriteControl);
   property_->AddMapping(this);
-  control_->AddMapping(this);
 }
 
 void ViewMapping::Deactivate() {
@@ -741,7 +726,6 @@ void ViewMapping::Deactivate() {
   }
   active_ = false;
   property_->RemoveMapping(this);
-  control_->RemoveMapping(this);
 }
 
 void ViewMapping::Sync() {

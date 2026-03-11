@@ -6,12 +6,12 @@
 #pragma once
 
 #include "gb/base/flags.h"
-#include "jpr/scene/view_control.h"
+#include "jpr/device/control.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
 
-// A view mapping represents a single mapping between a view property and a view
+// A view mapping represents a single mapping between a view property and a
 // control.
 //
 // It is responsible for doing the actual synchronization between the view
@@ -31,14 +31,14 @@ class ViewMapping final {
   static constexpr TypeFlags kReadWriteControl = {Type::kReadControl,
                                                   Type::kWriteControl};
 
-  ViewMapping(TypeFlags type, ViewProperty* property, ViewControl* control);
+  ViewMapping(TypeFlags type, ViewProperty* property, Control* control);
   ViewMapping(const ViewMapping&) = delete;
   ViewMapping& operator=(const ViewMapping&) = delete;
   ~ViewMapping();
 
   TypeFlags GetType() const { return type_; }
   ViewProperty* GetProperty() const { return property_; }
-  ViewControl* GetControl() const { return control_; }
+  Control* GetControl() const { return control_; }
 
   // Activation and deactivation. An active mapping will update the view
   // property and/or control according to its type when either changes.
@@ -56,7 +56,7 @@ class ViewMapping final {
   void WriteControl();
 
  private:
-  using SyncFunction = void(ViewProperty&, ViewControl&);
+  using SyncFunction = void(ViewProperty&, Control&);
 
   void InitReadControl();
   void InitReadActionSyncFunction();
@@ -77,7 +77,7 @@ class ViewMapping final {
 
   TypeFlags type_;
   ViewProperty* property_;
-  ViewControl* control_;
+  Control* control_;
   SyncFunction* read_control_;
   SyncFunction* write_control_;
   bool active_ = false;

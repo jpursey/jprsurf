@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "absl/memory/memory.h"
-#include "jpr/scene/view_control.h"
+#include "absl/strings/str_cat.h"
 
 namespace jpr {
 
@@ -21,17 +21,16 @@ Scene::~Scene() = default;
 void Scene::AddDevice(std::string_view device_name,
                       std::unique_ptr<Device> device) {
   for (const auto& control : device->GetControls()) {
-    auto view_control =
-        std::make_unique<ViewControl>(device_name, control.get());
-    std::string_view view_control_name = view_control->GetName();
-    controls_.emplace(view_control_name, std::move(view_control));
+    std::string control_name =
+        absl::StrCat(device_name, "/", control->GetName());
+    controls_.emplace(std::move(control_name), control.get());
   }
   devices_.emplace(device_name, std::move(device));
 }
 
-ViewControl* Scene::GetControl(std::string_view name) const {
+Control* Scene::GetControl(std::string_view name) const {
   auto it = controls_.find(name);
-  return it != controls_.end() ? it->second.get() : nullptr;
+  return it != controls_.end() ? it->second : nullptr;
 }
 
 ViewProperty* Scene::GetProperty(std::string_view name) const {
