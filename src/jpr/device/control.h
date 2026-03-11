@@ -6,9 +6,14 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 
+#include "gb/base/flags.h"
+#include "jpr/common/color.h"
+#include "jpr/common/runner.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
 
@@ -38,7 +43,7 @@ namespace jpr {
 //     Delta input and a DValue output for the light ring.
 //   - A text screen display would be a control with a Text output and no
 //     inputs.
-class Control {
+class Control final {
  public:
   //----------------------------------------------------------------------------
   // Options
@@ -76,7 +81,7 @@ class Control {
     // This should be a short, human-readable string that describes the control,
     // such as "Play" or "Fader1". This is required to be unique within a
     // Device, but does not need to be globally unique.
-    std::string name;
+    std::string_view name;
 
     // Set of inputs for this control.
     //
@@ -146,47 +151,100 @@ class Control {
     std::unique_ptr<ControlColorOutput> color_output;
   };
 
+  // Settings for which inputs and outputs a control has. This is used by
+  // control mappings to determine which controls they can map to, and how to
+  // best map to them.
+  using Inputs = gb::Flags<ControlInput::Type>;
+  using Outputs = gb::Flags<ControlOutput::Type>;
+
   //----------------------------------------------------------------------------
   // Construction / Destruction
   //----------------------------------------------------------------------------
 
   // Constructs a control with the given options.
-  explicit Control(Options options) : options_(std::move(options)) {}
+  Control(RunRegistry& run_registry, Options options);
   Control(const Control&) = delete;
   Control& operator=(const Control&) = delete;
-  virtual ~Control() = default;
+  ~Control();
 
   //----------------------------------------------------------------------------
   // Accessors
   //----------------------------------------------------------------------------
 
   // Access to configuration options for this control.
-  std::string_view GetName() const { return options_.name; }
-  ControlValueInput* GetValueInput() const {
-    return options_.value_input.get();
-  }
-  ControlDeltaInput* GetDeltaInput() const {
-    return options_.delta_input.get();
-  }
-  ControlPressInput* GetPressInput() const {
-    return options_.press_input.get();
-  }
-  OutputMode GetOutputMode() const { return options_.output_mode; }
-  ControlCValueOutput* GetCValueOutput() const {
-    return options_.cvalue_output.get();
-  }
-  ControlDValueOutput* GetDValueOutput() const {
-    return options_.dvalue_output.get();
-  }
-  ControlTextOutput* GetTextOutput() const {
-    return options_.text_output.get();
-  }
-  ControlColorOutput* GetColorOutput() const {
-    return options_.color_output.get();
-  }
+  std::string_view GetName() const { return name_; }
+  Inputs GetInputs() const { return input_types_; }
+  Outputs GetOutputs() const { return output_types_; }
+  OutputMode GetOutputMode() const { return output_mode_; }
+
+  // Returns the current value of Value input, or 0.0 if there is no Value
+  // input.
+  double GetValue() const;
+
+  // Returns the current accumulated delta value of the Delta input, or 0.0 if
+  // there is no Delta input, or it has not changed since Reset().
+  double GetDelta() const;
+
+  // Returns the press count of the Press input, or 0 if there is no Press
+  // input, or it has not been pressed since Reset().
+  int GetPressCount() const;
+
+  // Returns true if the Press input is currently pressed, or false if there is
+  // no Press input, or it is not currently pressed, or it does not support
+  // release signals.
+  bool IsPressed() const;
+
+  // Sets the value of the CValue output, if it exists. If there is no CValue
+  // output, this does nothing.
+  void SetCValue(double value);
+
+  // Returns the maximum value of the DValue output, or 0 if there is no DValue
+  // output.
+  int GetDValueMaxValue() const;
+
+  // Sets the value of the DValue output, if it exists. If there is no DValue
+  // output, this does nothing.
+  void SetDValue(int value);
+
+  // Sets the text of the Text output, if it exists. If there is no Text
+  // output, this does nothing.
+  void SetText(std::string_view text);
+
+  // Sets the color of the Color output, if it exists. If there is no Color
+  // output, this does nothing.
+  void SetColor(Color color);
+
+  //----------------------------------------------------------------------------
+  // Operations
+  //----------------------------------------------------------------------------
 
  private:
-  Options options_;
+  using OutputValue = std::variant<double, int, std::string, Color>;
+
+  void OnRun(const RunTime& time);
+  void ResetInputs();
+  void SendPendingOutput();
+
+  // Constructed state.
+  RunRegistry& run_registry_;
+  const std::string name_;
+  const std::unique_ptr<ControlValueInput> value_input_;
+  const std::unique_ptr<ControlDeltaInput> delta_input_;
+  const std::unique_ptr<ControlPressInput> press_input_;
+  const std::unique_ptr<ControlCValueOutput> cvalue_output_;
+  const std::unique_ptr<ControlDValueOutput> dvalue_output_;
+  const std::unique_ptr<ControlTextOutput> text_output_;
+  const std::unique_ptr<ControlColorOutput> color_output_;
+  const OutputMode output_mode_;
+  const double output_delay_;
+  Inputs input_types_;
+  Outputs output_types_;
+
+  // Runtime state.
+  RunHandle run_handle_;
+  double last_run_time_;
+  std::optional<double> last_input_time_;
+  std::optional<OutputValue> pending_output_;
 };
 
 }  // namespace jpr

@@ -12,6 +12,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/types/span.h"
+#include "jpr/common/runner.h"
 #include "jpr/device/control.h"
 
 namespace jpr {
@@ -42,12 +43,13 @@ class Device {
   Control* GetControl(std::string_view name) const;
 
  protected:
-  Device() = default;
+  explicit Device(RunRegistry& run_registry) : run_registry_(run_registry) {}
 
   // Derived classes should call this to add a control to the device.
-  void AddControl(std::unique_ptr<Control> control);
+  void AddControl(Control::Options options);
 
  private:
+  RunRegistry& run_registry_;
   std::vector<std::unique_ptr<Control>> controls_;
   absl::flat_hash_map<std::string, Control*> control_map_;
 };

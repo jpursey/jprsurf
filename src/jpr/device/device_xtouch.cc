@@ -144,7 +144,9 @@ const Button kButtons[] = {
 
 }  // namespace
 
-DeviceXTouch::DeviceXTouch(MidiIn* midi_in, MidiOut* midi_out) : Device() {
+DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
+                           MidiOut* midi_out)
+    : Device(run_registry) {
   for (const auto& button : kButtons) {
     Control::Options options = {.name = std::string(button.name)};
     options.press_input = std::make_unique<ControlPressInputMidiMsg>(
@@ -154,7 +156,7 @@ DeviceXTouch::DeviceXTouch(MidiIn* midi_in, MidiOut* midi_out) : Device() {
       options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
           midi_out, /*channel=*/0, button.note, /*use_note_off=*/false);
     }
-    AddControl(std::make_unique<Control>(std::move(options)));
+    AddControl(std::move(options));
   }
 }
 

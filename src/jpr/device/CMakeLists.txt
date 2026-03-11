@@ -4,7 +4,7 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 set(jpr_device_SOURCE
-  control.h
+  control.cc control.h
   control_input.cc control_input.h
   control_input_midi.cc control_input_midi.h
   control_output.cc control_output.h
