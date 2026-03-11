@@ -14,6 +14,9 @@ RunHandle::RunHandle(RunHandle&& other)
 
 RunHandle& RunHandle::operator=(RunHandle&& other) {
   if (this != &other) {
+    if (registry_ != nullptr) {
+      registry_->cleared_runnables_.insert(id_);
+    }
     registry_ = std::exchange(other.registry_, nullptr);
     id_ = other.id_;
   }
@@ -39,6 +42,7 @@ void RunRegistry::DoRun() {
   for (int id : cleared_runnables_) {
     runnables_.erase(id);
   }
+  cleared_runnables_.clear();
   for (auto& [id, runnable] : runnables_) {
     if (!cleared_runnables_.contains(id)) {
       runnable(time);
