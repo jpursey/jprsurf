@@ -16,14 +16,6 @@ namespace jpr {
 ViewProperty::ViewProperty(std::string_view name, Type type)
     : name_(name), type_(type) {}
 
-void ViewProperty::AddMapping(ViewMapping* mapping) {
-  mappings_.insert(mapping);
-}
-
-void ViewProperty::RemoveMapping(ViewMapping* mapping) {
-  mappings_.erase(mapping);
-}
-
 ViewProperty::Value ViewProperty::GetValue() const {
   switch (type_) {
     case Type::kAction:
