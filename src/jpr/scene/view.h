@@ -154,6 +154,10 @@ class View final {
   bool AddMapping(ViewMapping::Type type, std::string_view property_name,
                   std::string_view control_name);
 
+  // Synchronizes all active mappings for this view and all active child views.
+  // This should be called whenever the view is active.
+  void SyncMappings();
+
  private:
   friend class Scene;
 

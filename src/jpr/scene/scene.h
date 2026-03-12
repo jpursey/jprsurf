@@ -48,11 +48,6 @@ class Scene final {
  private:
   friend class View;
 
-  // Adds or removes the mapping from the active mappings set. This is called by
-  // the View when its mappings are activated or deactivated respectively.
-  void AddActiveMapping(ViewMapping* mapping);
-  void RemoveActiveMapping(ViewMapping* mapping);
-
   void OnRun(const RunTime& time);
 
   // State
@@ -60,7 +55,6 @@ class Scene final {
   absl::flat_hash_map<std::string, std::unique_ptr<Device>> devices_;
   absl::flat_hash_map<std::string, Control*> controls_;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
-  absl::flat_hash_set<ViewMapping*> active_mappings_;
   std::unique_ptr<View> root_view_;
   RunHandle run_handle_;
 };

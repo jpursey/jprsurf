@@ -23,7 +23,6 @@ void View::Activate() {
   // Activate all mappings for this view and add them to the scene's active
   for (auto& mapping : mappings_) {
     mapping->Activate();
-    scene_->AddActiveMapping(mapping.get());
   }
 }
 
@@ -42,7 +41,6 @@ void View::Deactivate() {
   // Deactivate all mappings for this view and remove them from the scene's
   // active
   for (auto& mapping : mappings_) {
-    scene_->RemoveActiveMapping(mapping.get());
     mapping->Deactivate();
   }
 }
@@ -156,6 +154,35 @@ bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
   mappings_.push_back(
       absl::WrapUnique(new ViewMapping(type, property, control)));
   return true;
+}
+
+void View::SyncMappings() {
+  if (!active_) {
+    return;
+  }
+
+  // First sync the track context if there is one, since some mappings may
+  // depend on it.
+  if (GetContextType() == ContextType::kTrack) {
+    auto& track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(context_);
+    DCHECK(track_properties != nullptr);
+    track_properties->GetTrack()->Refresh();
+  }
+
+  // Now update all active mappings for this view. This will update the REAPER
+  // state and hardware controls according to the current state of the view
+  // properties.
+  for (auto& mapping : mappings_) {
+    if (mapping->IsActive()) {
+      mapping->Sync();
+    }
+  }
+
+  // Sync all child views.
+  for (auto& child_view : child_views_) {
+    child_view->SyncMappings();
+  }
 }
 
 }  // namespace jpr

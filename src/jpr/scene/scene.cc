@@ -6,6 +6,7 @@
 #include "jpr/scene/scene.h"
 
 #include <memory>
+#include <stack>
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
@@ -47,16 +48,10 @@ void Scene::Activate(RunRegistry& registry) {
 
 void Scene::Deactivate() { run_handle_ = {}; }
 
-void Scene::AddActiveMapping(ViewMapping* mapping) {
-  active_mappings_.insert(mapping);
-}
-
-void Scene::RemoveActiveMapping(ViewMapping* mapping) {
-  active_mappings_.erase(mapping);
-}
-
 void Scene::OnRun(const RunTime& time) {
-  // TODO
+  if (root_view_->IsActive()) {
+    root_view_->SyncMappings();
+  }
 }
 
 }  // namespace jpr
