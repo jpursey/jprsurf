@@ -85,6 +85,7 @@ class ViewMapping final {
   std::optional<ControlInput::Type> input_type_;
   bool active_ = false;
   bool control_changed_ = false;
+  std::optional<ViewProperty::Value> last_property_value_;
 };
 
 }  // namespace jpr

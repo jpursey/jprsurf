@@ -743,6 +743,7 @@ void ViewMapping::Deactivate() {
     return;
   }
   active_ = false;
+  last_property_value_ = std::nullopt;
   if (input_type_.has_value()) {
     control_->UnregisterInputFlag(input_type_.value(), &control_changed_);
   }
@@ -768,7 +769,13 @@ void ViewMapping::ReadControl() {
 
 void ViewMapping::WriteControl() {
   if (type_.IsSet(kWriteControl)) {
+    auto value = property_->GetValue();
+    if (last_property_value_.has_value() &&
+        value == last_property_value_.value()) {
+      return;
+    }
     write_control_(*property_, *control_);
+    last_property_value_ = value;
   }
 }
 
