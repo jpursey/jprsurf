@@ -11,6 +11,8 @@ namespace jpr {
 
 // This represents a 24-bit RGB color value.
 struct Color {
+  bool operator==(const Color&) const = default;
+
   uint8_t r;
   uint8_t g;
   uint8_t b;
