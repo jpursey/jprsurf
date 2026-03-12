@@ -160,6 +160,14 @@ class View final {
   View(Scene* scene, View* parent_view, std::string_view name)
       : scene_(scene), parent_view_(parent_view), name_(name) {}
 
+  // Refreshes the context for all child views with the matching child context
+  // type, if the view is active.
+  void RefreshChildContext();
+
+  // Sets the context for all child views with a track context type to the
+  // child tracks of this view's track context, starting at the child context
+  // index. This should only be called when this view is active, and the child
+  // context type is kTrack.
   void SetChildTracks();
 
   // Constructed state

@@ -11,7 +11,13 @@
 
 namespace jpr {
 
-void View::Activate() { active_ = true; }
+void View::Activate() {
+  if (active_) {
+    return;
+  }
+  active_ = true;
+  RefreshChildContext();
+}
 
 void View::Deactivate() { active_ = false; }
 
@@ -30,12 +36,30 @@ View* View::GetChildView(std::string_view name) const {
   return it != child_views_by_name_.end() ? it->second : nullptr;
 }
 
-void View::SetContext(Context context) { context_ = std::move(context); }
+void View::SetContext(Context context) {
+  context_ = std::move(context);
+  RefreshChildContext();
+}
 
 void View::SetChildContext(ContextType context_type, int context_index) {
   child_context_type_ = context_type;
   child_context_index_ = context_index;
-  switch (context_type) {
+  RefreshChildContext();
+}
+
+void View::SetChildContextIndex(int context_index) {
+  if (child_context_index_ == context_index) {
+    return;
+  }
+  child_context_index_ = context_index;
+  RefreshChildContext();
+}
+
+void View::RefreshChildContext() {
+  if (!active_) {
+    return;
+  }
+  switch (child_context_type_) {
     case ContextType::kNone:
       return;
     case ContextType::kTrack:
@@ -44,17 +68,8 @@ void View::SetChildContext(ContextType context_type, int context_index) {
   }
 }
 
-void View::SetChildContextIndex(int context_index) {
-  if (child_context_index_ == context_index) {
-    return;
-  }
-  child_context_index_ = context_index;
-  if (child_context_type_ == ContextType::kTrack) {
-    SetChildTracks();
-  }
-}
-
 void View::SetChildTracks() {
+  CHECK(active_);
   CHECK(scene_ != nullptr);
   absl::Span<Track* const> child_tracks;
   if (GetContextType() == ContextType::kNone) {
