@@ -34,6 +34,9 @@ class Scene final {
   // Devices
   void AddDevice(std::string_view device_name, std::unique_ptr<Device> device);
 
+  // Views
+  View* GetRootView() const { return root_view_.get(); }
+
   // Controls and Properties
   Control* GetControl(std::string_view name) const;
   ViewProperty* GetProperty(std::string_view name) const;
