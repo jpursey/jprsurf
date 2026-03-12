@@ -13,8 +13,6 @@
 
 namespace jpr {
 
-class ViewMapping;
-
 // A view property represents a single property of the REAPER state that is
 // being mapped by one or more active views.
 //
@@ -23,8 +21,6 @@ class ViewMapping;
 // updated when the property changes.
 class ViewProperty {
  public:
-  using Mappings = absl::flat_hash_set<ViewMapping*>;
-
   // The type of the property, which defines what values it can hold.
   enum class Type {
     // A property that corresponds to a REAPER action that can be triggered.
