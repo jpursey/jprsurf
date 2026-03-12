@@ -12,14 +12,40 @@
 namespace jpr {
 
 void View::Activate() {
-  if (active_) {
+  // A view cannot be active if its parent view is not active, so we check for
+  // that here and simply return if the parent view is not active.
+  if (active_ || (parent_view_ != nullptr && !parent_view_->IsActive())) {
     return;
   }
   active_ = true;
   RefreshChildContext();
+
+  // Activate all mappings for this view and add them to the scene's active
+  for (auto& mapping : mappings_) {
+    mapping->Activate();
+    scene_->AddActiveMapping(mapping.get());
+  }
 }
 
-void View::Deactivate() { active_ = false; }
+void View::Deactivate() {
+  if (!active_) {
+    return;
+  }
+  active_ = false;
+
+  // Deactivate all child views. This will also remove their mappings from the
+  // scene's active mappings.
+  for (auto& child_view : child_views_) {
+    child_view->Deactivate();
+  }
+
+  // Deactivate all mappings for this view and remove them from the scene's
+  // active
+  for (auto& mapping : mappings_) {
+    scene_->RemoveActiveMapping(mapping.get());
+    mapping->Deactivate();
+  }
+}
 
 View* View::AddChildView(std::string_view name) {
   if (child_views_by_name_.contains(name)) {
