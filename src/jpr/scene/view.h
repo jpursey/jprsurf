@@ -160,6 +160,12 @@ class View final {
   View(Scene* scene, View* parent_view, std::string_view name)
       : scene_(scene), parent_view_(parent_view), name_(name) {}
 
+  // Returns the property with the given name in this view's context, or null if
+  // no such property exists. For example, if this view has a track context,
+  // this will return the track property with the given name for that track, if
+  // it exists.
+  ViewProperty* GetContextProperty(std::string_view name) const;
+
   // Refreshes the context for all child views with the matching child context
   // type, if the view is active.
   void RefreshChildContext();

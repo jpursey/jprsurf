@@ -97,12 +97,29 @@ void View::SetChildTracks() {
   }
 }
 
+ViewProperty* View::GetContextProperty(std::string_view name) const {
+  switch (GetContextType()) {
+    case ContextType::kNone:
+      return nullptr;
+    case ContextType::kTrack: {
+      auto& track_properties =
+          std::get<std::unique_ptr<TrackProperties>>(context_);
+      DCHECK(track_properties != nullptr);
+      return track_properties->GetProperty(name);
+    } break;
+  }
+  return nullptr;
+}
+
 bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
                       std::string_view control_name) {
   if (scene_ == nullptr) {
     return false;
   }
-  ViewProperty* property = scene_->GetProperty(property_name);
+  ViewProperty* property = GetContextProperty(property_name);
+  if (property == nullptr) {
+    property = scene_->GetProperty(property_name);
+  }
   if (property == nullptr) {
     return false;
   }
