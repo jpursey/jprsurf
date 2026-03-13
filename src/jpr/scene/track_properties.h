@@ -51,7 +51,7 @@ class TrackProperty : public ViewProperty {
 //   properties for a specific track.
 // - TrackProperties are destroyed when the track is removed from the project,
 //   or no views are mapped to the track anymore.
-class TrackProperties final : private TrackListener {
+class TrackProperties final {
  public:
   static constexpr std::string_view kName = "track_name";
   static constexpr std::string_view kSelected = "track_selected";
