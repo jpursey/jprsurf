@@ -156,6 +156,10 @@ class View final {
   // context for all child views with the matching child context type.
   void SetChildContextIndex(int context_index);
 
+  // Refreshes the context for all child views with the matching child context
+  // type, if the view is active.
+  void RefreshChildContext();
+
   //----------------------------------------------------------------------------
   // Mappings
   //----------------------------------------------------------------------------
@@ -182,10 +186,6 @@ class View final {
   // this will return the track property with the given name for that track, if
   // it exists.
   ViewProperty* GetContextProperty(std::string_view name) const;
-
-  // Refreshes the context for all child views with the matching child context
-  // type, if the view is active.
-  void RefreshChildContext();
 
   // Sets the context for all child views with a track context type to the
   // child tracks of this view's track context, starting at the child context
