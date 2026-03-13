@@ -64,13 +64,19 @@ class View final {
   Scene* GetScene() const { return scene_; }
 
   //----------------------------------------------------------------------------
-  // State
+  // Activation
   //----------------------------------------------------------------------------
 
-  // Activation and deactivation. An active view will update the REAPER state
-  // and hardware controls according to its mappings.
+  // Returns true if the scene is active. An active view will update the REAPER
+  // state and hardware controls according to its mappings.
   bool IsActive() const { return active_; }
+
+  // Activates this view, and all its direct mappings. This does not activate
+  // child views. It is not possible to activate a view if its parent view is
+  // not active.
   void Activate();
+
+  // Deactivates this view, all its direct mappings, and all child views.
   void Deactivate();
 
   //----------------------------------------------------------------------------
