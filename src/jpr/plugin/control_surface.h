@@ -111,6 +111,11 @@ class ControlSurface final : private IReaperControlSurface {
   std::unique_ptr<MidiIn> xtouch_in_;
   std::unique_ptr<MidiOut> xtouch_out_;
   std::unique_ptr<Scene> scene_;
+
+  // Performance monitoring
+  absl::Time last_log_time_;
+  absl::Duration elapsed_run_time_;
+  int run_count_ = 0;
 };
 
 }  // namespace jpr

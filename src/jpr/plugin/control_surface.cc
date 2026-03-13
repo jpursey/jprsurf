@@ -91,15 +91,35 @@ const char* ControlSurface::GetConfigString() {
   return config_string_.c_str();
 }
 
+constexpr absl::Duration kLogInterval = absl::Seconds(5);
+
 void ControlSurface::Run() {
+  absl::Time start = absl::Now();
   device_runner_.Run();
   midi_in_runner_.Run();
   scene_runner_.Run();
   midi_out_runner_.Run();
+  absl::Time end = absl::Now();
+
+  elapsed_run_time_ += end - start;
+  ++run_count_;
+  if (last_log_time_ + kLogInterval < end) {
+    LOG(INFO) << "Run() " << run_count_ << " times, avg/run: "
+              << std::ceil(absl::ToDoubleMicroseconds(elapsed_run_time_) /
+                           run_count_)
+              << "us, avg/sec: "
+              << std::ceil(absl::ToDoubleMicroseconds(elapsed_run_time_) /
+                           absl::ToDoubleSeconds(kLogInterval))
+              << "us";
+    last_log_time_ = end;
+    elapsed_run_time_ = absl::ZeroDuration();
+    run_count_ = 0;
+  }
 }
 
 void ControlSurface::SetTrackListChange() {
   LOG_REAPER() << "SetTrackListChange";
+  LOG(INFO) << "Refreshing TrackCache!";
   TrackCache::Get().Refresh();
   scene_->GetRootView()->RefreshChildContext();
 }
