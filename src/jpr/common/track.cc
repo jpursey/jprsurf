@@ -52,6 +52,7 @@ void Track::DoRefresh(MediaTrack* track_id) {
   selected_ = selected;
   mute_ = mute;
   solo_ = solo;
+  rec_arm_ = rec_arm;
 
   double volume = 0.0;
   double pan = 0.0;
