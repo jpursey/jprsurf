@@ -15,6 +15,7 @@ set(reaper_jprsurf_DEPS
   gb_config
   jpr_common
   jpr_device
+  jpr_scene
   reaper_sdk
 )
 

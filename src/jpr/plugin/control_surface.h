@@ -15,6 +15,7 @@
 #include "jpr/common/runner.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
+#include "jpr/scene/scene.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -30,56 +31,6 @@ class ControlSurface final : private IReaperControlSurface {
   ~ControlSurface() override;
 
  private:
-  // This is a pure binary string (not serialized to readable text). This is
-  // used for fast conversion from GUID and lookup.
-  using GuidKey = std::array<std::byte, sizeof(GUID)>;
-
-  enum class TrackFlag {
-    kSelected,
-    kSolo,
-    kMute,
-    kRecArm,
-  };
-  using TrackFlags = gb::Flags<TrackFlag>;
-
-  struct TrackState {
-    GUID guid;
-    MediaTrack* track_id;
-    std::string name;
-    TrackFlags flags;
-    double volume = 0.0;
-    double pan = 0.0;
-  };
-
-  // This holds the cached track state and control mappings for a single track.
-  struct TrackView {
-    const GUID& GetGuid() const;
-
-    // State is optional as a track view may exist even if there is no track for
-    // it currently.
-    std::optional<TrackState> state;
-
-    // TODO: Add control mappings that can are synchronized with the state.
-    std::unique_ptr<ControlPressInput> select_input;
-    std::unique_ptr<ControlDValueOutput> select_output;
-  };
-
-  // This holds a set of consecutive track views, that are treated as a
-  // contiguous set.
-  struct TrackListView {
-    // This is the GUID of the parent track for the view, if there is one.
-    std::optional<GUID> parent_track;
-
-    // This is the index of the first view relative to the parent track, or the
-    // top level track if there is no parent.
-    int index = 0;
-
-    // All tracks in the view, in sequential order. This may contain tracks
-    // that do not exist (for instance, if there are less actual tracks that
-    // there are views, or if it hasn't been initialized yet).
-    std::vector<TrackView> track_views;
-  };
-
   // Registration functions
   static IReaperControlSurface* Create(const char* type_string,
                                        const char* config_string,
@@ -146,35 +97,20 @@ class ControlSurface final : private IReaperControlSurface {
   void OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx);
 
   // Implementation
-  GuidKey GuidToKey(const GUID& guid);
   void ConnectDevices();
   void InitViews();
-  TrackView* GetTrackView(MediaTrack* track_id);
-  TrackState* GetTrackState(MediaTrack* track_id);
-  void RebuildTrackView(TrackView& track_view, const GUID& track_guid,
-                        MediaTrack* track_id, int track_index);
-  void RefreshTrackListView(TrackListView& track_list_view);
-  void RebuildTracks();
-  int GetChildTrackIndex(MediaTrack* track_id);
-  void EnsureTrackIsInView(TrackListView& track_list_view,
-                           MediaTrack* track_id);
-  void OnTrackViewSelectPressed(TrackView& track_view);
 
   // State
   std::string type_string_;
   gb::Config config_;
   std::string config_string_;
-  Runner runner_;
+  Runner device_runner_;    // Resets device state, sends pending messages.
+  Runner midi_in_runner_;   // Reads MIDI messages from the ports.
+  Runner scene_runner_;     // Updates the scene.
+  Runner midi_out_runner_;  // Sends MIDI messages to the ports.
   std::unique_ptr<MidiIn> xtouch_in_;
   std::unique_ptr<MidiOut> xtouch_out_;
-
-  // Cached track state, updated whenever MediaTrack* pointers may be
-  // invalidated (on a reset or track list change event).
-  absl::flat_hash_map<GuidKey, MediaTrack*> track_guid_to_id_;
-
-  // View state between the control surface and the actual REAPER tracks.
-  TrackListView track_list_view_;
-  TrackView master_track_view_;
+  std::unique_ptr<Scene> scene_;
 };
 
 }  // namespace jpr
