@@ -41,7 +41,7 @@ void TrackCache::Refresh() {
 
   // Update the master track, this is a special track that is not included in
   // the track list in REAPER and so needs to be queried independently.
-  MediaTrack* master_track_id = ::GetTrack(nullptr, -1);
+  MediaTrack* master_track_id = ::GetMasterTrack(nullptr);
   if (master_track_id == nullptr) {
     LOG(ERROR) << "Failed to get master track!";
     master_track_ = nullptr;
