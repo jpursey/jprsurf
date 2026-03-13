@@ -105,6 +105,13 @@ class View final {
   // mappings can be made to that context's properties (e.g. volume, pan, etc.).
   void SetContext(Context context);
 
+  // Sets the context to the specified track.
+  //
+  // If track is null, this will set the context to a default stub track that
+  // has no real functionality, but can be used for mappings. This is useful if
+  // a parent view will be setting the actual track dynamically.
+  void SetTrackContext(Track* track = nullptr);
+
   // Clears the context for this view, setting it back to the default state with
   // no context.
   //
@@ -157,7 +164,7 @@ class View final {
   //
   // This will return false if the mapping is invalid, for instance if the
   // named control or property doesn't exist in the scene.
-  bool AddMapping(ViewMapping::Type type, std::string_view property_name,
+  bool AddMapping(ViewMapping::TypeFlags type, std::string_view property_name,
                   std::string_view control_name);
 
   // Synchronizes all active mappings for this view and all active child views.

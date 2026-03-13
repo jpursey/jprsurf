@@ -65,6 +65,13 @@ void View::SetContext(Context context) {
   RefreshChildContext();
 }
 
+void View::SetTrackContext(Track* track) {
+  if (track == nullptr) {
+    track = TrackCache::Get().GetStubTrack();
+  }
+  SetContext(std::make_unique<TrackProperties>(track));
+}
+
 void View::SetChildContext(ContextType context_type, int context_index) {
   child_context_type_ = context_type;
   child_context_index_ = context_index;
@@ -117,6 +124,7 @@ void View::SetChildTracks() {
     } else {
       child_track_properties->SetTrack(TrackCache::Get().GetStubTrack());
     }
+    child_view->RefreshChildContext();
     ++index;
   }
 }
@@ -135,7 +143,8 @@ ViewProperty* View::GetContextProperty(std::string_view name) const {
   return nullptr;
 }
 
-bool View::AddMapping(ViewMapping::Type type, std::string_view property_name,
+bool View::AddMapping(ViewMapping::TypeFlags type,
+                      std::string_view property_name,
                       std::string_view control_name) {
   if (scene_ == nullptr) {
     return false;
