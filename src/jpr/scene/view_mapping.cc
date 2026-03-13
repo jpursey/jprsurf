@@ -733,6 +733,10 @@ void ViewMapping::Activate() {
     return;
   }
   active_ = true;
+  if (type_.IsSet(kWriteControl)) {
+    property_changed_ = true;
+    property_->RegisterFlag(&property_changed_);
+  }
   if (input_type_.has_value()) {
     control_->RegisterInputFlag(input_type_.value(), &control_changed_);
   }
@@ -743,7 +747,9 @@ void ViewMapping::Deactivate() {
     return;
   }
   active_ = false;
-  last_property_value_ = std::nullopt;
+  if (type_.IsSet(kWriteControl)) {
+    property_->UnregisterFlag(&property_changed_);
+  }
   if (input_type_.has_value()) {
     control_->UnregisterInputFlag(input_type_.value(), &control_changed_);
   }
@@ -755,7 +761,8 @@ void ViewMapping::Sync() {
   }
   if (control_changed_) {
     ReadControl();
-  } else {
+  }
+  if (property_changed_) {
     WriteControl();
   }
 }
@@ -768,14 +775,9 @@ void ViewMapping::ReadControl() {
 }
 
 void ViewMapping::WriteControl() {
+  property_changed_ = false;
   if (type_.IsSet(kWriteControl)) {
-    auto value = property_->GetValue();
-    if (last_property_value_.has_value() &&
-        value == last_property_value_.value()) {
-      return;
-    }
     write_control_(*property_, *control_);
-    last_property_value_ = value;
   }
 }
 

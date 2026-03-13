@@ -88,14 +88,27 @@ class TrackVolumeProperty : public TrackProperty {
 
 }  // namespace
 
-TrackProperties::TrackProperties(Track* track) : track_(track->GetShared()) {}
+TrackProperties::TrackProperties(Track* track) : track_(track->GetShared()) {
+  track_->Subscribe(this);
+}
 
-TrackProperties::~TrackProperties() = default;
+TrackProperties::~TrackProperties() { track_->Unsubscribe(this); }
 
 void TrackProperties::SetTrack(Track* track) {
+  if (track == track_.get()) {
+    return;
+  }
+  track_->Unsubscribe(this);
   track_ = track->GetShared();
+  track_->Subscribe(this);
   for (auto& [name, property] : properties_) {
     property->SetTrack(track);
+  }
+}
+
+void TrackProperties::OnTrackChanged(Track* track) {
+  for (auto& [name, property] : properties_) {
+    property->NotifyChanged();
   }
 }
 

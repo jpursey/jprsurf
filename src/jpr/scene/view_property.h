@@ -130,6 +130,11 @@ class ViewProperty {
   // properties of type kAction, and will have no effect for other types.
   void RunAction() { TriggerAction(); }
 
+  // Registers a boolean flag to be set to true whenever this property changes.
+  // The flag pointer must remain valid until it is unregistered.
+  void RegisterFlag(bool* flag);
+  void UnregisterFlag(bool* flag);
+
  protected:
   // Derived classes should override these to read and write the value that is
   // appropriate for their type. This is guaranteed to be called for the correct
@@ -144,9 +149,13 @@ class ViewProperty {
   virtual Color ReadColor() const { return {0, 0, 0}; }
   virtual void WriteColor(const Color& value) {}
 
+  // Derived classes should call this whenever the property value changes.
+  void NotifyChanged();
+
  private:
   std::string name_;
   Type type_;
+  absl::flat_hash_set<bool*> flags_;
 };
 
 }  // namespace jpr

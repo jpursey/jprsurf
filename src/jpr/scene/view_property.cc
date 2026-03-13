@@ -8,13 +8,22 @@
 #include <string_view>
 
 #include "absl/strings/str_cat.h"
-#include "jpr/scene/view_mapping.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 
 ViewProperty::ViewProperty(std::string_view name, Type type)
     : name_(name), type_(type) {}
+
+void ViewProperty::RegisterFlag(bool* flag) { flags_.insert(flag); }
+
+void ViewProperty::UnregisterFlag(bool* flag) { flags_.erase(flag); }
+
+void ViewProperty::NotifyChanged() {
+  for (bool* flag : flags_) {
+    *flag = true;
+  }
+}
 
 ViewProperty::Value ViewProperty::GetValue() const {
   switch (type_) {
