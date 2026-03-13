@@ -148,7 +148,7 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
                            MidiOut* midi_out)
     : Device(run_registry) {
   for (const auto& button : kButtons) {
-    Control::Options options = {.name = std::string(button.name)};
+    Control::Options options = {.name = button.name};
     options.press_input = std::make_unique<ControlPressInputMidiMsg>(
         midi_in, MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/127),
         MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/0));
@@ -159,5 +159,7 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
     AddControl(std::move(options));
   }
 }
+
+DeviceXTouch::~DeviceXTouch() = default;
 
 }  // namespace jpr
