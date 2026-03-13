@@ -21,7 +21,7 @@ TrackCache::TrackCache() {
   // an empty GUID and a null track ID, and it holds all default values. This is
   // used as a placeholder for tracks that have been deleted in REAPER, but may
   // still be referenced by listeners or through undo actions.
-  stub_track_ = (new Track(Guid(), nullptr))->GetShared();
+  stub_track_ = std::make_shared<Track>(Track::Private(), Guid(), nullptr);
   track_id_map_[nullptr] = stub_track_.get();
 }
 
@@ -48,7 +48,8 @@ void TrackCache::Refresh() {
   } else {
     Guid master_guid(GetTrackGUID(master_track_id));
     if (master_track_ == nullptr || master_track_->GetGuid() != master_guid) {
-      master_track_ = (new Track(master_guid, master_track_id))->GetShared();
+      master_track_ = std::make_shared<Track>(Track::Private(), master_guid,
+                                              master_track_id);
     }
     track_id_map_[master_track_id] = master_track_.get();
     master_track_->DoRefresh(master_track_id);
@@ -83,7 +84,7 @@ void TrackCache::Refresh() {
     auto it = old_track_map.find(guid);
     if (it == old_track_map.end()) {
       // Track is new and doesn't exist in the old cache, so just initialize it.
-      new_track = (new Track(guid, track_id))->GetShared();
+      new_track = std::make_shared<Track>(Track::Private(), guid, track_id);
       track_id_map_[track_id] = new_track.get();
       add_to_parent(new_track.get());
       continue;

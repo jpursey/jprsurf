@@ -43,8 +43,9 @@ class TrackListener {
 // longer exist (but may come back, for instance through an undo action or
 // project load). In the latter case, all properties will return to default
 // values and setting new values will have no effect.
-class Track final : private std::enable_shared_from_this<Track> {
+class Track final : public std::enable_shared_from_this<Track> {
  public:
+  // Called by the TrackCache when a track is added or updated in the cache.
   Track(const Track&) = delete;
   Track& operator=(const Track&) = delete;
   ~Track() = default;
@@ -106,9 +107,17 @@ class Track final : private std::enable_shared_from_this<Track> {
  private:
   friend class TrackCache;
 
-  // Called by the TrackCache when a track is added or updated in the cache.
-  Track(const Guid& guid, MediaTrack* track_id);
+  // Private construction parameters for a track. This is used to construct
+  // tracks from the TrackCache.
+  struct Private {
+    explicit Private() = default;
+  };
 
+ public:
+  // Must be public to allow construction with std::make_shared.
+  Track(Private, const Guid& guid, MediaTrack* track_id);
+
+ private:
   // Performs the actual refresh logic to update both the track ID and the
   // corresponding cached state for this track.
   void DoRefresh(MediaTrack* track_id);

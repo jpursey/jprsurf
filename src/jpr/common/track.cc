@@ -11,7 +11,7 @@
 
 namespace jpr {
 
-Track::Track(const Guid& guid, MediaTrack* track_id) : guid_(guid) {
+Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
 }
 
