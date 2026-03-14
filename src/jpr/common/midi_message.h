@@ -29,24 +29,37 @@ struct MidiMessage {
 // Generators for specific messages
 //==============================================================================
 
+inline uint8_t MidiNoteOnStatus(uint8_t channel) {
+  return static_cast<uint8_t>(0x90 | (channel & 0x0F));
+}
+
 inline MidiMessage MidiNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
-  return MidiMessage{static_cast<uint8_t>(0x90 | (channel & 0x0F)), note,
-                     velocity};
+  return MidiMessage{MidiNoteOnStatus(channel), note, velocity};
+}
+
+inline uint8_t MidiNoteOffStatus(uint8_t channel) {
+  return static_cast<uint8_t>(0x80 | (channel & 0x0F));
 }
 
 inline MidiMessage MidiNoteOff(uint8_t channel, uint8_t note,
                                uint8_t velocity) {
-  return MidiMessage{static_cast<uint8_t>(0x80 | (channel & 0x0F)), note,
-                     velocity};
+  return MidiMessage{MidiNoteOffStatus(channel), note, velocity};
+}
+
+inline uint8_t MidiCcStatus(uint8_t channel) {
+  return static_cast<uint8_t>(0xB0 | (channel & 0x0F));
 }
 
 inline MidiMessage MidiCc(uint8_t channel, uint8_t control, uint8_t value) {
-  return MidiMessage{static_cast<uint8_t>(0xB0 | (channel & 0x0F)), control,
-                     value};
+  return MidiMessage{MidiCcStatus(channel), control, value};
+}
+
+inline uint8_t MidiPitchBendStatus(uint8_t channel) {
+  return static_cast<uint8_t>(0xE0 | (channel & 0x0F));
 }
 
 inline MidiMessage MidiPitchBend(uint8_t channel, uint16_t value) {
-  return MidiMessage{static_cast<uint8_t>(0xE0 | (channel & 0x0F)),
+  return MidiMessage{MidiPitchBendStatus(channel),
                      static_cast<uint8_t>(value & 0x7F),
                      static_cast<uint8_t>((value >> 7) & 0x7F)};
 }
