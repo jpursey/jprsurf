@@ -42,6 +42,7 @@ class Scene final {
   ViewProperty* GetProperty(std::string_view name) const;
 
   // Activation and deactivation
+  bool IsActive() const { return run_handle_.IsRegistered(); }
   void Activate(RunRegistry& registry);
   void Deactivate();
 

@@ -5,6 +5,7 @@
 
 #include "jpr/scene/view_mapping.h"
 
+#include "jpr/scene/view.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
@@ -69,10 +70,11 @@ double ToggleDouble(double current, double min, double max) {
 
 }  // namespace
 
-ViewMapping::ViewMapping(TypeFlags type, ViewProperty* property,
-                         Control* control, ReadConfig read_config)
-    : type_(type),
-      property_(property),
+ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
+                     Control* control, ReadConfig read_config)
+: type_(type),
+  view_(view),
+  property_(property),
       control_(control),
       read_config_(std::move(read_config)),
       write_control_(NoOpSyncFunction) {
@@ -80,7 +82,13 @@ ViewMapping::ViewMapping(TypeFlags type, ViewProperty* property,
   InitWriteControl();
 }
 
-ViewMapping::~ViewMapping() { Deactivate(); }
+ViewMapping::~ViewMapping() {
+  if (active_) {
+    enabled_ = false;
+    RefreshActive(false);
+  }
+}
+
 
 void ViewMapping::InitReadControl() {
   if (!type_.IsSet(kReadControl)) {
@@ -848,30 +856,43 @@ void ViewMapping::InitWriteColorSyncFunction() {
   }
 }
 
-void ViewMapping::Activate() {
-  if (active_) {
+void ViewMapping::Enable() {
+  if (enabled_) {
     return;
   }
-  active_ = true;
-  if (type_.IsSet(kWriteControl)) {
-    property_changed_ = true;
-    property_->RegisterFlag(&property_changed_);
-  }
-  if (input_type_.has_value()) {
-    control_->RegisterInputFlag(input_type_.value(), &control_changed_);
-  }
+  enabled_ = true;
+  RefreshActive(view_->IsActive());
 }
 
-void ViewMapping::Deactivate() {
-  if (!active_) {
+void ViewMapping::Disable() {
+  if (!enabled_) {
     return;
   }
-  active_ = false;
-  if (type_.IsSet(kWriteControl)) {
-    property_->UnregisterFlag(&property_changed_);
+  enabled_ = false;
+  RefreshActive(view_->IsActive());
+}
+
+void ViewMapping::RefreshActive(bool parent_active) {
+  bool should_be_active = enabled_ && parent_active;
+  if (active_ == should_be_active) {
+    return;
   }
-  if (input_type_.has_value()) {
-    control_->UnregisterInputFlag(input_type_.value(), &control_changed_);
+  active_ = should_be_active;
+  if (active_) {
+    if (type_.IsSet(kWriteControl)) {
+      property_changed_ = true;
+      property_->RegisterFlag(&property_changed_);
+    }
+    if (input_type_.has_value()) {
+      control_->RegisterInputFlag(input_type_.value(), &control_changed_);
+    }
+  } else {
+    if (type_.IsSet(kWriteControl)) {
+      property_->UnregisterFlag(&property_changed_);
+    }
+    if (input_type_.has_value()) {
+      control_->UnregisterInputFlag(input_type_.value(), &control_changed_);
+    }
   }
 }
 

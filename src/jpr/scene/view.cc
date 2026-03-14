@@ -11,37 +11,44 @@
 
 namespace jpr {
 
-void View::Activate() {
-  // A view cannot be active if its parent view is not active, so we check for
-  // that here and simply return if the parent view is not active.
-  if (active_ || (parent_view_ != nullptr && !parent_view_->IsActive())) {
+void View::Enable() {
+  if (enabled_) {
     return;
   }
-  active_ = true;
-  RefreshChildContext();
-
-  // Activate all mappings for this view and add them to the scene's active
-  for (auto& mapping : mappings_) {
-    mapping->Activate();
-  }
+  enabled_ = true;
+  RefreshActive();
 }
 
-void View::Deactivate() {
-  if (!active_) {
+void View::Disable() {
+  if (!enabled_) {
     return;
   }
-  active_ = false;
+  enabled_ = false;
+  RefreshActive();
+}
 
-  // Deactivate all child views. This will also remove their mappings from the
-  // scene's active mappings.
-  for (auto& child_view : child_views_) {
-    child_view->Deactivate();
+void View::RefreshActive() {
+  bool parent_active = false;
+  if (parent_view_ != nullptr) {
+    parent_active = parent_view_->IsActive();
+  } else if (scene_ != nullptr) {
+    parent_active = scene_->IsActive();
+  }
+  bool should_be_active = enabled_ && parent_active;
+  if (active_ != should_be_active) {
+    active_ = should_be_active;
+    if (active_) {
+      RefreshChildContext();
+    }
   }
 
-  // Deactivate all mappings for this view and remove them from the scene's
-  // active
+  // Always propagate to children and mappings, as their enabled state may
+  // differ from this view's active state.
   for (auto& mapping : mappings_) {
-    mapping->Deactivate();
+    mapping->RefreshActive(active_);
+  }
+  for (auto& child_view : child_views_) {
+    child_view->RefreshActive();
   }
 }
 
@@ -162,7 +169,7 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
     return false;
   }
   mappings_.push_back(absl::WrapUnique(
-      new ViewMapping(type, property, control, std::move(read_config))));
+      new ViewMapping(this, type, property, control, std::move(read_config))));
   return true;
 }
 

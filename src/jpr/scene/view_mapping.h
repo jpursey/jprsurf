@@ -14,6 +14,8 @@
 
 namespace jpr {
 
+class View;
+
 // A view mapping represents a single mapping between a view property and a
 // control.
 //
@@ -58,8 +60,6 @@ class ViewMapping final {
     std::optional<ViewProperty::Value> property_max;
   };
 
-  ViewMapping(TypeFlags type, ViewProperty* property, Control* control,
-              ReadConfig read_config = {});
   ViewMapping(const ViewMapping&) = delete;
   ViewMapping& operator=(const ViewMapping&) = delete;
   ~ViewMapping();
@@ -68,11 +68,15 @@ class ViewMapping final {
   ViewProperty* GetProperty() const { return property_; }
   Control* GetControl() const { return control_; }
 
-  // Activation and deactivation. An active mapping will update the view
-  // property and/or control according to its type when either changes.
+  // Enable and disable this mapping. A mapping starts enabled by default.
+  bool IsEnabled() const { return enabled_; }
+  void Enable();
+  void Disable();
+
+  // Returns true if this mapping is actively synchronizing the view property
+  // and control. A mapping is active if it is both enabled and its parent view
+  // is active.
   bool IsActive() const { return active_; }
-  void Activate();
-  void Deactivate();
 
   // Synchronizes the view property and control according to the type of the
   // mapping. This should be called whenever the mapping is active.
@@ -84,7 +88,16 @@ class ViewMapping final {
   void WriteControl();
 
  private:
+  friend class View;
+
   using WriteSyncFunction = void(ViewProperty&, Control&);
+
+  ViewMapping(View* view, TypeFlags type, ViewProperty* property,
+    Control* control, ReadConfig read_config = {});
+
+  // Refreshes the active state of this mapping based on whether it is enabled
+  // and whether its parent view is active.
+  void RefreshActive(bool parent_active);
 
   void InitReadControl();
   void InitReadActionSyncFunction();
@@ -104,12 +117,14 @@ class ViewMapping final {
   void InitWriteColorSyncFunction();
 
   TypeFlags type_;
+  View* view_;
   ViewProperty* property_;
   Control* control_;
   ReadConfig read_config_;
   absl::AnyInvocable<void(ViewProperty&, Control&)> read_control_;
   WriteSyncFunction* write_control_;
   std::optional<ControlInput::Type> input_type_;
+  bool enabled_ = true;
   bool active_ = false;
   bool control_changed_ = false;
   bool property_changed_ = false;

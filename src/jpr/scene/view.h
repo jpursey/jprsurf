@@ -67,17 +67,21 @@ class View final {
   // Activation
   //----------------------------------------------------------------------------
 
-  // Returns true if the scene is active. An active view will update the REAPER
-  // state and hardware controls according to its mappings.
+  // Enable and disable this view. A view starts disabled by default and must
+  // be enabled before it can become active.
+  bool IsEnabled() const { return enabled_; }
+  void Enable();
+  void Disable();
+
+  // Returns true if this view is actively updating the REAPER state and
+  // hardware controls according to its mappings. A view is active if it is
+  // enabled and its parent view is active (or if it is a root view, the scene
+  // is active).
   bool IsActive() const { return active_; }
 
-  // Activates this view, and all its direct mappings. This does not activate
-  // child views. It is not possible to activate a view if its parent view is
-  // not active.
-  void Activate();
-
-  // Deactivates this view, all its direct mappings, and all child views.
-  void Deactivate();
+  // Refreshes the active state of this view and all its child views and
+  // mappings based on the current enabled state and parent active state.
+  void RefreshActive();
 
   //----------------------------------------------------------------------------
   // View hierarchy
@@ -200,6 +204,7 @@ class View final {
   std::string name_;
 
   // Current state
+  bool enabled_ = false;
   bool active_ = false;
 
   // View hierarchy

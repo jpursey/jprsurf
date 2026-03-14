@@ -595,18 +595,17 @@ void ControlSurface::InitViews() {
     track_view->AddMapping(ViewMapping::kReadControl, TrackProperties::kPan,
                            absl::StrCat("XTouch/PotButton", i),
                            {.property_min = 0.0, .property_max = 0.0});
+    track_view->Enable();
   }
   // Set the child context, which will initialize all the child track views to
   // actual tracks.
   track_list_view->SetChildContext(View::ContextType::kTrack);
 
-  // Activate the view and all child views.
-  track_list_view->Activate();
-  for (int i = 0; i < track_list_view->GetChildViewCount(); ++i) {
-    track_list_view->GetChildViewAt(i)->Activate();
-  }
+  // Enable the root view.
+  track_list_view->Enable();
 
-  // Finally activate the scene, which will start it running.
+  // Finally activate the scene, which will start it running and activate all
+  // enabled views.
   scene_->Activate(scene_runner_);
 }
 

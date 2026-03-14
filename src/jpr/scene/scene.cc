@@ -44,9 +44,13 @@ ViewProperty* Scene::GetProperty(std::string_view name) const {
 void Scene::Activate(RunRegistry& registry) {
   run_handle_ =
       registry.AddRunnable([this](const RunTime& time) { OnRun(time); });
+  root_view_->RefreshActive();
 }
 
-void Scene::Deactivate() { run_handle_ = {}; }
+void Scene::Deactivate() {
+  run_handle_ = {};
+  root_view_->RefreshActive();
+}
 
 void Scene::OnRun(const RunTime& time) {
   if (root_view_->IsActive()) {
