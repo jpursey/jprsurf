@@ -96,12 +96,20 @@ constexpr absl::Duration kLogInterval = absl::Seconds(5);
 
 void ControlSurface::Run() {
   absl::Time start = absl::Now();
+
+  if (track_list_changed_) {
+    LOG(INFO) << "Refreshing TrackCache!";
+    TrackCache::Get().Refresh();
+    scene_->GetRootView()->RefreshChildContext();
+    track_list_changed_ = false;
+  }
+
   device_runner_.Run();
   midi_in_runner_.Run();
   scene_runner_.Run();
   midi_out_runner_.Run();
-  absl::Time end = absl::Now();
 
+  absl::Time end = absl::Now();
   elapsed_run_time_ += end - start;
   ++run_count_;
   if (last_log_time_ + kLogInterval < end) {
@@ -120,9 +128,7 @@ void ControlSurface::Run() {
 
 void ControlSurface::SetTrackListChange() {
   LOG_REAPER() << "SetTrackListChange";
-  LOG(INFO) << "Refreshing TrackCache!";
-  TrackCache::Get().Refresh();
-  scene_->GetRootView()->RefreshChildContext();
+  track_list_changed_ = true;
 }
 
 void ControlSurface::SetSurfaceVolume(MediaTrack* track_id, double volume) {

@@ -111,6 +111,7 @@ class ControlSurface final : private IReaperControlSurface {
   std::unique_ptr<MidiIn> xtouch_in_;
   std::unique_ptr<MidiOut> xtouch_out_;
   std::unique_ptr<Scene> scene_;
+  bool track_list_changed_ = false;
 
   // Performance monitoring
   absl::Time last_log_time_;
