@@ -590,7 +590,7 @@ void ControlSurface::InitViews() {
                            absl::StrCat("XTouch/Rec", i));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kPan,
-                           absl::StrCat("XTouch/Pan", i));
+                           absl::StrCat("XTouch/Pot", i));
   }
   // Set the child context, which will initialize all the child track views to
   // actual tracks.

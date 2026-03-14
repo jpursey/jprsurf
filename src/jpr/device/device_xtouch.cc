@@ -164,7 +164,7 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
   // Additional per-track controls
   for (int track = 0; track < 8; ++track) {
     // Pan pots.
-    std::string name = absl::StrCat("Pan", track + 1);
+    std::string name = absl::StrCat("Pot", track + 1);
     Control::Options pan_options = {.name = name};
     pan_options.delta_input = std::make_unique<ControlDeltaInputMidiCcOnesComp>(
         midi_in, ControlDeltaInputMidiCcOnesComp::McuEncoder(track));
