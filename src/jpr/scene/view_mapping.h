@@ -7,6 +7,7 @@
 
 #include <optional>
 
+#include "absl/functional/any_invocable.h"
 #include "gb/base/flags.h"
 #include "jpr/device/control.h"
 #include "jpr/scene/view_property.h"
@@ -33,7 +34,32 @@ class ViewMapping final {
   static constexpr TypeFlags kReadWriteControl = {Type::kReadControl,
                                                   Type::kWriteControl};
 
-  ViewMapping(TypeFlags type, ViewProperty* property, Control* control);
+  struct ReadConfig {
+    // If set, the minimum and maximum values for the property that the control
+    // maps to. If not set, the default mapping will be used (e.g. for a pan
+    // property, -1 maps to min and 1 maps to max). The values must match the
+    // property's underlying type or they will be ignored.
+    //
+    // This is further affected by the input type of the control:
+    //   - If the control has a Value input, then the property value will be
+    //     linearly mapped to the control value according to the specified min
+    //     and max.
+    //   - If the control has a Delta input, then the property value will be
+    //     clamped to the specified min and max after the delta is applied.
+    //   - If the control has a Press input, then the property value will be
+    //     toggled between the min and max values when the control is pressed if
+    //     both are specified. If the value is not currently at either the min
+    //     or max value, then it will be toggled to the max value if it is
+    //     closer to the max value, or the min value if it is closer to the min
+    //     value.
+    //
+    // These values are ignored for action and toggle properties.
+    std::optional<ViewProperty::Value> property_min;
+    std::optional<ViewProperty::Value> property_max;
+  };
+
+  ViewMapping(TypeFlags type, ViewProperty* property, Control* control,
+              ReadConfig read_config = {});
   ViewMapping(const ViewMapping&) = delete;
   ViewMapping& operator=(const ViewMapping&) = delete;
   ~ViewMapping();
@@ -58,7 +84,7 @@ class ViewMapping final {
   void WriteControl();
 
  private:
-  using SyncFunction = void(ViewProperty&, Control&);
+  using WriteSyncFunction = void(ViewProperty&, Control&);
 
   void InitReadControl();
   void InitReadActionSyncFunction();
@@ -80,8 +106,9 @@ class ViewMapping final {
   TypeFlags type_;
   ViewProperty* property_;
   Control* control_;
-  SyncFunction* read_control_;
-  SyncFunction* write_control_;
+  ReadConfig read_config_;
+  absl::AnyInvocable<void(ViewProperty&, Control&)> read_control_;
+  WriteSyncFunction* write_control_;
   std::optional<ControlInput::Type> input_type_;
   bool active_ = false;
   bool control_changed_ = false;

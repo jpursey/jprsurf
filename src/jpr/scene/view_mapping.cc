@@ -16,14 +16,65 @@ void NoOpSyncFunction(ViewProperty& property, Control& control) {}
 // 10dB above unity gain, which matches the X-Touch faders.
 constexpr double kMaxVolume = 3.16228;
 
+// Extracts a double from a ViewProperty::Value, returning std::nullopt if the
+// value is not a double.
+std::optional<double> GetDouble(
+    const std::optional<ViewProperty::Value>& value) {
+  if (value.has_value() && std::holds_alternative<double>(*value)) {
+    return std::get<double>(*value);
+  }
+  return std::nullopt;
+}
+
+// Extracts a string from a ViewProperty::Value, returning std::nullopt if the
+// value is not a string.
+std::optional<std::string> GetString(
+    const std::optional<ViewProperty::Value>& value) {
+  if (value.has_value() && std::holds_alternative<std::string>(*value)) {
+    return std::get<std::string>(*value);
+  }
+  return std::nullopt;
+}
+
+// Extracts a Color from a ViewProperty::Value, returning std::nullopt if the
+// value is not a Color.
+std::optional<Color> GetColor(const std::optional<ViewProperty::Value>& value) {
+  if (value.has_value() && std::holds_alternative<Color>(*value)) {
+    return std::get<Color>(*value);
+  }
+  return std::nullopt;
+}
+
+// Linearly interpolates a value in [0,1] to [min,max].
+double Lerp(double t, double min, double max) { return min + t * (max - min); }
+
+// Linearly interpolates a value in [0,1] to a color between min and max.
+Color LerpColor(double t, Color min, Color max) {
+  return {
+      static_cast<uint8_t>(min.r + t * (max.r - min.r)),
+      static_cast<uint8_t>(min.g + t * (max.g - min.g)),
+      static_cast<uint8_t>(min.b + t * (max.b - min.b)),
+  };
+}
+
+// Toggles a double value between min and max. If the current value is not
+// exactly at min or max, it toggles to whichever is closer.
+double ToggleDouble(double current, double min, double max) {
+  double mid = (min + max) / 2.0;
+  if (current <= mid) {
+    return max;
+  }
+  return min;
+}
+
 }  // namespace
 
 ViewMapping::ViewMapping(TypeFlags type, ViewProperty* property,
-                         Control* control)
+                         Control* control, ReadConfig read_config)
     : type_(type),
       property_(property),
       control_(control),
-      read_control_(NoOpSyncFunction),
+      read_config_(std::move(read_config)),
       write_control_(NoOpSyncFunction) {
   InitReadControl();
   InitWriteControl();
@@ -116,99 +167,119 @@ void ViewMapping::InitReadToggleSyncFunction() {
 
 void ViewMapping::InitReadPanSyncFunction() {
   Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetDouble(read_config_.property_min);
+  auto cfg_max = GetDouble(read_config_.property_max);
 
   // The value input is preferred for pan controls, if it is available, which
-  // maps [0,1] to [-1,1].
+  // maps [0,1] to the configured range (default [-1,1]).
   if (inputs.IsSet(ControlInput::Type::kValue)) {
     input_type_ = ControlInput::Type::kValue;
-    read_control_ = [](ViewProperty& property, Control& control) {
+    double min = cfg_min.value_or(-1.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
       double value = control.GetValue();
-      property.SetPan(value * 2.0 - 1.0);
+      property.SetPan(Lerp(value, min, max));
     };
     return;
   }
 
-  // If there is a delta input, we add the delta to the current pan value.
+  // If there is a delta input, we add the delta to the current pan value, and
+  // clamp to the configured range (default [-1,1]).
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
     input_type_ = ControlInput::Type::kDelta;
-    read_control_ = [](ViewProperty& property, Control& control) {
+    double min = cfg_min.value_or(-1.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
-        property.SetPan(property.GetPan() + delta);
+        property.SetPan(std::clamp(property.GetPan() + delta, min, max));
       }
     };
     return;
   }
 
-  // If there is a press input, we alternate between left, center, and right pan
-  // on each press.
+  // If there is a press input, behavior depends on the configured range.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_type_ = ControlInput::Type::kPress;
-    read_control_ = [](ViewProperty& property, Control& control) {
-      // Get the current press count.
-      int press_count = control.GetPressCount() % 3;
-      if (press_count == 0) {
-        return;
-      }
-
-      // Calculate the new pan value based on the current pan and the number of
-      // presses. We cycle through left, center, and right pan on each press.
-      double current_pan = property.GetPan();
-      double new_pan = current_pan;
-      for (; press_count > 0; --press_count) {
-        if (current_pan < 0.0) {
-          new_pan = 0.0;
-        } else if (current_pan < 1.0) {
-          new_pan = 1.0;
-        } else {
-          new_pan = -1.0;
+    double min = cfg_min.value_or(-1.0);
+    double max = cfg_max.value_or(1.0);
+    // Three-way toggle (min, 0, max) if zero is strictly between min and max.
+    if (min < 0.0 && max > 0.0) {
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        int press_count = control.GetPressCount() % 3;
+        if (press_count == 0) {
+          return;
         }
-      }
-
-      // Set the new pan value if it has changed.
-      if (new_pan != current_pan) {
-        property.SetPan(new_pan);
-      }
-    };
+        double current_pan = property.GetPan();
+        double new_pan = current_pan;
+        for (; press_count > 0; --press_count) {
+          if (new_pan <= min) {
+            new_pan = 0.0;
+          } else if (new_pan < max) {
+            new_pan = max;
+          } else {
+            new_pan = min;
+          }
+        }
+        if (new_pan != current_pan) {
+          property.SetPan(new_pan);
+        }
+      };
+    } else {
+      // Binary toggle between min and max.
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        if (control.GetPressCount() % 2 != 0) {
+          property.SetPan(ToggleDouble(property.GetPan(), min, max));
+        }
+      };
+    }
     return;
   }
 }
 
 void ViewMapping::InitReadVolumeSyncFunction() {
   Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetDouble(read_config_.property_min);
+  auto cfg_max = GetDouble(read_config_.property_max);
 
   // The value input is preferred for volume controls, if it is available, which
-  // maps [0,1] to [0,kMaxVolume].
+  // maps [0,1] to the configured range (default [0,kMaxVolume]).
   if (inputs.IsSet(ControlInput::Type::kValue)) {
     input_type_ = ControlInput::Type::kValue;
-    read_control_ = [](ViewProperty& property, Control& control) {
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(kMaxVolume);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
       double value = control.GetValue();
-      property.SetVolume(value * kMaxVolume);
+      property.SetVolume(Lerp(value, min, max));
     };
     return;
   }
 
-  // If there is a delta input, we add the delta to the current volume value.
+  // If there is a delta input, we add the delta to the current volume value,
+  // and clamp to the configured range (default [0,kMaxVolume]).
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
     input_type_ = ControlInput::Type::kDelta;
-    read_control_ = [](ViewProperty& property, Control& control) {
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(kMaxVolume);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
-        property.SetVolume(property.GetVolume() + delta);
+        property.SetVolume(std::clamp(property.GetVolume() + delta, min, max));
       }
     };
     return;
   }
 
-  // If there is a press input, we toggle between silence and unity gain.
+  // If there is a press input, we toggle between the configured min and max
+  // values (default 0.0 and 1.0).
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_type_ = ControlInput::Type::kPress;
-    read_control_ = [](ViewProperty& property, Control& control) {
-      int press_count = control.GetPressCount() % 2;
-      if (press_count == 0) {
-        return;
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
+      if (control.GetPressCount() % 2 != 0) {
+        property.SetVolume(ToggleDouble(property.GetVolume(), min, max));
       }
-      property.SetVolume(property.GetVolume() > 0.0 ? 0.0 : 1.0);
     };
     return;
   }
@@ -216,38 +287,48 @@ void ViewMapping::InitReadVolumeSyncFunction() {
 
 void ViewMapping::InitReadNormalizedSyncFunction() {
   Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetDouble(read_config_.property_min);
+  auto cfg_max = GetDouble(read_config_.property_max);
 
-  // If there is a value input, we just set the value and let the property
-  // handle the conversion.
+  // If there is a value input, we linearly map [0,1] to the configured range
+  // (default [0,1]).
   if (inputs.IsSet(ControlInput::Type::kValue)) {
     input_type_ = ControlInput::Type::kValue;
-    read_control_ = [](ViewProperty& property, Control& control) {
-      property.SetNormalized(control.GetValue());
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
+      property.SetNormalized(Lerp(control.GetValue(), min, max));
     };
     return;
   }
 
-  // If there is a delta input, we add the delta to the current value.
+  // If there is a delta input, we add the delta to the current value and clamp
+  // to the configured range (default [0,1]).
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
     input_type_ = ControlInput::Type::kDelta;
-    read_control_ = [](ViewProperty& property, Control& control) {
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
       double delta = control.GetDelta();
       if (delta != 0) {
-        property.SetNormalized(property.GetNormalized() + delta);
+        property.SetNormalized(
+            std::clamp(property.GetNormalized() + delta, min, max));
       }
     };
     return;
   }
 
-  // If there is a press input, we toggle between the minimum and maximum value.
+  // If there is a press input, we toggle between the configured min and max
+  // values (default 0.0 and 1.0).
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_type_ = ControlInput::Type::kPress;
-    read_control_ = [](ViewProperty& property, Control& control) {
-      int press_count = control.GetPressCount() % 2;
-      if (press_count == 0) {
-        return;
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
+      if (control.GetPressCount() % 2 != 0) {
+        property.SetNormalized(
+            ToggleDouble(property.GetNormalized(), min, max));
       }
-      property.SetNormalized(property.GetNormalized() > 0.0 ? 0.0 : 1.0);
     };
     return;
   }
@@ -266,25 +347,54 @@ void ViewMapping::InitReadTextSyncFunction() {
     return;
   }
 
+  // If there is a press input and both min and max text values are configured,
+  // we toggle between them.
+  if (inputs.IsSet(ControlInput::Type::kPress)) {
+    auto cfg_min = GetString(read_config_.property_min);
+    auto cfg_max = GetString(read_config_.property_max);
+    if (cfg_min.has_value() && cfg_max.has_value()) {
+      input_type_ = ControlInput::Type::kPress;
+      std::string min = std::move(*cfg_min);
+      std::string max = std::move(*cfg_max);
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        if (control.GetPressCount() % 2 != 0) {
+          property.SetText(property.GetText() == max ? min : max);
+        }
+      };
+      return;
+    }
+  }
+
   // The other input types don't make much sense for text properties, so we
   // don't support them.
 }
 
 void ViewMapping::InitReadColorSyncFunction() {
   Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetColor(read_config_.property_min);
+  auto cfg_max = GetColor(read_config_.property_max);
 
-  // If there is a value input, we just set the value and let the property
-  // handle the conversion.
+  // If there is a value input, we linearly interpolate per-channel between
+  // the configured min and max colors (default black to white).
   if (inputs.IsSet(ControlInput::Type::kValue)) {
     input_type_ = ControlInput::Type::kValue;
-    read_control_ = [](ViewProperty& property, Control& control) {
-      property.SetNormalized(control.GetValue());
-    };
+    if (cfg_min.has_value() || cfg_max.has_value()) {
+      Color min = cfg_min.value_or(Color{0, 0, 0});
+      Color max = cfg_max.value_or(Color{255, 255, 255});
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        property.SetColor(LerpColor(control.GetValue(), min, max));
+      };
+    } else {
+      read_control_ = [](ViewProperty& property, Control& control) {
+        property.SetNormalized(control.GetValue());
+      };
+    }
     return;
   }
 
   // For a delta input, we let the property convert it to and from a normalized
-  // value.
+  // value. ReadConfig min/max are not applied for delta on color properties, as
+  // per-channel clamping from a single delta doesn't have clear semantics.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
     input_type_ = ControlInput::Type::kDelta;
     read_control_ = [](ViewProperty& property, Control& control) {
@@ -296,16 +406,26 @@ void ViewMapping::InitReadColorSyncFunction() {
     return;
   }
 
-  // For a press input, we let the property convert it to and from a boolean
-  // value.
+  // For a press input, we toggle between the configured min and max colors
+  // if specified, otherwise we toggle the boolean representation.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_type_ = ControlInput::Type::kPress;
-    read_control_ = [](ViewProperty& property, Control& control) {
-      int press_count = control.GetPressCount() % 2;
-      if (press_count == 1) {
-        property.SetBool(!property.GetBool());
-      }
-    };
+    if (cfg_min.has_value() && cfg_max.has_value()) {
+      Color min = *cfg_min;
+      Color max = *cfg_max;
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        if (control.GetPressCount() % 2 != 0) {
+          Color current = property.GetColor();
+          property.SetColor(current == max ? min : max);
+        }
+      };
+    } else {
+      read_control_ = [](ViewProperty& property, Control& control) {
+        if (control.GetPressCount() % 2 == 1) {
+          property.SetBool(!property.GetBool());
+        }
+      };
+    }
     return;
   }
 }
@@ -769,7 +889,7 @@ void ViewMapping::Sync() {
 
 void ViewMapping::ReadControl() {
   control_changed_ = false;
-  if (type_.IsSet(kReadControl)) {
+  if (read_control_ != nullptr) {
     read_control_(*property_, *control_);
   }
 }

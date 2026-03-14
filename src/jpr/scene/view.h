@@ -169,7 +169,8 @@ class View final {
   // This will return false if the mapping is invalid, for instance if the
   // named control or property doesn't exist in the scene.
   bool AddMapping(ViewMapping::TypeFlags type, std::string_view property_name,
-                  std::string_view control_name);
+                  std::string_view control_name,
+                  ViewMapping::ReadConfig read_config = {});
 
   // Synchronizes all active mappings for this view and all active child views.
   // This should be called whenever the view is active.
