@@ -154,12 +154,9 @@ void MidiIn::Poll(const RunTime& time) {
 
 namespace {
 
-// Supported 7-bit CC numbers: 0-5, 7-31, 64-87, 89-97, 102-119.
-// This excludes: 6 (data entry MSB), 32-63 (LSB for CCs 0-31), 88 (high
-// resolution velocity prefix), 98-101 (NRPN/RPN), 120-127 (channel mode).
+// Supported 7-bit CC numbers
 bool IsSupportedCc(uint8_t cc) {
-  return (cc <= 5) || (cc >= 7 && cc <= 31) || (cc >= 64 && cc <= 87) ||
-         (cc >= 89 && cc <= 97) || (cc >= 102 && cc <= 119);
+  return cc < 120;
 }
 
 // A note-on with velocity 0 is treated as a note-off per the MIDI spec.
