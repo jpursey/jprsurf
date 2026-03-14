@@ -9,6 +9,10 @@
 
 namespace jpr {
 
+//==============================================================================
+// ControlPressInputMidiMsg
+//==============================================================================
+
 ControlPressInputMidiMsg::ControlPressInputMidiMsg(
     MidiIn* midi_in, MidiMessage press, std::optional<MidiMessage> release)
     : ControlPressInput(release.has_value()),
@@ -36,6 +40,42 @@ void ControlPressInputMidiMsg::OnMidiMessage(double time,
              message.data2 == release_->data2) {
     Release();
   }
+}
+
+//==============================================================================
+// ControlDeltaInputMidiCcOnesComp
+//==============================================================================
+
+ControlDeltaInputMidiCcOnesComp::Config
+ControlDeltaInputMidiCcOnesComp::McuEncoder(uint8_t track, double scaling) {
+  return Config{
+      .channel = 0,
+      .control = static_cast<uint8_t>(0x10 + std::clamp<uint8_t>(track, 0, 7)),
+      .scaling = scaling};
+}
+
+ControlDeltaInputMidiCcOnesComp::ControlDeltaInputMidiCcOnesComp(
+    MidiIn* midi_in, Config config)
+    : ControlDeltaInput(),
+      midi_in_(midi_in),
+      scaling_(config.scaling),
+      channel_(config.channel),
+      control_(config.control) {
+  DCHECK(midi_in_ != nullptr);
+  midi_in_->Subscribe(this, MidiCcStatus(channel_), control_);
+}
+
+ControlDeltaInputMidiCcOnesComp::~ControlDeltaInputMidiCcOnesComp() {
+  midi_in_->Unsubscribe(this);
+}
+
+void ControlDeltaInputMidiCcOnesComp::OnMidiMessage(
+    double time, const MidiMessage& message) {
+  double delta = (message.data2 & 0x3F) * scaling_;
+  if (message.data2 & 0x40) {
+    delta = -delta;
+  }
+  AddDelta(delta);
 }
 
 }  // namespace jpr
