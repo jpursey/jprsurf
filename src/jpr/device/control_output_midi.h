@@ -10,6 +10,10 @@
 
 namespace jpr {
 
+//==============================================================================
+// ControlDValueOutputMidiNote
+//==============================================================================
+
 // This control output is an on/off discrete value that maps to a MIDI note
 // on/off message.
 //
@@ -29,6 +33,47 @@ class ControlDValueOutputMidiNote : public ControlDValueOutput {
 
   MidiOut* midi_out_;
   MidiMessage messages_[2];
+};
+
+//==============================================================================
+// ControlDValueOutputMidiCc
+//==============================================================================
+
+class ControlDValueOutputMidiCc : public ControlDValueOutput {
+ public:
+  struct Config {
+    uint8_t channel = 0;
+    uint8_t control = 0;
+    uint8_t value_or = 0;   // Or'd with the CC value.
+    uint8_t value_add = 0;  // Added to the CC value.
+    int max_value = 1;      // Maximum value (before value_add or value_or).
+  };
+
+  // Returns the configuration for a standard per-track encoder light-ring on an
+  // MCU device for the specified track and mode. Track must be between 0 and 7,
+  // and mode must be between 0 and 7. Modes are as follows:
+  //   - Mode 0: Single LED from left to right (11 values)
+  //   - Mode 1: Fill from center from left to right (11 values).
+  //   - Mode 2: Fill from left from left to right (11 values).
+  //   - Mode 3: Spread from center to both side (5 values).
+  //   - Mode 4: Same as Mode 0, but right and left always lit.
+  //   - Mode 5: Same as Mode 1, but right and left always lit.
+  //   - Mode 6: Same as Mode 2, but right and left always lit.
+  //   - Mode 7: Same as Mode 3, but right and left always lit.
+  static Config McuEncoder(uint8_t track, uint8_t mode);
+
+  ControlDValueOutputMidiCc(MidiOut* midi_out, Config config);
+  ~ControlDValueOutputMidiCc() override;
+
+ private:
+  // Implements ControlDValueOutput.
+  void OnValueChanged(int value) override;
+
+  MidiOut* midi_out_;
+  uint8_t status_;
+  uint8_t control_;
+  uint8_t value_or_;
+  uint8_t value_add_;
 };
 
 }  // namespace jpr
