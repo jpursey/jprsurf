@@ -62,6 +62,7 @@ void Track::DoRefresh(MediaTrack* track_id) {
     volume_ = 0.0;
     pan_ = 0.0;
   } else {
+    changed = changed || (volume_ != volume) || (pan_ != pan);
     volume_ = volume;
     pan_ = pan;
   }
