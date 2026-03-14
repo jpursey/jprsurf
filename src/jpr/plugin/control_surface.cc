@@ -575,7 +575,7 @@ void ControlSurface::InitViews() {
     // controls.
     track_view->SetTrackContext();
 
-    // Add all the per-track buttons
+    // Add all the per-track controls
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kSelected,
                            absl::StrCat("XTouch/Select", i));
@@ -588,6 +588,9 @@ void ControlSurface::InitViews() {
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kRecArm,
                            absl::StrCat("XTouch/Rec", i));
+    track_view->AddMapping(ViewMapping::kReadWriteControl,
+                           TrackProperties::kPan,
+                           absl::StrCat("XTouch/Pan", i));
   }
   // Set the child context, which will initialize all the child track views to
   // actual tracks.
