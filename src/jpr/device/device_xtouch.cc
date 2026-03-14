@@ -7,6 +7,7 @@
 
 #include "jpr/device/device_xtouch.h"
 
+#include "absl/strings/str_cat.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/device/control_input_midi.h"
 #include "jpr/device/control_output_midi.h"
@@ -147,6 +148,7 @@ const Button kButtons[] = {
 DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
                            MidiOut* midi_out)
     : Device(run_registry) {
+  // Add all button controls.
   for (const auto& button : kButtons) {
     Control::Options options = {.name = button.name};
     options.press_input = std::make_unique<ControlPressInputMidiMsg>(
@@ -157,6 +159,18 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
           midi_out, /*channel=*/0, button.note, /*use_note_off=*/false);
     }
     AddControl(std::move(options));
+  }
+
+  // Additional per-track controls
+  for (int track = 0; track < 8; ++track) {
+    // Pan pots.
+    std::string name = absl::StrCat("Pan", track + 1);
+    Control::Options pan_options = {.name = name};
+    pan_options.delta_input = std::make_unique<ControlDeltaInputMidiCcOnesComp>(
+        midi_in, ControlDeltaInputMidiCcOnesComp::McuEncoder(track));
+    pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
+        midi_out, ControlDValueOutputMidiCc::McuEncoder(track, /*mode=*/1));
+    AddControl(std::move(pan_options));
   }
 }
 
