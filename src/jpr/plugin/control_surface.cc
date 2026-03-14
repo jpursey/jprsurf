@@ -14,6 +14,7 @@
 #include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/view_mapping.h"
+#include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -591,6 +592,9 @@ void ControlSurface::InitViews() {
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kPan,
                            absl::StrCat("XTouch/Pot", i));
+    track_view->AddMapping(ViewMapping::kReadControl, TrackProperties::kPan,
+                           absl::StrCat("XTouch/PotButton", i),
+                           {.property_min = 0.0, .property_max = 0.0});
   }
   // Set the child context, which will initialize all the child track views to
   // actual tracks.
