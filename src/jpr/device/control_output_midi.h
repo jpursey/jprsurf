@@ -26,8 +26,16 @@ namespace jpr {
 // used for any control that can be represented with a discrete value.
 class ControlDValueOutputMidiNote : public ControlDValueOutput {
  public:
-  ControlDValueOutputMidiNote(MidiOut* midi_out, uint8_t channel, uint8_t note,
-                              bool use_note_off);
+  struct Config {
+    uint8_t channel = 0;
+    uint8_t note = 0;
+
+    // If true, value 0 sends a note off message. If false, value 0 sends a note
+    // on message with velocity 0.
+    bool use_note_off = false;
+  };
+
+  ControlDValueOutputMidiNote(MidiOut* midi_out, Config config);
   ~ControlDValueOutputMidiNote() override;
 
  private:

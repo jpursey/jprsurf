@@ -13,12 +13,12 @@ namespace jpr {
 // ControlPressInputMidiMsg
 //==============================================================================
 
-ControlPressInputMidiMsg::ControlPressInputMidiMsg(
-    MidiIn* midi_in, MidiMessage press, std::optional<MidiMessage> release)
-    : ControlPressInput(release.has_value()),
+ControlPressInputMidiMsg::ControlPressInputMidiMsg(MidiIn* midi_in,
+                                                   Config config)
+    : ControlPressInput(config.release.has_value()),
       midi_in_(midi_in),
-      press_(press),
-      release_(release) {
+      press_(config.press),
+      release_(config.release) {
   DCHECK(midi_in_ != nullptr);
   midi_in_->Subscribe(this, press_.status, press_.data1);
   if (release_.has_value()) {

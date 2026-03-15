@@ -11,7 +11,8 @@ namespace jpr {
 
 namespace {
 
-std::vector<int> GetMaxValues(absl::Span<const ControlDValueOutputMidiCc::Mode> modes) {
+std::vector<int> GetMaxValues(
+    absl::Span<const ControlDValueOutputMidiCc::Mode> modes) {
   std::vector<int> max_values;
   max_values.reserve(modes.size());
   for (const auto& mode : modes) {
@@ -37,13 +38,12 @@ std::vector<int> GetMaxValues(
 //==============================================================================
 
 ControlDValueOutputMidiNote::ControlDValueOutputMidiNote(MidiOut* midi_out,
-                                                         uint8_t channel,
-                                                         uint8_t note,
-                                                         bool use_note_off)
+                                                         Config config)
     : ControlDValueOutput(/*max_value=*/1), midi_out_(midi_out) {
-  messages_[0] = (use_note_off ? MidiNoteOff(channel, note, 0x00)
-                               : MidiNoteOn(channel, note, 0x00));
-  messages_[1] = MidiNoteOn(channel, note, 0x7F);
+  messages_[0] =
+      (config.use_note_off ? MidiNoteOff(config.channel, config.note, 0x00)
+                           : MidiNoteOn(config.channel, config.note, 0x00));
+  messages_[1] = MidiNoteOn(config.channel, config.note, 0x7F);
 }
 
 ControlDValueOutputMidiNote::~ControlDValueOutputMidiNote() = default;

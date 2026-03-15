@@ -24,8 +24,12 @@ namespace jpr {
 class ControlPressInputMidiMsg : public ControlPressInput,
                                  private MidiListener {
  public:
-  ControlPressInputMidiMsg(MidiIn* midi_in, MidiMessage press,
-                           std::optional<MidiMessage> release = std::nullopt);
+  struct Config {
+    MidiMessage press;
+    std::optional<MidiMessage> release;
+  };
+
+  ControlPressInputMidiMsg(MidiIn* midi_in, Config config);
   ~ControlPressInputMidiMsg() override;
 
  private:

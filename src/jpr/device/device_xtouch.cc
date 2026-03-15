@@ -152,11 +152,15 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
   for (const auto& button : kButtons) {
     Control::Options options = {.name = button.name};
     options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-        midi_in, MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/127),
-        MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/0));
+        midi_in,
+        ControlPressInputMidiMsg::Config{
+            .press = MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/127),
+            .release = MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/0)});
     if (button.has_light) {
       options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
-          midi_out, /*channel=*/0, button.note, /*use_note_off=*/false);
+          midi_out,
+          ControlDValueOutputMidiNote::Config{
+              .channel = 0, .note = button.note, .use_note_off = false});
     }
     AddControl(std::move(options));
   }
