@@ -165,7 +165,7 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
     AddControl(std::move(options));
   }
 
-  // Additional per-track controls
+  // Additional per-track controls.
   for (int track = 0; track < 8; ++track) {
     // Pan pots.
     std::string name = absl::StrCat("Pot", track + 1);
@@ -175,6 +175,20 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
     pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
         midi_out, ControlDValueOutputMidiCc::McuEncoder(track));
     AddControl(std::move(pan_options));
+
+    // Faders.
+    name = absl::StrCat("Fader", track + 1);
+    Control::Options fader_options = {.name = name};
+    fader_options.value_input = std::make_unique<ControlValueInputMcuFader>(
+        midi_in, ControlValueInputMcuFader::Track(track));
+    fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
+        midi_in,
+        ControlPressInputMidiMsg::Config{
+            .press = MidiNoteOn(/*channel=*/0, 0x68 + track, /*velocity=*/127),
+            .release =
+                MidiNoteOn(/*channel=*/0, 0x68 + track, /*velocity=*/0)});
+    fader_options.binding = Control::Binding::kMotorized;
+    AddControl(std::move(fader_options));
   }
 }
 

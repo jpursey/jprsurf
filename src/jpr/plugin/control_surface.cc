@@ -602,6 +602,8 @@ void ControlSurface::InitViews() {
         ViewMapping::kReadControl, TrackProperties::kPan,
         absl::StrCat("XTouch/PotButton", i),
         {.read = {.property_min = 0.0, .property_max = 0.0}});
+    track_view->AddMapping(ViewMapping::kReadControl, TrackProperties::kVolume,
+                           absl::StrCat("XTouch/Fader", i));
     track_view->Enable();
   }
   // Set the child context, which will initialize all the child track views to

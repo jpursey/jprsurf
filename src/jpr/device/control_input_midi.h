@@ -87,4 +87,41 @@ class ControlDeltaInputMidiCcOnesComp : public ControlDeltaInput,
   uint8_t control_;
 };
 
+//==============================================================================
+// ControlValueInputMcuFader
+//==============================================================================
+
+// This control input type represents a value in the range [0.0, 1.0] that is
+// controlled by MIDI pitch bend messages on a specified channel, following the
+// non-linear curve defined by MCU style faders.
+class ControlValueInputMcuFader : public ControlValueInput,
+                                  private MidiListener {
+ public:
+  // The configuration for a ControlValueInputMcuFader, which specifies the
+  // MIDI channel to listen for pitch bend messages on.
+  struct Config {
+    uint8_t channel = 0;
+  };
+
+  // Constructs a pitch bend input for the specified track (0-7). The MIDI
+  // channel will be set according to the standard encoding for that track.
+  static Config Track(uint8_t track) { return Config{.channel = track}; }
+
+  // Constructs a pitch bend input for the master fader. The MIDI channel will
+  // be set according to the standard encoding for the master fader on an MCU
+  // device.
+  static Config MasterFader() { return Config{.channel = 8}; }
+
+  // Constructs a pitch bend input for the specified MIDI channel.
+  ControlValueInputMcuFader(MidiIn* midi_in, Config config);
+  ~ControlValueInputMcuFader() override;
+
+ private:
+  // Implements MidiListener.
+  void OnMidiMessage(double time, const MidiMessage& message) override;
+
+  MidiIn* midi_in_;
+  uint8_t channel_;
+};
+
 }  // namespace jpr
