@@ -67,16 +67,34 @@ View* View::GetChildView(std::string_view name) const {
   return it != child_views_by_name_.end() ? it->second : nullptr;
 }
 
-void View::SetContext(Context context) {
+void View::SetContext(Context context, int child_context_index) {
   context_ = std::move(context);
+  child_context_index_ = child_context_index;
   RefreshChildContext();
 }
 
-void View::SetTrackContext(Track* track) {
+void View::SetTrackContext(Track* track, int child_context_index) {
   if (track == nullptr) {
     track = TrackCache::Get().GetStubTrack();
   }
-  SetContext(std::make_unique<TrackProperties>(track));
+  if (GetTrackContext() == track) {
+    SetChildContextIndex(child_context_index);
+  } else {
+    SetContext(std::make_unique<TrackProperties>(track), child_context_index);
+  }
+}
+
+Track* View::GetTrackContext() const {
+  if (GetContextType() != ContextType::kTrack) {
+    return nullptr;
+  }
+  auto& track_properties = std::get<std::unique_ptr<TrackProperties>>(context_);
+  DCHECK(track_properties != nullptr);
+  return track_properties->GetTrack();
+}
+
+void View::ClearContext(int child_context_index) {
+  SetContext(std::monostate(), child_context_index);
 }
 
 void View::SetChildContext(ContextType context_type, int context_index) {
@@ -151,9 +169,9 @@ ViewProperty* View::GetContextProperty(std::string_view name) const {
 }
 
 bool View::AddMapping(ViewMapping::TypeFlags type,
-std::string_view property_name,
-std::string_view control_name,
-ViewMapping::Config config) {
+                      std::string_view property_name,
+                      std::string_view control_name,
+                      ViewMapping::Config config) {
   if (scene_ == nullptr) {
     return false;
   }

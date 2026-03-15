@@ -107,20 +107,31 @@ class View final {
   //
   // The context type is implied by the type of context passed in. If set,
   // mappings can be made to that context's properties (e.g. volume, pan, etc.).
-  void SetContext(Context context);
+  // The child context index is also reset, which will update the context for
+  // all child views if there is a child context type set.
+  void SetContext(Context context, int child_context_index = 0);
 
   // Sets the context to the specified track.
   //
   // If track is null, this will set the context to a default stub track that
   // has no real functionality, but can be used for mappings. This is useful if
   // a parent view will be setting the actual track dynamically.
-  void SetTrackContext(Track* track = nullptr);
+  //
+  // The child context index is also reset, which will update the context for
+  // all child views if there is a child context type set.
+  void SetTrackContext(Track* track = nullptr, int child_context_index = 0);
+
+  // Returns the current track context for this view, or null if the context
+  // type is not kTrack.
+  Track* GetTrackContext() const;
 
   // Clears the context for this view, setting it back to the default state with
   // no context.
   //
-  // This is equivalent to calling SetContext with a std::monostate.
-  void ClearContext() { SetContext(std::monostate()); }
+  // The child context index is also reset, which will update the context for
+  // all child views if there is a child context type set. This is equivalent to
+  // calling SetContext with a std::monostate.
+  void ClearContext(int child_context_index = 0);
 
   // Returns the current context type for this view
   //
