@@ -64,4 +64,27 @@ void ControlDValueOutputMidiCc::OnValueChanged(int value) {
   midi_out_->UpdateState(message);
 }
 
+//==============================================================================
+// ControlDValueOutputMidiCPressure
+//==============================================================================
+
+ControlDValueOutputMidiCPressure::ControlDValueOutputMidiCPressure(
+    MidiOut* midi_out, Config config)
+    : ControlDValueOutput(config.max_value),
+      midi_out_(midi_out),
+      status_(MidiChannelPressureStatus(config.channel)),
+      value_or_(config.value_or),
+      value_add_(config.value_add) {}
+
+ControlDValueOutputMidiCPressure::~ControlDValueOutputMidiCPressure() = default;
+
+void ControlDValueOutputMidiCPressure::OnValueChanged(int value) {
+  MidiMessage message{
+      .status = status_,
+      .data1 = static_cast<uint8_t>(value_or_ | (value + value_add_)),
+      .data2 = 0,
+  };
+  midi_out_->UpdateState(message);
+}
+
 }  // namespace jpr

@@ -76,4 +76,36 @@ class ControlDValueOutputMidiCc : public ControlDValueOutput {
   uint8_t value_add_;
 };
 
+//==============================================================================
+// ControlDValueOutputMidiCPressure
+//==============================================================================
+
+// This control output maps a discrete value to a MIDI channel pressure
+// (aftertouch) message.
+//
+// The value is mapped linearly from [0, max_value] to the 7-bit pressure range
+// [0, 127], with optional value_or and value_add modifiers applied the same way
+// as ControlDValueOutputMidiCc.
+class ControlDValueOutputMidiCPressure : public ControlDValueOutput {
+ public:
+  struct Config {
+    uint8_t channel = 0;
+    uint8_t value_or = 0;   // Or'd with the pressure value.
+    uint8_t value_add = 0;  // Added to the pressure value.
+    int max_value = 1;      // Maximum value (before value_add or value_or).
+  };
+
+  ControlDValueOutputMidiCPressure(MidiOut* midi_out, Config config);
+  ~ControlDValueOutputMidiCPressure() override;
+
+ private:
+  // Implements ControlDValueOutput.
+  void OnValueChanged(int value) override;
+
+  MidiOut* midi_out_;
+  uint8_t status_;
+  uint8_t value_or_;
+  uint8_t value_add_;
+};
+
 }  // namespace jpr
