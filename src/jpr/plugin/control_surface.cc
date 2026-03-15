@@ -601,7 +601,8 @@ void ControlSurface::InitViews() {
         ViewMapping::kReadControl, TrackProperties::kPan,
         absl::StrCat("XTouch/PotButton", i),
         {.read = {.property_min = 0.0, .property_max = 0.0}});
-    track_view->AddMapping(ViewMapping::kReadControl, TrackProperties::kVolume,
+    track_view->AddMapping(ViewMapping::kReadWriteControl,
+                           TrackProperties::kVolume,
                            absl::StrCat("XTouch/Fader", i));
     track_view->Enable();
   }
