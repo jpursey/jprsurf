@@ -5,6 +5,8 @@
 
 #include "jpr/device/control.h"
 
+#include "absl/log/log.h"
+
 namespace jpr {
 
 namespace {
@@ -191,6 +193,9 @@ void Control::RegisterInputFlag(ControlInput::Type input_type, bool* flag) {
     case ControlInput::Type::kPress:
       flags = &press_input_flags_;
       break;
+    default:
+      LOG(FATAL) << "Invalid input type: " << static_cast<int>(input_type);
+      return;
   }
   bool was_empty = flags->empty();
   flags->insert(flag);
@@ -214,6 +219,9 @@ void Control::UnregisterInputFlag(ControlInput::Type input_type, bool* flag) {
     case ControlInput::Type::kPress:
       flags = &press_input_flags_;
       break;
+    default:
+      LOG(FATAL) << "Invalid input type: " << static_cast<int>(input_type);
+      return;
   }
   flags->erase(flag);
   if (flags->empty()) {
