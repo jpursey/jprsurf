@@ -9,7 +9,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "gb/config/text_config.h"
-#include "jpr/common/child_track_iterator.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
