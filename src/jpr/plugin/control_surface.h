@@ -13,6 +13,7 @@
 #include "gb/config/config.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/track.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
 #include "jpr/scene/scene.h"
@@ -99,6 +100,7 @@ class ControlSurface final : private IReaperControlSurface {
   // Implementation
   void ConnectDevices();
   void InitViews();
+  void EnsureTrackIsVisible(Track* track);
 
   // State
   std::string type_string_;
@@ -111,6 +113,7 @@ class ControlSurface final : private IReaperControlSurface {
   std::unique_ptr<MidiIn> xtouch_in_;
   std::unique_ptr<MidiOut> xtouch_out_;
   std::unique_ptr<Scene> scene_;
+  View* track_list_view_ = nullptr;
   bool track_list_changed_ = false;
 
   // Performance monitoring

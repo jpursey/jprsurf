@@ -482,6 +482,9 @@ void ControlSurface::OnSetFocusedFx(MediaTrack* track_id,
 
 void ControlSurface::OnSetLastTouchedTrack(MediaTrack* track_id) {
   LOG_REAPER() << "OnSetLastTouchedTrack(track_id=" << track_id << ")";
+  if (track_list_view_ != nullptr) {
+    EnsureTrackIsVisible(TrackCache::Get().GetTrack(track_id));
+  }
 }
 
 void ControlSurface::OnSetMixerScroll(MediaTrack* track_id) {
@@ -573,10 +576,10 @@ void ControlSurface::InitViews() {
       "XTouch", std::make_unique<DeviceXTouch>(device_runner_, xtouch_in_.get(),
                                                xtouch_out_.get()));
 
-  View* track_list_view = scene_->GetRootView();
+  track_list_view_ = scene_->GetRootView();
   // Add 8 track views, which will correspond to the 8 tracks on the X-Touch.
   for (int i = 1; i < 9; ++i) {
-    View* track_view = track_list_view->AddChildView(absl::StrCat("Track", i));
+    View* track_view = track_list_view_->AddChildView(absl::StrCat("Track", i));
     // Sets the context to a track context, so we can map REAPER tracks to the
     // controls.
     track_view->SetTrackContext();
@@ -608,14 +611,39 @@ void ControlSurface::InitViews() {
   }
   // Set the child context, which will initialize all the child track views to
   // actual tracks.
-  track_list_view->SetChildContext(View::ContextType::kTrack);
+  track_list_view_->SetChildContext(View::ContextType::kTrack);
 
   // Enable the root view.
-  track_list_view->Enable();
+  track_list_view_->Enable();
 
   // Finally activate the scene, which will start it running and activate all
   // enabled views.
   scene_->Activate(scene_runner_);
+}
+
+void ControlSurface::EnsureTrackIsVisible(Track* track) {
+  const int num_tracks_in_view = track_list_view_->GetChildViewCount();
+  const int track_index = track->GetIndex();
+  const int last_child_context_index =
+      std::max(0, track_index - num_tracks_in_view + 1);
+  Track* parent_track = track->GetParentTrack();
+
+  // If the track is already in the current view, we only need to make sure it
+  // is in view, or do a minimum scroll to get it in view.
+  if (track_list_view_->GetTrackContext() == parent_track) {
+    int first_index = track_list_view_->GetChildContextIndex();
+    if (track_index < first_index) {
+      track_list_view_->SetChildContextIndex(track_index);
+    } else if (track_index >= first_index + num_tracks_in_view) {
+      track_list_view_->SetChildContextIndex(last_child_context_index);
+    }
+  } else if (parent_track == nullptr) {
+    // We are switching to a top level track.
+    track_list_view_->ClearContext(last_child_context_index);
+  } else {
+    // We are switching to a nested track.
+    track_list_view_->SetTrackContext(parent_track, last_child_context_index);
+  }
 }
 
 }  // namespace jpr
