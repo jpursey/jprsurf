@@ -175,7 +175,8 @@ class MidiOut final {
   //
   // This only supports note on/off messages, 7-bit control change (CC) messages
   // (no RPN/NRPN, and only MSB for potentially 14-bit CCs like volume, pan,
-  // etc), and pitch bend messages (always 14-bit). If it is not one of these
+  // etc), pitch bend messages (always 14-bit), channel pressure (aftertouch),
+  // and polyphonic pressure (per-note aftertouch). If it is not one of these
   // messages, this will not do anything.
   void UpdateState(const MidiMessage& message);
 
@@ -201,20 +202,42 @@ class MidiOut final {
   // the pitch bend will always result in the state being queued for sending.
   void ResetPitchBendState(uint8_t channel);
 
-  // Resets the internal state for all MIDI notes, control changes, and pitch
-  // bends.
+  // Resets the internal state for the specified MIDI channel pressure.
   //
-  // This sets the state of all notes, control changes, and pitch bends to
-  // unknown, and dequeues any pending state changes for all of them. Any
-  // subsequent call to UpdateState() for a supported state will always result
-  // in the state being queued for sending.
+  // This sets the state of the channel pressure to unknown, and dequeues any
+  // pending state changes for the channel pressure. Any subsequent call to
+  // UpdateState() for the channel pressure will always result in the state
+  // being queued for sending.
+  void ResetChannelPressureState(uint8_t channel);
+
+  // Resets the internal state for the specified MIDI polyphonic pressure.
+  //
+  // This sets the state of the polyphonic pressure to unknown, and dequeues any
+  // pending state changes for the polyphonic pressure. Any subsequent call to
+  // UpdateState() for the polyphonic pressure will always result in the state
+  // being queued for sending.
+  void ResetPolyPressureState(uint8_t channel, uint8_t note);
+
+  // Resets the internal state for all MIDI notes, control changes, pitch
+  // bends, channel pressure, and polyphonic pressure.
+  //
+  // This sets the state of all tracked values to unknown, and dequeues any
+  // pending state changes for all of them. Any subsequent call to
+  // UpdateState() for a supported state will always result in the state being
+  // queued for sending.
   void ResetAllState();
 
  private:
   MidiOut(int index, std::string name)
       : index_(index), name_(std::move(name)) {}
 
-  enum class StateType { kNote, kCc7, kPitchBend };
+  enum class StateType {
+    kNote,
+    kCc7,
+    kPitchBend,
+    kChannelPressure,
+    kPolyPressure,
+  };
 
   struct StateInfo {
     StateType type;

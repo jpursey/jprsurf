@@ -164,8 +164,9 @@ bool IsNoteOn(const MidiMessage& message) {
   return (message.status & 0xF0) == 0x90 && message.data2 != 0;
 }
 
-// State key encoding: type_id (2 bits) | channel (4 bits) | value (8 bits),
-// where value is note number, CC number, or 0 for pitch bend.
+// State key encoding: type_id (3 bits) | channel (4 bits) | value (8 bits),
+// where value is note number, CC number, or 0 for pitch bend / channel
+// pressure.
 uint16_t MakeStateKey(int type_id, uint8_t channel, uint8_t value) {
   return (static_cast<uint16_t>(type_id) << 12) |
          (static_cast<uint16_t>(channel & 0x0F) << 8) | value;
@@ -184,6 +185,11 @@ std::optional<MidiOut::StateInfo> MidiOut::GetStateInfo(
       return StateInfo{.type = StateType::kNote,
                        .key = MakeStateKey(static_cast<int>(StateType::kNote),
                                            channel, message.data1)};
+    case 0xA0:  // Polyphonic pressure
+      return StateInfo{
+          .type = StateType::kPolyPressure,
+          .key = MakeStateKey(static_cast<int>(StateType::kPolyPressure),
+                              channel, message.data1)};
     case 0xB0:  // Control change
       if (IsSupportedCc(message.data1)) {
         return StateInfo{.type = StateType::kCc7,
@@ -195,6 +201,11 @@ std::optional<MidiOut::StateInfo> MidiOut::GetStateInfo(
                    << " for state tracking on channel "
                    << static_cast<int>(channel);
       return std::nullopt;
+    case 0xD0:  // Channel pressure
+      return StateInfo{
+          .type = StateType::kChannelPressure,
+          .key = MakeStateKey(static_cast<int>(StateType::kChannelPressure),
+                              channel, 0)};
     case 0xE0:  // Pitch bend
       return StateInfo{
           .type = StateType::kPitchBend,
@@ -322,6 +333,20 @@ void MidiOut::UpdateState(const MidiMessage& message) {
         }
         break;
       }
+      case StateType::kChannelPressure: {
+        // For channel pressure, compare the pressure byte (data1).
+        if (last.data1 == message.data1) {
+          return;
+        }
+        break;
+      }
+      case StateType::kPolyPressure: {
+        // For polyphonic pressure, compare the pressure byte (data2).
+        if (last.data2 == message.data2) {
+          return;
+        }
+        break;
+      }
     }
   }
 
@@ -348,6 +373,22 @@ void MidiOut::ResetCc7State(uint8_t channel, uint8_t cc) {
 void MidiOut::ResetPitchBendState(uint8_t channel) {
   uint16_t key =
       MakeStateKey(static_cast<int>(StateType::kPitchBend), channel, 0);
+  last_sent_.erase(key);
+  pending_.erase(key);
+  pending_keys_.erase(key);
+}
+
+void MidiOut::ResetChannelPressureState(uint8_t channel) {
+  uint16_t key =
+      MakeStateKey(static_cast<int>(StateType::kChannelPressure), channel, 0);
+  last_sent_.erase(key);
+  pending_.erase(key);
+  pending_keys_.erase(key);
+}
+
+void MidiOut::ResetPolyPressureState(uint8_t channel, uint8_t note) {
+  uint16_t key =
+      MakeStateKey(static_cast<int>(StateType::kPolyPressure), channel, note);
   last_sent_.erase(key);
   pending_.erase(key);
   pending_keys_.erase(key);
