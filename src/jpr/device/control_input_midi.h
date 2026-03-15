@@ -24,6 +24,10 @@ namespace jpr {
 class ControlPressInputMidiMsg : public ControlPressInput,
                                  private MidiListener {
  public:
+  // The configuration for a ControlPressInputMidiMsg, which specifies the MIDI
+  // messages to listen for when the control is pressed and released. If the
+  // release message is not specified, the control will only trigger press
+  // events and will not report a pressed state.
   struct Config {
     MidiMessage press;
     std::optional<MidiMessage> release;

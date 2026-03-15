@@ -26,6 +26,10 @@ namespace jpr {
 // used for any control that can be represented with a discrete value.
 class ControlDValueOutputMidiNote : public ControlDValueOutput {
  public:
+  // The configuration for a ControlDValueOutputMidiNote, which specifies the
+  // MIDI channel and note number to use for the note on/off messages, and
+  // whether to use note off messages or note on messages with velocity 0 for
+  // the off state.
   struct Config {
     uint8_t channel = 0;
     uint8_t note = 0;
@@ -52,12 +56,19 @@ class ControlDValueOutputMidiNote : public ControlDValueOutput {
 
 class ControlDValueOutputMidiCc : public ControlDValueOutput {
  public:
+  // A mode defines how the discrete value maps to the 7-bit CC value for a
+  // given mode. The value is mapped linearly from [0, max_value] to the 7-bit
+  // CC range [0, 127], with the value_or modifier applied as a bitwise OR and
+  // the value_add modifier applied as an addition after the linear mapping.
   struct Mode {
     uint8_t value_or = 0;   // Or'd with the CC value.
     uint8_t value_add = 0;  // Added to the CC value.
     int max_value = 1;      // Maximum value (before value_add or value_or).
   };
 
+  // The configuration for a ControlDValueOutputMidiCc, which specifies the MIDI
+  // channel and control number to use for the CC messages, and one or more
+  // modes that define how the discrete value maps to the 7-bit CC value.
   struct Config {
     uint8_t channel = 0;
     uint8_t control = 0;
@@ -101,12 +112,19 @@ class ControlDValueOutputMidiCc : public ControlDValueOutput {
 // as ControlDValueOutputMidiCc.
 class ControlDValueOutputMidiCPressure : public ControlDValueOutput {
  public:
+  // A mode defines how the discrete value maps to the 7-bit pressure value for
+  // a given mode. The value is mapped linearly from [0, max_value] to the 7-bit
+  // pressure range [0, 127], with the value_or modifier applied as a bitwise OR
+  // and the value_add modifier applied as an addition after the linear mapping.
   struct Mode {
     uint8_t value_or = 0;   // Or'd with the pressure value.
     uint8_t value_add = 0;  // Added to the pressure value.
     int max_value = 1;      // Maximum value (before value_add or value_or).
   };
 
+  // The configuration for a ControlDValueOutputMidiCPressure, which specifies
+  // the MIDI channel to use for the channel pressure messages, and one or more
+  // modes that define how the discrete value maps to the 7-bit pressure value.
   struct Config {
     uint8_t channel = 0;
     absl::Span<const Mode> modes;  // One or more modes.
