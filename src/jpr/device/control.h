@@ -50,11 +50,10 @@ class Control final {
   // Options
   //----------------------------------------------------------------------------
 
-  // The output mode for a control defines how the output(s) of the control
-  // behave relative to the inputs. This is important for controls that have
-  // outputs that directly affect the physical control and/or the hardware input
-  // state.
-  enum class OutputMode {
+  // The binding for a control defines how the output(s) of the control behave
+  // relative to the inputs. This is important for controls that have outputs
+  // that directly affect the physical control and/or the hardware input state.
+  enum class Binding {
     // The output is completely independent of the input, and can be set at any
     // time without affecting the physical control or subsequent input values.
     // For example, an indicator led on a button or a light ring around an
@@ -104,7 +103,7 @@ class Control final {
     //   - If a Press input is specified along with either a Value or Delta
     //     input, then the control may be touched or pressed. This configuration
     //     is recommended only in combination with the kDependent or kMotorized
-    //     output modes, and only when it is a true capacitive touch control.
+    //     bindings, and only when it is a true capacitive touch control.
     //     On the other hand, this should generally not be used to define a
     //     pushable endless encoder. Those should be more flexibly represented
     //     as two separate controls so they can be mapped independently, as
@@ -120,9 +119,9 @@ class Control final {
     std::unique_ptr<ControlDeltaInput> delta_input;
     std::unique_ptr<ControlPressInput> press_input;
 
-    // The output mode for this control, which defines how the output(s) of this
-    // control behave relative to the inputs. See OutputMode for details.
-    OutputMode output_mode = OutputMode::kIndependent;
+    // The binding for this control, which defines how the output(s) of this
+    // control behave relative to the inputs. See Binding for details.
+    Binding binding = Binding::kIndependent;
 
     // Set of outputs for this control.
     //
@@ -176,7 +175,11 @@ class Control final {
   std::string_view GetName() const { return name_; }
   Inputs GetInputs() const { return input_types_; }
   Outputs GetOutputs() const { return output_types_; }
-  OutputMode GetOutputMode() const { return output_mode_; }
+  Binding GetBinding() const { return binding_; }
+
+  // Returns the number of modes supported by this control's outputs. This is
+  // the maximum mode count across all output types.
+  int GetModeCount() const;
 
   // Returns the current value of Value input, or 0.0 if there is no Value
   // input.
@@ -197,23 +200,23 @@ class Control final {
 
   // Sets the value of the CValue output, if it exists. If there is no CValue
   // output, this does nothing.
-  void SetCValue(double value);
+  void SetCValue(double value, int mode = 0);
 
-  // Returns the maximum value of the DValue output, or 0 if there is no DValue
-  // output.
-  int GetDValueMaxValue() const;
+  // Returns the maximum value of the DValue output for the given mode, or 0 if
+  // there is no DValue output.
+  int GetDValueMaxValue(int mode = 0) const;
 
   // Sets the value of the DValue output, if it exists. If there is no DValue
   // output, this does nothing.
-  void SetDValue(int value);
+  void SetDValue(int value, int mode = 0);
 
   // Sets the text of the Text output, if it exists. If there is no Text
   // output, this does nothing.
-  void SetText(std::string_view text);
+  void SetText(std::string_view text, int mode = 0);
 
   // Sets the color of the Color output, if it exists. If there is no Color
   // output, this does nothing.
-  void SetColor(Color color);
+  void SetColor(Color color, int mode = 0);
 
   //----------------------------------------------------------------------------
   // Input change notifications
@@ -233,7 +236,10 @@ class Control final {
   //----------------------------------------------------------------------------
 
  private:
-  using OutputValue = std::variant<double, int, std::string, Color>;
+  struct PendingOutput {
+    std::variant<double, int, std::string, Color> value;
+    int mode = 0;
+  };
 
   void OnRun(const RunTime& time);
   void UpdateRunHandle();
@@ -253,8 +259,8 @@ class Control final {
   const std::unique_ptr<ControlDValueOutput> dvalue_output_;
   const std::unique_ptr<ControlTextOutput> text_output_;
   const std::unique_ptr<ControlColorOutput> color_output_;
-  const OutputMode output_mode_;
-  const double output_delay_;
+  const Binding binding_;
+  const double binding_delay_;
   Inputs input_types_;
   Outputs output_types_;
 
@@ -262,7 +268,7 @@ class Control final {
   RunHandle run_handle_;
   double last_run_time_;
   std::optional<double> last_input_time_;
-  std::optional<OutputValue> pending_output_;
+  std::optional<PendingOutput> pending_output_;
   absl::flat_hash_set<bool*> value_input_flags_;
   absl::flat_hash_set<bool*> delta_input_flags_;
   absl::flat_hash_set<bool*> press_input_flags_;

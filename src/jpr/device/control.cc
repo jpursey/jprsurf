@@ -10,18 +10,18 @@ namespace jpr {
 namespace {
 
 // Wait time in seconds to delay output updates after input events have stopped
-// for controls with kDependent or kMotorized output modes.
-constexpr double kDependentOutputDelay = 0.125;
-constexpr double kMotorizedOutputDelay = 0.375;
+// for controls with kDependent or kMotorized bindings.
+constexpr double kDependentBindingDelay = 0.125;
+constexpr double kMotorizedBindingDelay = 0.375;
 
-double GetOutputDelay(Control::OutputMode output_mode) {
-  switch (output_mode) {
-    case Control::OutputMode::kIndependent:
+double GetBindingDelay(Control::Binding binding) {
+  switch (binding) {
+    case Control::Binding::kIndependent:
       return 0.0;
-    case Control::OutputMode::kDependent:
-      return kDependentOutputDelay;
-    case Control::OutputMode::kMotorized:
-      return kMotorizedOutputDelay;
+    case Control::Binding::kDependent:
+      return kDependentBindingDelay;
+    case Control::Binding::kMotorized:
+      return kMotorizedBindingDelay;
   }
   // Should never reach here, but return zero to avoid compiler warning.
   return 0.0;
@@ -39,8 +39,8 @@ Control::Control(RunRegistry& run_registry, Options options)
       dvalue_output_(std::move(options.dvalue_output)),
       text_output_(std::move(options.text_output)),
       color_output_(std::move(options.color_output)),
-      output_mode_(options.output_mode),
-      output_delay_(GetOutputDelay(options.output_mode)) {
+      binding_(options.binding),
+      binding_delay_(GetBindingDelay(options.binding)) {
   if (value_input_ != nullptr) {
     input_types_.Set(ControlInput::Type::kValue);
   }
@@ -95,70 +95,87 @@ bool Control::IsPressed() const {
   return press_input_->IsPressed();
 }
 
-int Control::GetDValueMaxValue() const {
+int Control::GetModeCount() const {
+  int max_count = 1;
+  if (cvalue_output_ != nullptr) {
+    max_count = std::max(max_count, cvalue_output_->GetModeCount());
+  }
+  if (dvalue_output_ != nullptr) {
+    max_count = std::max(max_count, dvalue_output_->GetModeCount());
+  }
+  if (text_output_ != nullptr) {
+    max_count = std::max(max_count, text_output_->GetModeCount());
+  }
+  if (color_output_ != nullptr) {
+    max_count = std::max(max_count, color_output_->GetModeCount());
+  }
+  return max_count;
+}
+
+int Control::GetDValueMaxValue(int mode) const {
   if (dvalue_output_ == nullptr) {
     return 0;
   }
-  return dvalue_output_->GetMaxValue();
+  return dvalue_output_->GetMaxValue(mode);
 }
 
-void Control::SetCValue(double value) {
+void Control::SetCValue(double value, int mode) {
   if (cvalue_output_ == nullptr) {
     return;
   }
-  if (output_mode_ != OutputMode::kIndependent) {
+  if (binding_ != Binding::kIndependent) {
     bool had_pending = pending_output_.has_value();
-    pending_output_ = value;
+    pending_output_ = PendingOutput{.value = value, .mode = mode};
     if (!had_pending) {
       UpdateRunHandle();
     }
   } else {
-    cvalue_output_->SetValue(value);
+    cvalue_output_->SetValue(value, mode);
   }
 }
 
-void Control::SetDValue(int value) {
+void Control::SetDValue(int value, int mode) {
   if (dvalue_output_ == nullptr) {
     return;
   }
-  if (output_mode_ != OutputMode::kIndependent) {
+  if (binding_ != Binding::kIndependent) {
     bool had_pending = pending_output_.has_value();
-    pending_output_ = value;
+    pending_output_ = PendingOutput{.value = value, .mode = mode};
     if (!had_pending) {
       UpdateRunHandle();
     }
   } else {
-    dvalue_output_->SetValue(value);
+    dvalue_output_->SetValue(value, mode);
   }
 }
 
-void Control::SetText(std::string_view text) {
+void Control::SetText(std::string_view text, int mode) {
   if (text_output_ == nullptr) {
     return;
   }
-  if (output_mode_ != OutputMode::kIndependent) {
+  if (binding_ != Binding::kIndependent) {
     bool had_pending = pending_output_.has_value();
-    pending_output_ = std::string(text);
+    pending_output_ = PendingOutput{.value = std::string(text), .mode = mode};
     if (!had_pending) {
       UpdateRunHandle();
     }
   } else {
-    text_output_->SetText(text);
+    text_output_->SetText(text, mode);
   }
 }
 
-void Control::SetColor(Color color) {
+void Control::SetColor(Color color, int mode) {
   if (color_output_ == nullptr) {
     return;
   }
-  if (output_mode_ != OutputMode::kIndependent) {
+  if (binding_ != Binding::kIndependent) {
     bool had_pending = pending_output_.has_value();
-    pending_output_ = color;
+    pending_output_ = PendingOutput{.value = color, .mode = mode};
     if (!had_pending) {
       UpdateRunHandle();
     }
   } else {
-    color_output_->SetColor(color);
+    color_output_->SetColor(color, mode);
   }
 }
 
@@ -311,27 +328,29 @@ void Control::SendPendingOutput() {
       return;
     }
   } else if (last_input_time_.has_value() &&
-             last_run_time_ - last_input_time_.value() < output_delay_) {
+             last_run_time_ - last_input_time_.value() < binding_delay_) {
     return;
   }
 
   // Send the pending output and clear it.
+  const auto& pending = pending_output_.value();
+  int mode = pending.mode;
   std::visit(
-      [this](auto&& value) {
+      [this, mode](auto&& value) {
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<T, double>) {
-          cvalue_output_->SetValue(value);
+          cvalue_output_->SetValue(value, mode);
         } else if constexpr (std::is_same_v<T, int>) {
-          dvalue_output_->SetValue(value);
+          dvalue_output_->SetValue(value, mode);
         } else if constexpr (std::is_same_v<T, std::string>) {
-          text_output_->SetText(value);
+          text_output_->SetText(value, mode);
         } else if constexpr (std::is_same_v<T, Color>) {
-          color_output_->SetColor(value);
+          color_output_->SetColor(value, mode);
         } else {
           static_assert(false, "non-exhaustive visitor!");
         }
       },
-      pending_output_.value());
+      pending.value);
   pending_output_.reset();
 }
 

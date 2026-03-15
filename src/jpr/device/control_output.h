@@ -6,7 +6,9 @@
 #pragma once
 
 #include <string_view>
+#include <vector>
 
+#include "absl/types/span.h"
 #include "jpr/common/color.h"
 
 namespace jpr {
@@ -44,8 +46,16 @@ class ControlOutput {
   // set the value of the output.
   virtual Type GetType() const = 0;
 
+  // Returns the number of modes supported by this output. The mode is an
+  // optional parameter to the Set* methods, and must be in the range
+  // [0, GetModeCount()). If the output only has one mode, this returns 1.
+  int GetModeCount() const { return mode_count_; }
+
  protected:
-  ControlOutput() = default;
+  explicit ControlOutput(int mode_count = 1) : mode_count_(mode_count) {}
+
+ private:
+  int mode_count_ = 1;
 };
 
 //==============================================================================
@@ -62,18 +72,21 @@ class ControlCValueOutput : public ControlOutput {
   virtual ~ControlCValueOutput() = default;
 
   // Sets the value of this output, which must be in the range [0.0, 1.0].
-  // Values outside of this range will be clamped to that range.
-  void SetValue(double value);
+  // Values outside of this range will be clamped to that range. The mode
+  // parameter selects the output mode, and is clamped to the valid range.
+  void SetValue(double value, int mode = 0);
 
   // Implements ControlOutput.
   Type GetType() const override { return Type::kCValue; }
 
  protected:
-  ControlCValueOutput() = default;
+  explicit ControlCValueOutput(int mode_count = 1)
+      : ControlOutput(mode_count) {}
 
   // Derived classes should call this to update the value of the physical
-  // output. The value is guaranteed to be in the range [0.0, 1.0].
-  virtual void OnValueChanged(double value) = 0;
+  // output. The value is guaranteed to be in the range [0.0, 1.0], and the
+  // mode is guaranteed to be in the range [0, GetModeCount()).
+  virtual void OnValueChanged(double value, int mode) = 0;
 };
 
 //==============================================================================
@@ -100,26 +113,31 @@ class ControlDValueOutput : public ControlOutput {
  public:
   virtual ~ControlDValueOutput() = default;
 
-  // Returns the maximum value of this output, which is the upper bound of the
-  // valid range for SetValue().
-  int GetMaxValue() const { return max_value_; }
+  // Returns the maximum value of this output for the given mode. The mode
+  // parameter is clamped to the valid range [0, GetModeCount()).
+  int GetMaxValue(int mode = 0) const;
 
   // Sets the value of this output, which must be in the range [0,
-  // GetMaxValue()]. Values outside of this range will be clamped to that range.
-  void SetValue(int value);
+  // GetMaxValue(mode)]. Values outside of this range will be clamped to that
+  // range. The mode parameter selects the output mode, and is clamped to the
+  // valid range.
+  void SetValue(int value, int mode = 0);
 
   // Implements ControlOutput.
   Type GetType() const override { return Type::kDValue; }
 
  protected:
-  ControlDValueOutput(int max_value) : max_value_(max_value) {}
+  explicit ControlDValueOutput(int max_value);
+  explicit ControlDValueOutput(absl::Span<const int> max_values);
 
   // Derived classes should call this to update the value of the physical
-  // output. The value is guaranteed to be in the range [0, GetMaxValue()].
-  virtual void OnValueChanged(int value) = 0;
+  // output. The value is guaranteed to be in the range
+  // [0, GetMaxValue(mode)], and the mode is guaranteed to be in the range
+  // [0, GetModeCount()).
+  virtual void OnValueChanged(int value, int mode) = 0;
 
  private:
-  int max_value_ = 0;
+  std::vector<int> max_values_;
 };
 
 //==============================================================================
@@ -136,17 +154,20 @@ class ControlTextOutput : public ControlOutput {
   virtual ~ControlTextOutput() = default;
 
   // Sets the text of this output. The control may truncate or alter the text as
-  // needed to accomodate the actual control.
-  void SetText(std::string_view text);
+  // needed to accomodate the actual control. The mode parameter selects the
+  // output mode, and is clamped to the valid range.
+  void SetText(std::string_view text, int mode = 0);
 
   // Implements ControlOutput.
   Type GetType() const override { return Type::kText; }
 
  protected:
-  ControlTextOutput() = default;
+  explicit ControlTextOutput(int mode_count = 1)
+      : ControlOutput(mode_count) {}
 
   // Derived classes should call this to update the text of the physical output.
-  virtual void OnTextChanged(std::string_view text) = 0;
+  // The mode is guaranteed to be in the range [0, GetModeCount()).
+  virtual void OnTextChanged(std::string_view text, int mode) = 0;
 };
 
 //==============================================================================
@@ -164,18 +185,20 @@ class ControlColorOutput : public ControlOutput {
   virtual ~ControlColorOutput() = default;
 
   // Sets the color of this output. The control may alter the color as needed to
-  // accomodate the actual control.
-  void SetColor(Color color);
+  // accomodate the actual control. The mode parameter selects the output mode,
+  // and is clamped to the valid range.
+  void SetColor(Color color, int mode = 0);
 
   // Implements ControlOutput.
   Type GetType() const override { return Type::kColor; }
 
  protected:
-  ControlColorOutput() = default;
+  explicit ControlColorOutput(int mode_count = 1)
+      : ControlOutput(mode_count) {}
 
   // Derived classes should call this to update the color of the physical
-  // output.
-  virtual void OnColorChanged(Color color) = 0;
+  // output. The mode is guaranteed to be in the range [0, GetModeCount()).
+  virtual void OnColorChanged(Color color, int mode) = 0;
 };
 
 }  // namespace jpr

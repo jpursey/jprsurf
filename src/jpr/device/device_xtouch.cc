@@ -169,7 +169,7 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
     pan_options.delta_input = std::make_unique<ControlDeltaInputMidiCcOnesComp>(
         midi_in, ControlDeltaInputMidiCcOnesComp::McuEncoder(track));
     pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
-        midi_out, ControlDValueOutputMidiCc::McuEncoder(track, /*mode=*/1));
+        midi_out, ControlDValueOutputMidiCc::McuEncoder(track));
     AddControl(std::move(pan_options));
   }
 }

@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include <vector>
+
+#include "absl/types/span.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/device/control_output.h"
 
@@ -29,7 +32,7 @@ class ControlDValueOutputMidiNote : public ControlDValueOutput {
 
  private:
   // Implements ControlDValueOutput.
-  void OnValueChanged(int value) override;
+  void OnValueChanged(int value, int mode) override;
 
   MidiOut* midi_out_;
   MidiMessage messages_[2];
@@ -41,17 +44,20 @@ class ControlDValueOutputMidiNote : public ControlDValueOutput {
 
 class ControlDValueOutputMidiCc : public ControlDValueOutput {
  public:
-  struct Config {
-    uint8_t channel = 0;
-    uint8_t control = 0;
+  struct Mode {
     uint8_t value_or = 0;   // Or'd with the CC value.
     uint8_t value_add = 0;  // Added to the CC value.
     int max_value = 1;      // Maximum value (before value_add or value_or).
   };
 
+  struct Config {
+    uint8_t channel = 0;
+    uint8_t control = 0;
+    absl::Span<const Mode> modes;  // One or more modes.
+  };
+
   // Returns the configuration for a standard per-track encoder light-ring on an
-  // MCU device for the specified track and mode. Track must be between 0 and 7,
-  // and mode must be between 0 and 7. Modes are as follows:
+  // MCU device for the specified track. All 8 MCU encoder modes are included:
   //   - Mode 0: Single LED from left to right (11 values)
   //   - Mode 1: Fill from center from left to right (11 values).
   //   - Mode 2: Fill from left from left to right (11 values).
@@ -60,20 +66,19 @@ class ControlDValueOutputMidiCc : public ControlDValueOutput {
   //   - Mode 5: Same as Mode 1, but right and left always lit.
   //   - Mode 6: Same as Mode 2, but right and left always lit.
   //   - Mode 7: Same as Mode 3, but right and left always lit.
-  static Config McuEncoder(uint8_t track, uint8_t mode);
+  static Config McuEncoder(uint8_t track);
 
   ControlDValueOutputMidiCc(MidiOut* midi_out, Config config);
   ~ControlDValueOutputMidiCc() override;
 
  private:
   // Implements ControlDValueOutput.
-  void OnValueChanged(int value) override;
+  void OnValueChanged(int value, int mode) override;
 
   MidiOut* midi_out_;
   uint8_t status_;
   uint8_t control_;
-  uint8_t value_or_;
-  uint8_t value_add_;
+  std::vector<Mode> modes_;
 };
 
 //==============================================================================
@@ -88,11 +93,15 @@ class ControlDValueOutputMidiCc : public ControlDValueOutput {
 // as ControlDValueOutputMidiCc.
 class ControlDValueOutputMidiCPressure : public ControlDValueOutput {
  public:
-  struct Config {
-    uint8_t channel = 0;
+  struct Mode {
     uint8_t value_or = 0;   // Or'd with the pressure value.
     uint8_t value_add = 0;  // Added to the pressure value.
     int max_value = 1;      // Maximum value (before value_add or value_or).
+  };
+
+  struct Config {
+    uint8_t channel = 0;
+    absl::Span<const Mode> modes;  // One or more modes.
   };
 
   ControlDValueOutputMidiCPressure(MidiOut* midi_out, Config config);
@@ -100,12 +109,11 @@ class ControlDValueOutputMidiCPressure : public ControlDValueOutput {
 
  private:
   // Implements ControlDValueOutput.
-  void OnValueChanged(int value) override;
+  void OnValueChanged(int value, int mode) override;
 
   MidiOut* midi_out_;
   uint8_t status_;
-  uint8_t value_or_;
-  uint8_t value_add_;
+  std::vector<Mode> modes_;
 };
 
 }  // namespace jpr
