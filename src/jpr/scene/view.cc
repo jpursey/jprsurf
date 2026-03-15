@@ -151,9 +151,9 @@ ViewProperty* View::GetContextProperty(std::string_view name) const {
 }
 
 bool View::AddMapping(ViewMapping::TypeFlags type,
-                      std::string_view property_name,
-                      std::string_view control_name,
-                      ViewMapping::ReadConfig read_config) {
+std::string_view property_name,
+std::string_view control_name,
+ViewMapping::Config config) {
   if (scene_ == nullptr) {
     return false;
   }
@@ -169,7 +169,7 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
     return false;
   }
   mappings_.push_back(absl::WrapUnique(
-      new ViewMapping(this, type, property, control, std::move(read_config))));
+      new ViewMapping(this, type, property, control, std::move(config))));
   return true;
 }
 

@@ -60,6 +60,17 @@ class ViewMapping final {
     std::optional<ViewProperty::Value> property_max;
   };
 
+  struct WriteConfig {
+    // The output mode index to use when writing to the control. This is passed
+    // through to the control's Set* methods. Defaults to 0.
+    int mode = 0;
+  };
+
+  struct Config {
+    ReadConfig read;
+    WriteConfig write;
+  };
+
   ViewMapping(const ViewMapping&) = delete;
   ViewMapping& operator=(const ViewMapping&) = delete;
   ~ViewMapping();
@@ -90,10 +101,10 @@ class ViewMapping final {
  private:
   friend class View;
 
-  using WriteSyncFunction = void(ViewProperty&, Control&);
+  using WriteSyncFunction = void(ViewProperty&, Control&, int mode);
 
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-    Control* control, ReadConfig read_config = {});
+    Control* control, Config config = {});
 
   // Refreshes the active state of this mapping based on whether it is enabled
   // and whether its parent view is active.
@@ -120,7 +131,7 @@ class ViewMapping final {
   View* view_;
   ViewProperty* property_;
   Control* control_;
-  ReadConfig read_config_;
+  Config config_;
   absl::AnyInvocable<void(ViewProperty&, Control&)> read_control_;
   WriteSyncFunction* write_control_;
   std::optional<ControlInput::Type> input_type_;
