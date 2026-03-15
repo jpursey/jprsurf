@@ -54,6 +54,23 @@ inline MidiMessage MidiCc(uint8_t channel, uint8_t control, uint8_t value) {
   return MidiMessage{MidiCcStatus(channel), control, value};
 }
 
+inline uint8_t MidiPolyPressureStatus(uint8_t channel) {
+  return static_cast<uint8_t>(0xA0 | (channel & 0x0F));
+}
+
+inline MidiMessage MidiPolyPressure(uint8_t channel, uint8_t note,
+                                    uint8_t pressure) {
+  return MidiMessage{MidiPolyPressureStatus(channel), note, pressure};
+}
+
+inline uint8_t MidiChannelPressureStatus(uint8_t channel) {
+  return static_cast<uint8_t>(0xD0 | (channel & 0x0F));
+}
+
+inline MidiMessage MidiChannelPressure(uint8_t channel, uint8_t pressure) {
+  return MidiMessage{MidiChannelPressureStatus(channel), pressure, 0};
+}
+
 inline uint8_t MidiPitchBendStatus(uint8_t channel) {
   return static_cast<uint8_t>(0xE0 | (channel & 0x0F));
 }
