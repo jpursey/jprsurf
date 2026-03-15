@@ -21,6 +21,9 @@ void Track::DoRefresh(MediaTrack* track_id) {
   bool changed = (track_id_ != track_id);
   track_id_ = track_id;
   if (track_id == nullptr) {
+    if (!changed) {
+      return;
+    }
     name_.clear();
     volume_ = 0.0;
     pan_ = 0.0;
@@ -28,9 +31,7 @@ void Track::DoRefresh(MediaTrack* track_id) {
     mute_ = false;
     solo_ = false;
     rec_arm_ = false;
-    if (changed) {
-      NotifyListeners();
-    }
+    NotifyListeners();
     return;
   }
 

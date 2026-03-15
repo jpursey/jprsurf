@@ -87,8 +87,22 @@ class Track final : public std::enable_shared_from_this<Track> {
   void SetSolo(bool solo);
   void SetRecArm(bool record);
 
-  // Immediate child tracks of this track in order. These are updated whenever
-  // Refresh() is called, or when the track hierarchy changes in REAPER.
+  // Parent track of this track.
+  //
+  // If the track is a top level track, or does not currently exist in REAPER,
+  // this will return nullptr. This is updated whenever TrackCache::Refresh()
+  // is called.
+  Track* GetParentTrack() const { return parent_track_; }
+
+  // Returns the index of this track within its parent track.
+  //
+  // If this is a top level track, this will return the index within all
+  // top-level tracks. If the track does not currently exist in REAPER, this
+  // will return zero. This is updated whenever TrackCache::Refresh() is called.
+  int GetIndex() const { return index_; }
+
+  // Immediate child tracks of this track in order. These are updated
+  // whenever TrackCache::Refresh() is called.
   int GetChildTrackCount() const {
     return static_cast<int>(child_tracks_.size());
   }
@@ -139,7 +153,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool solo_ = false;
   bool rec_arm_ = false;
 
-  // Child tracks
+  // Track hierarchy.
+  Track* parent_track_ = nullptr;
+  int index_ = 0;  // Index of the track within the parent.
   std::vector<Track*> child_tracks_;
 
   // Listeners subscribed to this track for changes.

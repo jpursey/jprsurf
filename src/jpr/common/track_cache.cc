@@ -61,13 +61,21 @@ void TrackCache::Refresh() {
   auto add_to_parent = [this](Track* track) {
     MediaTrack* parent_id = GetParentTrack(track->GetTrackId());
     if (parent_id == nullptr) {
+      track->parent_track_ = nullptr;
+      track->index_ = static_cast<int>(top_level_tracks_.size());
       top_level_tracks_.push_back(track);
       return;
     }
     Track* parent_track = GetTrack(parent_id);
     if (parent_track == nullptr) {
+      LOG(ERROR) << "Failed to find parent track for track " << track->GetGuid()
+                 << " with parent ID " << parent_id;
+      track->parent_track_ = nullptr;
+      track->index_ = 0;
       return;
     }
+    track->parent_track_ = parent_track;
+    track->index_ = static_cast<int>(parent_track->child_tracks_.size());
     parent_track->child_tracks_.push_back(track);
   };
 
@@ -120,6 +128,8 @@ void TrackCache::Refresh() {
     std::shared_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
     new_track->child_tracks_.clear();
+    new_track->parent_track_ = nullptr;
+    new_track->index_ = 0;
     new_track->DoRefresh(nullptr);
   }
 }
