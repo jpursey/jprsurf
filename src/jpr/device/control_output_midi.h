@@ -142,4 +142,38 @@ class ControlDValueOutputMidiCPressure : public ControlDValueOutput {
   std::vector<Mode> modes_;
 };
 
+//==============================================================================
+// ControlCValueOutputMcuFader
+//==============================================================================
+
+// This control output maps a continuous value in [0.0, 1.0] to a MIDI pitch
+// bend message using the non-linear curve defined by MCU style faders. The
+// curve maps from negative infinity (0.0) to +10dB (1.0), which is the
+// inverse of the mapping performed by ControlValueInputMcuFader.
+class ControlCValueOutputMcuFader : public ControlCValueOutput {
+ public:
+  // The configuration for a ControlCValueOutputMcuFader, which specifies the
+  // MIDI channel to send pitch bend messages on.
+  struct Config {
+    uint8_t channel = 0;
+  };
+
+  // Returns the configuration for a standard per-track fader on an MCU device
+  // for the specified track (0-7).
+  static Config Track(uint8_t track) { return Config{.channel = track}; }
+
+  // Returns the configuration for the master fader on an MCU device.
+  static Config MasterFader() { return Config{.channel = 8}; }
+
+  ControlCValueOutputMcuFader(MidiOut* midi_out, Config config);
+  ~ControlCValueOutputMcuFader() override;
+
+ private:
+  // Implements ControlCValueOutput.
+  void OnValueChanged(double value, int mode) override;
+
+  MidiOut* midi_out_;
+  uint8_t channel_;
+};
+
 }  // namespace jpr

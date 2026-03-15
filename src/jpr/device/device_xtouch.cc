@@ -187,6 +187,8 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
             .press = MidiNoteOn(/*channel=*/0, 0x68 + track, /*velocity=*/127),
             .release =
                 MidiNoteOn(/*channel=*/0, 0x68 + track, /*velocity=*/0)});
+    fader_options.cvalue_output = std::make_unique<ControlCValueOutputMcuFader>(
+        midi_out, ControlCValueOutputMcuFader::Track(track));
     fader_options.binding = Control::Binding::kMotorized;
     AddControl(std::move(fader_options));
   }

@@ -118,4 +118,66 @@ void ControlDValueOutputMidiCPressure::OnValueChanged(int value, int mode) {
   midi_out_->UpdateState(message);
 }
 
+//==============================================================================
+// ControlCValueOutputMcuFader
+//==============================================================================
+
+namespace {
+
+struct McuFaderPoint {
+  double normalized;
+  double pitch_bend;
+};
+
+// Approximation of curve that lines up with the markings on MCU faders.
+// This is the same data as in control_input_midi.cc but keyed by normalized
+// value for the inverse lookup.
+constexpr McuFaderPoint kMcuFaderPoints[] = {
+    {0.0, 0.0},            // -infinity
+    {0.000316228, 530.0},  // -60dB
+    {0.001, 1700.0},       // -50dB
+    {0.00316228, 2750.0},  // -40dB
+    {0.01, 3850.0},        // -30dB
+    {0.0316228, 6100.0},   // -20dB
+    {0.1, 8250.0},         // -10dB
+    {0.177828, 10600.0},   // -5dB
+    {0.316228, 12720.0},   // 0dB
+    {0.562341, 14900.0},   // 5dB
+    {1.0, 16383.0},        // 10dB
+};
+
+}  // namespace
+
+ControlCValueOutputMcuFader::ControlCValueOutputMcuFader(MidiOut* midi_out,
+                                                         Config config)
+    : ControlCValueOutput(), midi_out_(midi_out), channel_(config.channel) {}
+
+ControlCValueOutputMcuFader::~ControlCValueOutputMcuFader() = default;
+
+void ControlCValueOutputMcuFader::OnValueChanged(double value, int mode) {
+  double pitch_bend = 0.0;
+  constexpr int kLastPoint = std::size(kMcuFaderPoints) - 1;
+  if (value <= kMcuFaderPoints[0].normalized) {
+    pitch_bend = kMcuFaderPoints[0].pitch_bend;
+  } else if (value >= kMcuFaderPoints[kLastPoint].normalized) {
+    pitch_bend = kMcuFaderPoints[kLastPoint].pitch_bend;
+  } else {
+    for (int i = 0; i < kLastPoint; ++i) {
+      if (value >= kMcuFaderPoints[i].normalized &&
+          value <= kMcuFaderPoints[i + 1].normalized) {
+        double t =
+            (value - kMcuFaderPoints[i].normalized) /
+            (kMcuFaderPoints[i + 1].normalized - kMcuFaderPoints[i].normalized);
+        pitch_bend = kMcuFaderPoints[i].pitch_bend +
+                     t * (kMcuFaderPoints[i + 1].pitch_bend -
+                          kMcuFaderPoints[i].pitch_bend);
+        break;
+      }
+    }
+  }
+
+  uint16_t pb = static_cast<uint16_t>(std::clamp(pitch_bend, 0.0, 16383.0));
+  midi_out_->UpdateState(MidiPitchBend(channel_, pb));
+}
+
 }  // namespace jpr
