@@ -12,6 +12,7 @@ set(jpr_common_SOURCE
   runner.cc runner.h
   track.cc track.h
   track_cache.cc track_cache.h
+  volume_utils.h
 )
 
 set(jpr_common_DEPS
