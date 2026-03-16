@@ -607,6 +607,8 @@ void ControlSurface::InitViews() {
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kVolume,
                            absl::StrCat("XTouch/Fader", i));
+    track_view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kName,
+                           absl::StrCat("XTouch/Scribble", i, "Line1"));
     track_view->Enable();
   }
   // Set the child context, which will initialize all the child track views to
