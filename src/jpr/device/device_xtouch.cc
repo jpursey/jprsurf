@@ -7,8 +7,11 @@
 
 #include "jpr/device/device_xtouch.h"
 
+#include "absl/base/no_destructor.h"
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "jpr/common/midi_port.h"
+#include "jpr/common/midi_sysex.h"
 #include "jpr/device/control_input_midi.h"
 #include "jpr/device/control_output_midi.h"
 
@@ -143,11 +146,188 @@ const Button kButtons[] = {
     {"Right", 0x65, true},
 };
 
+static constexpr int kScribbleLineLength = 56;
+static constexpr int kScribbleTrackLineLength = 7;
+static constexpr uint8_t kScribbleSysexPrefix[] = {0x00, 0x00, 0x66, 0x14,
+                                                   0x12};
+
+struct ScribbleConfig {
+  int line;
+  int offset;
+  int length;
+  std::string_view text;
+};
+
+ScribbleConfig ParseScribbleBytes(absl::Span<const uint8_t> bytes) {
+  if (bytes.empty()) {
+    LOG(ERROR) << "Invalid X-Touch scribble strip message: empty message";
+    return {.line = 0, .offset = 0, .length = 0};
+  }
+  if (bytes.size() > kScribbleLineLength + 1) {
+    LOG(ERROR) << "Invalid X-Touch scribble strip message: message too long";
+    return {.line = 0, .offset = 0, .length = 0};
+  }
+  int line = (bytes[0] < kScribbleLineLength ? 0 : 1);
+  int offset = (line == 0 ? bytes[0] : bytes[0] - kScribbleLineLength);
+  int length = std::clamp(static_cast<int>(bytes.size()) - 1, 0,
+                          kScribbleLineLength - offset);
+  const char* text_data = reinterpret_cast<const char*>(bytes.data() + 1);
+  return {.line = line,
+          .offset = offset,
+          .length = length,
+          .text = std::string_view(text_data, length)};
+}
+
+SysexMessage CreateScribbleMessage(ScribbleConfig config) {
+  int line = std::clamp(config.line, 0, 1);
+  int offset = std::clamp(config.offset, 0, kScribbleLineLength);
+  int length = std::clamp(config.length, 0, kScribbleLineLength - offset);
+  SysexMessage message(SysexPrefix(kScribbleSysexPrefix), length + 1);
+  message.GetMutableData()[0] = line * kScribbleLineLength + offset;
+  char* text_data =
+      reinterpret_cast<char*>(message.GetMutableData().data() + 1);
+  std::fill(text_data, text_data + length, ' ');
+  if (!config.text.empty()) {
+    std::memcpy(text_data, config.text.data(),
+                std::min(length, static_cast<int>(config.text.size())));
+  }
+  return message;
+}
+
+// Manages the state for an X-Touch scribble strip that is updated by X-Touch
+// scribble strip sysex messages.
+class XTouchScribbleState final : public SysexMessageState {
+ public:
+  XTouchScribbleState(const SysexMessage& message);
+  XTouchScribbleState(const XTouchScribbleState& other);
+  XTouchScribbleState& operator=(const XTouchScribbleState&);
+  ~XTouchScribbleState() override = default;
+
+  // Returns the entire text for the scribble strip.
+  std::string_view GetTopLine() const { return line_[0]; }
+  std::string_view GetBottomLine() const { return line_[1]; }
+
+  // Overrides for SysexMessageState.
+  std::unique_ptr<SysexMessageState> Clone() const override;
+  bool Update(const SysexMessage& message) override;
+
+ private:
+  std::string line_[2];
+};
+
+XTouchScribbleState::XTouchScribbleState(const SysexMessage& message) {
+  line_[0] = std::string(kScribbleLineLength, ' ');
+  line_[1] = std::string(kScribbleLineLength, ' ');
+  ScribbleConfig config = ParseScribbleBytes(message.GetData());
+  std::memcpy(line_[config.line].data() + config.offset, config.text.data(),
+              config.text.size());
+}
+
+XTouchScribbleState::XTouchScribbleState(const XTouchScribbleState& other) {
+  line_[0] = other.line_[0];
+  line_[1] = other.line_[1];
+}
+
+XTouchScribbleState& XTouchScribbleState::operator=(
+    const XTouchScribbleState& other) {
+  if (this != &other) {
+    line_[0] = other.line_[0];
+    line_[1] = other.line_[1];
+  }
+  return *this;
+}
+
+std::unique_ptr<SysexMessageState> XTouchScribbleState::Clone() const {
+  return std::make_unique<XTouchScribbleState>(*this);
+}
+
+bool XTouchScribbleState::Update(const SysexMessage& message) {
+  if (message.GetPrefix() != SysexPrefix(kScribbleSysexPrefix)) {
+    return false;
+  }
+  ScribbleConfig config = ParseScribbleBytes(message.GetData());
+  std::string_view old_text(line_[config.line].data() + config.offset,
+                            config.length);
+  if (old_text == config.text) {
+    return false;
+  }
+  std::memcpy(line_[config.line].data() + config.offset, config.text.data(),
+              config.text.size());
+  return true;
+}
+
+class XTouchScribbleSysex : public SysexMessageType {
+ public:
+  XTouchScribbleSysex();
+  XTouchScribbleSysex(const XTouchScribbleSysex&) = delete;
+  XTouchScribbleSysex& operator=(const XTouchScribbleSysex&) = delete;
+  ~XTouchScribbleSysex() override = default;
+
+  // Overrides for SysexMessageType.
+  std::unique_ptr<SysexMessageState> CreateState(
+      const SysexMessage& message) const override;
+};
+
+XTouchScribbleSysex::XTouchScribbleSysex()
+    : SysexMessageType(SysexPrefix(kScribbleSysexPrefix)) {
+  Register();
+}
+
+std::unique_ptr<SysexMessageState> XTouchScribbleSysex::CreateState(
+    const SysexMessage& message) const {
+  if (message.GetPrefix() != SysexPrefix(kScribbleSysexPrefix)) {
+    return nullptr;
+  }
+  return std::make_unique<XTouchScribbleState>(message);
+}
+
+class XTouchTrackScribbleText final : public ControlTextOutput {
+ public:
+  XTouchTrackScribbleText(MidiOut* midi_out, int track, int line);
+  XTouchTrackScribbleText(const XTouchTrackScribbleText&) = delete;
+  XTouchTrackScribbleText& operator=(const XTouchTrackScribbleText&) = delete;
+  ~XTouchTrackScribbleText() override = default;
+
+ protected:
+  // Overrides for ControlTextOutput.
+  void OnTextChanged(std::string_view text, int mode) override;
+
+ private:
+  MidiOut* midi_out_;
+  ScribbleConfig config_;
+};
+
+XTouchTrackScribbleText::XTouchTrackScribbleText(MidiOut* midi_out, int track,
+                                                 int line)
+    : midi_out_(midi_out),
+      config_({.line = line,
+               .offset = track * kScribbleTrackLineLength,
+               .length = kScribbleTrackLineLength}) {}
+
+void XTouchTrackScribbleText::OnTextChanged(std::string_view text, int mode) {
+  ScribbleConfig config = config_;
+  config.text = text;
+  midi_out_->UpdateState(CreateScribbleMessage(config));
+}
+
+void RegisterSysex() {
+  static absl::NoDestructor<XTouchScribbleSysex> instance;
+  if (!instance->IsRegistered()) {
+    if (!instance->Register()) {
+      LOG(ERROR)
+          << "Failed to register X-Touch scribble strip sysex message type";
+    }
+  }
+}
+
 }  // namespace
 
 DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
                            MidiOut* midi_out)
     : Device(run_registry) {
+  // Ensure all sysex message types are registered.
+  RegisterSysex();
+
   // Add all button controls.
   for (const auto& button : kButtons) {
     Control::Options options = {.name = button.name};
@@ -191,6 +371,15 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
         midi_out, ControlCValueOutputMcuFader::Track(track));
     fader_options.binding = Control::Binding::kMotorized;
     AddControl(std::move(fader_options));
+
+    // Scribble strip text.
+    for (int line = 0; line < 2; ++line) {
+      name = absl::StrCat("Scribble", track + 1, "Line", line + 1);
+      Control::Options scribble_options = {.name = name};
+      scribble_options.text_output =
+          std::make_unique<XTouchTrackScribbleText>(midi_out, track, line);
+      AddControl(std::move(scribble_options));
+    }
   }
 }
 
