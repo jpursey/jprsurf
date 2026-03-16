@@ -16,7 +16,7 @@ namespace jpr {
 
 // A unique prefix for a specific sysex message, which can be used to identify a
 // message as belong to a registered SysexMessageType.
-class SysexPrefix {
+class SysexPrefix final {
  public:
   // Constructs a SysexPrefix with the given prefix bytes. The prefix must be to
   // a constant buffer that lasts for the life of the program.
@@ -66,7 +66,7 @@ class SysexPrefix {
 // The variable data bytes can be modified through a mutable span, while the
 // header, prefix, and footer bytes are fixed and required for the message to be
 // valid.
-class SysexMessage {
+class SysexMessage final {
  public:
   // Constructs a SysexMessage with the given prefix and a capacity for the
   // message bytes (not including the header, prefix, and footer). The prefix is
@@ -89,14 +89,30 @@ class SysexMessage {
   // guaranteed to be in the correct format for the message to be valid.
   absl::Span<const uint8_t> GetBytes() const { return bytes_; }
 
-  // Returns a mutable span of the sub-section of the message bytes that can be
-  // modified. This does not include the header, prefix, or footer bytes that
-  // are required for the message to be valid, and should only be used to modify
-  // the portion of the message that contains the variable data for the message.
-  absl::Span<uint8_t> GetMutableBytes() {
+  // Returns a span of the sub-section of the message bytes that represents the
+  // data portion of the message. This does not include the header, prefix, or
+  // footer bytes that are required for the message to be valid. Only this
+  // portion of the message should be modified, and the header, prefix, and
+  // footer bytes should remain unchanged.
+  absl::Span<const uint8_t> GetData() const {
+    const int prefix_size = static_cast<int>(prefix_.GetPrefix().size());
+    return absl::MakeConstSpan(bytes_.data() + prefix_size + 1,
+                               bytes_.size() - prefix_size - 2);
+  }
+  absl::Span<uint8_t> GetMutableData() {
     const int prefix_size = static_cast<int>(prefix_.GetPrefix().size());
     return absl::MakeSpan(bytes_.data() + prefix_size + 1,
                           bytes_.size() - prefix_size - 2);
+  }
+
+  // Resizes the message to have the given size for the variable data portion of
+  // the message. This will resize the underlying message bytes to accommodate
+  // the new size, while keeping the header, prefix, and footer bytes intact.
+  void Resize(int size) {
+    const int prefix_size = static_cast<int>(prefix_.GetPrefix().size());
+    bytes_.pop_back();  // Remove the footer byte before resizing.
+    bytes_.resize(prefix_size + 1 + size + 1, 0);
+    bytes_.back() = 0xF7;  // Reset the footer byte after resizing.
   }
 
  private:
@@ -153,6 +169,9 @@ class SysexMessageType {
 
   // Destroys the SysexMessageType, unregistering it if is currently registered.
   virtual ~SysexMessageType();
+
+  // Returns whether this SysexMessageType is currently registered.
+  bool IsRegistered() const { return registered_; }
 
   // Attempts to register this SysexMessageType.
   //
