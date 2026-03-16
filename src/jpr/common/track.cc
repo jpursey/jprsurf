@@ -42,6 +42,7 @@ void Track::DoRefresh(MediaTrack* track_id) {
     LOG(ERROR) << "Failed to get name for valid track " << guid_;
     name_.clear();
   } else {
+    changed = changed || (name_ != name);
     name_ = name;
   }
   bool selected = (flags & 2) != 0;
