@@ -8,6 +8,7 @@ set(jpr_common_SOURCE
   guid.cc guid.h
   midi_message.h
   midi_port.cc midi_port.h
+  midi_sysex.cc midi_sysex.h
   runner.cc runner.h
   track.cc track.h
   track_cache.cc track_cache.h
