@@ -7,9 +7,11 @@
 
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include "jpr/common/midi_message.h"
+#include "jpr/common/midi_sysex.h"
 #include "jpr/common/runner.h"
 #include "sdk/reaper_plugin.h"
 
@@ -157,12 +159,30 @@ class MidiOut final {
   // sent.
   void QueueMessage(const MidiMessage& message);
 
+  // Queues a sysex message to be sent from this output port.
+  //
+  // This does nothing if the port is not currently open.
+  //
+  // All messages will be sent at the next Run() invocation after this is
+  // called in FIFO order (interleaved with any MidiMessage queue entries).
+  // This message is always sent, and ahead of any state changes that might
+  // otherwise be pending.
+  //
+  // If there is a registered SysexMessageType for this message's prefix, this
+  // will also update the queued sysex state and replay any pending sysex
+  // messages for that prefix, dropping any that no longer apply.
+  void QueueMessage(const SysexMessage& message);
+
   // Returns true if the given MIDI message corresponds to a supported state
   // type that can be tracked by UpdateState().
   //
   // Callers can use this to determine whether to use UpdateState() or
   // QueueMessage() for a given message.
   bool IsStateMessage(const MidiMessage& message) const;
+
+  // Returns true if the given sysex message has a registered SysexMessageType
+  // that can be tracked by UpdateState().
+  bool IsStateMessage(const SysexMessage& message) const;
 
   // Updates the internal state of a MIDI note or control value.
   //
@@ -179,6 +199,18 @@ class MidiOut final {
   // and polyphonic pressure (per-note aftertouch). If it is not one of these
   // messages, this will not do anything.
   void UpdateState(const MidiMessage& message);
+
+  // Updates the internal sysex state for the message's prefix.
+  //
+  // This does nothing if the port is not currently open, or if there is no
+  // registered SysexMessageType for the message's prefix.
+  //
+  // The message is passed to the SysexMessageState for the prefix. If the
+  // state indicates the message changes something (Update() returns true), the
+  // message is appended to the pending list for that prefix. Pending sysex
+  // messages are sent at the next Run() invocation, after any messages queued
+  // via QueueMessage().
+  void UpdateState(const SysexMessage& message);
 
   // Resets the internal state for the specified MIDI note.
   //
@@ -218,8 +250,15 @@ class MidiOut final {
   // being queued for sending.
   void ResetPolyPressureState(uint8_t channel, uint8_t note);
 
+  // Resets the internal sysex state for the specified prefix.
+  //
+  // This destroys the cached SysexMessageState for the prefix, and dequeues
+  // any pending sysex messages for it. Any subsequent call to UpdateState()
+  // for a sysex message with this prefix will create fresh state.
+  void ResetSysexState(const SysexPrefix& prefix);
+
   // Resets the internal state for all MIDI notes, control changes, pitch
-  // bends, channel pressure, and polyphonic pressure.
+  // bends, channel pressure, polyphonic pressure, and sysex state.
   //
   // This sets the state of all tracked values to unknown, and dequeues any
   // pending state changes for all of them. Any subsequent call to
@@ -253,6 +292,8 @@ class MidiOut final {
   void UpdateLastSent(const StateInfo& info, const MidiMessage& message);
 
   void Run(const RunTime& time);
+  void SendSysexMessage(const SysexMessage& message);
+  void UpdateSysexQueuedState(const SysexMessage& message);
 
   int index_ = -1;
   std::string name_;
@@ -260,12 +301,20 @@ class MidiOut final {
   RunHandle run_handle_;
 
   // FIFO queue of messages to send unconditionally (via QueueMessage).
-  std::vector<MidiMessage> message_queue_;
+  std::vector<std::variant<MidiMessage, SysexMessage>> message_queue_;
 
   // State tracking: last-sent and pending state for each state key.
   absl::flat_hash_map<uint16_t, MidiMessage> last_sent_;
   absl::flat_hash_map<uint16_t, MidiMessage> pending_;
   absl::flat_hash_set<uint16_t> pending_keys_;
+
+  // Sysex state tracking.
+  struct SysexState {
+    std::unique_ptr<SysexMessageState> queued;
+    std::unique_ptr<SysexMessageState> pending;
+    std::vector<SysexMessage> pending_messages;
+  };
+  absl::flat_hash_map<SysexPrefix, SysexState> sysex_states_;
 };
 
 }  // namespace jpr

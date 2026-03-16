@@ -5,6 +5,8 @@
 
 #include "jpr/common/midi_port.h"
 
+#include <cstring>
+
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
@@ -270,6 +272,7 @@ void MidiOut::Close() {
   pending_.clear();
   pending_keys_.clear();
   last_sent_.clear();
+  sysex_states_.clear();
   LOG(INFO) << "Closed MIDI output port " << index_ << " (" << name_ << ")";
 }
 
@@ -279,7 +282,7 @@ void MidiOut::QueueMessage(const MidiMessage& message) {
   }
 
   // Always queue the message for sending.
-  message_queue_.push_back(message);
+  message_queue_.emplace_back(message);
 
   // If this message corresponds to a supported state type, update the
   // last-sent state and remove any pending state change (since this explicit
@@ -291,6 +294,57 @@ void MidiOut::QueueMessage(const MidiMessage& message) {
 
 bool MidiOut::IsStateMessage(const MidiMessage& message) const {
   return GetStateInfo(message).has_value();
+}
+
+void MidiOut::QueueMessage(const SysexMessage& message) {
+  if (!run_handle_.IsRegistered()) {
+    return;
+  }
+
+  // Always queue the message for sending.
+  message_queue_.emplace_back(message);
+
+  // Update the queued sysex state and replay pending messages.
+  UpdateSysexQueuedState(message);
+}
+
+bool MidiOut::IsStateMessage(const SysexMessage& message) const {
+  return SysexMessageType::Get(message.GetPrefix()) != nullptr;
+}
+
+void MidiOut::UpdateState(const SysexMessage& message) {
+  if (!run_handle_.IsRegistered()) {
+    return;
+  }
+
+  SysexMessageType* type = SysexMessageType::Get(message.GetPrefix());
+  if (type == nullptr) {
+    return;
+  }
+
+  SysexState& state = sysex_states_[message.GetPrefix()];
+
+  // Build pending state if it doesn't exist yet.
+  if (state.pending == nullptr) {
+    if (state.queued != nullptr) {
+      state.pending = state.queued->Clone();
+    } else {
+      // No queued state either -- create fresh from the message. The initial
+      // CreateState represents the state as if the message were sent, so the
+      // message should be queued for sending.
+      state.pending = type->CreateState(message);
+      if (state.pending != nullptr) {
+        state.pending_messages.push_back(message);
+      }
+      return;
+    }
+  }
+
+  // Update the pending state. If Update() returns true, the message changes
+  // something not yet sent, so append it to the pending list.
+  if (state.pending->Update(message)) {
+    state.pending_messages.push_back(message);
+  }
 }
 
 void MidiOut::UpdateState(const MidiMessage& message) {
@@ -394,10 +448,64 @@ void MidiOut::ResetPolyPressureState(uint8_t channel, uint8_t note) {
   pending_keys_.erase(key);
 }
 
+void MidiOut::ResetSysexState(const SysexPrefix& prefix) {
+  sysex_states_.erase(prefix);
+}
+
 void MidiOut::ResetAllState() {
   last_sent_.clear();
   pending_.clear();
   pending_keys_.clear();
+  sysex_states_.clear();
+}
+
+void MidiOut::SendSysexMessage(const SysexMessage& message) {
+  absl::Span<const uint8_t> bytes = message.GetBytes();
+  // Allocate a MIDI_event_t with enough room for the sysex bytes. The struct
+  // has a 4-byte midi_message tail, so we only need extra space beyond that.
+  const int extra = static_cast<int>(bytes.size()) > 4
+                        ? static_cast<int>(bytes.size()) - 4
+                        : 0;
+  std::vector<uint8_t> buffer(sizeof(MIDI_event_t) + extra);
+  auto* event = reinterpret_cast<MIDI_event_t*>(buffer.data());
+  event->frame_offset = -1;
+  event->size = static_cast<int>(bytes.size());
+  std::memcpy(event->midi_message, bytes.data(), bytes.size());
+  port_->SendMsg(event, -1);
+}
+
+void MidiOut::UpdateSysexQueuedState(const SysexMessage& message) {
+  SysexMessageType* type = SysexMessageType::Get(message.GetPrefix());
+  if (type == nullptr) {
+    return;
+  }
+
+  SysexState& state = sysex_states_[message.GetPrefix()];
+
+  // Update (or create) the queued state.
+  if (state.queued != nullptr) {
+    state.queued->Update(message);
+  } else {
+    state.queued = type->CreateState(message);
+  }
+
+  // Rebuild the pending state from the queued state and replay pending
+  // messages, dropping any that no longer apply.
+  if (!state.pending_messages.empty()) {
+    state.pending = state.queued->Clone();
+    std::vector<SysexMessage> surviving;
+    for (const SysexMessage& pending_msg : state.pending_messages) {
+      if (state.pending->Update(pending_msg)) {
+        surviving.push_back(pending_msg);
+      }
+    }
+    state.pending_messages = std::move(surviving);
+    if (state.pending_messages.empty()) {
+      state.pending.reset();
+    }
+  } else {
+    state.pending.reset();
+  }
 }
 
 void MidiOut::Run(const RunTime& time) {
@@ -406,20 +514,24 @@ void MidiOut::Run(const RunTime& time) {
   }
 
   // First, send all queued explicit messages in FIFO order.
-  for (const MidiMessage& message : message_queue_) {
-    port_->Send(message.status, message.data1, message.data2, -1);
-
-    // Update last-sent state for any messages that are supported state types.
-    // This ensures that even after a ResetAllState() call between
-    // QueueMessage() and Run(), the actually-sent message is reflected in the
-    // state.
-    if (auto info = GetStateInfo(message); info.has_value()) {
-      last_sent_[info->key] = message;
-    }
+  for (const auto& entry : message_queue_) {
+    std::visit(
+        [this](const auto& message) {
+          using T = std::decay_t<decltype(message)>;
+          if constexpr (std::is_same_v<T, MidiMessage>) {
+            port_->Send(message.status, message.data1, message.data2, -1);
+            if (auto info = GetStateInfo(message); info.has_value()) {
+              last_sent_[info->key] = message;
+            }
+          } else {
+            SendSysexMessage(message);
+          }
+        },
+        entry);
   }
   message_queue_.clear();
 
-  // Then, send all pending state changes.
+  // Then, send all pending MidiMessage state changes.
   for (uint16_t key : pending_keys_) {
     auto it = pending_.find(key);
     if (it == pending_.end()) {
@@ -431,6 +543,41 @@ void MidiOut::Run(const RunTime& time) {
   }
   pending_.clear();
   pending_keys_.clear();
+
+  // Finally, send all pending sysex messages and update state.
+  for (auto& [prefix, state] : sysex_states_) {
+    if (state.pending_messages.empty()) {
+      continue;
+    }
+    // Start from the best available state to rebuild queued state as messages
+    // are sent.
+    if (state.pending != nullptr) {
+      state.queued = std::move(state.pending);
+    } else if (state.queued == nullptr) {
+      // No state at all -- build fresh from the first pending message.
+      SysexMessageType* type = SysexMessageType::Get(prefix);
+      if (type != nullptr && !state.pending_messages.empty()) {
+        state.queued = type->CreateState(state.pending_messages[0]);
+        SendSysexMessage(state.pending_messages[0]);
+        // Process remaining messages through the new state.
+        for (size_t i = 1; i < state.pending_messages.size(); ++i) {
+          if (state.queued->Update(state.pending_messages[i])) {
+            SendSysexMessage(state.pending_messages[i]);
+          }
+        }
+        state.pending_messages.clear();
+        continue;
+      }
+    }
+    // Send each pending message, updating queued state as we go.
+    for (const SysexMessage& message : state.pending_messages) {
+      SendSysexMessage(message);
+      if (state.queued != nullptr) {
+        state.queued->Update(message);
+      }
+    }
+    state.pending_messages.clear();
+  }
 }
 
 }  // namespace jpr
