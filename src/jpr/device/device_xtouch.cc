@@ -19,6 +19,10 @@ namespace jpr {
 
 namespace {
 
+//==============================================================================
+// Buttons
+//==============================================================================
+
 struct Button {
   std::string_view name;
   uint8_t note;
@@ -146,6 +150,10 @@ const Button kButtons[] = {
     {"Right", 0x65, true},
 };
 
+//==============================================================================
+// Scribble strip
+//==============================================================================
+
 static constexpr int kScribbleLineLength = 56;
 static constexpr int kScribbleTrackLineLength = 7;
 static constexpr uint8_t kScribbleSysexPrefix[] = {0x00, 0x00, 0x66, 0x14,
@@ -216,8 +224,8 @@ class XTouchScribbleState final : public SysexMessageState {
 };
 
 XTouchScribbleState::XTouchScribbleState(const SysexMessage& message) {
-  line_[0] = std::string(kScribbleLineLength, ' ');
-  line_[1] = std::string(kScribbleLineLength, ' ');
+  line_[0] = std::string(kScribbleLineLength, 0);
+  line_[1] = std::string(kScribbleLineLength, 0);
   ScribbleConfig config = ParseScribbleBytes(message.GetData());
   std::memcpy(line_[config.line].data() + config.offset, config.text.data(),
               config.text.size());
@@ -321,6 +329,10 @@ void RegisterSysex() {
 }
 
 }  // namespace
+
+//==============================================================================
+// DeviceXTouch
+//==============================================================================
 
 DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
                            MidiOut* midi_out)
