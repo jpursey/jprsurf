@@ -100,10 +100,10 @@ void Track::SetVolume(double volume) {
   if (track_id_ == nullptr) {
     return;
   }
-  if (!GetSetMediaTrackInfo(track_id_, "D_VOL", &volume)) {
-    LOG(ERROR) << "Failed to set volume for valid track " << guid_;
-    return;
-  }
+  // Done should actually be set based on whether the fader is being touched or
+  // not, but that is not yet supported.
+  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
+                   /*ingroupflags=*/0);
   bool changed = (volume_ != volume);
   volume_ = volume;
   if (changed) {
@@ -115,10 +115,10 @@ void Track::SetPan(double pan) {
   if (track_id_ == nullptr) {
     return;
   }
-  if (!GetSetMediaTrackInfo(track_id_, "D_PAN", &pan)) {
-    LOG(ERROR) << "Failed to set pan for valid track " << guid_;
-    return;
-  }
+  // Done should actually be set based on whether the pan knob is being touched
+  // or not, but that is not yet supported (it also isn't possible on XTouch).
+  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
+                /*ingroupflags=*/0);
   bool changed = (pan_ != pan);
   pan_ = pan;
   if (changed) {
@@ -127,68 +127,51 @@ void Track::SetPan(double pan) {
 }
 
 void Track::SetSelected(bool selected) {
-  if (track_id_ == nullptr) {
+  if (track_id_ == nullptr || selected_ == selected) {
     return;
   }
-  SetTrackSelected(track_id_, selected);
-  bool changed = (selected_ != selected);
-  selected_ = selected;
-  if (changed) {
-    NotifyListeners();
+  // To emulate default REAPER behavior "unselected" a selected track will
+  // just unselect every other track and leave the selected track selected.
+  if (selected_ && CountSelectedTracks(nullptr) > 1) {
+    SetOnlyTrackSelected(track_id_);
+    return;
   }
+  if (!selected_) {
+    SetOnlyTrackSelected(track_id_);
+  } else {
+    //  Even though this is not default REAPER behavior, this allows unselecting
+    //  the last track.
+    SetTrackSelected(track_id_, false);
+  }
+  selected_ = selected;
+  NotifyListeners();
 }
 
 void Track::SetMute(bool mute) {
-  if (track_id_ == nullptr) {
+  if (track_id_ == nullptr || mute_ == mute) {
     return;
   }
-  if (!GetSetMediaTrackInfo(track_id_, "B_MUTE", &mute)) {
-    LOG(ERROR) << "Failed to set mute for valid track " << guid_;
-    return;
-  }
-  bool changed = (mute_ != mute);
+  SetTrackUIMute(track_id_, mute ? 1 : 0, /*ingroupflags=*/0);
   mute_ = mute;
-  if (changed) {
-    NotifyListeners();
-  }
+  NotifyListeners();
 }
 
 void Track::SetSolo(bool solo) {
-  if (track_id_ == nullptr) {
+  if (track_id_ == nullptr || solo_ == solo) {
     return;
   }
-  // REAPER has the following settings for solo:
-  //   0=not soloed,
-  //   1=soloed,
-  //   2=soloed in place,
-  //   5=safe soloed,
-  //   6=safe soloed in place
-  int solo_value = (solo ? 1 : 0);
-  if (!GetSetMediaTrackInfo(track_id_, "I_SOLO", &solo_value)) {
-    LOG(ERROR) << "Failed to set solo for valid track " << guid_;
-    return;
-  }
-  bool changed = (solo_ != solo);
+  SetTrackUISolo(track_id_, solo ? 1 : 0, /*ingroupflags=*/0);
   solo_ = solo;
-  if (changed) {
-    NotifyListeners();
-  }
+  NotifyListeners();
 }
 
 void Track::SetRecArm(bool rec_arm) {
-  if (track_id_ == nullptr) {
+  if (track_id_ == nullptr || rec_arm_ == rec_arm) {
     return;
   }
-  int rec_arm_value = (rec_arm ? 1 : 0);
-  if (!GetSetMediaTrackInfo(track_id_, "I_RECARM", &rec_arm_value)) {
-    LOG(ERROR) << "Failed to set record arm for valid track " << guid_;
-    return;
-  }
-  bool changed = (rec_arm_ != rec_arm);
+  SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, /*ingroupflags=*/0);
   rec_arm_ = rec_arm;
-  if (changed) {
-    NotifyListeners();
-  }
+  NotifyListeners();
 }
 
 void Track::Subscribe(TrackListener* listener) { listeners_.insert(listener); }
