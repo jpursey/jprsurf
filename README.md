@@ -17,3 +17,4 @@ The JPRSurf project is built using [GameBits](https://github.com/jpursey/game-bi
 
 We'll see how long this lasts, but I'll periodically update progress and changes here for now.
 - *2026-02-22:* First version working end-to-end with only track selection supported. [Demo Video](https://youtu.be/7Z1pmt_pxGU)
+- *2026-03-16:* Generalized scene / view / mapping concepts with track context and added initial support for each track mapping to a channel on the X-Touch. [Demo Video](https://youtu.be/nqRgdNaj1Y8)
