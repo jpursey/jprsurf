@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "absl/container/flat_hash_map.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/device.h"
 #include "jpr/scene/view.h"
@@ -41,6 +42,16 @@ class Scene final {
   Control* GetControl(std::string_view name) const;
   ViewProperty* GetProperty(std::string_view name) const;
 
+  // Adds a new toggle property that can be mapped to an unused modifier flag.
+  //
+  // If no more modifier flags are available, or the property name is already
+  // used or reserved, this will return zero.
+  //
+  // Modifier properties are already preset for "shift", "ctrl", and "alt"
+  // modifiers, but this allows for up to 61 additional modifiers to be added
+  // for mapping to custom properties.
+  Modifiers AddModifierProperty(std::string_view name);
+
   // Activation and deactivation
   bool IsActive() const { return run_handle_.IsRegistered(); }
   void Activate(RunRegistry& registry);
@@ -58,6 +69,7 @@ class Scene final {
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
   std::unique_ptr<View> root_view_;
   RunHandle run_handle_;
+  Modifiers next_modifier_flag_ = kModUserStart;
 };
 
 }  // namespace jpr

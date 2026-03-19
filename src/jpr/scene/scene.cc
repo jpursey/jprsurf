@@ -10,11 +10,21 @@
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
+#include "jpr/scene/modifier_property.h"
 
 namespace jpr {
 
 Scene::Scene(std::string_view name) : name_(name) {
   root_view_ = absl::WrapUnique(new View(this, nullptr, "root"));
+  properties_.emplace(
+      ModifierProperty::kShift,
+      std::make_unique<ModifierProperty>(ModifierProperty::kShift, kModShift));
+  properties_.emplace(
+      ModifierProperty::kCtrl,
+      std::make_unique<ModifierProperty>(ModifierProperty::kCtrl, kModCtrl));
+  properties_.emplace(
+      ModifierProperty::kAlt,
+      std::make_unique<ModifierProperty>(ModifierProperty::kAlt, kModAlt));
 }
 
 Scene::~Scene() = default;
@@ -39,6 +49,16 @@ ViewProperty* Scene::GetProperty(std::string_view name) const {
   // already exist.
   auto it = properties_.find(name);
   return it != properties_.end() ? it->second.get() : nullptr;
+}
+
+Modifiers Scene::AddModifierProperty(std::string_view name) {
+  if (next_modifier_flag_ == 0 || properties_.contains(name)) {
+    return 0;
+  }
+  Modifiers flag = next_modifier_flag_;
+  next_modifier_flag_ <<= 1;
+  properties_.emplace(name, std::make_unique<ModifierProperty>(name, flag));
+  return flag;
 }
 
 void Scene::Activate(RunRegistry& registry) {

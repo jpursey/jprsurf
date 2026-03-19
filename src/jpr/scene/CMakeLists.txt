@@ -4,6 +4,7 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 set(jpr_scene_SOURCE
+  modifier_property.h
   scene.cc scene.h
   track_properties.cc track_properties.h
   view.cc view.h
