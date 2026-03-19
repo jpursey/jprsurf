@@ -586,30 +586,31 @@ void ControlSurface::InitViews() {
 
     // Add all the per-track controls
     track_view->AddMapping(ViewMapping::kReadWriteControl,
-                           TrackProperties::kSelected,
+                           TrackProperties::kUiSelected,
                            absl::StrCat("XTouch/Select", i));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
-                           TrackProperties::kMute,
+                           TrackProperties::kUiMute,
                            absl::StrCat("XTouch/Mute", i));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
-                           TrackProperties::kSolo,
+                           TrackProperties::kUiSolo,
                            absl::StrCat("XTouch/Solo", i));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
-                           TrackProperties::kRecArm,
+                           TrackProperties::kUiRecArm,
                            absl::StrCat("XTouch/Rec", i));
-    track_view->AddMapping(ViewMapping::kReadWriteControl,
-                           TrackProperties::kPan, absl::StrCat("XTouch/Pot", i),
-                           {.write = {.mode = 1}});
     track_view->AddMapping(
-        ViewMapping::kReadControl, TrackProperties::kPan,
+        ViewMapping::kReadWriteControl, TrackProperties::kUiPan,
+        absl::StrCat("XTouch/Pot", i), {.write = {.mode = 1}});
+    track_view->AddMapping(
+        ViewMapping::kReadControl, TrackProperties::kUiPan,
         absl::StrCat("XTouch/PotButton", i),
         {.read = {.property_min = 0.0, .property_max = 0.0}});
     track_view->AddMapping(ViewMapping::kReadWriteControl,
-                           TrackProperties::kVolume,
+                           TrackProperties::kUiVolume,
                            absl::StrCat("XTouch/Fader", i));
     track_view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kName,
                            absl::StrCat("XTouch/Scribble", i, "Line1"));
-    track_view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kVolume,
+    track_view->AddMapping(ViewMapping::kWriteControl,
+                           TrackProperties::kUiVolume,
                            absl::StrCat("XTouch/Scribble", i, "Line2"));
     track_view->Enable();
   }

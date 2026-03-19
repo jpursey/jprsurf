@@ -56,39 +56,45 @@ class TrackProperty : public ViewProperty {
 // - TrackProperties are destroyed when the track is removed from the project,
 //   or no views are mapped to the track anymore.
 class TrackProperties final : public TrackListener {
-public:
- static constexpr std::string_view kName = "track_name";
- static constexpr std::string_view kSelected = "track_selected";
- static constexpr std::string_view kMute = "track_mute";
- static constexpr std::string_view kSolo = "track_solo";
- static constexpr std::string_view kRecArm = "track_recarm";
- static constexpr std::string_view kPan = "track_pan";
- static constexpr std::string_view kVolume = "track_volume";
+ public:
+  static constexpr std::string_view kName = "track_name";
+  static constexpr std::string_view kSelected = "track_selected";
+  static constexpr std::string_view kMute = "track_mute";
+  static constexpr std::string_view kSolo = "track_solo";
+  static constexpr std::string_view kRecArm = "track_recarm";
+  static constexpr std::string_view kPan = "track_pan";
+  static constexpr std::string_view kVolume = "track_volume";
+  static constexpr std::string_view kUiSelected = "track_ui_selected";
+  static constexpr std::string_view kUiMute = "track_ui_mute";
+  static constexpr std::string_view kUiSolo = "track_ui_solo";
+  static constexpr std::string_view kUiRecArm = "track_ui_recarm";
+  static constexpr std::string_view kUiPan = "track_ui_pan";
+  static constexpr std::string_view kUiVolume = "track_ui_volume";
 
- // The track that these properties are tied to.
- //
- // TrackProperties are bound to the track GUID. So once created it will remain
- // bound to the same track, even if underlying the MediaTrack* changes.
- explicit TrackProperties(Track* track);
- TrackProperties(const TrackProperties&) = delete;
- TrackProperties& operator=(const TrackProperties&) = delete;
- ~TrackProperties() override;
+  // The track that these properties are tied to.
+  //
+  // TrackProperties are bound to the track GUID. So once created it will remain
+  // bound to the same track, even if underlying the MediaTrack* changes.
+  explicit TrackProperties(Track* track);
+  TrackProperties(const TrackProperties&) = delete;
+  TrackProperties& operator=(const TrackProperties&) = delete;
+  ~TrackProperties() override;
 
- // Returns the track that these properties are tied to.
- Track* GetTrack() const { return track_.get(); }
+  // Returns the track that these properties are tied to.
+  Track* GetTrack() const { return track_.get(); }
 
- // Sets the track that these properties are tied to.
- //
- // This will update the internal state of the properties to reflect the new
- // track.
- void SetTrack(Track* track);
+  // Sets the track that these properties are tied to.
+  //
+  // This will update the internal state of the properties to reflect the new
+  // track.
+  void SetTrack(Track* track);
 
- // Returns property scoped to this track with the given name, or nullptr if no
- // such property exists.
- ViewProperty* GetProperty(std::string_view name);
+  // Returns property scoped to this track with the given name, or nullptr if no
+  // such property exists.
+  ViewProperty* GetProperty(std::string_view name);
 
- // TrackListener implementation.
- void OnTrackChanged(Track* track) override;
+  // TrackListener implementation.
+  void OnTrackChanged(Track* track) override;
 
  private:
   // State

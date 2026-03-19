@@ -11,6 +11,15 @@
 
 namespace jpr {
 
+namespace {
+
+// These ingroupflags are used for SetTrackUIVolume and SetTrackUIPan, and are
+// passed to the REAPER API to control grouping and ganging behavior.
+constexpr int kNoGrouping = 1;
+constexpr int kNoGanging = 2;
+
+}  // namespace
+
 Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
 }
@@ -97,21 +106,74 @@ void Track::SetName(std::string_view name) {
 }
 
 void Track::SetVolume(double volume) {
-  if (track_id_ == nullptr) {
+  if (track_id_ == nullptr || volume_ == volume) {
+    return;
+  }
+  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
+                   kNoGrouping | kNoGanging);
+  volume_ = volume;
+  NotifyListeners();
+}
+
+void Track::SetPan(double pan) {
+  if (track_id_ == nullptr || pan_ == pan) {
+    return;
+  }
+  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
+                kNoGrouping | kNoGanging);
+  pan_ = pan;
+  NotifyListeners();
+}
+
+void Track::SetSelected(bool selected) {
+  if (track_id_ == nullptr || selected_ == selected) {
+    return;
+  }
+  SetTrackSelected(track_id_, selected);
+  selected_ = selected;
+  NotifyListeners();
+}
+
+void Track::SetMute(bool mute) {
+  if (track_id_ == nullptr || mute_ == mute) {
+    return;
+  }
+  SetTrackUIMute(track_id_, mute ? 1 : 0, kNoGrouping | kNoGanging);
+  mute_ = mute;
+  NotifyListeners();
+}
+
+void Track::SetSolo(bool solo) {
+  if (track_id_ == nullptr || solo_ == solo) {
+    return;
+  }
+  SetTrackUISolo(track_id_, solo ? 1 : 0, kNoGrouping | kNoGanging);
+  solo_ = solo;
+  NotifyListeners();
+}
+
+void Track::SetRecArm(bool rec_arm) {
+  if (track_id_ == nullptr || rec_arm_ == rec_arm) {
+    return;
+  }
+  SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, kNoGrouping | kNoGanging);
+  rec_arm_ = rec_arm;
+  NotifyListeners();
+}
+
+void Track::UiVolume(double volume) {
+  if (track_id_ == nullptr || volume_ == volume) {
     return;
   }
   // Done should actually be set based on whether the fader is being touched or
   // not, but that is not yet supported.
   SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
                    /*ingroupflags=*/0);
-  bool changed = (volume_ != volume);
   volume_ = volume;
-  if (changed) {
-    NotifyListeners();
-  }
+  NotifyListeners();
 }
 
-void Track::SetPan(double pan) {
+void Track::UiPan(double pan) {
   if (track_id_ == nullptr) {
     return;
   }
@@ -119,15 +181,12 @@ void Track::SetPan(double pan) {
   // or not, but that is not yet supported (it also isn't possible on XTouch).
   SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
                 /*ingroupflags=*/0);
-  bool changed = (pan_ != pan);
   pan_ = pan;
-  if (changed) {
-    NotifyListeners();
-  }
+  NotifyListeners();
 }
 
-void Track::SetSelected(bool selected) {
-  if (track_id_ == nullptr || selected_ == selected) {
+void Track::UiSelected() {
+  if (track_id_ == nullptr) {
     return;
   }
   // To emulate default REAPER behavior "unselected" a selected track will
@@ -143,34 +202,34 @@ void Track::SetSelected(bool selected) {
     //  the last track.
     SetTrackSelected(track_id_, false);
   }
-  selected_ = selected;
+  selected_ = !selected_;
   NotifyListeners();
 }
 
-void Track::SetMute(bool mute) {
-  if (track_id_ == nullptr || mute_ == mute) {
+void Track::UiMute() {
+  if (track_id_ == nullptr) {
     return;
   }
-  SetTrackUIMute(track_id_, mute ? 1 : 0, /*ingroupflags=*/0);
-  mute_ = mute;
+  mute_ = !mute_;
+  SetTrackUIMute(track_id_, mute_ ? 1 : 0, /*ingroupflags=*/0);
   NotifyListeners();
 }
 
-void Track::SetSolo(bool solo) {
-  if (track_id_ == nullptr || solo_ == solo) {
+void Track::UiSolo() {
+  if (track_id_ == nullptr) {
     return;
   }
-  SetTrackUISolo(track_id_, solo ? 1 : 0, /*ingroupflags=*/0);
-  solo_ = solo;
+  solo_ = !solo_;
+  SetTrackUISolo(track_id_, solo_ ? 1 : 0, /*ingroupflags=*/0);
   NotifyListeners();
 }
 
-void Track::SetRecArm(bool rec_arm) {
-  if (track_id_ == nullptr || rec_arm_ == rec_arm) {
+void Track::UiRecArm() {
+  if (track_id_ == nullptr) {
     return;
   }
-  SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, /*ingroupflags=*/0);
-  rec_arm_ = rec_arm;
+  rec_arm_ = !rec_arm_;
+  SetTrackUIRecArm(track_id_, rec_arm_ ? 1 : 0, /*ingroupflags=*/0);
   NotifyListeners();
 }
 

@@ -87,6 +87,16 @@ class Track final : public std::enable_shared_from_this<Track> {
   void SetSolo(bool solo);
   void SetRecArm(bool record);
 
+  // Actions which run the corresponding UI behavior for each property (the
+  // equivalent of clicking or changing the property in REAPER's UI, whenever
+  // possible).
+  void UiVolume(double volume);
+  void UiPan(double pan);
+  void UiSelected();
+  void UiMute();
+  void UiSolo();
+  void UiRecArm();
+
   // Parent track of this track.
   //
   // If the track is a top level track, or does not currently exist in REAPER,

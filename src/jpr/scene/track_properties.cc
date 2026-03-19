@@ -28,62 +28,119 @@ class TrackNameProperty : public TrackProperty {
 
 class TrackSelectedProperty : public TrackProperty {
  public:
-  explicit TrackSelectedProperty(Track* track)
-      : TrackProperty(TrackProperties::kSelected, Type::kToggle, track) {}
+  explicit TrackSelectedProperty(Track* track, bool ui)
+      : TrackProperty(TrackProperties::kSelected, Type::kToggle, track),
+        ui_(ui) {}
 
  protected:
   bool ReadBool() const override { return GetTrack()->GetSelected(); }
-  void WriteBool(bool value) override { GetTrack()->SetSelected(value); }
+  void WriteBool(bool value) override {
+    if (ui_) {
+      GetTrack()->UiSelected();
+    } else {
+      GetTrack()->SetSelected(value);
+    }
+  }
+
+ private:
+  bool ui_;
 };
 
 class TrackMuteProperty : public TrackProperty {
  public:
-  explicit TrackMuteProperty(Track* track)
-      : TrackProperty(TrackProperties::kMute, Type::kToggle, track) {}
+  explicit TrackMuteProperty(Track* track, bool ui)
+      : TrackProperty(TrackProperties::kMute, Type::kToggle, track), ui_(ui) {}
 
  protected:
   bool ReadBool() const override { return GetTrack()->GetMute(); }
-  void WriteBool(bool value) override { GetTrack()->SetMute(value); }
+  void WriteBool(bool value) override {
+    if (ui_) {
+      GetTrack()->UiMute();
+    } else {
+      GetTrack()->SetMute(value);
+    }
+  }
+
+ private:
+  bool ui_;
 };
 
 class TrackSoloProperty : public TrackProperty {
  public:
-  explicit TrackSoloProperty(Track* track)
-      : TrackProperty(TrackProperties::kSolo, Type::kToggle, track) {}
+  explicit TrackSoloProperty(Track* track, bool ui)
+      : TrackProperty(TrackProperties::kSolo, Type::kToggle, track), ui_(ui) {}
 
  protected:
   bool ReadBool() const override { return GetTrack()->GetSolo(); }
-  void WriteBool(bool value) override { GetTrack()->SetSolo(value); }
+  void WriteBool(bool value) override {
+    if (ui_) {
+      GetTrack()->UiSolo();
+    } else {
+      GetTrack()->SetSolo(value);
+    }
+  }
+
+ private:
+  bool ui_;
 };
 
 class TrackRecArmProperty : public TrackProperty {
  public:
-  explicit TrackRecArmProperty(Track* track)
-      : TrackProperty(TrackProperties::kRecArm, Type::kToggle, track) {}
+  explicit TrackRecArmProperty(Track* track, bool ui)
+      : TrackProperty(TrackProperties::kRecArm, Type::kToggle, track),
+        ui_(ui) {}
 
  protected:
   bool ReadBool() const override { return GetTrack()->GetRecArm(); }
-  void WriteBool(bool value) override { GetTrack()->SetRecArm(value); }
+  void WriteBool(bool value) override {
+    if (ui_) {
+      GetTrack()->UiRecArm();
+    } else {
+      GetTrack()->SetRecArm(value);
+    }
+  }
+
+ private:
+  bool ui_;
 };
 
 class TrackPanProperty : public TrackProperty {
  public:
-  explicit TrackPanProperty(Track* track)
-      : TrackProperty(TrackProperties::kPan, Type::kPan, track) {}
+  explicit TrackPanProperty(Track* track, bool ui)
+      : TrackProperty(TrackProperties::kPan, Type::kPan, track), ui_(ui) {}
 
  protected:
   double ReadDouble() const override { return GetTrack()->GetPan(); }
-  void WriteDouble(double value) override { GetTrack()->SetPan(value); }
+  void WriteDouble(double value) override {
+    if (ui_) {
+      GetTrack()->UiPan(value);
+    } else {
+      GetTrack()->SetPan(value);
+    }
+  }
+
+ private:
+  bool ui_;
 };
 
 class TrackVolumeProperty : public TrackProperty {
  public:
-  explicit TrackVolumeProperty(Track* track)
-      : TrackProperty(TrackProperties::kVolume, Type::kVolume, track) {}
+  explicit TrackVolumeProperty(Track* track, bool ui)
+      : TrackProperty(TrackProperties::kVolume, Type::kVolume, track),
+        ui_(ui) {}
 
  protected:
   double ReadDouble() const override { return GetTrack()->GetVolume(); }
-  void WriteDouble(double value) override { GetTrack()->SetVolume(value); }
+  void WriteDouble(double value) override {
+    if (ui_) {
+      GetTrack()->UiVolume(value);
+    } else {
+      GetTrack()->SetVolume(value);
+    }
+  }
+
+ private:
+  bool ui_;
 };
 
 }  // namespace
@@ -123,32 +180,62 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   }
   if (name == kSelected) {
     auto& property = properties_[name] =
-        std::make_unique<TrackSelectedProperty>(track_.get());
+        std::make_unique<TrackSelectedProperty>(track_.get(), /*ui=*/false);
     return property.get();
   }
   if (name == kMute) {
     auto& property = properties_[name] =
-        std::make_unique<TrackMuteProperty>(track_.get());
+        std::make_unique<TrackMuteProperty>(track_.get(), /*ui=*/false);
     return property.get();
   }
   if (name == kSolo) {
     auto& property = properties_[name] =
-        std::make_unique<TrackSoloProperty>(track_.get());
+        std::make_unique<TrackSoloProperty>(track_.get(), /*ui=*/false);
     return property.get();
   }
   if (name == kRecArm) {
     auto& property = properties_[name] =
-        std::make_unique<TrackRecArmProperty>(track_.get());
+        std::make_unique<TrackRecArmProperty>(track_.get(), /*ui=*/false);
     return property.get();
   }
   if (name == kPan) {
     auto& property = properties_[name] =
-        std::make_unique<TrackPanProperty>(track_.get());
+        std::make_unique<TrackPanProperty>(track_.get(), /*ui=*/false);
     return property.get();
   }
   if (name == kVolume) {
     auto& property = properties_[name] =
-        std::make_unique<TrackVolumeProperty>(track_.get());
+        std::make_unique<TrackVolumeProperty>(track_.get(), /*ui=*/false);
+    return property.get();
+  }
+  if (name == kUiSelected) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackSelectedProperty>(track_.get(), /*ui=*/true);
+    return property.get();
+  }
+  if (name == kUiMute) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackMuteProperty>(track_.get(), /*ui=*/true);
+    return property.get();
+  }
+  if (name == kUiSolo) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackSoloProperty>(track_.get(), /*ui=*/true);
+    return property.get();
+  }
+  if (name == kUiRecArm) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackRecArmProperty>(track_.get(), /*ui=*/true);
+    return property.get();
+  }
+  if (name == kUiPan) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackPanProperty>(track_.get(), /*ui=*/true);
+    return property.get();
+  }
+  if (name == kUiVolume) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackVolumeProperty>(track_.get(), /*ui=*/true);
     return property.get();
   }
   return nullptr;
