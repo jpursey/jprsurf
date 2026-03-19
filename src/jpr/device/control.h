@@ -174,6 +174,9 @@ class Control final {
   // Access to configuration options for this control.
   std::string_view GetName() const { return name_; }
   Inputs GetInputs() const { return input_types_; }
+  bool HasPressRelease() const {
+    return press_input_ != nullptr && press_input_->HasRelease();
+  }
   Outputs GetOutputs() const { return output_types_; }
   Binding GetBinding() const { return binding_; }
 
