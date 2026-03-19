@@ -6,6 +6,7 @@
 #include "jpr/common/track.h"
 
 #include "absl/log/log.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
 #include "sdk/reaper_plugin_functions.h"
 
@@ -189,6 +190,15 @@ void Track::UiSelected() {
   if (track_id_ == nullptr) {
     return;
   }
+
+  // Ctrl is used to toggle selection of individual tracks.
+  if (AreModifiersOn(kModCtrl)) {
+    SetTrackSelected(track_id_, !selected_);
+    selected_ = !selected_;
+    NotifyListeners();
+    return;
+  }
+
   // To emulate default REAPER behavior "unselected" a selected track will
   // just unselect every other track and leave the selected track selected.
   if (selected_ && CountSelectedTracks(nullptr) > 1) {
