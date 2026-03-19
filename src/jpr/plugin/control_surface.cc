@@ -5,6 +5,7 @@
 
 #include "jpr/plugin/control_surface.h"
 
+#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -12,6 +13,7 @@
 #include "jpr/common/midi_port.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
+#include "jpr/scene/modifier_property.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin_functions.h"
@@ -99,7 +101,7 @@ void ControlSurface::Run() {
   if (track_list_changed_) {
     LOG(INFO) << "Refreshing TrackCache!";
     TrackCache::Get().Refresh();
-    scene_->GetRootView()->RefreshChildContext();
+    track_list_view_->RefreshChildContext();
     track_list_changed_ = false;
   }
 
@@ -575,9 +577,23 @@ void ControlSurface::InitViews() {
   scene_->AddDevice(
       "XTouch", std::make_unique<DeviceXTouch>(device_runner_, xtouch_in_.get(),
                                                xtouch_out_.get()));
+  scene_->AddModifierProperty("mod_option");
 
-  track_list_view_ = scene_->GetRootView();
-  // Add 8 track views, which will correspond to the 8 tracks on the X-Touch.
+  // Add global mappings
+  auto* root_view = scene_->GetRootView();
+  root_view->AddMapping(ViewMapping::kReadControl, ModifierProperty::kShift,
+                        "XTouch/Shift", {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadControl, ModifierProperty::kCtrl,
+                        "XTouch/Control", {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadControl, ModifierProperty::kAlt,
+                        "XTouch/Alt", {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadControl, "mod_option",
+                        "XTouch/Option", {.read = {.press_release = true}});
+  root_view->Enable();
+
+  // Add TrackList view with 8 track views, which will correspond to the 8
+  // tracks on the X-Touch.
+  track_list_view_ = root_view->AddChildView("TrackList");
   for (int i = 1; i < 9; ++i) {
     View* track_view = track_list_view_->AddChildView(absl::StrCat("Track", i));
     // Sets the context to a track context, so we can map REAPER tracks to the
@@ -614,11 +630,7 @@ void ControlSurface::InitViews() {
                            absl::StrCat("XTouch/Scribble", i, "Line2"));
     track_view->Enable();
   }
-  // Set the child context, which will initialize all the child track views to
-  // actual tracks.
   track_list_view_->SetChildContext(View::ContextType::kTrack);
-
-  // Enable the root view.
   track_list_view_->Enable();
 
   // Finally activate the scene, which will start it running and activate all
