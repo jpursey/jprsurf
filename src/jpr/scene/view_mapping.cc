@@ -71,10 +71,10 @@ double ToggleDouble(double current, double min, double max) {
 }  // namespace
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-                     Control* control, Config config)
-: type_(type),
-  view_(view),
-  property_(property),
+                         Control* control, Config config)
+    : type_(type),
+      view_(view),
+      property_(property),
       control_(control),
       config_(std::move(config)),
       write_control_(NoOpSyncFunction) {
@@ -89,9 +89,13 @@ ViewMapping::~ViewMapping() {
   }
 }
 
-
 void ViewMapping::InitReadControl() {
   if (!type_.IsSet(kReadControl)) {
+    return;
+  }
+  if (config_.read.press_release && !control_->HasPressRelease()) {
+    type_.Clear(kReadControl);
+    config_.read.press_release = false;
     return;
   }
   switch (property_->GetType()) {
@@ -138,6 +142,16 @@ void ViewMapping::InitReadActionSyncFunction() {
 void ViewMapping::InitReadToggleSyncFunction() {
   Control::Inputs inputs = control_->GetInputs();
 
+  // If we are configured for press/release behavior, then we set the property
+  // based on whether the control is currently pressed.
+  if (config_.read.press_release) {
+    input_type_ = ControlInput::Type::kPress;
+    read_control_ = [](ViewProperty& property, Control& control) {
+      property.SetBool(control.IsPressed());
+    };
+    return;
+  }
+
   // If there is a press input, we toggle the property on each press event.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_type_ = ControlInput::Type::kPress;
@@ -174,9 +188,14 @@ void ViewMapping::InitReadToggleSyncFunction() {
 }
 
 void ViewMapping::InitReadPanSyncFunction() {
-Control::Inputs inputs = control_->GetInputs();
-auto cfg_min = GetDouble(config_.read.property_min);
-auto cfg_max = GetDouble(config_.read.property_max);
+  Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetDouble(config_.read.property_min);
+  auto cfg_max = GetDouble(config_.read.property_max);
+
+  // Panning does not make sense for press/release behavior.
+  if (config_.read.press_release) {
+    return;
+  }
 
   // The value input is preferred for pan controls, if it is available, which
   // maps [0,1] to the configured range (default [-1,1]).
@@ -246,9 +265,14 @@ auto cfg_max = GetDouble(config_.read.property_max);
 }
 
 void ViewMapping::InitReadVolumeSyncFunction() {
-Control::Inputs inputs = control_->GetInputs();
-auto cfg_min = GetDouble(config_.read.property_min);
-auto cfg_max = GetDouble(config_.read.property_max);
+  Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetDouble(config_.read.property_min);
+  auto cfg_max = GetDouble(config_.read.property_max);
+
+  // Volume does not make sense for press/release behavior.
+  if (config_.read.press_release) {
+    return;
+  }
 
   // The value input is preferred for volume controls, if it is available, which
   // maps [0,1] to the configured range (default [0,kMaxVolume]).
@@ -294,9 +318,22 @@ auto cfg_max = GetDouble(config_.read.property_max);
 }
 
 void ViewMapping::InitReadNormalizedSyncFunction() {
-Control::Inputs inputs = control_->GetInputs();
-auto cfg_min = GetDouble(config_.read.property_min);
-auto cfg_max = GetDouble(config_.read.property_max);
+  Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetDouble(config_.read.property_min);
+  auto cfg_max = GetDouble(config_.read.property_max);
+
+  // While weird, press/release behavior is technically supported for normalized
+  // properties. If configured, the property is set to 1.0 when the control is
+  // pressed, and set to 0.0 when the control is released.
+  if (config_.read.press_release) {
+    input_type_ = ControlInput::Type::kPress;
+    double min = cfg_min.value_or(0.0);
+    double max = cfg_max.value_or(1.0);
+    read_control_ = [min, max](ViewProperty& property, Control& control) {
+      property.SetNormalized(control.IsPressed() ? max : min);
+    };
+    return;
+  }
 
   // If there is a value input, we linearly map [0,1] to the configured range
   // (default [0,1]).
@@ -345,6 +382,24 @@ auto cfg_max = GetDouble(config_.read.property_max);
 void ViewMapping::InitReadTextSyncFunction() {
   Control::Inputs inputs = control_->GetInputs();
 
+  // While weird, press/release behavior is technically supported for text
+  // properties. If configured, the property is set to the configured max text
+  // value when the control is pressed, and set to the configured min text value
+  // when the control is released.
+  if (config_.read.press_release) {
+    auto cfg_min = GetString(config_.read.property_min);
+    auto cfg_max = GetString(config_.read.property_max);
+    if (cfg_min.has_value() && cfg_max.has_value()) {
+      input_type_ = ControlInput::Type::kPress;
+      std::string min = std::move(*cfg_min);
+      std::string max = std::move(*cfg_max);
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        property.SetText(control.IsPressed() ? max : min);
+      };
+    }
+    return;
+  }
+
   // If there is a value input, we just set the value and let the property
   // handle the conversion.
   if (inputs.IsSet(ControlInput::Type::kValue)) {
@@ -378,9 +433,29 @@ void ViewMapping::InitReadTextSyncFunction() {
 }
 
 void ViewMapping::InitReadColorSyncFunction() {
-Control::Inputs inputs = control_->GetInputs();
-auto cfg_min = GetColor(config_.read.property_min);
-auto cfg_max = GetColor(config_.read.property_max);
+  Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetColor(config_.read.property_min);
+  auto cfg_max = GetColor(config_.read.property_max);
+
+  // While weird, press/release behavior is technically supported for color
+  // properties. If configured, the property is set to the configured max color
+  // value when the control is pressed, and set to the configured min color
+  // value when the control is released.
+  if (config_.read.press_release) {
+    input_type_ = ControlInput::Type::kPress;
+    if (cfg_min.has_value() && cfg_max.has_value()) {
+      Color min = *cfg_min;
+      Color max = *cfg_max;
+      read_control_ = [min, max](ViewProperty& property, Control& control) {
+        property.SetColor(control.IsPressed() ? max : min);
+      };
+    } else {
+      read_control_ = [](ViewProperty& property, Control& control) {
+        property.SetBool(control.IsPressed());
+      };
+    }
+    return;
+  }
 
   // If there is a value input, we linearly interpolate per-channel between
   // the configured min and max colors (default black to white).
@@ -589,13 +664,15 @@ void ViewMapping::InitWritePanSyncFunction() {
       };
     } else if (max_value % 2 == 1) {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(
-            MapPanToEvenRange(property.GetPan(), control.GetDValueMaxValue(mode)), mode);
+        control.SetDValue(MapPanToEvenRange(property.GetPan(),
+                                            control.GetDValueMaxValue(mode)),
+                          mode);
       };
     } else {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(
-            MapPanToOddRange(property.GetPan(), control.GetDValueMaxValue(mode)), mode);
+        control.SetDValue(MapPanToOddRange(property.GetPan(),
+                                           control.GetDValueMaxValue(mode)),
+                          mode);
       };
     }
     return;
@@ -675,7 +752,8 @@ void ViewMapping::InitWriteVolumeSyncFunction() {
     } else {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
         control.SetDValue(MapVolumeToRange(property.GetVolume(),
-                                           control.GetDValueMaxValue(mode)), mode);
+                                           control.GetDValueMaxValue(mode)),
+                          mode);
       };
     }
     return;
@@ -746,16 +824,19 @@ void ViewMapping::InitWriteNormalizedSyncFunction() {
     int max_value = control_->GetDValueMaxValue(config_.write.mode);
     if (max_value == 1) {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()), mode);
+        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()),
+                          mode);
       };
     } else if (max_value == 2) {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()), mode);
+        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()),
+                          mode);
       };
     } else {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
         control.SetDValue(MapNormalizedToRange(property.GetNormalized(),
-                                               control.GetDValueMaxValue(mode)), mode);
+                                               control.GetDValueMaxValue(mode)),
+                          mode);
       };
     }
     return;
@@ -840,16 +921,19 @@ void ViewMapping::InitWriteColorSyncFunction() {
     int max_value = control_->GetDValueMaxValue(config_.write.mode);
     if (max_value == 1) {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()), mode);
+        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()),
+                          mode);
       };
     } else if (max_value == 2) {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()), mode);
+        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()),
+                          mode);
       };
     } else {
       write_control_ = [](ViewProperty& property, Control& control, int mode) {
         control.SetDValue(MapNormalizedToRange(property.GetNormalized(),
-                                               control.GetDValueMaxValue(mode)), mode);
+                                               control.GetDValueMaxValue(mode)),
+                          mode);
       };
     }
     return;

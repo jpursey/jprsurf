@@ -58,6 +58,13 @@ class ViewMapping final {
     // These values are ignored for action and toggle properties.
     std::optional<ViewProperty::Value> property_min;
     std::optional<ViewProperty::Value> property_max;
+
+    // If true, then the property value will be set to property_max when the
+    // control is pressed and property_min when the control is released. If the
+    // underlying control does not have press/release capbility
+    // (HasPressRelease() returns false), then this will never update the
+    // property value (effectively disabling kReadControl capability).
+    bool press_release = false;
   };
 
   struct WriteConfig {
@@ -104,7 +111,7 @@ class ViewMapping final {
   using WriteSyncFunction = void(ViewProperty&, Control&, int mode);
 
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-    Control* control, Config config = {});
+              Control* control, Config config = {});
 
   // Refreshes the active state of this mapping based on whether it is enabled
   // and whether its parent view is active.
