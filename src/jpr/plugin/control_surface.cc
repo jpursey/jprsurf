@@ -581,13 +581,14 @@ void ControlSurface::InitViews() {
 
   // Add global mappings
   auto* root_view = scene_->GetRootView();
-  root_view->AddMapping(ViewMapping::kReadControl, ModifierProperty::kShift,
-                        "XTouch/Shift", {.read = {.press_release = true}});
-  root_view->AddMapping(ViewMapping::kReadControl, ModifierProperty::kCtrl,
+  root_view->AddMapping(ViewMapping::kReadWriteControl,
+                        ModifierProperty::kShift, "XTouch/Shift",
+                        {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kCtrl,
                         "XTouch/Control", {.read = {.press_release = true}});
-  root_view->AddMapping(ViewMapping::kReadControl, ModifierProperty::kAlt,
+  root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kAlt,
                         "XTouch/Alt", {.read = {.press_release = true}});
-  root_view->AddMapping(ViewMapping::kReadControl, "mod_option",
+  root_view->AddMapping(ViewMapping::kReadWriteControl, "mod_option",
                         "XTouch/Option", {.read = {.press_release = true}});
   root_view->Enable();
 

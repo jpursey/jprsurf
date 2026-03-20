@@ -24,7 +24,13 @@ class ModifierProperty : public ViewProperty {
 
  protected:
   bool ReadBool() const override { return AreModifiersOn(modifier_); }
-  void WriteBool(bool value) override { SetModifiers(modifier_, value); }
+  void WriteBool(bool value) override { 
+    if (value == AreModifiersOn(modifier_)) {
+      return;  // No change needed.
+    }
+    SetModifiers(modifier_, value); 
+    NotifyChanged();
+  }
 
  private:
   Modifiers modifier_;
