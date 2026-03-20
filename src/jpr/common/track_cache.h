@@ -49,7 +49,12 @@ class TrackCache final {
 
   // Returns the track with the given track ID, or nullptr if no such track
   // exists.
-  Track* GetTrack(MediaTrack* track_id);
+  Track* GetTrack(MediaTrack* track_id) const;
+
+  // Returns all tracks in the project, in order, not including the master
+  // track.
+  int GetTrackCount() const { return static_cast<int>(all_tracks_.size()); }
+  absl::Span<Track* const> GetTracks() const { return all_tracks_; }
 
   // The top level tracks in the project, in order. These are tracks that have
   // no parent track, and are the roots of the track hierarchy in REAPER.
@@ -60,6 +65,13 @@ class TrackCache final {
     return top_level_tracks_;
   }
 
+  // The last touched track, which is the track that is the root for
+  // shift-selection. This may be updated by Track when modified by
+  // ViewMappings, or by the ControlSurface when it receives an update from
+  // REAPER.
+  Track* GetLastTouchedTrack() const { return last_touched_track_; }
+  void SetLastTouchedTrack(Track* track) { last_touched_track_ = track; }
+
  private:
   friend class absl::NoDestructor<TrackCache>;
 
@@ -68,8 +80,14 @@ class TrackCache final {
 
   TrackCache();
 
+  // This helper callsed by Refresh() adds the given track to the relevant track
+  // lists and to its parent track's child track list, if it has a parent track.
+  void AddTrack(Track* track);
+
   TrackMap track_map_;
   TrackIdMap track_id_map_;
+  Track* last_touched_track_ = nullptr;
+  std::vector<Track*> all_tracks_;
   std::vector<Track*> top_level_tracks_;
   std::shared_ptr<Track> master_track_;
   std::shared_ptr<Track> stub_track_;

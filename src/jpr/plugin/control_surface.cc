@@ -485,7 +485,9 @@ void ControlSurface::OnSetFocusedFx(MediaTrack* track_id,
 void ControlSurface::OnSetLastTouchedTrack(MediaTrack* track_id) {
   LOG_REAPER() << "OnSetLastTouchedTrack(track_id=" << track_id << ")";
   if (track_list_view_ != nullptr) {
+    Track* track = TrackCache::Get().GetTrack(track_id);
     EnsureTrackIsVisible(TrackCache::Get().GetTrack(track_id));
+    TrackCache::Get().SetLastTouchedTrack(TrackCache::Get().GetTrack(track_id));
   }
 }
 

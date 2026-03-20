@@ -34,6 +34,7 @@ void TrackCache::Refresh() {
   // Reset the track ID map and top level tracks, and recreate it as we iterate
   // over the tracks.
   track_id_map_.clear();
+  all_tracks_.clear();
   top_level_tracks_.clear();
 
   // Add the stub track to the null ID.
@@ -55,32 +56,9 @@ void TrackCache::Refresh() {
     master_track_->DoRefresh(master_track_id);
   }
 
-  // This helper adds the given track to its parent track's child track list, if
-  // it has a parent track. This is used to maintain the child track lists for
-  // all tracks as we refresh the cache.
-  auto add_to_parent = [this](Track* track) {
-    MediaTrack* parent_id = GetParentTrack(track->GetTrackId());
-    if (parent_id == nullptr) {
-      track->parent_track_ = nullptr;
-      track->index_ = static_cast<int>(top_level_tracks_.size());
-      top_level_tracks_.push_back(track);
-      return;
-    }
-    Track* parent_track = GetTrack(parent_id);
-    if (parent_track == nullptr) {
-      LOG(ERROR) << "Failed to find parent track for track " << track->GetGuid()
-                 << " with parent ID " << parent_id;
-      track->parent_track_ = nullptr;
-      track->index_ = 0;
-      return;
-    }
-    track->parent_track_ = parent_track;
-    track->index_ = static_cast<int>(parent_track->child_tracks_.size());
-    parent_track->child_tracks_.push_back(track);
-  };
-
   // Iterate over all tracks to build the new cache.
   const int track_count = CountTracks(nullptr);
+  all_tracks_.reserve(track_count);
   for (int i = 0; i < track_count; ++i) {
     MediaTrack* track_id = ::GetTrack(nullptr, i);
     if (track_id == nullptr) {
@@ -94,7 +72,7 @@ void TrackCache::Refresh() {
       // Track is new and doesn't exist in the old cache, so just initialize it.
       new_track = std::make_shared<Track>(Track::Private(), guid, track_id);
       track_id_map_[track_id] = new_track.get();
-      add_to_parent(new_track.get());
+      AddTrack(new_track.get());
       continue;
     }
 
@@ -102,7 +80,7 @@ void TrackCache::Refresh() {
     new_track = std::move(it->second);
     old_track_map.erase(it);
     track_id_map_[track_id] = new_track.get();
-    add_to_parent(new_track.get());
+    AddTrack(new_track.get());
 
     // Clear child tracks. They will be added back in as we iterate over the
     // tracks, and this ensures that any tracks that are no longer children will
@@ -129,9 +107,36 @@ void TrackCache::Refresh() {
     new_track = std::move(old_track);
     new_track->child_tracks_.clear();
     new_track->parent_track_ = nullptr;
+    new_track->global_index_ = 0;
     new_track->index_ = 0;
     new_track->DoRefresh(nullptr);
   }
+}
+
+void TrackCache::AddTrack(Track* track) {
+  track->global_index_ = static_cast<int>(all_tracks_.size());
+  all_tracks_.push_back(track);
+
+  MediaTrack* parent_id = GetParentTrack(track->GetTrackId());
+  if (parent_id == nullptr) {
+    track->parent_track_ = nullptr;
+    track->index_ = static_cast<int>(top_level_tracks_.size());
+    top_level_tracks_.push_back(track);
+    return;
+  }
+
+  Track* parent_track = GetTrack(parent_id);
+  if (parent_track == nullptr) {
+    LOG(ERROR) << "Failed to find parent track for track " << track->GetGuid()
+               << " with parent ID " << parent_id;
+    track->parent_track_ = nullptr;
+    track->index_ = 0;
+    return;
+  }
+
+  track->parent_track_ = parent_track;
+  track->index_ = static_cast<int>(parent_track->child_tracks_.size());
+  parent_track->child_tracks_.push_back(track);
 }
 
 Track* TrackCache::GetTrack(const Guid& guid) const {
@@ -139,7 +144,7 @@ Track* TrackCache::GetTrack(const Guid& guid) const {
   return it != track_map_.end() ? it->second.get() : nullptr;
 }
 
-Track* TrackCache::GetTrack(MediaTrack* track_id) {
+Track* TrackCache::GetTrack(MediaTrack* track_id) const {
   auto it = track_id_map_.find(track_id);
   return it != track_id_map_.end() ? it->second : nullptr;
 }

@@ -25,6 +25,14 @@ Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
 }
 
+Track::~Track() {
+  // If this track is currently selected, clear the last selected track pointer
+  // to avoid leaving a dangling pointer.
+  if (TrackCache::Get().GetLastTouchedTrack() == this) {
+    TrackCache::Get().SetLastTouchedTrack(nullptr);
+  }
+}
+
 void Track::Refresh() { DoRefresh(track_id_); }
 
 void Track::DoRefresh(MediaTrack* track_id) {
@@ -33,6 +41,9 @@ void Track::DoRefresh(MediaTrack* track_id) {
   if (track_id == nullptr) {
     if (!changed) {
       return;
+    }
+    if (TrackCache::Get().GetLastTouchedTrack() == this) {
+      TrackCache::Get().SetLastTouchedTrack(nullptr);
     }
     name_.clear();
     volume_ = 0.0;
@@ -89,6 +100,14 @@ void Track::NotifyListeners() {
   }
 }
 
+void Track::DoToggleSelected() {
+  selected_ = !selected_;
+  if (selected_) {
+    TrackCache::Get().SetLastTouchedTrack(this);
+  }
+  NotifyListeners();
+}
+
 void Track::SetName(std::string_view name) {
   if (track_id_ == nullptr) {
     return;
@@ -131,8 +150,7 @@ void Track::SetSelected(bool selected) {
     return;
   }
   SetTrackSelected(track_id_, selected);
-  selected_ = selected;
-  NotifyListeners();
+  DoToggleSelected();
 }
 
 void Track::SetMute(bool mute) {
@@ -191,17 +209,39 @@ void Track::UiSelected() {
     return;
   }
 
+  // Shift is used to toggle selection of all tracks between the last selected
+  // track and this track.
+  Track* last_selected_track = TrackCache::Get().GetLastTouchedTrack();
+  if (AreModifiersOn(kModShift) && last_selected_track != nullptr) {
+    // We iterate over *all* tracks in the project, and only select tracks which
+    // are between the last selected track and this track in the track list.
+    int first_index = last_selected_track->GetGlobalIndex();
+    int last_index = GetGlobalIndex();
+    if (first_index > last_index) {
+      std::swap(first_index, last_index);
+    }
+    auto tracks = TrackCache::Get().GetTracks();
+    for (int i = 0; i < tracks.size(); ++i) {
+      Track* track = tracks[i];
+      bool selected = (i >= first_index && i <= last_index);
+      if (selected != IsTrackSelected(track->track_id_)) {
+         SetTrackSelected(track->track_id_, selected);
+      }
+    }
+    return;
+  }
+
   // Ctrl is used to toggle selection of individual tracks.
   if (AreModifiersOn(kModCtrl)) {
     SetTrackSelected(track_id_, !selected_);
-    selected_ = !selected_;
-    NotifyListeners();
+    DoToggleSelected();
     return;
   }
 
   // To emulate default REAPER behavior "unselected" a selected track will
   // just unselect every other track and leave the selected track selected.
   if (selected_ && CountSelectedTracks(nullptr) > 1) {
+    TrackCache::Get().SetLastTouchedTrack(this);
     SetOnlyTrackSelected(track_id_);
     return;
   }
@@ -212,8 +252,7 @@ void Track::UiSelected() {
     //  the last track.
     SetTrackSelected(track_id_, false);
   }
-  selected_ = !selected_;
-  NotifyListeners();
+  DoToggleSelected();
 }
 
 void Track::UiMute() {

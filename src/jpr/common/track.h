@@ -48,7 +48,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Called by the TrackCache when a track is added or updated in the cache.
   Track(const Track&) = delete;
   Track& operator=(const Track&) = delete;
-  ~Track() = default;
+  ~Track();
 
   // Strong and weak pointer references to the track.
   std::shared_ptr<Track> GetShared() { return shared_from_this(); }
@@ -111,6 +111,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   // will return zero. This is updated whenever TrackCache::Refresh() is called.
   int GetIndex() const { return index_; }
 
+  // Returns the global index of this track within all tracks in the project.
+  int GetGlobalIndex() const { return global_index_; }
+
   // Immediate child tracks of this track in order. These are updated
   // whenever TrackCache::Refresh() is called.
   int GetChildTrackCount() const {
@@ -149,6 +152,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
 
+  // Toggles the selected state and notifies listeners.
+  void DoToggleSelected();
+
   // Track identification. The Guid may be empty and the track_id may be null.
   Guid guid_;
   MediaTrack* track_id_ = nullptr;
@@ -165,7 +171,8 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // Track hierarchy.
   Track* parent_track_ = nullptr;
-  int index_ = 0;  // Index of the track within the parent.
+  int global_index_ = 0;  // Index of the track within the project.
+  int index_ = 0;         // Index of the track within the parent.
   std::vector<Track*> child_tracks_;
 
   // Listeners subscribed to this track for changes.
