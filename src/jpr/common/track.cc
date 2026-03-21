@@ -213,6 +213,12 @@ void Track::UiSelected() {
   // track and this track.
   Track* last_selected_track = TrackCache::Get().GetLastTouchedTrack();
   if (AreModifiersOn(kModShift) && last_selected_track != nullptr) {
+    // Unlike REAPER's default behavior "Shift" on its own will only select
+    // tracks with the same parent as the starting track. This is more desirable
+    // on a control surface. To get the standard "all tracks" the control
+    // modifier must also be pressed.
+    bool require_same_parent = !AreModifiersOn(kModCtrl);
+
     // We iterate over *all* tracks in the project, and only select tracks which
     // are between the last selected track and this track in the track list.
     int first_index = last_selected_track->GetGlobalIndex();
@@ -220,12 +226,17 @@ void Track::UiSelected() {
     if (first_index > last_index) {
       std::swap(first_index, last_index);
     }
+
     auto tracks = TrackCache::Get().GetTracks();
     for (int i = 0; i < tracks.size(); ++i) {
       Track* track = tracks[i];
       bool selected = (i >= first_index && i <= last_index);
+      if (selected && require_same_parent &&
+          track->GetParentTrack() != last_selected_track->GetParentTrack()) {
+        selected = false;
+      }
       if (selected != IsTrackSelected(track->track_id_)) {
-         SetTrackSelected(track->track_id_, selected);
+        SetTrackSelected(track->track_id_, selected);
       }
     }
     return;
