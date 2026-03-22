@@ -100,13 +100,9 @@ void Track::NotifyListeners() {
   }
 }
 
-void Track::DoToggleSelected() {
-  selected_ = !selected_;
-  if (selected_) {
-    TrackCache::Get().SetLastTouchedTrack(this);
-  }
-  NotifyListeners();
-}
+//------------------------------------------------------------------------------
+// Name
+//------------------------------------------------------------------------------
 
 void Track::SetName(std::string_view name) {
   if (track_id_ == nullptr) {
@@ -125,6 +121,22 @@ void Track::SetName(std::string_view name) {
   }
 }
 
+//------------------------------------------------------------------------------
+// Volume
+//------------------------------------------------------------------------------
+
+void Track::UiVolume(double volume) {
+  if (track_id_ == nullptr || volume_ == volume) {
+    return;
+  }
+  // Done should actually be set based on whether the fader is being touched or
+  // not, but that is not yet supported.
+  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
+    /*ingroupflags=*/0);
+  volume_ = volume;
+  NotifyListeners();
+}
+
 void Track::SetVolume(double volume) {
   if (track_id_ == nullptr || volume_ == volume) {
     return;
@@ -132,6 +144,22 @@ void Track::SetVolume(double volume) {
   SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
                    kNoGrouping | kNoGanging);
   volume_ = volume;
+  NotifyListeners();
+}
+
+//------------------------------------------------------------------------------
+// Pan
+//------------------------------------------------------------------------------
+
+void Track::UiPan(double pan) {
+  if (track_id_ == nullptr) {
+    return;
+  }
+  // Done should actually be set based on whether the pan knob is being touched
+  // or not, but that is not yet supported (it also isn't possible on XTouch).
+  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
+    /*ingroupflags=*/0);
+  pan_ = pan;
   NotifyListeners();
 }
 
@@ -145,64 +173,9 @@ void Track::SetPan(double pan) {
   NotifyListeners();
 }
 
-void Track::SetSelected(bool selected) {
-  if (track_id_ == nullptr || selected_ == selected) {
-    return;
-  }
-  SetTrackSelected(track_id_, selected);
-  DoToggleSelected();
-}
-
-void Track::SetMute(bool mute) {
-  if (track_id_ == nullptr || mute_ == mute) {
-    return;
-  }
-  SetTrackUIMute(track_id_, mute ? 1 : 0, kNoGrouping | kNoGanging);
-  mute_ = mute;
-  NotifyListeners();
-}
-
-void Track::SetSolo(bool solo) {
-  if (track_id_ == nullptr || solo_ == solo) {
-    return;
-  }
-  SetTrackUISolo(track_id_, solo ? 1 : 0, kNoGrouping | kNoGanging);
-  solo_ = solo;
-  NotifyListeners();
-}
-
-void Track::SetRecArm(bool rec_arm) {
-  if (track_id_ == nullptr || rec_arm_ == rec_arm) {
-    return;
-  }
-  SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, kNoGrouping | kNoGanging);
-  rec_arm_ = rec_arm;
-  NotifyListeners();
-}
-
-void Track::UiVolume(double volume) {
-  if (track_id_ == nullptr || volume_ == volume) {
-    return;
-  }
-  // Done should actually be set based on whether the fader is being touched or
-  // not, but that is not yet supported.
-  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
-                   /*ingroupflags=*/0);
-  volume_ = volume;
-  NotifyListeners();
-}
-
-void Track::UiPan(double pan) {
-  if (track_id_ == nullptr) {
-    return;
-  }
-  // Done should actually be set based on whether the pan knob is being touched
-  // or not, but that is not yet supported (it also isn't possible on XTouch).
-  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
-                /*ingroupflags=*/0);
-  pan_ = pan;
-  NotifyListeners();
-}
+//------------------------------------------------------------------------------
+// Selected
+//------------------------------------------------------------------------------
 
 void Track::UiSelected() {
   if (track_id_ == nullptr) {
@@ -266,6 +239,27 @@ void Track::UiSelected() {
   DoToggleSelected();
 }
 
+void Track::SetSelected(bool selected) {
+  if (track_id_ == nullptr || selected_ == selected) {
+    return;
+  }
+  SetTrackSelected(track_id_, selected);
+  DoToggleSelected();
+}
+
+void Track::DoToggleSelected() {
+  selected_ = !selected_;
+  if (selected_) {
+    TrackCache::Get().SetLastTouchedTrack(this);
+  }
+  NotifyListeners();
+}
+
+
+//------------------------------------------------------------------------------
+// Mute
+//------------------------------------------------------------------------------
+
 void Track::UiMute() {
   if (track_id_ == nullptr) {
     return;
@@ -274,6 +268,19 @@ void Track::UiMute() {
   SetTrackUIMute(track_id_, mute_ ? 1 : 0, /*ingroupflags=*/0);
   NotifyListeners();
 }
+
+void Track::SetMute(bool mute) {
+  if (track_id_ == nullptr || mute_ == mute) {
+    return;
+  }
+  SetTrackUIMute(track_id_, mute ? 1 : 0, kNoGrouping | kNoGanging);
+  mute_ = mute;
+  NotifyListeners();
+}
+
+//------------------------------------------------------------------------------
+// Solo
+//------------------------------------------------------------------------------
 
 void Track::UiSolo() {
   if (track_id_ == nullptr) {
@@ -284,12 +291,34 @@ void Track::UiSolo() {
   NotifyListeners();
 }
 
+void Track::SetSolo(bool solo) {
+  if (track_id_ == nullptr || solo_ == solo) {
+    return;
+  }
+  SetTrackUISolo(track_id_, solo ? 1 : 0, kNoGrouping | kNoGanging);
+  solo_ = solo;
+  NotifyListeners();
+}
+
+//------------------------------------------------------------------------------
+// Record Arm
+//------------------------------------------------------------------------------
+
 void Track::UiRecArm() {
   if (track_id_ == nullptr) {
     return;
   }
   rec_arm_ = !rec_arm_;
   SetTrackUIRecArm(track_id_, rec_arm_ ? 1 : 0, /*ingroupflags=*/0);
+  NotifyListeners();
+}
+
+void Track::SetRecArm(bool rec_arm) {
+  if (track_id_ == nullptr || rec_arm_ == rec_arm) {
+    return;
+  }
+  SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, kNoGrouping | kNoGanging);
+  rec_arm_ = rec_arm;
   NotifyListeners();
 }
 

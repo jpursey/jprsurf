@@ -77,8 +77,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool GetSolo() const { return solo_; }
   bool GetRecArm() const { return rec_arm_; }
 
-  // Sets the track's properties. These will be applied to the underlying track
-  // in REAPER, and will also update the internal cached state for this track.
+  // Sets the track's properties directly with no additional side effects. These
+  // will be applied to the underlying track in REAPER, and will also update the
+  // internal cached state for this track.
   void SetName(std::string_view name);
   void SetVolume(double volume);
   void SetPan(double pan);
@@ -90,6 +91,25 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Actions which run the corresponding UI behavior for each property (the
   // equivalent of clicking or changing the property in REAPER's UI, whenever
   // possible).
+  //
+  // Modifiers are also applied to these actions if mapped on the control
+  // surface, which provide similar behavior to REAPER, but the mappings are
+  // different:
+  //
+  // Volume and Pan:
+  // - None: Changes this track and any grouped or ganged tracks proportionally.
+  // - Ctrl: Changes only this track, ignoring any grouping or ganging.
+  //  (in REAPER this is Shift)
+  //
+  // Selected:
+  // - None: Selects this track and unselects all other tracks. Sets the last
+  //   touched track.
+  // - Ctrl: Toggles selection of this track without affecting any other tracks.
+  //   Sets the last touched track. (Same ias in REAPER)
+  // - Shift: Selects all tracks between the last selected track and this track
+  //   that share the same parent track. (Not available in REAPER)
+  // - Ctrl+Shift: Selects all tracks between the last selected track and this
+  //   regardless of parent track. (In REAPER this is Shift)
   void UiVolume(double volume);
   void UiPan(double pan);
   void UiSelected();
