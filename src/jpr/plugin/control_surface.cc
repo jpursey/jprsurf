@@ -631,6 +631,14 @@ void ControlSurface::InitViews() {
     track_view->Enable();
   }
   track_list_view_->SetChildContext(View::ContextType::kTrack);
+  track_list_view_->AddMapping(ViewMapping::kReadControl, View::kChildDec,
+                               "XTouch/ChannelLeft");
+  track_list_view_->AddMapping(ViewMapping::kReadControl, View::kChildInc,
+                               "XTouch/ChannelRight");
+  track_list_view_->AddMapping(ViewMapping::kReadControl, View::kBankDec,
+                               "XTouch/BankLeft");
+  track_list_view_->AddMapping(ViewMapping::kReadControl, View::kBankInc,
+                               "XTouch/BankRight");
   track_list_view_->Enable();
 
   // Finally activate the scene, which will start it running and activate all

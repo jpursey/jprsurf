@@ -45,6 +45,22 @@ class View final {
       std::variant<std::monostate, std::unique_ptr<TrackProperties>>;
 
   //----------------------------------------------------------------------------
+  // View-specific properties
+  //----------------------------------------------------------------------------
+
+  // Action properties that will move the child context index one less
+  // (child_dec) or one more (child_inc). The resulting child_index will be
+  // clamped to the number of child views that match the child context type.
+  static constexpr std::string_view kChildDec = "child_dec";
+  static constexpr std::string_view kChildInc = "child_inc";
+
+  // Action properties that are the same as "child_dec" and "child_inc" except
+  // that they will move the child context index by a bank size settable via
+  // SetBankSize(). The default bank size is 8.
+  static constexpr std::string_view kBankDec = "bank_dec";
+  static constexpr std::string_view kBankInc = "bank_inc";
+
+  //----------------------------------------------------------------------------
   // Construction / Destruction
   //----------------------------------------------------------------------------
 
@@ -163,9 +179,23 @@ class View final {
   // and context index.
   void ClearChildContext() { SetChildContext(ContextType::kNone); }
 
+  // Returns the number of child views that would be affected by the child
+  // context index based on the child context type. For example, if the child
+  // context type is kTrack, this will return the number of tracks that would be
+  // mapped to child views.
+  int GetChildContextCount() const;
+
   // Returns the current child context type and index for this view.
   ContextType GetChildContextType() const { return child_context_type_; }
   int GetChildContextIndex() const { return child_context_index_; }
+
+  // Returns the maximum valid child context index for this view based on the
+  // child context type and the number of views of that type. For example, if
+  // the child context type is kTrack and there are 8 child views of that type,
+  // and 10 possible tracks that can be mapped to, this would return 2, since
+  // the child context index can only be 0, 1, or 2 to map to valid tracks for
+  // all child views.
+  int GetMaxChildContextIndex() const;
 
   // Updates the child context index for this view, which will update the
   // context for all child views with the matching child context type.
@@ -174,6 +204,16 @@ class View final {
   // Refreshes the context for all child views with the matching child context
   // type, if the view is active.
   void RefreshChildContext();
+
+  //----------------------------------------------------------------------------
+  // Property settings
+  //----------------------------------------------------------------------------
+
+  // Controls the bank size for this view, which is used by the kBankLeft and
+  // kBankRight properties to determine how much to change the child context
+  // index when activated. The default bank size is 8.
+  int GetBankSize() const { return bank_size_; }
+  void SetBankSize(int bank_size) { bank_size_ = bank_size; }
 
   //----------------------------------------------------------------------------
   // Mappings
@@ -194,14 +234,14 @@ class View final {
  private:
   friend class Scene;
 
-  View(Scene* scene, View* parent_view, std::string_view name)
-      : scene_(scene), parent_view_(parent_view), name_(name) {}
+  View(Scene* scene, View* parent_view, std::string_view name);
 
-  // Returns the property with the given name in this view's context, or null if
+  // Returns the property with the given name in this view's scope, or null if
   // no such property exists. For example, if this view has a track context,
   // this will return the track property with the given name for that track, if
-  // it exists.
-  ViewProperty* GetContextProperty(std::string_view name) const;
+  // it exists. If it is a view-specific property, such as "child_inc", then
+  // this will return that property.
+  ViewProperty* GetProperty(std::string_view name) const;
 
   // Sets the context for all child views with a track context type to the
   // child tracks of this view's track context, starting at the child context
@@ -226,6 +266,10 @@ class View final {
   Context context_;
   ContextType child_context_type_ = ContextType::kNone;
   int child_context_index_ = 0;
+
+  // Properties for the view.
+  int bank_size_ = 8;
+  absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
 
   // Mappings for this view.
   std::vector<std::unique_ptr<ViewMapping>> mappings_;

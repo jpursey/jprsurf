@@ -11,6 +11,57 @@
 
 namespace jpr {
 
+namespace {
+
+// A view property that changes the child context index by a specified offset
+// when triggered. This is used for the child_inc, child_dec, child_bank_inc,
+// and child_bank_dec properties.
+class ChildIndexOffsetProperty : public ViewProperty {
+ public:
+  ChildIndexOffsetProperty(View* view, std::string_view name, int offset)
+      : view_(view), ViewProperty(name, Type::kAction), offset_(offset) {}
+  ~ChildIndexOffsetProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    int new_index =
+        std::clamp(view_->GetChildContextIndex() + offset_ * GetStepSize(), 0,
+                   view_->GetMaxChildContextIndex());
+    view_->SetChildContextIndex(new_index);
+  }
+
+  View* GetView() const { return view_; }
+  virtual int GetStepSize() const { return 1; }
+
+ private:
+  View* const view_;
+  const int offset_;
+};
+
+class ChildIndexBankOffsetProperty : public ChildIndexOffsetProperty {
+ public:
+  ChildIndexBankOffsetProperty(View* view, std::string_view name, int offset)
+      : ChildIndexOffsetProperty(view, name, offset) {}
+
+ protected:
+  int GetStepSize() const override { return GetView()->GetBankSize(); }
+};
+
+}  // namespace
+
+View::View(Scene* scene, View* parent_view, std::string_view name)
+    : scene_(scene), parent_view_(parent_view), name_(name) {
+  // Add properties for changing the child context index.
+  properties_.emplace(kChildDec, std::make_unique<ChildIndexOffsetProperty>(
+                                     this, kChildDec, -1));
+  properties_.emplace(kChildInc, std::make_unique<ChildIndexOffsetProperty>(
+                                     this, kChildInc, 1));
+  properties_.emplace(kBankDec, std::make_unique<ChildIndexBankOffsetProperty>(
+                                    this, kBankDec, -1));
+  properties_.emplace(kBankInc, std::make_unique<ChildIndexBankOffsetProperty>(
+                                    this, kBankInc, 1));
+}
+
 void View::Enable() {
   if (enabled_) {
     return;
@@ -97,6 +148,43 @@ void View::ClearContext(int child_context_index) {
   SetContext(std::monostate(), child_context_index);
 }
 
+int View::GetChildContextCount() const {
+  switch (child_context_type_) {
+    case ContextType::kNone:
+      return 0;
+    case ContextType::kTrack: {
+      int count = 0;
+      for (auto& child_view : child_views_) {
+        if (child_view->GetContextType() == ContextType::kTrack) {
+          ++count;
+        }
+      }
+      return count;
+    }
+  }
+  return 0;
+}
+
+int View::GetMaxChildContextIndex() const {
+  switch (child_context_type_) {
+    case ContextType::kNone:
+      return 0;
+    case ContextType::kTrack:
+      if (GetContextType() == ContextType::kNone) {
+        return TrackCache::Get().GetTopLevelTrackCount() -
+               GetChildContextCount();
+      } else if (GetContextType() == ContextType::kTrack) {
+        auto& track_properties =
+            std::get<std::unique_ptr<TrackProperties>>(context_);
+        DCHECK(track_properties != nullptr);
+        return track_properties->GetTrack()->GetChildTracks().size() -
+               GetChildContextCount();
+      }
+      break;
+  }
+  return 0;
+}
+
 void View::SetChildContext(ContextType context_type, int context_index) {
   child_context_type_ = context_type;
   child_context_index_ = context_index;
@@ -154,16 +242,19 @@ void View::SetChildTracks() {
   }
 }
 
-ViewProperty* View::GetContextProperty(std::string_view name) const {
+ViewProperty* View::GetProperty(std::string_view name) const {
   switch (GetContextType()) {
     case ContextType::kNone:
-      return nullptr;
+      break;
     case ContextType::kTrack: {
       auto& track_properties =
           std::get<std::unique_ptr<TrackProperties>>(context_);
       DCHECK(track_properties != nullptr);
       return track_properties->GetProperty(name);
     } break;
+  }
+  if (auto it = properties_.find(name); it != properties_.end()) {
+    return it->second.get();
   }
   return nullptr;
 }
@@ -175,7 +266,7 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
   if (scene_ == nullptr) {
     return false;
   }
-  ViewProperty* property = GetContextProperty(property_name);
+  ViewProperty* property = GetProperty(property_name);
   if (property == nullptr) {
     property = scene_->GetProperty(property_name);
   }
