@@ -38,4 +38,8 @@ void SetModifiers(Modifiers modifiers, bool on);
 // otherwise.
 bool AreModifiersOn(Modifiers modifiers);
 
+// Returns true if all of the specified modifiers are currently off, and false
+// otherwise.
+bool AreModifiersOff(Modifiers modifiers);
+
 }  // namespace jpr

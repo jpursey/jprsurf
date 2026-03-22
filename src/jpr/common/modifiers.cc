@@ -29,4 +29,8 @@ bool AreModifiersOn(Modifiers modifiers) {
   return (g_modifiers & modifiers) == modifiers;
 }
 
+bool AreModifiersOff(Modifiers modifiers) {
+  return (g_modifiers & modifiers) == 0;
+}
+
 }  // namespace jpr
