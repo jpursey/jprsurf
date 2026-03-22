@@ -196,7 +196,17 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kLeft = "Left";
   static constexpr std::string_view kRight = "Right";
 
-  DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in, MidiOut* midi_out);
+  //----------------------------------------------------------------------------
+  // Construction / Destruction
+  //----------------------------------------------------------------------------
+
+  // The type of X-Touch device to construct. The full X-Touch has more controls
+  // than the X-Touch Extender, so this determines which controls will be added
+  // to the device.
+  enum class Type { kFull, kExtender };
+
+  DeviceXTouch(Type type, RunRegistry& run_registry, MidiIn* midi_in,
+               MidiOut* midi_out);
   ~DeviceXTouch() override;
 };
 

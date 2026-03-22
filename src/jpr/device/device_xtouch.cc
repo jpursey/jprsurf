@@ -27,127 +27,128 @@ struct Button {
   std::string_view name;
   uint8_t note;
   bool has_light;
+  bool on_extender;
 };
 
 const Button kButtons[] = {
     // Track record arm buttons.
-    {DeviceXTouch::kRec1, 0x00, true},
-    {DeviceXTouch::kRec2, 0x01, true},
-    {DeviceXTouch::kRec3, 0x02, true},
-    {DeviceXTouch::kRec4, 0x03, true},
-    {DeviceXTouch::kRec5, 0x04, true},
-    {DeviceXTouch::kRec6, 0x05, true},
-    {DeviceXTouch::kRec7, 0x06, true},
-    {DeviceXTouch::kRec8, 0x07, true},
+    {DeviceXTouch::kRec1, 0x00, true, true},
+    {DeviceXTouch::kRec2, 0x01, true, true},
+    {DeviceXTouch::kRec3, 0x02, true, true},
+    {DeviceXTouch::kRec4, 0x03, true, true},
+    {DeviceXTouch::kRec5, 0x04, true, true},
+    {DeviceXTouch::kRec6, 0x05, true, true},
+    {DeviceXTouch::kRec7, 0x06, true, true},
+    {DeviceXTouch::kRec8, 0x07, true, true},
     // Track solo buttons.
-    {DeviceXTouch::kSolo1, 0x08, true},
-    {DeviceXTouch::kSolo2, 0x09, true},
-    {DeviceXTouch::kSolo3, 0x0A, true},
-    {DeviceXTouch::kSolo4, 0x0B, true},
-    {DeviceXTouch::kSolo5, 0x0C, true},
-    {DeviceXTouch::kSolo6, 0x0D, true},
-    {DeviceXTouch::kSolo7, 0x0E, true},
-    {DeviceXTouch::kSolo8, 0x0F, true},
+    {DeviceXTouch::kSolo1, 0x08, true, true},
+    {DeviceXTouch::kSolo2, 0x09, true, true},
+    {DeviceXTouch::kSolo3, 0x0A, true, true},
+    {DeviceXTouch::kSolo4, 0x0B, true, true},
+    {DeviceXTouch::kSolo5, 0x0C, true, true},
+    {DeviceXTouch::kSolo6, 0x0D, true, true},
+    {DeviceXTouch::kSolo7, 0x0E, true, true},
+    {DeviceXTouch::kSolo8, 0x0F, true, true},
     // Track mute buttons.
-    {DeviceXTouch::kMute1, 0x10, true},
-    {DeviceXTouch::kMute2, 0x11, true},
-    {DeviceXTouch::kMute3, 0x12, true},
-    {DeviceXTouch::kMute4, 0x13, true},
-    {DeviceXTouch::kMute5, 0x14, true},
-    {DeviceXTouch::kMute6, 0x15, true},
-    {DeviceXTouch::kMute7, 0x16, true},
-    {DeviceXTouch::kMute8, 0x17, true},
+    {DeviceXTouch::kMute1, 0x10, true, true},
+    {DeviceXTouch::kMute2, 0x11, true, true},
+    {DeviceXTouch::kMute3, 0x12, true, true},
+    {DeviceXTouch::kMute4, 0x13, true, true},
+    {DeviceXTouch::kMute5, 0x14, true, true},
+    {DeviceXTouch::kMute6, 0x15, true, true},
+    {DeviceXTouch::kMute7, 0x16, true, true},
+    {DeviceXTouch::kMute8, 0x17, true, true},
     // Track select buttons.
-    {DeviceXTouch::kSelect1, 0x18, true},
-    {DeviceXTouch::kSelect2, 0x19, true},
-    {DeviceXTouch::kSelect3, 0x1A, true},
-    {DeviceXTouch::kSelect4, 0x1B, true},
-    {DeviceXTouch::kSelect5, 0x1C, true},
-    {DeviceXTouch::kSelect6, 0x1D, true},
-    {DeviceXTouch::kSelect7, 0x1E, true},
-    {DeviceXTouch::kSelect8, 0x1F, true},
+    {DeviceXTouch::kSelect1, 0x18, true, true},
+    {DeviceXTouch::kSelect2, 0x19, true, true},
+    {DeviceXTouch::kSelect3, 0x1A, true, true},
+    {DeviceXTouch::kSelect4, 0x1B, true, true},
+    {DeviceXTouch::kSelect5, 0x1C, true, true},
+    {DeviceXTouch::kSelect6, 0x1D, true, true},
+    {DeviceXTouch::kSelect7, 0x1E, true, true},
+    {DeviceXTouch::kSelect8, 0x1F, true, true},
     // Track pot buttons.
-    {DeviceXTouch::kPotButton1, 0x20, false},
-    {DeviceXTouch::kPotButton2, 0x21, false},
-    {DeviceXTouch::kPotButton3, 0x22, false},
-    {DeviceXTouch::kPotButton4, 0x23, false},
-    {DeviceXTouch::kPotButton5, 0x24, false},
-    {DeviceXTouch::kPotButton6, 0x25, false},
-    {DeviceXTouch::kPotButton7, 0x26, false},
-    {DeviceXTouch::kPotButton8, 0x27, false},
+    {DeviceXTouch::kPotButton1, 0x20, false, true},
+    {DeviceXTouch::kPotButton2, 0x21, false, true},
+    {DeviceXTouch::kPotButton3, 0x22, false, true},
+    {DeviceXTouch::kPotButton4, 0x23, false, true},
+    {DeviceXTouch::kPotButton5, 0x24, false, true},
+    {DeviceXTouch::kPotButton6, 0x25, false, true},
+    {DeviceXTouch::kPotButton7, 0x26, false, true},
+    {DeviceXTouch::kPotButton8, 0x27, false, true},
     // Assign buttons
-    {DeviceXTouch::kAssignTrack, 0x28, true},
-    {DeviceXTouch::kAssignSend, 0x29, true},
-    {DeviceXTouch::kAssignPan, 0x2A, true},
-    {DeviceXTouch::kAssignPlugin, 0x2B, true},
-    {DeviceXTouch::kAssignEQ, 0x2C, true},
-    {DeviceXTouch::kAssignInst, 0x2D, true},
+    {DeviceXTouch::kAssignTrack, 0x28, true, false},
+    {DeviceXTouch::kAssignSend, 0x29, true, false},
+    {DeviceXTouch::kAssignPan, 0x2A, true, false},
+    {DeviceXTouch::kAssignPlugin, 0x2B, true, false},
+    {DeviceXTouch::kAssignEQ, 0x2C, true, false},
+    {DeviceXTouch::kAssignInst, 0x2D, true, false},
     // Channel navigation buttons.
-    {DeviceXTouch::kBankLeft, 0x2E, true},
-    {DeviceXTouch::kBankRight, 0x2F, true},
-    {DeviceXTouch::kChannelLeft, 0x30, true},
-    {DeviceXTouch::kChannelRight, 0x31, true},
+    {DeviceXTouch::kBankLeft, 0x2E, true, false},
+    {DeviceXTouch::kBankRight, 0x2F, true, false},
+    {DeviceXTouch::kChannelLeft, 0x30, true, false},
+    {DeviceXTouch::kChannelRight, 0x31, true, false},
     // Master fader buttons.
-    {DeviceXTouch::kGlobal, 0x32, true},
-    {DeviceXTouch::kFlip, 0x33, true},
+    {DeviceXTouch::kGlobal, 0x32, true, false},
+    {DeviceXTouch::kFlip, 0x33, true, false},
     // Display buttons.
-    {DeviceXTouch::kShowNameValue, 0x34, true},
-    {DeviceXTouch::kShowTimeBeats, 0x35, true},
+    {DeviceXTouch::kShowNameValue, 0x34, true, false},
+    {DeviceXTouch::kShowTimeBeats, 0x35, true, false},
     // Function buttons.
-    {DeviceXTouch::kF1, 0x36, true},
-    {DeviceXTouch::kF2, 0x37, true},
-    {DeviceXTouch::kF3, 0x38, true},
-    {DeviceXTouch::kF4, 0x39, true},
-    {DeviceXTouch::kF5, 0x3A, true},
-    {DeviceXTouch::kF6, 0x3B, true},
-    {DeviceXTouch::kF7, 0x3C, true},
-    {DeviceXTouch::kF8, 0x3D, true},
+    {DeviceXTouch::kF1, 0x36, true, false},
+    {DeviceXTouch::kF2, 0x37, true, false},
+    {DeviceXTouch::kF3, 0x38, true, false},
+    {DeviceXTouch::kF4, 0x39, true, false},
+    {DeviceXTouch::kF5, 0x3A, true, false},
+    {DeviceXTouch::kF6, 0x3B, true, false},
+    {DeviceXTouch::kF7, 0x3C, true, false},
+    {DeviceXTouch::kF8, 0x3D, true, false},
     // View buttons.
-    {DeviceXTouch::kViewMIDI, 0x3E, true},
-    {DeviceXTouch::kViewInputs, 0x3F, true},
-    {DeviceXTouch::kViewAudio, 0x40, true},
-    {DeviceXTouch::kViewInst, 0x41, true},
-    {DeviceXTouch::kViewAux, 0x42, true},
-    {DeviceXTouch::kViewBuses, 0x43, true},
-    {DeviceXTouch::kViewOutputs, 0x44, true},
-    {DeviceXTouch::kViewUser, 0x45, true},
+    {DeviceXTouch::kViewMIDI, 0x3E, true, false},
+    {DeviceXTouch::kViewInputs, 0x3F, true, false},
+    {DeviceXTouch::kViewAudio, 0x40, true, false},
+    {DeviceXTouch::kViewInst, 0x41, true, false},
+    {DeviceXTouch::kViewAux, 0x42, true, false},
+    {DeviceXTouch::kViewBuses, 0x43, true, false},
+    {DeviceXTouch::kViewOutputs, 0x44, true, false},
+    {DeviceXTouch::kViewUser, 0x45, true, false},
     // Modifier buttons.
-    {DeviceXTouch::kShift, 0x46, true},
-    {DeviceXTouch::kOption, 0x47, true},
-    {DeviceXTouch::kControl, 0x48, true},
-    {DeviceXTouch::kAlt, 0x49, true},
+    {DeviceXTouch::kShift, 0x46, true, false},
+    {DeviceXTouch::kOption, 0x47, true, false},
+    {DeviceXTouch::kControl, 0x48, true, false},
+    {DeviceXTouch::kAlt, 0x49, true, false},
     // Automation buttons.
-    {DeviceXTouch::kAutoRead, 0x4A, true},
-    {DeviceXTouch::kAutoWrite, 0x4B, true},
-    {DeviceXTouch::kAutoTrim, 0x4C, true},
-    {DeviceXTouch::kAutoTouch, 0x4D, true},
-    {DeviceXTouch::kAutoLatch, 0x4E, true},
-    {DeviceXTouch::kAutoGroup, 0x4F, true},
+    {DeviceXTouch::kAutoRead, 0x4A, true, false},
+    {DeviceXTouch::kAutoWrite, 0x4B, true, false},
+    {DeviceXTouch::kAutoTrim, 0x4C, true, false},
+    {DeviceXTouch::kAutoTouch, 0x4D, true, false},
+    {DeviceXTouch::kAutoLatch, 0x4E, true, false},
+    {DeviceXTouch::kAutoGroup, 0x4F, true, false},
     // Utility buttons.
-    {DeviceXTouch::kSave, 0x50, true},
-    {DeviceXTouch::kUndo, 0x51, true},
-    {DeviceXTouch::kCancel, 0x52, true},
-    {DeviceXTouch::kEnter, 0x53, true},
+    {DeviceXTouch::kSave, 0x50, true, false},
+    {DeviceXTouch::kUndo, 0x51, true, false},
+    {DeviceXTouch::kCancel, 0x52, true, false},
+    {DeviceXTouch::kEnter, 0x53, true, false},
     // Transport buttons.
-    {DeviceXTouch::kMarkers, 0x54, true},
-    {DeviceXTouch::kNudge, 0x55, true},
-    {DeviceXTouch::kCycle, 0x56, true},
-    {DeviceXTouch::kDrop, 0x57, true},
-    {DeviceXTouch::kReplace, 0x58, true},
-    {DeviceXTouch::kClick, 0x59, true},
-    {DeviceXTouch::kSolo, 0x5A, true},
-    {DeviceXTouch::kRewind, 0x5B, true},
-    {DeviceXTouch::kForward, 0x5C, true},
-    {DeviceXTouch::kStop, 0x5D, true},
-    {DeviceXTouch::kPlay, 0x5E, true},
-    {DeviceXTouch::kRecord, 0x5F, true},
+    {DeviceXTouch::kMarkers, 0x54, true, false},
+    {DeviceXTouch::kNudge, 0x55, true, false},
+    {DeviceXTouch::kCycle, 0x56, true, false},
+    {DeviceXTouch::kDrop, 0x57, true, false},
+    {DeviceXTouch::kReplace, 0x58, true, false},
+    {DeviceXTouch::kClick, 0x59, true, false},
+    {DeviceXTouch::kSolo, 0x5A, true, false},
+    {DeviceXTouch::kRewind, 0x5B, true, false},
+    {DeviceXTouch::kForward, 0x5C, true, false},
+    {DeviceXTouch::kStop, 0x5D, true, false},
+    {DeviceXTouch::kPlay, 0x5E, true, false},
+    {DeviceXTouch::kRecord, 0x5F, true, false},
     // Navigation buttons.
-    {DeviceXTouch::kUp, 0x60, true},
-    {DeviceXTouch::kDown, 0x61, true},
-    {DeviceXTouch::kScrub, 0x62, true},
-    {DeviceXTouch::kZoom, 0x63, true},
-    {DeviceXTouch::kLeft, 0x64, true},
-    {DeviceXTouch::kRight, 0x65, true},
+    {DeviceXTouch::kUp, 0x60, true, false},
+    {DeviceXTouch::kDown, 0x61, true, false},
+    {DeviceXTouch::kScrub, 0x62, true, false},
+    {DeviceXTouch::kZoom, 0x63, true, false},
+    {DeviceXTouch::kLeft, 0x64, true, false},
+    {DeviceXTouch::kRight, 0x65, true, false},
 };
 
 //==============================================================================
@@ -158,6 +159,8 @@ static constexpr int kScribbleLineLength = 56;
 static constexpr int kScribbleTrackLineLength = 7;
 static constexpr uint8_t kScribbleSysexPrefix[] = {0x00, 0x00, 0x66, 0x14,
                                                    0x12};
+static constexpr uint8_t kScribbleExtSysexPrefix[] = {0x00, 0x00, 0x66, 0x15,
+                                                      0x12};
 
 struct ScribbleConfig {
   int line;
@@ -186,11 +189,11 @@ ScribbleConfig ParseScribbleBytes(absl::Span<const uint8_t> bytes) {
           .text = std::string_view(text_data, length)};
 }
 
-SysexMessage CreateScribbleMessage(ScribbleConfig config) {
+SysexMessage CreateScribbleMessage(SysexPrefix prefix, ScribbleConfig config) {
   int line = std::clamp(config.line, 0, 1);
   int offset = std::clamp(config.offset, 0, kScribbleLineLength);
   int length = std::clamp(config.length, 0, kScribbleLineLength - offset);
-  SysexMessage message(SysexPrefix(kScribbleSysexPrefix), length + 1);
+  SysexMessage message(prefix, length + 1);
   message.GetMutableData()[0] = line * kScribbleLineLength + offset;
   char* text_data =
       reinterpret_cast<char*>(message.GetMutableData().data() + 1);
@@ -206,7 +209,7 @@ SysexMessage CreateScribbleMessage(ScribbleConfig config) {
 // scribble strip sysex messages.
 class XTouchScribbleState final : public SysexMessageState {
  public:
-  XTouchScribbleState(const SysexMessage& message);
+  XTouchScribbleState(SysexPrefix prefix, const SysexMessage& message);
   XTouchScribbleState(const XTouchScribbleState& other);
   XTouchScribbleState& operator=(const XTouchScribbleState&);
   ~XTouchScribbleState() override = default;
@@ -220,10 +223,13 @@ class XTouchScribbleState final : public SysexMessageState {
   bool Update(const SysexMessage& message) override;
 
  private:
+  SysexPrefix prefix_;
   std::string line_[2];
 };
 
-XTouchScribbleState::XTouchScribbleState(const SysexMessage& message) {
+XTouchScribbleState::XTouchScribbleState(SysexPrefix prefix,
+                                         const SysexMessage& message)
+    : prefix_(prefix) {
   line_[0] = std::string(kScribbleLineLength, 0);
   line_[1] = std::string(kScribbleLineLength, 0);
   ScribbleConfig config = ParseScribbleBytes(message.GetData());
@@ -231,7 +237,8 @@ XTouchScribbleState::XTouchScribbleState(const SysexMessage& message) {
               config.text.size());
 }
 
-XTouchScribbleState::XTouchScribbleState(const XTouchScribbleState& other) {
+XTouchScribbleState::XTouchScribbleState(const XTouchScribbleState& other)
+    : prefix_(other.prefix_) {
   line_[0] = other.line_[0];
   line_[1] = other.line_[1];
 }
@@ -239,6 +246,7 @@ XTouchScribbleState::XTouchScribbleState(const XTouchScribbleState& other) {
 XTouchScribbleState& XTouchScribbleState::operator=(
     const XTouchScribbleState& other) {
   if (this != &other) {
+    prefix_ = other.prefix_;
     line_[0] = other.line_[0];
     line_[1] = other.line_[1];
   }
@@ -250,7 +258,7 @@ std::unique_ptr<SysexMessageState> XTouchScribbleState::Clone() const {
 }
 
 bool XTouchScribbleState::Update(const SysexMessage& message) {
-  if (message.GetPrefix() != SysexPrefix(kScribbleSysexPrefix)) {
+  if (message.GetPrefix() != prefix_) {
     return false;
   }
   ScribbleConfig config = ParseScribbleBytes(message.GetData());
@@ -266,7 +274,7 @@ bool XTouchScribbleState::Update(const SysexMessage& message) {
 
 class XTouchScribbleSysex : public SysexMessageType {
  public:
-  XTouchScribbleSysex();
+  explicit XTouchScribbleSysex(SysexPrefix prefix);
   XTouchScribbleSysex(const XTouchScribbleSysex&) = delete;
   XTouchScribbleSysex& operator=(const XTouchScribbleSysex&) = delete;
   ~XTouchScribbleSysex() override = default;
@@ -276,22 +284,23 @@ class XTouchScribbleSysex : public SysexMessageType {
       const SysexMessage& message) const override;
 };
 
-XTouchScribbleSysex::XTouchScribbleSysex()
-    : SysexMessageType(SysexPrefix(kScribbleSysexPrefix)) {
+XTouchScribbleSysex::XTouchScribbleSysex(SysexPrefix prefix)
+    : SysexMessageType(prefix) {
   Register();
 }
 
 std::unique_ptr<SysexMessageState> XTouchScribbleSysex::CreateState(
     const SysexMessage& message) const {
-  if (message.GetPrefix() != SysexPrefix(kScribbleSysexPrefix)) {
+  if (message.GetPrefix() != GetPrefix()) {
     return nullptr;
   }
-  return std::make_unique<XTouchScribbleState>(message);
+  return std::make_unique<XTouchScribbleState>(GetPrefix(), message);
 }
 
 class XTouchTrackScribbleText final : public ControlTextOutput {
  public:
-  XTouchTrackScribbleText(MidiOut* midi_out, int track, int line);
+  XTouchTrackScribbleText(SysexPrefix prefix, MidiOut* midi_out, int track,
+                          int line);
   XTouchTrackScribbleText(const XTouchTrackScribbleText&) = delete;
   XTouchTrackScribbleText& operator=(const XTouchTrackScribbleText&) = delete;
   ~XTouchTrackScribbleText() override = default;
@@ -301,13 +310,16 @@ class XTouchTrackScribbleText final : public ControlTextOutput {
   void OnTextChanged(std::string_view text, int mode) override;
 
  private:
+  SysexPrefix prefix_;
   MidiOut* midi_out_;
   ScribbleConfig config_;
 };
 
-XTouchTrackScribbleText::XTouchTrackScribbleText(MidiOut* midi_out, int track,
+XTouchTrackScribbleText::XTouchTrackScribbleText(SysexPrefix prefix,
+                                                 MidiOut* midi_out, int track,
                                                  int line)
-    : midi_out_(midi_out),
+    : prefix_(prefix),
+      midi_out_(midi_out),
       config_({.line = line,
                .offset = track * kScribbleTrackLineLength,
                .length = kScribbleTrackLineLength}) {}
@@ -315,15 +327,25 @@ XTouchTrackScribbleText::XTouchTrackScribbleText(MidiOut* midi_out, int track,
 void XTouchTrackScribbleText::OnTextChanged(std::string_view text, int mode) {
   ScribbleConfig config = config_;
   config.text = text;
-  midi_out_->UpdateState(CreateScribbleMessage(config));
+  midi_out_->UpdateState(CreateScribbleMessage(prefix_, config));
 }
 
 void RegisterSysex() {
-  static absl::NoDestructor<XTouchScribbleSysex> instance;
-  if (!instance->IsRegistered()) {
-    if (!instance->Register()) {
+  static absl::NoDestructor<XTouchScribbleSysex> full_instance{
+      SysexPrefix(kScribbleSysexPrefix)};
+  if (!full_instance->IsRegistered()) {
+    if (!full_instance->Register()) {
       LOG(ERROR)
           << "Failed to register X-Touch scribble strip sysex message type";
+    }
+  }
+
+  static absl::NoDestructor<XTouchScribbleSysex> ext_instance{
+      SysexPrefix(kScribbleExtSysexPrefix)};
+  if (!ext_instance->IsRegistered()) {
+    if (!ext_instance->Register()) {
+      LOG(ERROR) << "Failed to register X-Touch Extender scribble strip sysex "
+                    "message type";
     }
   }
 }
@@ -334,14 +356,17 @@ void RegisterSysex() {
 // DeviceXTouch
 //==============================================================================
 
-DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
-                           MidiOut* midi_out)
+DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
+                           MidiIn* midi_in, MidiOut* midi_out)
     : Device(run_registry) {
   // Ensure all sysex message types are registered.
   RegisterSysex();
 
   // Add all button controls.
   for (const auto& button : kButtons) {
+    if (!button.on_extender && type == Type::kExtender) {
+      continue;
+    }
     Control::Options options = {.name = button.name};
     options.press_input = std::make_unique<ControlPressInputMidiMsg>(
         midi_in,
@@ -385,11 +410,14 @@ DeviceXTouch::DeviceXTouch(RunRegistry& run_registry, MidiIn* midi_in,
     AddControl(std::move(fader_options));
 
     // Scribble strip text.
+    SysexPrefix scribble_prefix =
+        (type == Type::kFull ? SysexPrefix(kScribbleSysexPrefix)
+                             : SysexPrefix(kScribbleExtSysexPrefix));
     for (int line = 0; line < 2; ++line) {
       name = Scribble(track, line);
       Control::Options scribble_options = {.name = name};
-      scribble_options.text_output =
-          std::make_unique<XTouchTrackScribbleText>(midi_out, track, line);
+      scribble_options.text_output = std::make_unique<XTouchTrackScribbleText>(
+          scribble_prefix, midi_out, track, line);
       AddControl(std::move(scribble_options));
     }
   }
