@@ -42,8 +42,9 @@ IReaperControlSurface* ControlSurface::Create(const char* type_string,
                                               const char* config_string,
                                               int* err_stats) {
   VLOG_REAPER() << "Create(type_string="
-               << (type_string ? type_string : "(null)") << ", config_string=\""
-               << (config_string ? config_string : "") << "\")";
+                << (type_string ? type_string : "(null)")
+                << ", config_string=\"" << (config_string ? config_string : "")
+                << "\")";
   return new ControlSurface(type_string != nullptr ? type_string : "",
                             config_string != nullptr ? config_string : "");
 }
@@ -51,9 +52,9 @@ IReaperControlSurface* ControlSurface::Create(const char* type_string,
 HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
                                 const char* init_config_string) {
   VLOG_REAPER() << "ShowConfig(type_string="
-               << (type_string ? type_string : "(null)")
-               << ", parent=" << parent << ", init_config_string=\""
-               << (init_config_string ? init_config_string : "") << "\")";
+                << (type_string ? type_string : "(null)")
+                << ", parent=" << parent << ", init_config_string=\""
+                << (init_config_string ? init_config_string : "") << "\")";
   return 0;
 }
 
@@ -131,37 +132,37 @@ void ControlSurface::SetTrackListChange() {
 
 void ControlSurface::SetSurfaceVolume(MediaTrack* track_id, double volume) {
   VLOG_REAPER() << "SetSurfaceVolume(track_id=" << track_id
-               << ", volume=" << volume << ")";
+                << ", volume=" << volume << ")";
 }
 
 void ControlSurface::SetSurfacePan(MediaTrack* track_id, double pan) {
   VLOG_REAPER() << "SetSurfacePan(track_id=" << track_id << ", pan=" << pan
-               << ")";
+                << ")";
 }
 
 void ControlSurface::SetSurfaceMute(MediaTrack* track_id, bool mute) {
   VLOG_REAPER() << "SetSurfaceMute(track_id=" << track_id << ", mute=" << mute
-               << ")";
+                << ")";
 }
 
 void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
   VLOG_REAPER() << "SetSurfaceSelected(track_id=" << track_id
-               << ", selected=" << selected << ")";
+                << ", selected=" << selected << ")";
 }
 
 void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
   VLOG_REAPER() << "SetSurfaceSolo(track_id=" << track_id << ", solo=" << solo
-               << ")";
+                << ")";
 }
 
 void ControlSurface::SetSurfaceRecArm(MediaTrack* track_id, bool rec_arm) {
   VLOG_REAPER() << "SetSurfaceRecArm(track_id=" << track_id
-               << ", rec_arm=" << rec_arm << ")";
+                << ", rec_arm=" << rec_arm << ")";
 }
 
 void ControlSurface::SetPlayState(bool play, bool pause, bool rec) {
   VLOG_REAPER() << "SetPlayState(play=" << play << ", pause=" << pause
-               << ", rec=" << rec << ")";
+                << ", rec=" << rec << ")";
 }
 
 void ControlSurface::SetRepeatState(bool rep) {
@@ -170,12 +171,12 @@ void ControlSurface::SetRepeatState(bool rep) {
 
 void ControlSurface::SetTrackTitle(MediaTrack* track_id, const char* title) {
   VLOG_REAPER() << "SetTrackTitle(track_id=" << track_id << ", title=\""
-               << (title != nullptr ? title : "(null)") << "\")";
+                << (title != nullptr ? title : "(null)") << "\")";
 }
 
 bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
-  VLOG_REAPER() << "GetTouchState(track_id=" << track_id << ", is_pan=" << is_pan
-               << ")";
+  VLOG_REAPER() << "GetTouchState(track_id=" << track_id
+                << ", is_pan=" << is_pan << ")";
   return false;
 }
 
@@ -387,7 +388,7 @@ int ControlSurface::Extended(int call, void* param1, void* param2,
     }
   }
   VLOG_REAPER() << "Extended(call=" << absl::Hex(call, absl::kZeroPad8)
-               << "): Unsupported call";
+                << "): Unsupported call";
   return 0;
 }
 
@@ -395,7 +396,7 @@ void ControlSurface::OnReset() { VLOG_REAPER() << "OnReset"; }
 
 void ControlSurface::OnSetInputMonitor(MediaTrack* track_id, int rec_monitor) {
   VLOG_REAPER() << "OnSetInputMonitor(track_id=" << track_id
-               << ", rec_monitor=" << rec_monitor << ")";
+                << ", rec_monitor=" << rec_monitor << ")";
 }
 
 void ControlSurface::OnSetMetronome(bool enabled) {
@@ -413,43 +414,43 @@ void ControlSurface::OnSetRecMode(int rec_mode) {
 void ControlSurface::OnSetSendVolume(MediaTrack* track_id, int send_idx,
                                      double volume) {
   VLOG_REAPER() << "OnSetSendVolume(track_id=" << track_id
-               << ", send_idx=" << send_idx << ", volume=" << volume << ")";
+                << ", send_idx=" << send_idx << ", volume=" << volume << ")";
 }
 
 void ControlSurface::OnSetSendPan(MediaTrack* track_id, int send_idx,
                                   double pan) {
   VLOG_REAPER() << "OnSetSendPan(track_id=" << track_id
-               << ", send_idx=" << send_idx << ", pan=" << pan << ")";
+                << ", send_idx=" << send_idx << ", pan=" << pan << ")";
 }
 
 void ControlSurface::OnSetFxEnabled(MediaTrack* track_id, int fx_idx,
                                     bool enabled) {
   VLOG_REAPER() << "OnSetFxEnabled(track_id=" << track_id
-               << ", fx_idx=" << fx_idx << ", enabled=" << enabled << ")";
+                << ", fx_idx=" << fx_idx << ", enabled=" << enabled << ")";
 }
 
 void ControlSurface::OnSetFxParam(MediaTrack* track_id, int fx_idx,
                                   int param_idx, double normalized_value) {
   VLOG_REAPER() << "OnSetFxParam(track_id=" << track_id << ", fx_idx=" << fx_idx
-               << ", param_idx=" << param_idx
-               << ", normalized_value=" << normalized_value << ")";
+                << ", param_idx=" << param_idx
+                << ", normalized_value=" << normalized_value << ")";
 }
 
 void ControlSurface::OnSetFxParamRecFx(MediaTrack* track_id, int fx_idx,
                                        int param_idx, double normalized_value) {
   VLOG_REAPER() << "OnSetFxParamRecFx(track_id=" << track_id
-               << ", fx_idx=" << fx_idx << ", param_idx=" << param_idx
-               << ", normalized_value=" << normalized_value << ")";
+                << ", fx_idx=" << fx_idx << ", param_idx=" << param_idx
+                << ", normalized_value=" << normalized_value << ")";
 }
 
 void ControlSurface::OnSetBpmAndPlayRate(std::optional<double> bpm,
                                          std::optional<double> play_rate) {
   VLOG_REAPER() << "OnSetBpmAndPlayRate(bpm="
-               << (bpm.has_value() ? absl::StrCat(bpm.value()) : "(null)")
-               << ", play_rate="
-               << (play_rate.has_value() ? absl::StrCat(play_rate.value())
-                                         : "(null)")
-               << ")";
+                << (bpm.has_value() ? absl::StrCat(bpm.value()) : "(null)")
+                << ", play_rate="
+                << (play_rate.has_value() ? absl::StrCat(play_rate.value())
+                                          : "(null)")
+                << ")";
 }
 
 void ControlSurface::OnClearLastTouchedFx() {
@@ -460,11 +461,11 @@ void ControlSurface::OnSetLastTouchedFx(MediaTrack* track_id,
                                         std::optional<int> media_item_idx,
                                         int fx_idx) {
   VLOG_REAPER() << "OnSetLastTouchedFx(track_id=" << track_id
-               << ", media_item_idx="
-               << (media_item_idx.has_value()
-                       ? absl::StrCat(media_item_idx.value())
-                       : "(null)")
-               << ", fx_idx=" << fx_idx << ")";
+                << ", media_item_idx="
+                << (media_item_idx.has_value()
+                        ? absl::StrCat(media_item_idx.value())
+                        : "(null)")
+                << ", fx_idx=" << fx_idx << ")";
 }
 
 void ControlSurface::OnClearFocusedFx() { VLOG_REAPER() << "OnClearFocusedFx"; }
@@ -473,10 +474,10 @@ void ControlSurface::OnSetFocusedFx(MediaTrack* track_id,
                                     std::optional<int> media_item_idx,
                                     int fx_idx) {
   VLOG_REAPER() << "OnSetFocusedFx(track_id=" << track_id << ", media_item_idx="
-               << (media_item_idx.has_value()
-                       ? absl::StrCat(media_item_idx.value())
-                       : "(null)")
-               << ", fx_idx=" << fx_idx << ")";
+                << (media_item_idx.has_value()
+                        ? absl::StrCat(media_item_idx.value())
+                        : "(null)")
+                << ", fx_idx=" << fx_idx << ")";
 }
 
 void ControlSurface::OnSetLastTouchedTrack(MediaTrack* track_id) {
@@ -495,29 +496,29 @@ void ControlSurface::OnSetMixerScroll(MediaTrack* track_id) {
 void ControlSurface::OnSetPanEx(MediaTrack* track_id,
                                 absl::Span<const double> pan, int mode) {
   VLOG_REAPER() << "OnSetPanEx(track_id=" << track_id << ", pan=["
-               << absl::StrJoin(pan, ", ") << "], mode=" << mode << ")";
+                << absl::StrJoin(pan, ", ") << "], mode=" << mode << ")";
 }
 
 void ControlSurface::OnSetRecvVolume(MediaTrack* track_id, int rec_idx,
                                      double volume) {
   VLOG_REAPER() << "OnSetRecvVolume(track_id=" << track_id
-               << ", rec_idx=" << rec_idx << ", volume=" << volume << ")";
+                << ", rec_idx=" << rec_idx << ", volume=" << volume << ")";
 }
 
 void ControlSurface::OnSetRecvPan(MediaTrack* track_id, int rec_idx,
                                   double pan) {
   VLOG_REAPER() << "OnSetRecvPan(track_id=" << track_id
-               << ", rec_idx=" << rec_idx << ", pan=" << pan << ")";
+                << ", rec_idx=" << rec_idx << ", pan=" << pan << ")";
 }
 
 void ControlSurface::OnSetFxOpen(MediaTrack* track_id, int fx_idx, bool open) {
   VLOG_REAPER() << "OnSetFxOpen(track_id=" << track_id << ", fx_idx=" << fx_idx
-               << ", open=" << open << ")";
+                << ", open=" << open << ")";
 }
 
 void ControlSurface::OnSetFxChange(MediaTrack* track_id, int flags) {
   VLOG_REAPER() << "OnSetFxChange(track_id=" << track_id
-               << ", flags=" << absl::Hex(flags, absl::kZeroPad8) << ")";
+                << ", flags=" << absl::Hex(flags, absl::kZeroPad8) << ")";
 }
 
 void ControlSurface::OnSetProjectMarkerChange() {
@@ -526,7 +527,7 @@ void ControlSurface::OnSetProjectMarkerChange() {
 
 void ControlSurface::OnTrackFxPresetChanged(MediaTrack* track_id, int fx_idx) {
   VLOG_REAPER() << "OnTrackFxPresetChanged(track_id=" << track_id
-               << ", fx_idx=" << fx_idx << ")";
+                << ", fx_idx=" << fx_idx << ")";
 }
 
 bool ControlSurface::OnSupportsExtendedTouch() {
@@ -536,7 +537,7 @@ bool ControlSurface::OnSupportsExtendedTouch() {
 
 void ControlSurface::OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx) {
   VLOG_REAPER() << "OnMidiDeviceRemap(is_out=" << is_out
-               << ", old_idx=" << old_idx << ", new_idx=" << new_idx << ")";
+                << ", old_idx=" << old_idx << ", new_idx=" << new_idx << ")";
 }
 
 //------------------------------------------------------------------------------
