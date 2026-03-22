@@ -129,10 +129,10 @@ void Track::UiVolume(double volume) {
   if (track_id_ == nullptr || volume_ == volume) {
     return;
   }
+  const int flags = AreModifiersOn(kModCtrl) ? (kNoGrouping | kNoGanging) : 0;
   // Done should actually be set based on whether the fader is being touched or
   // not, but that is not yet supported.
-  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
-                   /*ingroupflags=*/0);
+  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true, flags);
   volume_ = volume;
   NotifyListeners();
 }
@@ -155,10 +155,10 @@ void Track::UiPan(double pan) {
   if (track_id_ == nullptr) {
     return;
   }
+  const int flags = AreModifiersOn(kModCtrl) ? (kNoGrouping | kNoGanging) : 0;
   // Done should actually be set based on whether the pan knob is being touched
   // or not, but that is not yet supported (it also isn't possible on XTouch).
-  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
-                /*ingroupflags=*/0);
+  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true, flags);
   pan_ = pan;
   NotifyListeners();
 }

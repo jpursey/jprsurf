@@ -99,7 +99,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   //
   // Volume and Pan:
   // - Ctrl: Changes only this track, ignoring any grouping or ganging.
-  //  (in REAPER this is Shift)
+  //   (in REAPER this is Shift)
   // - Default: Changes this track and any grouped or ganged tracks
   //   proportionally.
   //
