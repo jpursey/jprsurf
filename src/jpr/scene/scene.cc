@@ -25,6 +25,9 @@ Scene::Scene(std::string_view name) : name_(name) {
   properties_.emplace(
       ModifierProperty::kAlt,
       std::make_unique<ModifierProperty>(ModifierProperty::kAlt, kModAlt));
+  properties_.emplace(
+      ModifierProperty::kOpt,
+      std::make_unique<ModifierProperty>(ModifierProperty::kOpt, kModOpt));
 }
 
 Scene::~Scene() = default;

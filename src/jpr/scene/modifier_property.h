@@ -18,17 +18,18 @@ class ModifierProperty : public ViewProperty {
   static constexpr std::string_view kShift = "mod_shift";
   static constexpr std::string_view kCtrl = "mod_ctrl";
   static constexpr std::string_view kAlt = "mod_alt";
+  static constexpr std::string_view kOpt = "mod_opt";
 
   explicit ModifierProperty(std::string_view name, Modifiers modifier)
       : ViewProperty(name, Type::kToggle), modifier_(modifier) {}
 
  protected:
   bool ReadBool() const override { return AreModifiersOn(modifier_); }
-  void WriteBool(bool value) override { 
+  void WriteBool(bool value) override {
     if (value == AreModifiersOn(modifier_)) {
       return;  // No change needed.
     }
-    SetModifiers(modifier_, value); 
+    SetModifiers(modifier_, value);
     NotifyChanged();
   }
 

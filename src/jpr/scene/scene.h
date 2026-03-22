@@ -47,9 +47,9 @@ class Scene final {
   // If no more modifier flags are available, or the property name is already
   // used or reserved, this will return zero.
   //
-  // Modifier properties are already preset for "shift", "ctrl", and "alt"
-  // modifiers, but this allows for up to 61 additional modifiers to be added
-  // for mapping to custom properties.
+  // Modifier properties are already preset for "shift", "ctrl", "alt", and
+  // "opt" modifiers, but this allows for up to 60 additional modifiers to be
+  // added for mapping to custom properties.
   Modifiers AddModifierProperty(std::string_view name);
 
   // Activation and deactivation

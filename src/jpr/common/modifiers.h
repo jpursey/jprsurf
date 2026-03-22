@@ -13,12 +13,13 @@ using Modifiers = uint64_t;
 
 // Standard modifier bit masks, used in common code for "UI" behavior.
 inline constexpr Modifiers kModShift = 1;
-inline constexpr Modifiers kModCtrl = 2;
-inline constexpr Modifiers kModAlt = 4;
+inline constexpr Modifiers kModCtrl = 2;  // Command on Mac
+inline constexpr Modifiers kModAlt = 4;   // Option on Mac
+inline constexpr Modifiers kModOpt = 8;   // Control on Mac, Windows on Windows
 
 // The first available "user" modifier bit mask that can be used for custom
 // modifiers in property
-inline constexpr Modifiers kModUserStart = 8;
+inline constexpr Modifiers kModUserStart = 16;
 
 // Returns the current state of the modifier keys (shift, ctrl, alt, etc.) as a
 // bitmask. The standard modifier bit masks are defined above, but additional
