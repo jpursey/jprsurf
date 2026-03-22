@@ -581,21 +581,26 @@ void ControlSurface::InitViews() {
   // Add global mappings
   auto* root_view = scene_->GetRootView();
   root_view->AddMapping(ViewMapping::kReadWriteControl,
-                        ModifierProperty::kShift, "XTouch/Shift",
+                        ModifierProperty::kShift,
+                        absl::StrCat("XTouch/", DeviceXTouch::kShift),
                         {.read = {.press_release = true}});
   root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kCtrl,
-                        "XTouch/Control", {.read = {.press_release = true}});
+                        absl::StrCat("XTouch/", DeviceXTouch::kControl),
+                        {.read = {.press_release = true}});
   root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kAlt,
-                        "XTouch/Alt", {.read = {.press_release = true}});
+                        absl::StrCat("XTouch/", DeviceXTouch::kAlt),
+                        {.read = {.press_release = true}});
   root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kOpt,
-                        "XTouch/Option", {.read = {.press_release = true}});
+                        absl::StrCat("XTouch/", DeviceXTouch::kOption),
+                        {.read = {.press_release = true}});
   root_view->Enable();
 
   // Add TrackList view with 8 track views, which will correspond to the 8
   // tracks on the X-Touch.
   track_list_view_ = root_view->AddChildView("TrackList");
-  for (int i = 1; i < 9; ++i) {
-    View* track_view = track_list_view_->AddChildView(absl::StrCat("Track", i));
+  for (int i = 0; i < 8; ++i) {
+    View* track_view =
+        track_list_view_->AddChildView(absl::StrCat("Track", i + 1));
     // Sets the context to a track context, so we can map REAPER tracks to the
     // controls.
     track_view->SetTrackContext();
@@ -603,31 +608,33 @@ void ControlSurface::InitViews() {
     // Add all the per-track controls
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kUiSelected,
-                           absl::StrCat("XTouch/Select", i));
+                           absl::StrCat("XTouch/", DeviceXTouch::Select(i)));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kUiMute,
-                           absl::StrCat("XTouch/Mute", i));
+                           absl::StrCat("XTouch/", DeviceXTouch::Mute(i)));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kUiSolo,
-                           absl::StrCat("XTouch/Solo", i));
+                           absl::StrCat("XTouch/", DeviceXTouch::Solo(i)));
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kUiRecArm,
-                           absl::StrCat("XTouch/Rec", i));
-    track_view->AddMapping(
-        ViewMapping::kReadWriteControl, TrackProperties::kUiPan,
-        absl::StrCat("XTouch/Pot", i), {.write = {.mode = 1}});
+                           absl::StrCat("XTouch/", DeviceXTouch::Rec(i)));
+    track_view->AddMapping(ViewMapping::kReadWriteControl,
+                           TrackProperties::kUiPan,
+                           absl::StrCat("XTouch/", DeviceXTouch::Pot(i)),
+                           {.write = {.mode = 1}});
     track_view->AddMapping(
         ViewMapping::kReadControl, TrackProperties::kUiPan,
-        absl::StrCat("XTouch/PotButton", i),
+        absl::StrCat("XTouch/", DeviceXTouch::PotButton(i)),
         {.read = {.property_min = 0.0, .property_max = 0.0}});
     track_view->AddMapping(ViewMapping::kReadWriteControl,
                            TrackProperties::kUiVolume,
-                           absl::StrCat("XTouch/Fader", i));
-    track_view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kName,
-                           absl::StrCat("XTouch/Scribble", i, "Line1"));
-    track_view->AddMapping(ViewMapping::kWriteControl,
-                           TrackProperties::kUiVolume,
-                           absl::StrCat("XTouch/Scribble", i, "Line2"));
+                           absl::StrCat("XTouch/", DeviceXTouch::Fader(i)));
+    track_view->AddMapping(
+        ViewMapping::kWriteControl, TrackProperties::kName,
+        absl::StrCat("XTouch/", DeviceXTouch::Scribble(i, 0)));
+    track_view->AddMapping(
+        ViewMapping::kWriteControl, TrackProperties::kUiVolume,
+        absl::StrCat("XTouch/", DeviceXTouch::Scribble(i, 1)));
     track_view->Enable();
   }
   track_list_view_->SetChildContext(View::ContextType::kTrack);
