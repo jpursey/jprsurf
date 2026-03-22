@@ -577,7 +577,6 @@ void ControlSurface::InitViews() {
   scene_->AddDevice(
       "XTouch", std::make_unique<DeviceXTouch>(device_runner_, xtouch_in_.get(),
                                                xtouch_out_.get()));
-  scene_->AddModifierProperty("mod_option");
 
   // Add global mappings
   auto* root_view = scene_->GetRootView();
@@ -588,7 +587,7 @@ void ControlSurface::InitViews() {
                         "XTouch/Control", {.read = {.press_release = true}});
   root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kAlt,
                         "XTouch/Alt", {.read = {.press_release = true}});
-  root_view->AddMapping(ViewMapping::kReadWriteControl, "mod_option",
+  root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kOpt,
                         "XTouch/Option", {.read = {.press_release = true}});
   root_view->Enable();
 
