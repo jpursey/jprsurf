@@ -647,6 +647,11 @@ void ControlSurface::InitViews() {
 }
 
 void ControlSurface::EnsureTrackIsVisible(Track* track) {
+  // This can happen if we get events for tracks before the TrachCache has been
+  // refreshed which happens only when Run() is called.
+  if (track == nullptr) {
+    return;
+  }
   const int num_tracks_in_view = track_list_view_->GetChildViewCount();
   const int track_index = track->GetIndex();
   const int last_child_context_index =
