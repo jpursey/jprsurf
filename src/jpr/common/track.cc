@@ -132,7 +132,7 @@ void Track::UiVolume(double volume) {
   // Done should actually be set based on whether the fader is being touched or
   // not, but that is not yet supported.
   SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
-    /*ingroupflags=*/0);
+                   /*ingroupflags=*/0);
   volume_ = volume;
   NotifyListeners();
 }
@@ -158,7 +158,7 @@ void Track::UiPan(double pan) {
   // Done should actually be set based on whether the pan knob is being touched
   // or not, but that is not yet supported (it also isn't possible on XTouch).
   SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
-    /*ingroupflags=*/0);
+                /*ingroupflags=*/0);
   pan_ = pan;
   NotifyListeners();
 }
@@ -255,7 +255,6 @@ void Track::DoToggleSelected() {
   NotifyListeners();
 }
 
-
 //------------------------------------------------------------------------------
 // Mute
 //------------------------------------------------------------------------------
@@ -264,9 +263,14 @@ void Track::UiMute() {
   if (track_id_ == nullptr) {
     return;
   }
-  mute_ = !mute_;
-  SetTrackUIMute(track_id_, mute_ ? 1 : 0, /*ingroupflags=*/0);
-  NotifyListeners();
+  DoUiProperty(
+      mute_,
+      +[](MediaTrack* track_id) {
+        int flags = 0;
+        GetTrackState(track_id, &flags);
+        return (flags & 8) != 0;
+      },
+      SetTrackUIMute);
 }
 
 void Track::SetMute(bool mute) {
@@ -286,9 +290,14 @@ void Track::UiSolo() {
   if (track_id_ == nullptr) {
     return;
   }
-  solo_ = !solo_;
-  SetTrackUISolo(track_id_, solo_ ? 1 : 0, /*ingroupflags=*/0);
-  NotifyListeners();
+  DoUiProperty(
+      solo_,
+      +[](MediaTrack* track_id) {
+        int flags = 0;
+        GetTrackState(track_id, &flags);
+        return (flags & 16) != 0;
+      },
+      SetTrackUISolo);
 }
 
 void Track::SetSolo(bool solo) {
@@ -308,9 +317,14 @@ void Track::UiRecArm() {
   if (track_id_ == nullptr) {
     return;
   }
-  rec_arm_ = !rec_arm_;
-  SetTrackUIRecArm(track_id_, rec_arm_ ? 1 : 0, /*ingroupflags=*/0);
-  NotifyListeners();
+  DoUiProperty(
+      rec_arm_,
+      +[](MediaTrack* track_id) {
+        int flags = 0;
+        GetTrackState(track_id, &flags);
+        return (flags & 64) != 0;
+      },
+      SetTrackUIRecArm);
 }
 
 void Track::SetRecArm(bool rec_arm) {
@@ -321,6 +335,106 @@ void Track::SetRecArm(bool rec_arm) {
   rec_arm_ = rec_arm;
   NotifyListeners();
 }
+
+//------------------------------------------------------------------------------
+// Generalized boolean property handling for mute, solo, and record arm, which
+// all have similar behavior with ganging, grouping, and modifiers.
+//------------------------------------------------------------------------------
+
+void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
+                         SetPropertyFn set_property) {
+  // Handle clear/set-only functionality.
+  if (AreModifiersOn(kModAlt)) {
+    // First, we clear the property for all tracks.
+    for (Track* track : TrackCache::Get().GetTracks()) {
+      if (get_property(track->track_id_)) {
+        set_property(track->track_id_, false, kNoGrouping | kNoGanging);
+      }
+    }
+    if (AreModifiersOn(kModCtrl)) {
+      set_property(track_id_, true, kNoGrouping | kNoGanging);
+      TrackCache::Get().SetLastTouchedTrack(this);
+      if (!property) {
+        property = true;
+        NotifyListeners();
+      }
+    } else if (AreModifiersOn(kModShift)) {
+      set_property(track_id_, true, /*ingroupflags=*/0);
+      TrackCache::Get().SetLastTouchedTrack(this);
+      if (!property) {
+        property = true;
+        NotifyListeners();
+      }
+    } else {
+      if (property) {
+        property = false;
+        NotifyListeners();
+      }
+    }
+    return;
+  }
+
+  // Handle ranged set/clear functionality
+  if (AreModifiersOn(kModShift)) {
+    Track* last_touched_track = TrackCache::Get().GetLastTouchedTrack();
+    bool require_same_parent = !AreModifiersOn(kModCtrl);
+
+    // We iterate over *all* tracks in the project, and only set the property
+    // value of tracks which are between the last touched track and this track
+    // in the track list.
+    int first_index = last_touched_track->GetGlobalIndex();
+    int last_index = GetGlobalIndex();
+    if (first_index > last_index) {
+      std::swap(first_index, last_index);
+    }
+
+    auto tracks = TrackCache::Get().GetTracks();
+    bool value = get_property(last_touched_track->track_id_);
+    for (int i = first_index; i <= last_index; ++i) {
+      Track* track = tracks[i];
+      if (require_same_parent &&
+          track->GetParentTrack() != last_touched_track->GetParentTrack()) {
+        continue;
+      }
+      if (value != get_property(track->track_id_)) {
+        set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
+      }
+    }
+    return;
+  }
+
+  if (AreModifiersOn(kModOpt)) {
+    set_property(track_id_, !property ? 1 : 0, kNoGrouping | kNoGanging);
+    if (IsTrackSelected(track_id_)) {
+      TrackCache::Get().SetLastTouchedTrack(this);
+      int selected_count = CountSelectedTracks(nullptr);
+      for (int i = 0; i < selected_count; ++i) {
+        Track* track = TrackCache::Get().GetTrack(GetSelectedTrack(nullptr, i));
+        if (track->GetTrackId() == track_id_) {
+          continue;
+        }
+        set_property(track->track_id_, !get_property(track->track_id_) ? 1 : 0,
+                     kNoGrouping | kNoGanging);
+      }
+    }
+    property = !property;
+    NotifyListeners();
+    return;
+  }
+
+  if (AreModifiersOn(kModCtrl)) {
+    set_property(track_id_, !property ? 1 : 0, kNoGrouping | kNoGanging);
+  } else {
+    set_property(track_id_, !property ? 1 : 0, /*ingroupflags=*/0);
+  }
+  property = !property;
+  TrackCache::Get().SetLastTouchedTrack(this);
+  NotifyListeners();
+}
+
+//------------------------------------------------------------------------------
+// Listeners
+//------------------------------------------------------------------------------
 
 void Track::Subscribe(TrackListener* listener) { listeners_.insert(listener); }
 

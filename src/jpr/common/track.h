@@ -94,22 +94,50 @@ class Track final : public std::enable_shared_from_this<Track> {
   //
   // Modifiers are also applied to these actions if mapped on the control
   // surface, which provide similar behavior to REAPER, but the mappings are
-  // different:
+  // different. Mappings are checked in the declared order as listed below. The
+  // first set of modifiers that match will trigger the behavior.
   //
   // Volume and Pan:
-  // - None: Changes this track and any grouped or ganged tracks proportionally.
   // - Ctrl: Changes only this track, ignoring any grouping or ganging.
   //  (in REAPER this is Shift)
+  // - Default: Changes this track and any grouped or ganged tracks
+  //   proportionally.
   //
   // Selected:
-  // - None: Selects this track and unselects all other tracks. Sets the last
-  //   touched track.
-  // - Ctrl: Toggles selection of this track without affecting any other tracks.
-  //   Sets the last touched track. (Same ias in REAPER)
-  // - Shift: Selects all tracks between the last selected track and this track
-  //   that share the same parent track. (Not available in REAPER)
   // - Ctrl+Shift: Selects all tracks between the last selected track and this
   //   regardless of parent track. (In REAPER this is Shift)
+  // - Shift: Selects all tracks between the last selected track and this track
+  //   that share the same parent track. (Not available in REAPER)
+  // - Ctrl: Toggles selection of this track without affecting any other tracks.
+  //   Sets the last touched track. (Same ias in REAPER)
+  // - Default: Selects this track and unselects all other tracks. Sets the last
+  //   touched track.
+  //
+  // Mute, Solo, and Rec Arm:
+  // - Ctrl+Alt: Clears the property for all tracks, but sets the property on
+  //   for this track alone, ignoring any ganged or grouped tracks. Sets the
+  //   last touched track. (Not available in REAPER)
+  // - Shift+Alt: Clears the property for all tracks, but sets the property on
+  //   for this track and any ganged or grouped tracks. Sets the last touched
+  //   track. (Not available in REAPER)
+  // - Alt: Clears the property for all tracks, including this track. (In REAPER
+  //   this is Ctrl).
+  // - Ctrl+Shift: Sets the property for all tracks between the last touched
+  //   track and this track to be the value of the last touced track's property
+  //   value regardless of parent track. Track grouping is ignored. (Not
+  //   available in REAPER)
+  // - Shift: Sets the property for all tracks between the last touched track
+  //   and this track to be the value of the last touced track's property value
+  //   if they have the same parent track. Track grouping is ignored. (Not
+  //   available in REAPER)
+  // - Option: Toggles the property for this track and any ganged tracks (they
+  //   each get individually toggled). Track grouping is ignored. (Not available
+  //   in REAPER)
+  // - Ctrl: Toggles the property for this track, but ignores any grouping or
+  //   ganging. Sets the last touched track. (In REAPER this is Shift)
+  // - Default: Toogles the property for this track, and sets all ganged /
+  //   grouped tracks to the same value. Sets the last touched track. (Same as
+  //   in REAPER)
   void UiVolume(double volume);
   void UiPan(double pan);
   void UiSelected();
@@ -165,6 +193,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   Track(Private, const Guid& guid, MediaTrack* track_id);
 
  private:
+  using SetPropertyFn = int (*)(MediaTrack* track, int value, int ingroupflags);
+  using GetPropertyFn = bool (*)(MediaTrack* track);
+
   // Performs the actual refresh logic to update both the track ID and the
   // corresponding cached state for this track.
   void DoRefresh(MediaTrack* track_id);
@@ -172,8 +203,13 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
 
-  // Toggles the selected state and notifies listeners.
+  // Toggles the internal selected state, potentially sets the last touched
+  // track, and notifies listeners.
   void DoToggleSelected();
+
+  // Generic form for a UI property.
+  void DoUiProperty(bool& property, GetPropertyFn get_property,
+                    SetPropertyFn set_property);
 
   // Track identification. The Guid may be empty and the track_id may be null.
   Guid guid_;
