@@ -129,10 +129,8 @@ void Track::UiVolume(double volume) {
   if (track_id_ == nullptr || volume_ == volume) {
     return;
   }
-  const int flags = AreModifiersOn(kModCtrl) ? (kNoGrouping | kNoGanging) : 0;
-  // Done should actually be set based on whether the fader is being touched or
-  // not, but that is not yet supported.
-  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true, flags);
+  CSurf_OnVolumeChangeEx(track_id_, volume, /*relative=*/false,
+                         /*allowgang=*/!AreModifiersOn(kModCtrl));
   volume_ = volume;
   NotifyListeners();
 }
@@ -141,8 +139,8 @@ void Track::SetVolume(double volume) {
   if (track_id_ == nullptr || volume_ == volume) {
     return;
   }
-  SetTrackUIVolume(track_id_, volume, /*relative=*/false, /*done=*/true,
-                   kNoGrouping | kNoGanging);
+  CSurf_OnVolumeChangeEx(track_id_, volume, /*relative=*/false,
+                         /*allowgang=*/false);
   volume_ = volume;
   NotifyListeners();
 }
@@ -155,10 +153,8 @@ void Track::UiPan(double pan) {
   if (track_id_ == nullptr) {
     return;
   }
-  const int flags = AreModifiersOn(kModCtrl) ? (kNoGrouping | kNoGanging) : 0;
-  // Done should actually be set based on whether the pan knob is being touched
-  // or not, but that is not yet supported (it also isn't possible on XTouch).
-  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true, flags);
+  CSurf_OnPanChangeEx(track_id_, pan, /*relative=*/false,
+                      /*allowgang=*/!AreModifiersOn(kModCtrl));
   pan_ = pan;
   NotifyListeners();
 }
@@ -167,8 +163,7 @@ void Track::SetPan(double pan) {
   if (track_id_ == nullptr || pan_ == pan) {
     return;
   }
-  SetTrackUIPan(track_id_, pan, /*relative=*/false, /*done=*/true,
-                kNoGrouping | kNoGanging);
+  CSurf_OnPanChangeEx(track_id_, pan, /*relative=*/false, /*allowgang=*/false);
   pan_ = pan;
   NotifyListeners();
 }
@@ -264,7 +259,7 @@ void Track::UiMute() {
     return;
   }
   DoUiProperty(
-      mute_,
+      mute_, "JPR:Toggle Mute",
       +[](MediaTrack* track_id) {
         int flags = 0;
         GetTrackState(track_id, &flags);
@@ -278,6 +273,7 @@ void Track::SetMute(bool mute) {
     return;
   }
   SetTrackUIMute(track_id_, mute ? 1 : 0, kNoGrouping | kNoGanging);
+  Undo_OnStateChangeEx("JPR:Toggle Mute", UNDO_STATE_TRACKCFG, -1);
   mute_ = mute;
   NotifyListeners();
 }
@@ -291,7 +287,7 @@ void Track::UiSolo() {
     return;
   }
   DoUiProperty(
-      solo_,
+      solo_, "JPR:Toggle Solo",
       +[](MediaTrack* track_id) {
         int flags = 0;
         GetTrackState(track_id, &flags);
@@ -305,6 +301,7 @@ void Track::SetSolo(bool solo) {
     return;
   }
   SetTrackUISolo(track_id_, solo ? 1 : 0, kNoGrouping | kNoGanging);
+  Undo_OnStateChangeEx("JPR:Toggle Solo", UNDO_STATE_TRACKCFG, -1);
   solo_ = solo;
   NotifyListeners();
 }
@@ -318,7 +315,7 @@ void Track::UiRecArm() {
     return;
   }
   DoUiProperty(
-      rec_arm_,
+      rec_arm_, "JPR:Toggle Record Arm",
       +[](MediaTrack* track_id) {
         int flags = 0;
         GetTrackState(track_id, &flags);
@@ -332,6 +329,7 @@ void Track::SetRecArm(bool rec_arm) {
     return;
   }
   SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, kNoGrouping | kNoGanging);
+  Undo_OnStateChangeEx("JPR:Toggle Record Arm", UNDO_STATE_TRACKCFG, -1);
   rec_arm_ = rec_arm;
   NotifyListeners();
 }
@@ -341,13 +339,21 @@ void Track::SetRecArm(bool rec_arm) {
 // all have similar behavior with ganging, grouping, and modifiers.
 //------------------------------------------------------------------------------
 
-void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
+void Track::DoUiProperty(bool& property, const char* undo_entry,
+                         GetPropertyFn get_property,
                          SetPropertyFn set_property) {
   // Handle clear/set-only functionality.
   if (AreModifiersOn(kModAlt)) {
     // First, we clear the property for all tracks.
+    bool this_track_changed = false;
+    bool other_tracks_changed = false;
     for (Track* track : TrackCache::Get().GetTracks()) {
       if (get_property(track->track_id_)) {
+        if (track->track_id_ == track_id_) {
+          this_track_changed = true;
+        } else {
+          other_tracks_changed = true;
+        }
         set_property(track->track_id_, false, kNoGrouping | kNoGanging);
       }
     }
@@ -355,6 +361,7 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
       set_property(track_id_, true, kNoGrouping | kNoGanging);
       TrackCache::Get().SetLastTouchedTrack(this);
       if (!property) {
+        this_track_changed = !this_track_changed;
         property = true;
         NotifyListeners();
       }
@@ -362,6 +369,7 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
       set_property(track_id_, true, /*ingroupflags=*/0);
       TrackCache::Get().SetLastTouchedTrack(this);
       if (!property) {
+        this_track_changed = this_track_changed;
         property = true;
         NotifyListeners();
       }
@@ -370,6 +378,9 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
         property = false;
         NotifyListeners();
       }
+    }
+    if (this_track_changed || other_tracks_changed) {
+      Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
     }
     return;
   }
@@ -390,6 +401,7 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
 
     auto tracks = TrackCache::Get().GetTracks();
     bool value = get_property(last_touched_track->track_id_);
+    bool any_changed = false;
     for (int i = first_index; i <= last_index; ++i) {
       Track* track = tracks[i];
       if (require_same_parent &&
@@ -398,7 +410,11 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
       }
       if (value != get_property(track->track_id_)) {
         set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
+        any_changed = true;
       }
+    }
+    if (any_changed) {
+      Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
     }
     return;
   }
@@ -419,6 +435,7 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
     }
     property = !property;
     NotifyListeners();
+    Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
     return;
   }
 
@@ -430,6 +447,7 @@ void Track::DoUiProperty(bool& property, GetPropertyFn get_property,
   property = !property;
   TrackCache::Get().SetLastTouchedTrack(this);
   NotifyListeners();
+  Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
 }
 
 //------------------------------------------------------------------------------

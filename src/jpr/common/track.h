@@ -208,8 +208,8 @@ class Track final : public std::enable_shared_from_this<Track> {
   void DoToggleSelected();
 
   // Generic form for a UI property.
-  void DoUiProperty(bool& property, GetPropertyFn get_property,
-                    SetPropertyFn set_property);
+  void DoUiProperty(bool& property, const char* undo_entry,
+                    GetPropertyFn get_property, SetPropertyFn set_property);
 
   // Track identification. The Guid may be empty and the track_id may be null.
   Guid guid_;
