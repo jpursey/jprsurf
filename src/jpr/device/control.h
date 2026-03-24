@@ -171,7 +171,7 @@ class Control final {
   ~Control();
 
   //----------------------------------------------------------------------------
-  // Accessors
+  // Properties
   //----------------------------------------------------------------------------
 
   // Access to configuration options for this control.
@@ -183,9 +183,25 @@ class Control final {
   Outputs GetOutputs() const { return output_types_; }
   Binding GetBinding() const { return binding_; }
 
-  // Returns the number of modes supported by this control's outputs. This is
-  // the maximum mode count across all output types.
-  int GetModeCount() const;
+  //----------------------------------------------------------------------------
+  // Input accessors
+  //----------------------------------------------------------------------------
+
+  // Registers an input with the given configuration. The returned handle
+  // manages the lifetime of the registration; when the handle is destroyed,
+  // the input is automatically unregistered.
+  //
+  // The flag pointer will be set to true whenever the virtual input has new
+  // data available. The flag pointer must remain valid for the lifetime of the
+  // returned handle.
+  //
+  // The returned handle's GetId() can be passed to GetValue(), GetDelta(),
+  // GetPressCount(), and IsPressed() to query the virtual input state.
+  ControlInputHandle RegisterInput(const InputConfig& config, bool* flag);
+
+  // Unregisters the input with the given ID. This is called automatically by
+  // ControlInputHandle's destructor; it should not normally be called directly.
+  void UnregisterInput(InputId id);
 
   // Returns the current value of the Value input for the given registered
   // input, or 0.0 if the input ID is not valid or not a Value input.
@@ -206,6 +222,14 @@ class Control final {
   // is not currently pressed, or it does not support release signals.
   bool IsPressed(InputId id) const;
 
+  //----------------------------------------------------------------------------
+  // Output accessors
+  //----------------------------------------------------------------------------
+
+  // Returns the number of modes supported by this control's outputs. This is
+  // the maximum mode count across all output types.
+  int GetModeCount() const;
+
   // Sets the value of the CValue output, if it exists. If there is no CValue
   // output, this does nothing.
   void SetCValue(double value, int mode = 0);
@@ -225,30 +249,6 @@ class Control final {
   // Sets the color of the Color output, if it exists. If there is no Color
   // output, this does nothing.
   void SetColor(Color color, int mode = 0);
-
-  //----------------------------------------------------------------------------
-  // Input registration
-  //----------------------------------------------------------------------------
-
-  // Registers an input with the given configuration. The returned handle
-  // manages the lifetime of the registration; when the handle is destroyed,
-  // the input is automatically unregistered.
-  //
-  // The flag pointer will be set to true whenever the virtual input has new
-  // data available. The flag pointer must remain valid for the lifetime of the
-  // returned handle.
-  //
-  // The returned handle's GetId() can be passed to GetValue(), GetDelta(),
-  // GetPressCount(), and IsPressed() to query the virtual input state.
-  ControlInputHandle RegisterInput(const InputConfig& config, bool* flag);
-
-  // Unregisters the input with the given ID. This is called automatically by
-  // ControlInputHandle's destructor; it should not normally be called directly.
-  void UnregisterInput(InputId id);
-
-  //----------------------------------------------------------------------------
-  // Operations
-  //----------------------------------------------------------------------------
 
  private:
   friend class ControlInputHandle;
