@@ -10,6 +10,7 @@
 #include "absl/functional/any_invocable.h"
 #include "gb/base/flags.h"
 #include "jpr/device/control.h"
+#include "jpr/device/control_input_handle.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
@@ -37,6 +38,21 @@ class ViewMapping final {
                                                   Type::kWriteControl};
 
   struct ReadConfig {
+    // The type of physical input to use for reading the control. If not set,
+    // the mapping will automatically choose the best input type based on the
+    // property type and available inputs.
+    std::optional<ControlInput::Type> input_type;
+
+    // The modifier keys that must be active for this input to trigger. When
+    // multiple mappings exist for the same control and input type, modifiers
+    // are used for mutual exclusivity.
+    Modifiers required_modifiers = 0;
+
+    // The press behavior for this mapping. Only meaningful for press input
+    // types and is ignored for value and delta inputs.
+    InputConfig::PressBehavior press_behavior =
+        InputConfig::PressBehavior::kNormal;
+
     // If set, the minimum and maximum values for the property that the control
     // maps to. If not set, the default mapping will be used (e.g. for a pan
     // property, -1 maps to min and 1 maps to max). The values must match the
@@ -139,9 +155,10 @@ class ViewMapping final {
   ViewProperty* property_;
   Control* control_;
   Config config_;
-  absl::AnyInvocable<void(ViewProperty&, Control&)> read_control_;
+  absl::AnyInvocable<void(ViewProperty&, Control&, InputId)> read_control_;
   WriteSyncFunction* write_control_;
-  std::optional<ControlInput::Type> input_type_;
+  InputConfig input_config_;
+  ControlInputHandle input_handle_;
   bool enabled_ = true;
   bool active_ = false;
   bool control_changed_ = false;

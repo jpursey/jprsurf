@@ -72,6 +72,9 @@ class ControlValueInput : public ControlInput {
   // to change the listener (which may be nullptr).
   void SetListener(Listener listener) { listener_ = std::move(listener); }
 
+  // Returns true if a listener is currently set for this input.
+  bool HasListener() const { return listener_ != nullptr; }
+
   // Returns the current value of this input, which is always in the range
   // [0.0, 1.0].
   double GetValue() const { return value_; }
@@ -115,6 +118,9 @@ class ControlDeltaInput : public ControlInput {
   // The listener must outlive the input or until SetListener() is called again
   // to change the listener (which may be nullptr).
   void SetListener(Listener listener) { listener_ = std::move(listener); }
+
+  // Returns true if a listener is currently set for this input.
+  bool HasListener() const { return listener_ != nullptr; }
 
   // Returns the current accumulated delta value of this input, which can be
   // positive or negative, and resets the delta back to zero.
@@ -172,6 +178,9 @@ class ControlPressInput : public ControlInput {
   // The listener must outlive the input or until SetListener() is called again
   // to change the listener (which may be nullptr).
   void SetListener(Listener listener) { listener_ = std::move(listener); }
+
+  // Returns true if a listener is currently set for this input.
+  bool HasListener() const { return listener_ != nullptr; }
 
   // Returns true if this input supports release signals. If this returns false,
   // the input will always report that it is not pressed, and the caller should

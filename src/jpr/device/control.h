@@ -10,12 +10,15 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "gb/base/flags.h"
 #include "jpr/common/color.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/control_input.h"
+#include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output.h"
 
 namespace jpr {
@@ -184,22 +187,24 @@ class Control final {
   // the maximum mode count across all output types.
   int GetModeCount() const;
 
-  // Returns the current value of Value input, or 0.0 if there is no Value
-  // input.
-  double GetValue() const;
+  // Returns the current value of the Value input for the given registered
+  // input, or 0.0 if the input ID is not valid or not a Value input.
+  double GetValue(InputId id) const;
 
-  // Returns the current accumulated delta value of the Delta input, or 0.0 if
-  // there is no Delta input, or it has not changed since Reset().
-  double GetDelta() const;
+  // Returns the current accumulated delta value of the Delta input for the
+  // given registered input, or 0.0 if the input ID is not valid or not a Delta
+  // input, or it has not changed since the last sync.
+  double GetDelta(InputId id) const;
 
-  // Returns the press count of the Press input, or 0 if there is no Press
-  // input, or it has not been pressed since Reset().
-  int GetPressCount() const;
+  // Returns the press count of the Press input for the given registered input,
+  // or 0 if the input ID is not valid or not a Press input, or it has not been
+  // pressed since the last sync.
+  int GetPressCount(InputId id) const;
 
-  // Returns true if the Press input is currently pressed, or false if there is
-  // no Press input, or it is not currently pressed, or it does not support
-  // release signals.
-  bool IsPressed() const;
+  // Returns true if the Press input for the given registered input is currently
+  // pressed, or false if the input ID is not valid or not a Press input, or it
+  // is not currently pressed, or it does not support release signals.
+  bool IsPressed(InputId id) const;
 
   // Sets the value of the CValue output, if it exists. If there is no CValue
   // output, this does nothing.
@@ -222,23 +227,83 @@ class Control final {
   void SetColor(Color color, int mode = 0);
 
   //----------------------------------------------------------------------------
-  // Input change notifications
+  // Input registration
   //----------------------------------------------------------------------------
 
-  // Registers a boolean flag to be set to true whenever the specified input
-  // type changes. The flag pointer must remain valid until it is unregistered.
+  // Registers an input with the given configuration. The returned handle
+  // manages the lifetime of the registration; when the handle is destroyed,
+  // the input is automatically unregistered.
   //
-  // When the first flag is registered for an input type, the Control will
-  // begin listening for changes on that input. When the last flag is
-  // unregistered, the listener is removed.
-  void RegisterInputFlag(ControlInput::Type input_type, bool* flag);
-  void UnregisterInputFlag(ControlInput::Type input_type, bool* flag);
+  // The flag pointer will be set to true whenever the virtual input has new
+  // data available. The flag pointer must remain valid for the lifetime of the
+  // returned handle.
+  //
+  // The returned handle's GetId() can be passed to GetValue(), GetDelta(),
+  // GetPressCount(), and IsPressed() to query the virtual input state.
+  ControlInputHandle RegisterInput(const InputConfig& config, bool* flag);
+
+  // Unregisters the input with the given ID. This is called automatically by
+  // ControlInputHandle's destructor; it should not normally be called directly.
+  void UnregisterInput(InputId id);
 
   //----------------------------------------------------------------------------
   // Operations
   //----------------------------------------------------------------------------
 
  private:
+  friend class ControlInputHandle;
+
+  // Per-registration state for a virtual input.
+  struct InputRegistration {
+    InputConfig config;
+    bool* flag = nullptr;
+
+    // Computed modifier masks (recomputed when registrations change).
+    // This registration triggers when all on_mask modifiers are on AND all
+    // off_mask modifiers are off.
+    Modifiers on_mask = 0;
+    Modifiers off_mask = 0;
+
+    // Virtual input state.
+    double value = 0.0;       // For kValue inputs.
+    double delta = 0.0;       // For kDelta inputs.
+    int press_count = 0;      // For kPress inputs.
+    bool is_pressed = false;  // For kPress inputs.
+  };
+
+  // Press timing state for a group of press registrations that share the same
+  // modifier on/off masks. This tracks whether we need to defer press delivery
+  // due to long-press or double-press siblings.
+  struct PressGroup {
+    // Press timing state machine.
+    enum class State {
+      kIdle,
+      // Physical button is held, waiting for release or long press timeout.
+      kPendingLong,
+      // Physical button is held, waiting for release only (no long-press
+      // sibling). Times out after the double press window, delivering a normal
+      // press, since a double press is no longer possible.
+      kPendingRelease,
+      // Short press released, waiting for second press or double-press timeout.
+      kPendingDouble,
+    };
+
+    Modifiers on_mask = 0;
+    Modifiers off_mask = 0;
+
+    // IDs of registrations in this group, by press behavior.
+    std::vector<InputId> normal_ids;
+    std::vector<InputId> long_press_ids;
+    std::vector<InputId> double_press_ids;
+
+    State state = State::kIdle;
+    double state_start_time = 0.0;
+
+    // The number of press events that occurred during the first press (should
+    // be 1, but tracked for correctness).
+    int pending_press_count = 0;
+  };
+
   struct PendingOutput {
     std::variant<double, int, std::string, Color> value;
     int mode = 0;
@@ -246,11 +311,24 @@ class Control final {
 
   void OnRun(const RunTime& time);
   void UpdateRunHandle();
-  void ResetInputs();
+  void ResetVirtualInputs();
+  void UpdatePressTimers(double current_time);
   void SendPendingOutput();
   void SetInputListener(ControlInput::Type input_type);
   void ClearInputListener(ControlInput::Type input_type);
-  void NotifyInputFlags(ControlInput::Type input_type);
+  void OnValueInputChanged();
+  void OnDeltaInputChanged();
+  void OnPressInputChanged();
+  void OnPressInputChangedWithRelease();
+  void OnPressInputChangedWithoutRelease();
+  void RecomputeModifierMasks(ControlInput::Type input_type);
+  void RebuildPressGroups();
+  bool CheckModifiers(const InputRegistration& reg) const;
+  PressGroup* FindPressGroup(Modifiers on_mask, Modifiers off_mask);
+  void DeliverNormalPress(PressGroup& group);
+  void DeliverLongPress(PressGroup& group);
+  void DeliverDoublePress(PressGroup& group);
+  bool HasRegistrations() const { return !registrations_.empty(); }
 
   // Constructed state.
   RunRegistry& run_registry_;
@@ -269,12 +347,16 @@ class Control final {
 
   // Runtime state.
   RunHandle run_handle_;
-  double last_run_time_;
+  double last_run_time_ = 0.0;
   std::optional<double> last_input_time_;
   std::optional<PendingOutput> pending_output_;
-  absl::flat_hash_set<bool*> value_input_flags_;
-  absl::flat_hash_set<bool*> delta_input_flags_;
-  absl::flat_hash_set<bool*> press_input_flags_;
+
+  // Input registration state.
+  int next_input_id_ = 1;
+  absl::flat_hash_map<InputId, InputRegistration> registrations_;
+
+  // Press timing groups (rebuilt when press registrations change).
+  std::vector<PressGroup> press_groups_;
 };
 
 }  // namespace jpr
