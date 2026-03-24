@@ -89,8 +89,8 @@ const Button kButtons[] = {
     {DeviceXTouch::kChannelLeft, 0x30, true, false},
     {DeviceXTouch::kChannelRight, 0x31, true, false},
     // Master fader buttons.
-    {DeviceXTouch::kGlobal, 0x32, true, false},
-    {DeviceXTouch::kFlip, 0x33, true, false},
+    {DeviceXTouch::kFlip, 0x32, true, false},
+    {DeviceXTouch::kGlobal, 0x33, true, false},
     // Display buttons.
     {DeviceXTouch::kShowNameValue, 0x34, true, false},
     {DeviceXTouch::kShowTimeBeats, 0x35, true, false},
