@@ -60,15 +60,30 @@ class View final {
   static constexpr std::string_view kBankDec = "bank_dec";
   static constexpr std::string_view kBankInc = "bank_inc";
 
+  // This switches the context of this track to be its parent track if this view
+  // has a kTrack context.
+  static constexpr std::string_view kTrackParent = "track_parent";
+
+  // This switches the context of this track to be the root track (no context)
+  // if this view has a kTrack context.
+  static constexpr std::string_view kTrackRoot = "track_root";
+
   // Tells the parent view to be the same track view as this view if both this
   // view has the kTrack context and its parent has a child kTrack context. This
   // effectively results in navigating "in" to the current track.
-  static constexpr std::string_view kTrackChild = "track_child";
+  static constexpr std::string_view kParentTrackChild = "parent_track_child";
 
-  // Tells the parent view to change to its track context's parent track if both
-  // this view has the kTrack context and its parent has a child kTrack context.
-  // This effectively results in navigating "up" to the parent track.
-  static constexpr std::string_view kTrackParent = "track_parent";
+  // If this view has a kTrack context, and its parent view has a child kTrack
+  // context, this will tell the parent view to switch to its parent track. This
+  // is effectively results in navigating "up" to the parent track from a child
+  // track.
+  static constexpr std::string_view kParentTrackParent = "parent_track_parent";
+
+  // If this view has a kTrack context, and its parent view has a child kTrack
+  // context, this will tell the parent view to switch to the root (no context).
+  // This is effectively results in navigating "out" to the top level tracks
+  // from a child track.
+  static constexpr std::string_view kParentTrackRoot = "parent_track_root";
 
   //----------------------------------------------------------------------------
   // Construction / Destruction
@@ -246,8 +261,11 @@ class View final {
 
   class ChildIndexOffsetProperty;
   class ChildIndexBankOffsetProperty;
-  class TrackChildProperty;
   class TrackParentProperty;
+  class TrackRootProperty;
+  class ParentTrackChildProperty;
+  class ParentTrackParentProperty;
+  class ParentTrackRootProperty;
 
   View(Scene* scene, View* parent_view, std::string_view name);
 

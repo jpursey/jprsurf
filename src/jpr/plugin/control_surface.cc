@@ -644,14 +644,14 @@ void ControlSurface::InitViews() {
           ViewMapping::kReadWriteControl, TrackProperties::kUiSelected,
           absl::StrCat(device_prefix, DeviceXTouch::Select(i)));
       track_view->AddMapping(
-          ViewMapping::kReadControl, View::kTrackChild,
-          absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
-          {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-      track_view->AddMapping(
-          ViewMapping::kReadControl, View::kTrackParent,
+          ViewMapping::kReadControl, View::kParentTrackChild,
           absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
           {.read = {.press_behavior =
                         InputConfig::PressBehavior::kDoublePress}});
+      track_view->AddMapping(
+          ViewMapping::kReadControl, View::kParentTrackParent,
+          absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
+          {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
       track_view->AddMapping(
           ViewMapping::kReadWriteControl, TrackProperties::kUiMute,
           absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
@@ -683,14 +683,21 @@ void ControlSurface::InitViews() {
   }
   track_list_view_->SetChildContext(View::ContextType::kTrack);
   if (has_xtouch) {
-    track_list_view_->AddMapping(ViewMapping::kReadControl, View::kChildDec,
-                                 "XTouch/ChannelLeft");
-    track_list_view_->AddMapping(ViewMapping::kReadControl, View::kChildInc,
-                                 "XTouch/ChannelRight");
-    track_list_view_->AddMapping(ViewMapping::kReadControl, View::kBankDec,
-                                 "XTouch/BankLeft");
-    track_list_view_->AddMapping(ViewMapping::kReadControl, View::kBankInc,
-                                 "XTouch/BankRight");
+    track_list_view_->AddMapping(
+        ViewMapping::kReadControl, View::kTrackRoot,
+        absl::StrCat("XTouch/", DeviceXTouch::kGlobal));
+    track_list_view_->AddMapping(
+        ViewMapping::kReadControl, View::kChildDec,
+        absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));
+    track_list_view_->AddMapping(
+        ViewMapping::kReadControl, View::kChildInc,
+        absl::StrCat("XTouch/", DeviceXTouch::kChannelRight));
+    track_list_view_->AddMapping(
+        ViewMapping::kReadControl, View::kBankDec,
+        absl::StrCat("XTouch/", DeviceXTouch::kBankLeft));
+    track_list_view_->AddMapping(
+        ViewMapping::kReadControl, View::kBankInc,
+        absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
   }
   track_list_view_->Enable();
 

@@ -46,11 +46,55 @@ class View::ChildIndexBankOffsetProperty : public ChildIndexOffsetProperty {
   int GetStepSize() const override { return GetView()->GetBankSize(); }
 };
 
-class View::TrackChildProperty : public ViewProperty {
+class View::TrackParentProperty : public ViewProperty {
  public:
-  explicit TrackChildProperty(View* view, std::string_view name)
+  explicit TrackParentProperty(View* view, std::string_view name)
       : ViewProperty(name, Type::kAction), view_(view) {}
-  ~TrackChildProperty() override = default;
+  ~TrackParentProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    if (view_->GetContextType() != View::ContextType::kTrack) {
+      return;
+    }
+    auto& track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(view_->context_);
+    DCHECK(track_properties != nullptr);
+    Track* parent_track = track_properties->GetTrack()->GetParentTrack();
+    if (parent_track != nullptr) {
+      view_->SetTrackContext(parent_track, 0);
+    } else {
+      view_->ClearContext(0);
+    }
+  }
+
+ private:
+  View* const view_;
+};
+
+class View::TrackRootProperty : public ViewProperty {
+ public:
+  explicit TrackRootProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~TrackRootProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    if (view_->GetContextType() != View::ContextType::kTrack) {
+      return;
+    }
+    view_->ClearContext(0);
+  }
+
+ private:
+  View* const view_;
+};
+
+class View::ParentTrackChildProperty : public ViewProperty {
+ public:
+  explicit ParentTrackChildProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~ParentTrackChildProperty() override = default;
 
  protected:
   void TriggerAction() override {
@@ -74,11 +118,11 @@ class View::TrackChildProperty : public ViewProperty {
   View* const view_;
 };
 
-class View::TrackParentProperty : public ViewProperty {
+class View::ParentTrackParentProperty : public ViewProperty {
  public:
-  explicit TrackParentProperty(View* view, std::string_view name)
+  explicit ParentTrackParentProperty(View* view, std::string_view name)
       : ViewProperty(name, Type::kAction), view_(view) {}
-  ~TrackParentProperty() override = default;
+  ~ParentTrackParentProperty() override = default;
 
  protected:
   void TriggerAction() override {
@@ -113,6 +157,27 @@ class View::TrackParentProperty : public ViewProperty {
   View* const view_;
 };
 
+class View::ParentTrackRootProperty : public ViewProperty {
+ public:
+  explicit ParentTrackRootProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~ParentTrackRootProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    if (view_->GetContextType() != View::ContextType::kTrack ||
+        view_->GetParentView() == nullptr ||
+        view_->GetParentView()->GetChildContextType() !=
+            View::ContextType::kTrack) {
+      return;
+    }
+    view_->GetParentView()->ClearContext(0);
+  }
+
+ private:
+  View* const view_;
+};
+
 View::View(Scene* scene, View* parent_view, std::string_view name)
     : scene_(scene), parent_view_(parent_view), name_(name) {
   // Add properties for changing the child context index.
@@ -124,10 +189,20 @@ View::View(Scene* scene, View* parent_view, std::string_view name)
                                     this, kBankDec, -1));
   properties_.emplace(kBankInc, std::make_unique<ChildIndexBankOffsetProperty>(
                                     this, kBankInc, 1));
-  properties_.emplace(kTrackChild,
-                      std::make_unique<TrackChildProperty>(this, kTrackChild));
+  // Add properties for navigating track contexts.
   properties_.emplace(
       kTrackParent, std::make_unique<TrackParentProperty>(this, kTrackParent));
+  properties_.emplace(kTrackRoot,
+                      std::make_unique<TrackRootProperty>(this, kTrackRoot));
+  properties_.emplace(
+      kParentTrackChild,
+      std::make_unique<ParentTrackChildProperty>(this, kParentTrackChild));
+  properties_.emplace(
+      kParentTrackParent,
+      std::make_unique<ParentTrackParentProperty>(this, kParentTrackParent));
+  properties_.emplace(
+      kParentTrackRoot,
+      std::make_unique<ParentTrackRootProperty>(this, kParentTrackRoot));
 }
 
 void View::Enable() {
