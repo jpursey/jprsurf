@@ -644,6 +644,15 @@ void ControlSurface::InitViews() {
           ViewMapping::kReadWriteControl, TrackProperties::kUiSelected,
           absl::StrCat(device_prefix, DeviceXTouch::Select(i)));
       track_view->AddMapping(
+          ViewMapping::kReadControl, View::kTrackChild,
+          absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
+          {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+      track_view->AddMapping(
+          ViewMapping::kReadControl, View::kTrackParent,
+          absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
+          {.read = {.press_behavior =
+                        InputConfig::PressBehavior::kDoublePress}});
+      track_view->AddMapping(
           ViewMapping::kReadWriteControl, TrackProperties::kUiMute,
           absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
       track_view->AddMapping(
@@ -696,7 +705,7 @@ void ControlSurface::EnsureTrackIsVisible(Track* track) {
   if (track == nullptr) {
     return;
   }
-  const int num_tracks_in_view = track_list_view_->GetChildViewCount();
+  const int num_tracks_in_view = track_list_view_->GetChildContextCount();
   const int track_index = track->GetIndex();
   const int last_child_context_index =
       std::max(0, track_index - num_tracks_in_view + 1);

@@ -60,6 +60,16 @@ class View final {
   static constexpr std::string_view kBankDec = "bank_dec";
   static constexpr std::string_view kBankInc = "bank_inc";
 
+  // Tells the parent view to be the same track view as this view if both this
+  // view has the kTrack context and its parent has a child kTrack context. This
+  // effectively results in navigating "in" to the current track.
+  static constexpr std::string_view kTrackChild = "track_child";
+
+  // Tells the parent view to change to its track context's parent track if both
+  // this view has the kTrack context and its parent has a child kTrack context.
+  // This effectively results in navigating "up" to the parent track.
+  static constexpr std::string_view kTrackParent = "track_parent";
+
   //----------------------------------------------------------------------------
   // Construction / Destruction
   //----------------------------------------------------------------------------
@@ -233,6 +243,11 @@ class View final {
 
  private:
   friend class Scene;
+
+  class ChildIndexOffsetProperty;
+  class ChildIndexBankOffsetProperty;
+  class TrackChildProperty;
+  class TrackParentProperty;
 
   View(Scene* scene, View* parent_view, std::string_view name);
 

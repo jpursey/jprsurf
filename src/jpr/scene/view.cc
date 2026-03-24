@@ -6,17 +6,16 @@
 #include "jpr/scene/view.h"
 
 #include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "jpr/scene/scene.h"
 
 namespace jpr {
 
-namespace {
-
 // A view property that changes the child context index by a specified offset
 // when triggered. This is used for the child_inc, child_dec, child_bank_inc,
 // and child_bank_dec properties.
-class ChildIndexOffsetProperty : public ViewProperty {
+class View::ChildIndexOffsetProperty : public ViewProperty {
  public:
   ChildIndexOffsetProperty(View* view, std::string_view name, int offset)
       : view_(view), ViewProperty(name, Type::kAction), offset_(offset) {}
@@ -38,7 +37,7 @@ class ChildIndexOffsetProperty : public ViewProperty {
   const int offset_;
 };
 
-class ChildIndexBankOffsetProperty : public ChildIndexOffsetProperty {
+class View::ChildIndexBankOffsetProperty : public ChildIndexOffsetProperty {
  public:
   ChildIndexBankOffsetProperty(View* view, std::string_view name, int offset)
       : ChildIndexOffsetProperty(view, name, offset) {}
@@ -47,7 +46,72 @@ class ChildIndexBankOffsetProperty : public ChildIndexOffsetProperty {
   int GetStepSize() const override { return GetView()->GetBankSize(); }
 };
 
-}  // namespace
+class View::TrackChildProperty : public ViewProperty {
+ public:
+  explicit TrackChildProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~TrackChildProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    if (view_->GetContextType() != View::ContextType::kTrack ||
+        view_->GetParentView() == nullptr ||
+        view_->GetParentView()->GetChildContextType() !=
+            View::ContextType::kTrack) {
+      return;
+    }
+    auto& track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(view_->context_);
+    DCHECK(track_properties != nullptr);
+    Track* track = track_properties->GetTrack();
+    if (track->GetChildTrackCount() == 0) {
+      return;
+    }
+    view_->GetParentView()->SetTrackContext(track_properties->GetTrack(), 0);
+  }
+
+ private:
+  View* const view_;
+};
+
+class View::TrackParentProperty : public ViewProperty {
+ public:
+  explicit TrackParentProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~TrackParentProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    if (view_->GetContextType() != View::ContextType::kTrack ||
+        view_->GetParentView() == nullptr ||
+        view_->GetParentView()->GetChildContextType() !=
+            View::ContextType::kTrack) {
+      return;
+    }
+    auto& track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(view_->context_);
+    DCHECK(track_properties != nullptr);
+    Track* parent_track = track_properties->GetTrack()->GetParentTrack();
+    if (parent_track == nullptr) {
+      return;
+    }
+    Track* grandparent_track = parent_track->GetParentTrack();
+    int track_count = (grandparent_track != nullptr
+                           ? grandparent_track->GetChildTrackCount()
+                           : TrackCache::Get().GetTopLevelTrackCount());
+    int view_count = view_->GetParentView()->GetChildContextCount();
+    int start_index = std::clamp(parent_track->GetIndex() - view_count / 2, 0,
+                                 std::max(0, track_count - view_count));
+    if (grandparent_track != nullptr) {
+      view_->GetParentView()->SetTrackContext(grandparent_track, start_index);
+    } else {
+      view_->GetParentView()->ClearContext(start_index);
+    }
+  }
+
+ private:
+  View* const view_;
+};
 
 View::View(Scene* scene, View* parent_view, std::string_view name)
     : scene_(scene), parent_view_(parent_view), name_(name) {
@@ -60,6 +124,10 @@ View::View(Scene* scene, View* parent_view, std::string_view name)
                                     this, kBankDec, -1));
   properties_.emplace(kBankInc, std::make_unique<ChildIndexBankOffsetProperty>(
                                     this, kBankInc, 1));
+  properties_.emplace(kTrackChild,
+                      std::make_unique<TrackChildProperty>(this, kTrackChild));
+  properties_.emplace(
+      kTrackParent, std::make_unique<TrackParentProperty>(this, kTrackParent));
 }
 
 void View::Enable() {
@@ -250,7 +318,10 @@ ViewProperty* View::GetProperty(std::string_view name) const {
       auto& track_properties =
           std::get<std::unique_ptr<TrackProperties>>(context_);
       DCHECK(track_properties != nullptr);
-      return track_properties->GetProperty(name);
+      if (ViewProperty* property = track_properties->GetProperty(name);
+          property != nullptr) {
+        return property;
+      }
     } break;
   }
   if (auto it = properties_.find(name); it != properties_.end()) {
@@ -271,10 +342,14 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
     property = scene_->GetProperty(property_name);
   }
   if (property == nullptr) {
+    LOG(ERROR) << "Failed to add mapping for view '" << GetName()
+               << "': property '" << property_name << "' not found";
     return false;
   }
   Control* control = scene_->GetControl(control_name);
   if (control == nullptr) {
+    LOG(ERROR) << "Failed to add mapping for view '" << GetName()
+               << "': control '" << control_name << "' not found";
     return false;
   }
   mappings_.push_back(absl::WrapUnique(
