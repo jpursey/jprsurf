@@ -58,6 +58,7 @@ class TrackProperty : public ViewProperty {
 class TrackProperties final : public TrackListener {
  public:
   static constexpr std::string_view kName = "track_name";
+  static constexpr std::string_view kColor = "track_color";
   static constexpr std::string_view kSelected = "track_selected";
   static constexpr std::string_view kMute = "track_mute";
   static constexpr std::string_view kSolo = "track_solo";

@@ -26,6 +26,15 @@ class TrackNameProperty : public TrackProperty {
   }
 };
 
+class TrackColorProperty : public TrackProperty {
+ public:
+  explicit TrackColorProperty(Track* track)
+      : TrackProperty(TrackProperties::kColor, Type::kColor, track) {}
+
+ protected:
+  Color ReadColor() const override { return GetTrack()->GetColor(); }
+};
+
 class TrackSelectedProperty : public TrackProperty {
  public:
   explicit TrackSelectedProperty(Track* track, bool ui)
@@ -176,6 +185,11 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   if (name == kName) {
     auto& property = properties_[name] =
         std::make_unique<TrackNameProperty>(track_.get());
+    return property.get();
+  }
+  if (name == kColor) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackColorProperty>(track_.get());
     return property.get();
   }
   if (name == kSelected) {
