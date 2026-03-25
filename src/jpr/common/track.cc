@@ -46,6 +46,7 @@ void Track::DoRefresh(MediaTrack* track_id) {
       TrackCache::Get().SetLastTouchedTrack(nullptr);
     }
     name_.clear();
+    color_ = {0, 0, 0};
     volume_ = 0.0;
     pan_ = 0.0;
     selected_ = false;
@@ -89,6 +90,22 @@ void Track::DoRefresh(MediaTrack* track_id) {
     volume_ = volume;
     pan_ = pan;
   }
+
+  int raw_color = GetTrackColor(track_id);
+  Color color;
+  if (raw_color == 0) {
+    // No custom color set; use white as the default to match REAPER's
+    // uncolored track appearance on the scribble strip.
+    color = {255, 255, 255};
+  } else {
+    // Format is 0x01BBGGRR; mask off the 0x01 flag byte.
+    color = {static_cast<uint8_t>(raw_color & 0xFF),
+             static_cast<uint8_t>((raw_color >> 8) & 0xFF),
+             static_cast<uint8_t>((raw_color >> 16) & 0xFF)};
+  }
+  changed = changed || (color_ != color);
+  color_ = color;
+
   if (changed) {
     NotifyListeners();
   }

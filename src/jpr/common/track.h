@@ -70,6 +70,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Gets the current cached state for this track. These are updated whenever
   // Refresh() is called.
   std::string_view GetName() const { return name_; }
+  Color GetColor() const { return color_; }
   double GetVolume() const { return volume_; }
   double GetPan() const { return pan_; }
   bool GetSelected() const { return selected_; }
@@ -218,6 +219,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Cached state for the track. These are updated whenever Refresh() is called,
   // or when set explicitly through the Set*() methods.
   std::string name_;
+  Color color_ = {0, 0, 0};
   double volume_ = 0.0;  // Default is silent so faders will be at the bottom.
   double pan_ = 0.0;
   bool selected_ = false;
