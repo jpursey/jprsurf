@@ -30,6 +30,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton1 = "PotButton1";
   static constexpr std::string_view kScribble1Line1 = "Scribble1Line1";
   static constexpr std::string_view kScribble1Line2 = "Scribble1Line2";
+  static constexpr std::string_view kScribble1Color = "Scribble1Color";
 
   static constexpr std::string_view kRec2 = "Rec2";
   static constexpr std::string_view kSolo2 = "Solo2";
@@ -40,6 +41,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton2 = "PotButton2";
   static constexpr std::string_view kScribble2Line1 = "Scribble2Line1";
   static constexpr std::string_view kScribble2Line2 = "Scribble2Line2";
+  static constexpr std::string_view kScribble2Color = "Scribble2Color";
 
   static constexpr std::string_view kRec3 = "Rec3";
   static constexpr std::string_view kSolo3 = "Solo3";
@@ -50,6 +52,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton3 = "PotButton3";
   static constexpr std::string_view kScribble3Line1 = "Scribble3Line1";
   static constexpr std::string_view kScribble3Line2 = "Scribble3Line2";
+  static constexpr std::string_view kScribble3Color = "Scribble3Color";
 
   static constexpr std::string_view kRec4 = "Rec4";
   static constexpr std::string_view kSolo4 = "Solo4";
@@ -60,6 +63,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton4 = "PotButton4";
   static constexpr std::string_view kScribble4Line1 = "Scribble4Line1";
   static constexpr std::string_view kScribble4Line2 = "Scribble4Line2";
+  static constexpr std::string_view kScribble4Color = "Scribble4Color";
 
   static constexpr std::string_view kRec5 = "Rec5";
   static constexpr std::string_view kSolo5 = "Solo5";
@@ -70,6 +74,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton5 = "PotButton5";
   static constexpr std::string_view kScribble5Line1 = "Scribble5Line1";
   static constexpr std::string_view kScribble5Line2 = "Scribble5Line2";
+  static constexpr std::string_view kScribble5Color = "Scribble5Color";
 
   static constexpr std::string_view kRec6 = "Rec6";
   static constexpr std::string_view kSolo6 = "Solo6";
@@ -80,6 +85,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton6 = "PotButton6";
   static constexpr std::string_view kScribble6Line1 = "Scribble6Line1";
   static constexpr std::string_view kScribble6Line2 = "Scribble3Line2";
+  static constexpr std::string_view kScribble6Color = "Scribble6Color";
 
   static constexpr std::string_view kRec7 = "Rec7";
   static constexpr std::string_view kSolo7 = "Solo7";
@@ -90,6 +96,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton7 = "PotButton7";
   static constexpr std::string_view kScribble7Line1 = "Scribble7Line1";
   static constexpr std::string_view kScribble7Line2 = "Scribble7Line2";
+  static constexpr std::string_view kScribble7Color = "Scribble7Color";
 
   static constexpr std::string_view kRec8 = "Rec8";
   static constexpr std::string_view kSolo8 = "Solo8";
@@ -100,6 +107,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton8 = "PotButton8";
   static constexpr std::string_view kScribble8Line1 = "Scribble8Line1";
   static constexpr std::string_view kScribble8Line2 = "Scribble8Line2";
+  static constexpr std::string_view kScribble8Color = "Scribble8Color";
 
   // These convenience functions return the control names for per-track
   // controls. Track index and line are 0-based.
@@ -126,6 +134,9 @@ class DeviceXTouch final : public Device {
   }
   static std::string Scribble(int track_index, int line) {
     return absl::StrCat("Scribble", track_index + 1, "Line", line + 1);
+  }
+  static std::string ScribbleColor(int track) {
+    return absl::StrCat("Scribble", track + 1, "Color");
   }
 
   //----------------------------------------------------------------------------
@@ -208,6 +219,9 @@ class DeviceXTouch final : public Device {
   DeviceXTouch(Type type, RunRegistry& run_registry, MidiIn* midi_in,
                MidiOut* midi_out);
   ~DeviceXTouch() override;
+
+ private:
+  uint8_t scribble_colors_[8] = {};
 };
 
 }  // namespace jpr

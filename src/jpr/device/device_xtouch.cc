@@ -152,7 +152,7 @@ const Button kButtons[] = {
 };
 
 //==============================================================================
-// Scribble strip
+// Scribble strip text
 //==============================================================================
 
 static constexpr int kScribbleLineLength = 56;
@@ -330,6 +330,147 @@ void XTouchTrackScribbleText::OnTextChanged(std::string_view text, int mode) {
   midi_out_->UpdateState(CreateScribbleMessage(prefix_, config));
 }
 
+//==============================================================================
+// Scribble strip colors
+//==============================================================================
+
+static constexpr uint8_t kColorSysexPrefix[] = {0x00, 0x00, 0x66, 0x14, 0x72};
+static constexpr uint8_t kColorExtSysexPrefix[] = {0x00, 0x00, 0x66, 0x15,
+                                                   0x72};
+static constexpr int kColorChannelCount = 8;
+
+// Maps a full RGB color to the nearest XTouch scribble strip palette color.
+// The XTouch supports 8 colors corresponding to the corners of the RGB cube:
+//   0x00=black, 0x01=red, 0x02=green, 0x03=yellow,
+//   0x04=blue,  0x05=magenta, 0x06=cyan, 0x07=white
+uint8_t RgbToXTouchColor(Color color) {
+  return static_cast<uint8_t>((color.r >= 128 ? 0x01 : 0x00) |
+                              (color.g >= 128 ? 0x02 : 0x00) |
+                              (color.b >= 128 ? 0x04 : 0x00));
+}
+
+// Manages the shared 8-channel color state for an X-Touch scribble strip
+// color SysEx message (0x72 command). The wire message carries all 8 colors
+// in a single payload; this state holds them and deduplicates the send.
+class XTouchColorState final : public SysexMessageState {
+ public:
+  XTouchColorState(SysexPrefix prefix, const SysexMessage& message);
+  XTouchColorState(const XTouchColorState& other);
+  XTouchColorState& operator=(const XTouchColorState& other);
+  ~XTouchColorState() override = default;
+
+  std::unique_ptr<SysexMessageState> Clone() const override;
+  bool Update(const SysexMessage& message) override;
+
+ private:
+  SysexPrefix prefix_;
+  uint8_t colors_[kColorChannelCount] = {};
+};
+
+XTouchColorState::XTouchColorState(SysexPrefix prefix,
+                                   const SysexMessage& message)
+    : prefix_(prefix) {
+  absl::Span<const uint8_t> data = message.GetData();
+  int count = std::min(static_cast<int>(data.size()), kColorChannelCount);
+  std::memcpy(colors_, data.data(), count);
+}
+
+XTouchColorState::XTouchColorState(const XTouchColorState& other)
+    : prefix_(other.prefix_) {
+  std::memcpy(colors_, other.colors_, kColorChannelCount);
+}
+
+XTouchColorState& XTouchColorState::operator=(const XTouchColorState& other) {
+  if (this != &other) {
+    prefix_ = other.prefix_;
+    std::memcpy(colors_, other.colors_, kColorChannelCount);
+  }
+  return *this;
+}
+
+std::unique_ptr<SysexMessageState> XTouchColorState::Clone() const {
+  return std::make_unique<XTouchColorState>(*this);
+}
+
+bool XTouchColorState::Update(const SysexMessage& message) {
+  if (message.GetPrefix() != prefix_) {
+    return false;
+  }
+  absl::Span<const uint8_t> data = message.GetData();
+  int count = std::min(static_cast<int>(data.size()), kColorChannelCount);
+  if (std::memcmp(colors_, data.data(), count) == 0) {
+    return false;
+  }
+  std::memcpy(colors_, data.data(), count);
+  return true;
+}
+
+class XTouchColorSysex : public SysexMessageType {
+ public:
+  explicit XTouchColorSysex(SysexPrefix prefix);
+  XTouchColorSysex(const XTouchColorSysex&) = delete;
+  XTouchColorSysex& operator=(const XTouchColorSysex&) = delete;
+  ~XTouchColorSysex() override = default;
+
+  std::unique_ptr<SysexMessageState> CreateState(
+      const SysexMessage& message) const override;
+};
+
+XTouchColorSysex::XTouchColorSysex(SysexPrefix prefix)
+    : SysexMessageType(prefix) {
+  Register();
+}
+
+std::unique_ptr<SysexMessageState> XTouchColorSysex::CreateState(
+    const SysexMessage& message) const {
+  if (message.GetPrefix() != GetPrefix()) {
+    return nullptr;
+  }
+  return std::make_unique<XTouchColorState>(GetPrefix(), message);
+}
+
+SysexMessage CreateColorMessage(SysexPrefix prefix,
+                                const uint8_t colors[kColorChannelCount]) {
+  SysexMessage message(prefix, kColorChannelCount);
+  std::memcpy(message.GetMutableData().data(), colors, kColorChannelCount);
+  return message;
+}
+
+// Per-channel color control for the X-Touch scribble strip. All 8 channel
+// instances share the same colors array and midi_out; setting any one channel
+// triggers a full 8-color SysEx send (suppressed by UpdateState if unchanged).
+class XTouchTrackScribbleColor final : public ControlColorOutput {
+ public:
+  XTouchTrackScribbleColor(SysexPrefix prefix, MidiOut* midi_out, int track,
+                           uint8_t* colors);
+  XTouchTrackScribbleColor(const XTouchTrackScribbleColor&) = delete;
+  XTouchTrackScribbleColor& operator=(const XTouchTrackScribbleColor&) = delete;
+  ~XTouchTrackScribbleColor() override = default;
+
+ protected:
+  void OnColorChanged(Color color, int mode) override;
+
+ private:
+  SysexPrefix prefix_;
+  MidiOut* midi_out_;
+  int track_;
+  uint8_t* colors_;  // Points into DeviceXTouch::scribble_colors_.
+};
+
+XTouchTrackScribbleColor::XTouchTrackScribbleColor(SysexPrefix prefix,
+                                                   MidiOut* midi_out, int track,
+                                                   uint8_t* colors)
+    : prefix_(prefix), midi_out_(midi_out), track_(track), colors_(colors) {}
+
+void XTouchTrackScribbleColor::OnColorChanged(Color color, int mode) {
+  colors_[track_] = RgbToXTouchColor(color);
+  midi_out_->UpdateState(CreateColorMessage(prefix_, colors_));
+}
+
+//==============================================================================
+// Sysex registration
+//==============================================================================
+
 void RegisterSysex() {
   static absl::NoDestructor<XTouchScribbleSysex> full_instance{
       SysexPrefix(kScribbleSysexPrefix)};
@@ -346,6 +487,23 @@ void RegisterSysex() {
     if (!ext_instance->Register()) {
       LOG(ERROR) << "Failed to register X-Touch Extender scribble strip sysex "
                     "message type";
+    }
+  }
+
+  static absl::NoDestructor<XTouchColorSysex> color_full_instance{
+      SysexPrefix(kColorSysexPrefix)};
+  if (!color_full_instance->IsRegistered()) {
+    if (!color_full_instance->Register()) {
+      LOG(ERROR) << "Failed to register X-Touch color sysex message type";
+    }
+  }
+
+  static absl::NoDestructor<XTouchColorSysex> color_ext_instance{
+      SysexPrefix(kColorExtSysexPrefix)};
+  if (!color_ext_instance->IsRegistered()) {
+    if (!color_ext_instance->Register()) {
+      LOG(ERROR)
+          << "Failed to register X-Touch Extender color sysex message type";
     }
   }
 }
@@ -420,6 +578,16 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
           scribble_prefix, midi_out, track, line);
       AddControl(std::move(scribble_options));
     }
+
+    // Scribble strip color.
+    SysexPrefix color_prefix =
+        (type == Type::kFull ? SysexPrefix(kColorSysexPrefix)
+                             : SysexPrefix(kColorExtSysexPrefix));
+    name = ScribbleColor(track);
+    Control::Options color_options = {.name = name};
+    color_options.color_output = std::make_unique<XTouchTrackScribbleColor>(
+        color_prefix, midi_out, track, scribble_colors_);
+    AddControl(std::move(color_options));
   }
 }
 
