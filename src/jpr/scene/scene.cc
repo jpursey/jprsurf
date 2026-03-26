@@ -9,8 +9,12 @@
 #include <stack>
 
 #include "absl/memory/memory.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "jpr/scene/modifier_property.h"
+#include "jpr/scene/reaper_property.h"
+#include "jpr/scene/scene_state_property.h"
+#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 
@@ -47,11 +51,30 @@ Control* Scene::GetControl(std::string_view name) const {
   return it != controls_.end() ? it->second : nullptr;
 }
 
-ViewProperty* Scene::GetProperty(std::string_view name) const {
+ViewProperty* Scene::GetProperty(std::string_view name) {
   // TODO: Create properties on demand for valid property names, if it doesn't
   // already exist.
-  auto it = properties_.find(name);
-  return it != properties_.end() ? it->second.get() : nullptr;
+  if (auto it = properties_.find(name); it != properties_.end()) {
+    return it->second.get();
+  }
+  if (name.starts_with("cmd:")) {
+    int command_id = 0;
+    if (!absl::SimpleAtoi(name.substr(4), &command_id) || command_id == 0) {
+      return nullptr;
+    }
+    int state = GetToggleCommandState(command_id);
+    std::unique_ptr<ViewProperty> property;
+    if (state < 0) {
+      property = std::make_unique<CommandActionProperty>(name, command_id);
+    } else {
+      property = std::make_unique<CommandToggleProperty>(this, name, command_id,
+                                                         state > 0);
+    }
+    auto property_ptr = property.get();
+    properties_[name] = std::move(property);
+    return property_ptr;
+  }
+  return nullptr;
 }
 
 Modifiers Scene::AddModifierProperty(std::string_view name) {
@@ -76,9 +99,20 @@ void Scene::Deactivate() {
 }
 
 void Scene::OnRun(const RunTime& time) {
+  for (const auto& property : state_properties_) {
+    property->UpdateState();
+  }
   if (root_view_->IsActive()) {
     root_view_->SyncMappings();
   }
+}
+
+void Scene::RegisterProperty(SceneStateProperty* property) {
+  state_properties_.insert(property);
+}
+
+void Scene::UnregisterProperty(SceneStateProperty* property) {
+  state_properties_.erase(property);
 }
 
 }  // namespace jpr

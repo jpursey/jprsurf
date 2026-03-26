@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/device.h"
@@ -40,7 +41,7 @@ class Scene final {
 
   // Controls and Properties
   Control* GetControl(std::string_view name) const;
-  ViewProperty* GetProperty(std::string_view name) const;
+  ViewProperty* GetProperty(std::string_view name);
 
   // Adds a new toggle property that can be mapped to an unused modifier flag.
   //
@@ -59,14 +60,21 @@ class Scene final {
 
  private:
   friend class View;
+  friend class SceneStateProperty;
 
   void OnRun(const RunTime& time);
+
+  // Called by stateful properties that are being listened to, to register for
+  // updates.
+  void RegisterProperty(SceneStateProperty* property);
+  void UnregisterProperty(SceneStateProperty* property);
 
   // State
   std::string name_;
   absl::flat_hash_map<std::string, std::unique_ptr<Device>> devices_;
   absl::flat_hash_map<std::string, Control*> controls_;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
+  absl::flat_hash_set<SceneStateProperty*> state_properties_;
   std::unique_ptr<View> root_view_;
   RunHandle run_handle_;
   Modifiers next_modifier_flag_ = kModUserStart;

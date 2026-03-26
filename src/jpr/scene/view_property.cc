@@ -15,9 +15,22 @@ namespace jpr {
 ViewProperty::ViewProperty(std::string_view name, Type type)
     : name_(name), type_(type) {}
 
-void ViewProperty::RegisterFlag(bool* flag) { flags_.insert(flag); }
+void ViewProperty::RegisterFlag(bool* flag) {
+  flags_.insert(flag);
+  if (flags_.size() == 1) {
+    OnRegistered();
+  }
+}
 
-void ViewProperty::UnregisterFlag(bool* flag) { flags_.erase(flag); }
+void ViewProperty::UnregisterFlag(bool* flag) {
+  if (flags_.empty()) {
+    return;
+  }
+  flags_.erase(flag);
+  if (flags_.empty()) {
+    OnUnregistered();
+  }
+}
 
 void ViewProperty::NotifyChanged() {
   for (bool* flag : flags_) {

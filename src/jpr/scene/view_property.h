@@ -152,6 +152,16 @@ class ViewProperty {
   // Derived classes should call this whenever the property value changes.
   void NotifyChanged();
 
+  // Called the when the first flag is registered to this property. This can be
+  // used to perform any setup that is needed to track changes to the property,
+  // such as subscribing to REAPER notifications.
+  virtual void OnRegistered() {}
+
+  // Called when the last flag is unregistered from this property. This can be
+  // used to perform any teardown that is needed when the property is no longer
+  // being tracked, such as unsubscribing from REAPER notifications.
+  virtual void OnUnregistered() {}
+
  private:
   std::string name_;
   Type type_;
