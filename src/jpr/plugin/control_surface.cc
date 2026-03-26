@@ -620,6 +620,9 @@ void ControlSurface::InitViews() {
                           ModifierProperty::kOpt,
                           absl::StrCat("XTouch/", DeviceXTouch::kOption),
                           {.read = {.press_release = true}});
+    root_view->AddMapping(ViewMapping::kReadWriteControl,
+                          "cmd:40745",  // Solo in front toggle.
+                          absl::StrCat("XTouch/", DeviceXTouch::kSolo));
   }
   root_view->Enable();
 
