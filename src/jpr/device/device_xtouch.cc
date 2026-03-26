@@ -344,9 +344,35 @@ static constexpr int kColorChannelCount = 8;
 //   0x00=black, 0x01=red, 0x02=green, 0x03=yellow,
 //   0x04=blue,  0x05=magenta, 0x06=cyan, 0x07=white
 uint8_t RgbToXTouchColor(Color color) {
-  return static_cast<uint8_t>((color.r >= 128 ? 0x01 : 0x00) |
-                              (color.g >= 128 ? 0x02 : 0x00) |
-                              (color.b >= 128 ? 0x04 : 0x00));
+  if (color.r == 0 && color.g == 0 && color.b == 0) {
+    return 0x00;  // Special case for black to avoid division by zero.
+  }
+
+  // Convert to normalized RGB values in the range [0, 1].
+  float r = color.r / 255.0f;
+  float g = color.g / 255.0f;
+  float b = color.b / 255.0f;
+
+  // Non-linearly darken all the colors by a fixed value to improve contrast
+  // before scaling back up.
+  float min = std::min({r, g, b}) / 2.0f;
+  r -= min;
+  g -= min;
+  b -= min;
+
+  // Scale the colors so that the brightest color is at full brightness, to
+  // preserve the hue as much as possible when converting to the limited
+  // palette.
+  float scale = (1.0f / std::max({r, g, b}));
+  r = std::min(r * scale, 1.0f);
+  g = std::min(g * scale, 1.0f);
+  b = std::min(b * scale, 1.0f);
+
+  // Finally, convert to the nearest palette color by thresholding each channel
+  // at 0.5 and encoding the result as bits in the output byte.
+  return static_cast<uint8_t>((r > 0.5f ? 0x01 : 0x00) |
+                              (g > 0.5f ? 0x02 : 0x00) |
+                              (b > 0.5f ? 0x04 : 0x00));
 }
 
 // Manages the shared 8-channel color state for an X-Touch scribble strip
