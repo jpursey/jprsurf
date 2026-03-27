@@ -143,6 +143,9 @@ class DeviceXTouch final : public Device {
   // XTouch only controls (not available on the Extender)
   //----------------------------------------------------------------------------
 
+  // Master fader.
+  static constexpr std::string_view kMasterFader = "MasterFader";
+
   // Buttons
   static constexpr std::string_view kAssignTrack = "AssignTrack";
   static constexpr std::string_view kAssignSend = "AssignSend";

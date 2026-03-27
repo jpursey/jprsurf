@@ -566,6 +566,21 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     AddControl(std::move(options));
   }
 
+  // Master fader.
+  Control::Options master_fader_options = {.name = kMasterFader};
+  master_fader_options.value_input =
+      std::make_unique<ControlValueInputMcuFader>(
+          midi_in, ControlValueInputMcuFader::MasterFader());
+  master_fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
+      midi_in, ControlPressInputMidiMsg::Config{
+                   .press = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/127),
+                   .release = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/0)});
+  master_fader_options.cvalue_output =
+      std::make_unique<ControlCValueOutputMcuFader>(
+          midi_out, ControlCValueOutputMcuFader::MasterFader());
+  master_fader_options.binding = Control::Binding::kMotorized;
+  AddControl(std::move(master_fader_options));
+
   // Additional per-track controls.
   for (int track = 0; track < 8; ++track) {
     // Pan pots.
