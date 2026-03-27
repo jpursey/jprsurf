@@ -15,7 +15,7 @@ namespace jpr {
 
 inline constexpr std::string_view kCmdSoloInFront = "cmd:40745";
 inline constexpr std::string_view kCmdMetronome = "cmd:40364";
-inline constexpr std::string_view kCmdLoopTimeSelection = "cmd:40621";
+inline constexpr std::string_view kCmdTransportRepeat = "cmd:1068";
 inline constexpr std::string_view kCmdTransportPlay = "cmd:1007";
 inline constexpr std::string_view kCmdTransportPause = "cmd:1008";
 inline constexpr std::string_view kCmdTransportPlayPause = "cmd:40073";
@@ -26,10 +26,12 @@ inline constexpr std::string_view kCmdGoPrevMeasure = "cmd:41041";
 inline constexpr std::string_view kCmdGoNextMeasure = "cmd:41040";
 inline constexpr std::string_view kCmdGoPrevMeasureNoSeek = "cmd:40838";
 inline constexpr std::string_view kCmdGoNextMeasureNoSeek = "cmd:40837";
-inline constexpr std::string_view kCmdGoPrevBeat = "cmd:41045";
-inline constexpr std::string_view kCmdGoNextBeat = "cmd:41044";
-inline constexpr std::string_view kCmdGoPrevBeatNoSeek = "cmd:40842";
-inline constexpr std::string_view kCmdGoNextBeatNoSeek = "cmd:40841";
+inline constexpr std::string_view kCmdGoPrevBeat = "cmd:40230";
+inline constexpr std::string_view kCmdGoNextBeat = "cmd:40231";
+inline constexpr std::string_view kCmdGoBackBeat = "cmd:41045";
+inline constexpr std::string_view kCmdGoForwardBeat = "cmd:41044";
+inline constexpr std::string_view kCmdGoBackBeatNoSeek = "cmd:40842";
+inline constexpr std::string_view kCmdGoForwardBeatNoSeek = "cmd:40841";
 inline constexpr std::string_view kCmdGoPrevMarker = "cmd:40172";
 inline constexpr std::string_view kCmdGoNextMarker = "cmd:40173";
 inline constexpr std::string_view kCmdGoStart = "cmd:40042";
