@@ -135,7 +135,7 @@ class View::ParentTrackParentProperty : public ViewProperty {
     auto& track_properties =
         std::get<std::unique_ptr<TrackProperties>>(view_->context_);
     DCHECK(track_properties != nullptr);
-    Track* parent_track = track_properties->GetTrack()->GetParentTrack();
+    Track* parent_track = view_->GetParentView()->GetTrackContext();
     if (parent_track == nullptr) {
       return;
     }
