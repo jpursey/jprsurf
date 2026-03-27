@@ -14,6 +14,7 @@
 #include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/modifier_property.h"
+#include "jpr/scene/reaper_property.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin_functions.h"
@@ -589,10 +590,16 @@ void ControlSurface::InitViews() {
   bool has_xtouch = (xtouch_in_ != nullptr && xtouch_out_ != nullptr);
   bool has_xtouch_ext =
       (xtouch_ext_in_ != nullptr && xtouch_ext_out_ != nullptr);
+  constexpr std::string_view kModMarker = "mod_marker";
+  constexpr std::string_view kModNudge = "mod_nudge";
+  Modifiers mod_marker = 0;
+  Modifiers mod_nudge = 0;
   if (has_xtouch) {
     scene_->AddDevice("XTouch", std::make_unique<DeviceXTouch>(
                                     DeviceXTouch::Type::kFull, device_runner_,
                                     xtouch_in_.get(), xtouch_out_.get()));
+    mod_marker = scene_->AddModifierProperty(kModMarker);
+    mod_nudge = scene_->AddModifierProperty(kModNudge);
   }
   if (has_xtouch_ext) {
     scene_->AddDevice("XTouchExt",
@@ -604,6 +611,7 @@ void ControlSurface::InitViews() {
   // Add global mappings
   auto* root_view = scene_->GetRootView();
   if (has_xtouch) {
+    // Modifiers
     root_view->AddMapping(ViewMapping::kReadWriteControl,
                           ModifierProperty::kShift,
                           absl::StrCat("XTouch/", DeviceXTouch::kShift),
@@ -620,9 +628,44 @@ void ControlSurface::InitViews() {
                           ModifierProperty::kOpt,
                           absl::StrCat("XTouch/", DeviceXTouch::kOption),
                           {.read = {.press_release = true}});
-    root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          "cmd:40745",  // Solo in front toggle.
+
+    // Misc buttons (above transport)
+    root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
+                          absl::StrCat("XTouch/", DeviceXTouch::kMarker));
+    root_view->AddMapping(ViewMapping::kReadWriteControl, kModNudge,
+                          absl::StrCat("XTouch/", DeviceXTouch::kNudge));
+    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
+                          absl::StrCat("XTouch/", DeviceXTouch::kCycle));
+    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome,
+                          absl::StrCat("XTouch/", DeviceXTouch::kClick));
+    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdSoloInFront,
                           absl::StrCat("XTouch/", DeviceXTouch::kSolo));
+
+    // Transport controls
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevMeasure,
+                          absl::StrCat("XTouch/", DeviceXTouch::kRewind));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevBeat,
+                          absl::StrCat("XTouch/", DeviceXTouch::kRewind),
+                          {.read = {.required_modifiers = mod_nudge}});
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevMarker,
+                          absl::StrCat("XTouch/", DeviceXTouch::kRewind),
+                          {.read = {.required_modifiers = mod_marker}});
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoNextMeasure,
+                          absl::StrCat("XTouch/", DeviceXTouch::kForward));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoNextBeat,
+                          absl::StrCat("XTouch/", DeviceXTouch::kForward),
+                          {.read = {.required_modifiers = mod_nudge}});
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoNextMarker,
+                          absl::StrCat("XTouch/", DeviceXTouch::kForward),
+                          {.read = {.required_modifiers = mod_marker}});
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportStop,
+                          absl::StrCat("XTouch/", DeviceXTouch::kStop));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportPlayPause,
+                          absl::StrCat("XTouch/", DeviceXTouch::kPlay));
+    root_view->AddMapping(ViewMapping::kWriteControl, kCmdTransportPlay,
+                          absl::StrCat("XTouch/", DeviceXTouch::kPlay));
+    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRecord,
+                          absl::StrCat("XTouch/", DeviceXTouch::kRecord));
   }
   root_view->Enable();
 
