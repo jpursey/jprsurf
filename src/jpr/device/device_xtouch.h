@@ -188,7 +188,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kUndo = "Undo";
   static constexpr std::string_view kCancel = "Cancel";
   static constexpr std::string_view kEnter = "Enter";
-  static constexpr std::string_view kMarkers = "Markers";
+  static constexpr std::string_view kMarker = "Marker";
   static constexpr std::string_view kNudge = "Nudge";
   static constexpr std::string_view kCycle = "Cycle";
   static constexpr std::string_view kDrop = "Drop";

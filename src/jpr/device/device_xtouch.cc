@@ -130,7 +130,7 @@ const Button kButtons[] = {
     {DeviceXTouch::kCancel, 0x52, true, false},
     {DeviceXTouch::kEnter, 0x53, true, false},
     // Transport buttons.
-    {DeviceXTouch::kMarkers, 0x54, true, false},
+    {DeviceXTouch::kMarker, 0x54, true, false},
     {DeviceXTouch::kNudge, 0x55, true, false},
     {DeviceXTouch::kCycle, 0x56, true, false},
     {DeviceXTouch::kDrop, 0x57, true, false},
