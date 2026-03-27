@@ -100,6 +100,9 @@ void ControlSurface::Run() {
   if (track_list_changed_) {
     LOG(INFO) << "Refreshing TrackCache!";
     TrackCache::Get().Refresh();
+    if (master_track_view_ != nullptr) {
+      master_track_view_->SetTrackContext(TrackCache::Get().GetMasterTrack());
+    }
     track_list_view_->RefreshChildContext();
     track_list_changed_ = false;
   }
@@ -611,6 +614,14 @@ void ControlSurface::InitViews() {
   // Add global mappings
   auto* root_view = scene_->GetRootView();
   if (has_xtouch) {
+    // Master fader
+    master_track_view_ = root_view->AddChildView("MasterFader");
+    master_track_view_->SetTrackContext();
+    master_track_view_->AddMapping(
+        ViewMapping::kReadWriteControl, TrackProperties::kVolume,
+        absl::StrCat("XTouch/", DeviceXTouch::kMasterFader));
+    master_track_view_->Enable();
+
     // Modifiers
     root_view->AddMapping(ViewMapping::kReadWriteControl,
                           ModifierProperty::kShift,

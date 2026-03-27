@@ -115,6 +115,7 @@ class ControlSurface final : private IReaperControlSurface {
   std::unique_ptr<MidiIn> xtouch_ext_in_;
   std::unique_ptr<MidiOut> xtouch_ext_out_;
   std::unique_ptr<Scene> scene_;
+  View* master_track_view_ = nullptr;
   View* track_list_view_ = nullptr;
   bool track_list_changed_ = false;
 
