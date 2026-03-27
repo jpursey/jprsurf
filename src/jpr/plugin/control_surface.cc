@@ -230,13 +230,13 @@ int ControlSurface::Extended(int call, void* param1, void* param2,
       return 0;
     }
     case CSURF_EXT_SETMETRONOME: {
-      JPR_GET_PARAM_VALUE(int, enabled, 1);
-      OnSetMetronome(enabled != 0);
+      bool enabled = (param1 != nullptr);
+      OnSetMetronome(enabled);
       return 0;
     }
     case CSURF_EXT_SETAUTORECARM: {
-      JPR_GET_PARAM_VALUE(int, enabled, 1);
-      OnSetAutoRecArm(enabled != 0);
+      bool enabled = (param1 != nullptr);
+      OnSetAutoRecArm(enabled);
       return 0;
     }
     case CSURF_EXT_SETRECMODE: {
@@ -261,7 +261,7 @@ int ControlSurface::Extended(int call, void* param1, void* param2,
     case CSURF_EXT_SETFXENABLED: {
       auto* track_id = static_cast<MediaTrack*>(param1);
       JPR_GET_PARAM_VALUE(int, fx_idx, 2);
-      auto enabled = param3 != nullptr;
+      auto enabled = (param3 != nullptr);
       OnSetFxEnabled(track_id, fx_idx, enabled);
       return 0;
     }
