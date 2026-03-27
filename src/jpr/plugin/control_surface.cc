@@ -366,7 +366,7 @@ int ControlSurface::Extended(int call, void* param1, void* param2,
     }
     case CSURF_EXT_SETFXCHANGE: {
       auto* track_id = static_cast<MediaTrack*>(param1);
-      JPR_GET_PARAM_VALUE(int, flags, 2);
+      int flags = reinterpret_cast<intptr_t>(param2);
       OnSetFxChange(track_id, flags);
       return 0;
     }
