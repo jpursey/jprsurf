@@ -273,8 +273,14 @@ void View::SetTrackContext(Track* track, int child_context_index) {
   }
   if (GetTrackContext() == track) {
     SetChildContextIndex(child_context_index);
-  } else {
+  } else if (GetContextType() != ContextType::kTrack) {
     SetContext(std::make_unique<TrackProperties>(track), child_context_index);
+  } else {
+    auto& track_properties =
+        std::get<std::unique_ptr<TrackProperties>>(context_);
+    DCHECK(track_properties != nullptr);
+    track_properties->SetTrack(track);
+    SetChildContextIndex(child_context_index);
   }
 }
 
