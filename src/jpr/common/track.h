@@ -31,6 +31,13 @@ class TrackListener {
   // This will be called whenever the underlying MediaTrack* changes (including
   // changing to null).
   virtual void OnTrackChanged(Track* track) = 0;
+
+  // This will be called whenever the track's peak meter value changes. The
+  // peak value is a linear value in the range [0.0, +inf), where 1.0
+  // corresponds to 0 dB, 0.5 corresponds to -6 dB, and so on. The peak value
+  // may be greater than 1.0 if the track is clipping, and may be 0.0 if the
+  // track is silent.
+  virtual void OnTrackMeterChanged(Track* track, double peak) {}
 };
 
 // Represents a track in REAPER, identified by a GUID.
@@ -66,6 +73,11 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Refreshes the track by querying REAPER for the current track ID for this
   // track's GUID and updates its internal state.
   void Refresh();
+
+  // Refreshes the track's peak meter values by querying REAPER for the current
+  // peak levels for this track, and notifies listeners unconditionally of the
+  // new value.
+  void RefreshMeter();
 
   // Gets the current cached state for this track. These are updated whenever
   // Refresh() is called.

@@ -111,6 +111,18 @@ void Track::DoRefresh(MediaTrack* track_id) {
   }
 }
 
+void Track::RefreshMeter() {
+  if (track_id_ == nullptr) {
+    return;
+  }
+  double left = Track_GetPeakInfo(track_id_, 0);
+  double right = Track_GetPeakInfo(track_id_, 1);
+  double peak = std::max(left, right);
+  for (TrackListener* listener : listeners_) {
+    listener->OnTrackMeterChanged(this, peak);
+  }
+}
+
 void Track::NotifyListeners() {
   for (TrackListener* listener : listeners_) {
     listener->OnTrackChanged(this);
