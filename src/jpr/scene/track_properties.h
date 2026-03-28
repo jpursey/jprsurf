@@ -42,6 +42,21 @@ class TrackProperty : public ViewProperty {
   Track* track_;
 };
 
+class TrackMeterProperty : public TrackProperty {
+ public:
+  static constexpr std::string_view kMeter = "track_meter";
+
+  explicit TrackMeterProperty(Track* track)
+      : TrackProperty(kMeter, Type::kNormalized, track) {}
+
+ protected:
+  double ReadDouble() const override { return peak_; }
+
+ private:
+  friend class TrackProperties;
+  double peak_ = 0.0;
+};
+
 //==============================================================================
 // TrackProperties
 //==============================================================================
@@ -65,6 +80,7 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kRecArm = "track_recarm";
   static constexpr std::string_view kPan = "track_pan";
   static constexpr std::string_view kVolume = "track_volume";
+  static constexpr std::string_view kMeter = TrackMeterProperty::kMeter;
   static constexpr std::string_view kUiSelected = "track_ui_selected";
   static constexpr std::string_view kUiMute = "track_ui_mute";
   static constexpr std::string_view kUiSolo = "track_ui_solo";
@@ -96,11 +112,13 @@ class TrackProperties final : public TrackListener {
 
   // TrackListener implementation.
   void OnTrackChanged(Track* track) override;
+  void OnTrackMeterChanged(Track* track, double peak) override;
 
  private:
   // State
   std::shared_ptr<Track> track_;
   absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>> properties_;
+  TrackMeterProperty* meter_property_ = nullptr;
 };
 
 }  // namespace jpr

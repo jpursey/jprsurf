@@ -178,9 +178,25 @@ void TrackProperties::OnTrackChanged(Track* track) {
   }
 }
 
+void TrackProperties::OnTrackMeterChanged(Track* track, double peak) {
+  if (meter_property_ != nullptr) {
+    if (meter_property_->peak_ == 0.0 && peak <= 0.0) {
+      return;
+    }
+    meter_property_->peak_ = std::max(peak, 0.0);
+    meter_property_->NotifyChanged();
+  }
+}
+
 ViewProperty* TrackProperties::GetProperty(std::string_view name) {
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
+  }
+  if (name == kMeter) {
+    auto meter_property = std::make_unique<TrackMeterProperty>(track_.get());
+    meter_property_ = meter_property.get();
+    properties_[name] = std::move(meter_property);
+    return meter_property_;
   }
   if (name == kName) {
     auto& property = properties_[name] =

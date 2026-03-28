@@ -449,7 +449,9 @@ void View::SyncMappings() {
     auto& track_properties =
         std::get<std::unique_ptr<TrackProperties>>(context_);
     DCHECK(track_properties != nullptr);
-    track_properties->GetTrack()->Refresh();
+    Track* track = track_properties->GetTrack();
+    track->Refresh();
+    track->RefreshMeter();
   }
 
   // Now update all active mappings for this view. This will update the REAPER
