@@ -28,6 +28,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader1 = "Fader1";
   static constexpr std::string_view kPot1 = "Pot1";
   static constexpr std::string_view kPotButton1 = "PotButton1";
+  static constexpr std::string_view kMeter1 = "Meter1";
   static constexpr std::string_view kScribble1Line1 = "Scribble1Line1";
   static constexpr std::string_view kScribble1Line2 = "Scribble1Line2";
   static constexpr std::string_view kScribble1Color = "Scribble1Color";
@@ -39,6 +40,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader2 = "Fader2";
   static constexpr std::string_view kPot2 = "Pot2";
   static constexpr std::string_view kPotButton2 = "PotButton2";
+  static constexpr std::string_view kMeter2 = "Meter2";
   static constexpr std::string_view kScribble2Line1 = "Scribble2Line1";
   static constexpr std::string_view kScribble2Line2 = "Scribble2Line2";
   static constexpr std::string_view kScribble2Color = "Scribble2Color";
@@ -50,6 +52,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader3 = "Fader3";
   static constexpr std::string_view kPot3 = "Pot3";
   static constexpr std::string_view kPotButton3 = "PotButton3";
+  static constexpr std::string_view kMeter3 = "Meter3";
   static constexpr std::string_view kScribble3Line1 = "Scribble3Line1";
   static constexpr std::string_view kScribble3Line2 = "Scribble3Line2";
   static constexpr std::string_view kScribble3Color = "Scribble3Color";
@@ -61,6 +64,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader4 = "Fader4";
   static constexpr std::string_view kPot4 = "Pot4";
   static constexpr std::string_view kPotButton4 = "PotButton4";
+  static constexpr std::string_view kMeter4 = "Meter4";
   static constexpr std::string_view kScribble4Line1 = "Scribble4Line1";
   static constexpr std::string_view kScribble4Line2 = "Scribble4Line2";
   static constexpr std::string_view kScribble4Color = "Scribble4Color";
@@ -72,6 +76,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader5 = "Fader5";
   static constexpr std::string_view kPot5 = "Pot5";
   static constexpr std::string_view kPotButton5 = "PotButton5";
+  static constexpr std::string_view kMeter5 = "Meter5";
   static constexpr std::string_view kScribble5Line1 = "Scribble5Line1";
   static constexpr std::string_view kScribble5Line2 = "Scribble5Line2";
   static constexpr std::string_view kScribble5Color = "Scribble5Color";
@@ -83,6 +88,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader6 = "Fader6";
   static constexpr std::string_view kPot6 = "Pot6";
   static constexpr std::string_view kPotButton6 = "PotButton6";
+  static constexpr std::string_view kMeter6 = "Meter6";
   static constexpr std::string_view kScribble6Line1 = "Scribble6Line1";
   static constexpr std::string_view kScribble6Line2 = "Scribble3Line2";
   static constexpr std::string_view kScribble6Color = "Scribble6Color";
@@ -94,6 +100,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader7 = "Fader7";
   static constexpr std::string_view kPot7 = "Pot7";
   static constexpr std::string_view kPotButton7 = "PotButton7";
+  static constexpr std::string_view kMeter7 = "Meter7";
   static constexpr std::string_view kScribble7Line1 = "Scribble7Line1";
   static constexpr std::string_view kScribble7Line2 = "Scribble7Line2";
   static constexpr std::string_view kScribble7Color = "Scribble7Color";
@@ -105,6 +112,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kFader8 = "Fader8";
   static constexpr std::string_view kPot8 = "Pot8";
   static constexpr std::string_view kPotButton8 = "PotButton8";
+  static constexpr std::string_view kMeter8 = "Meter8";
   static constexpr std::string_view kScribble8Line1 = "Scribble8Line1";
   static constexpr std::string_view kScribble8Line2 = "Scribble8Line2";
   static constexpr std::string_view kScribble8Color = "Scribble8Color";
@@ -131,6 +139,9 @@ class DeviceXTouch final : public Device {
   }
   static std::string PotButton(int track_index) {
     return absl::StrCat("PotButton", track_index + 1);
+  }
+  static std::string Meter(int track) {
+    return absl::StrCat("Meter", track + 1);
   }
   static std::string Scribble(int track_index, int line) {
     return absl::StrCat("Scribble", track_index + 1, "Line", line + 1);

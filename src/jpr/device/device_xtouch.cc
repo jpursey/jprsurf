@@ -152,6 +152,52 @@ const Button kButtons[] = {
 };
 
 //==============================================================================
+// VU meters
+//==============================================================================
+
+// Converts a linear peak amplitude to an MCU VU meter nibble value (0x0-0xD).
+// Input is the linear amplitude from Track_GetPeakInfo (1.0 = 0dBFS).
+uint8_t PeakToMcuMeter(double peak) {
+  if (peak >= 1.0) return 0xE;      // Clip
+  if (peak >= 0.631) return 0xD;    // >= -4 dB
+  if (peak >= 0.398) return 0xB;    // >= -8 dB
+  if (peak >= 0.200) return 0xA;    // >= -14 dB
+  if (peak >= 0.100) return 0x8;    // >= -20 dB
+  if (peak >= 0.0316) return 0x6;   // >= -30 dB
+  if (peak >= 0.0100) return 0x4;   // >= -40 dB
+  if (peak >= 0.00316) return 0x2;  // >= -60 dB...
+  return 0.0;
+}
+
+//inline constexpr uint8_t kTrackToLevel[8] = {0x02, 0x04, 0x06, 0x08,
+//                                             0x0A, 0x0B, 0x0D, 0x0E};
+
+// Output-only control that sends MCU VU meter updates for a single channel
+// strip. Must be polled every run cycle; the hardware handles decay.
+class XTouchTrackMeter final : public ControlCValueOutput {
+ public:
+  XTouchTrackMeter(MidiOut* midi_out, int track)
+      : midi_out_(midi_out), track_(track) {}
+  XTouchTrackMeter(const XTouchTrackMeter&) = delete;
+  XTouchTrackMeter& operator=(const XTouchTrackMeter&) = delete;
+  ~XTouchTrackMeter() override = default;
+
+ protected:
+  void OnValueChanged(double value, int mode) override {
+    // value is a linear amplitude [0, 1+]. Convert to MCU nibble.
+    uint8_t level = PeakToMcuMeter(value);
+    //uint8_t level = kTrackToLevel[track_];
+    uint8_t data = static_cast<uint8_t>((track_ << 4) | level);
+    // Channel Pressure on MIDI channel 0: status=0xD0, data byte=sv.
+    midi_out_->QueueMessage(MidiChannelPressure(/*channel=*/0, data));
+  }
+
+ private:
+  MidiOut* midi_out_;
+  int track_;  // 0-7
+};
+
+//==============================================================================
 // Scribble strip text
 //==============================================================================
 
@@ -607,6 +653,13 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
         midi_out, ControlCValueOutputMcuFader::Track(track));
     fader_options.binding = Control::Binding::kMotorized;
     AddControl(std::move(fader_options));
+
+    // VU meter.
+    name = Meter(track);
+    Control::Options meter_options = {.name = name};
+    meter_options.cvalue_output =
+        std::make_unique<XTouchTrackMeter>(midi_out, track);
+    AddControl(std::move(meter_options));
 
     // Scribble strip text.
     SysexPrefix scribble_prefix =
