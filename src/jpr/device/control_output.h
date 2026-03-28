@@ -10,6 +10,7 @@
 
 #include "absl/types/span.h"
 #include "jpr/common/color.h"
+#include "jpr/common/timeline.h"
 
 namespace jpr {
 
@@ -83,7 +84,7 @@ class ControlCValueOutput : public ControlOutput {
   explicit ControlCValueOutput(int mode_count = 1)
       : ControlOutput(mode_count) {}
 
-  // Derived classes should call this to update the value of the physical
+  // Derived classes should override this to update the value of the physical
   // output. The value is guaranteed to be in the range [0.0, 1.0], and the
   // mode is guaranteed to be in the range [0, GetModeCount()).
   virtual void OnValueChanged(double value, int mode) = 0;
@@ -130,7 +131,7 @@ class ControlDValueOutput : public ControlOutput {
   explicit ControlDValueOutput(int max_value);
   explicit ControlDValueOutput(absl::Span<const int> max_values);
 
-  // Derived classes should call this to update the value of the physical
+  // Derived classes should override this to update the value of the physical
   // output. The value is guaranteed to be in the range
   // [0, GetMaxValue(mode)], and the mode is guaranteed to be in the range
   // [0, GetModeCount()).
@@ -158,15 +159,30 @@ class ControlTextOutput : public ControlOutput {
   // output mode, and is clamped to the valid range.
   void SetText(std::string_view text, int mode = 0);
 
+  // Sets the text of this output based on the given timeline position. The mode
+  // maps to the TimelineMode as follows:
+  //   mode = 0: GetRulerMode()
+  //   mode = 1: TimelineMode::kBeats
+  //   mode = 2: TimelineMode::kTime
+  //   mode = 3: TimelineMode::kFrames
+  //   mode = 4: TimelineMode::kSamples
+  void SetTimelineText(TimelinePosition position, int mode = 0);
+
   // Implements ControlOutput.
   Type GetType() const override { return Type::kText; }
 
  protected:
-  explicit ControlTextOutput(int mode_count = 1)
-      : ControlOutput(mode_count) {}
+  explicit ControlTextOutput(int mode_count = 1) : ControlOutput(mode_count) {}
 
-  // Derived classes should call this to update the text of the physical output.
-  // The mode is guaranteed to be in the range [0, GetModeCount()).
+  // Derived classes can optionally override this to update the text of the
+  // physical output based on a timeline position. If this is not overridden,
+  // the default implementation will format the position automatically based on
+  // the mode and call OnTextChanged with a mode of zero.
+  virtual void OnTimelineTextChanged(TimelinePosition position,
+                                     TimelineMode mode);
+
+  // Derived classes should override this to update the text of the physical
+  // output. The mode is guaranteed to be in the range [0, GetModeCount()).
   virtual void OnTextChanged(std::string_view text, int mode) = 0;
 };
 
@@ -193,10 +209,9 @@ class ControlColorOutput : public ControlOutput {
   Type GetType() const override { return Type::kColor; }
 
  protected:
-  explicit ControlColorOutput(int mode_count = 1)
-      : ControlOutput(mode_count) {}
+  explicit ControlColorOutput(int mode_count = 1) : ControlOutput(mode_count) {}
 
-  // Derived classes should call this to update the color of the physical
+  // Derived classes should override this to update the color of the physical
   // output. The mode is guaranteed to be in the range [0, GetModeCount()).
   virtual void OnColorChanged(Color color, int mode) = 0;
 };
