@@ -320,14 +320,15 @@ int View::GetMaxChildContextIndex() const {
       return 0;
     case ContextType::kTrack:
       if (GetContextType() == ContextType::kNone) {
-        return TrackCache::Get().GetTopLevelTrackCount() -
-               GetChildContextCount();
+        return std::max(0, TrackCache::Get().GetTopLevelTrackCount() -
+                               GetChildContextCount());
       } else if (GetContextType() == ContextType::kTrack) {
         auto& track_properties =
             std::get<std::unique_ptr<TrackProperties>>(context_);
         DCHECK(track_properties != nullptr);
-        return track_properties->GetTrack()->GetChildTracks().size() -
-               GetChildContextCount();
+        return std::max<int>(
+            0, track_properties->GetTrack()->GetChildTracks().size() -
+                   GetChildContextCount());
       }
       break;
   }
