@@ -246,6 +246,11 @@ class Control final {
   // output, this does nothing.
   void SetText(std::string_view text, int mode = 0);
 
+  // Sets the text of the Text output based on a timeline position. If there is
+  // no Text output, this does nothing. The mode selects the timeline display
+  // format (see ControlTextOutput::SetTimelineText for details).
+  void SetTimelineText(TimelinePosition position, int mode = 0);
+
   // Sets the color of the Color output, if it exists. If there is no Color
   // output, this does nothing.
   void SetColor(Color color, int mode = 0);
@@ -305,7 +310,7 @@ class Control final {
   };
 
   struct PendingOutput {
-    std::variant<double, int, std::string, Color> value;
+    std::variant<double, int, std::string, Color, TimelinePosition> value;
     int mode = 0;
   };
 

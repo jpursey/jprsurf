@@ -181,6 +181,21 @@ void Control::SetText(std::string_view text, int mode) {
   }
 }
 
+void Control::SetTimelineText(TimelinePosition position, int mode) {
+  if (text_output_ == nullptr) {
+    return;
+  }
+  if (binding_ != Binding::kIndependent) {
+    bool had_pending = pending_output_.has_value();
+    pending_output_ = PendingOutput{.value = position, .mode = mode};
+    if (!had_pending) {
+      UpdateRunHandle();
+    }
+  } else {
+    text_output_->SetTimelineText(position, mode);
+  }
+}
+
 void Control::SetColor(Color color, int mode) {
   if (color_output_ == nullptr) {
     return;
@@ -672,6 +687,8 @@ void Control::SendPendingOutput() {
           text_output_->SetText(value, mode);
         } else if constexpr (std::is_same_v<T, Color>) {
           color_output_->SetColor(value, mode);
+        } else if constexpr (std::is_same_v<T, TimelinePosition>) {
+          text_output_->SetTimelineText(value, mode);
         } else {
           static_assert(false, "non-exhaustive visitor!");
         }
