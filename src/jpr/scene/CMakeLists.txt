@@ -8,6 +8,7 @@ set(jpr_scene_SOURCE
   reaper_property.cc reaper_property.h
   scene.cc scene.h
   scene_state_property.cc scene_state_property.h
+  timeline_property.cc timeline_property.h
   track_properties.cc track_properties.h
   view.cc view.h
   view_mapping.cc view_mapping.h

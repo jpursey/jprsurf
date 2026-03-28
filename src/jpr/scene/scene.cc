@@ -14,6 +14,7 @@
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/reaper_property.h"
 #include "jpr/scene/scene_state_property.h"
+#include "jpr/scene/timeline_property.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -52,8 +53,6 @@ Control* Scene::GetControl(std::string_view name) const {
 }
 
 ViewProperty* Scene::GetProperty(std::string_view name) {
-  // TODO: Create properties on demand for valid property names, if it doesn't
-  // already exist.
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }
@@ -70,6 +69,50 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
       property = std::make_unique<CommandToggleProperty>(this, name, command_id,
                                                          state > 0);
     }
+    auto property_ptr = property.get();
+    properties_[name] = std::move(property);
+    return property_ptr;
+  }
+
+  // Timeline position properties.
+  std::unique_ptr<ViewProperty> property;
+  if (name == kTimelinePosition) {
+    property = std::make_unique<TimelinePositionProperty>(
+        this, name, TimelinePositionProperty::Source::kCurrent);
+  } else if (name == kPlaybackPosition) {
+    property = std::make_unique<TimelinePositionProperty>(
+        this, name, TimelinePositionProperty::Source::kPlayback);
+  } else if (name == kEditPosition) {
+    property = std::make_unique<TimelinePositionProperty>(
+        this, name, TimelinePositionProperty::Source::kEdit);
+  }
+  // Primary ruler mode properties.
+  else if (name == kRulerBeats) {
+    property =
+        std::make_unique<RulerModeProperty>(this, name, TimelineMode::kBeats);
+  } else if (name == kRulerTime) {
+    property =
+        std::make_unique<RulerModeProperty>(this, name, TimelineMode::kTime);
+  } else if (name == kRulerFrames) {
+    property =
+        std::make_unique<RulerModeProperty>(this, name, TimelineMode::kFrames);
+  } else if (name == kRulerSamples) {
+    property = std::make_unique<RulerModeProperty>(this, name,
+                                                    TimelineMode::kSamples);
+  }
+  // Secondary ruler mode properties.
+  else if (name == kRuler2Time) {
+    property = std::make_unique<SecondaryRulerModeProperty>(
+        this, name, TimelineMode::kTime);
+  } else if (name == kRuler2Frames) {
+    property = std::make_unique<SecondaryRulerModeProperty>(
+        this, name, TimelineMode::kFrames);
+  } else if (name == kRuler2Samples) {
+    property = std::make_unique<SecondaryRulerModeProperty>(
+        this, name, TimelineMode::kSamples);
+  }
+
+  if (property != nullptr) {
     auto property_ptr = property.get();
     properties_[name] = std::move(property);
     return property_ptr;
