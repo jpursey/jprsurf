@@ -166,7 +166,7 @@ uint8_t PeakToMcuMeter(double peak) {
   if (peak >= 0.0316) return 0x6;   // >= -30 dB
   if (peak >= 0.0100) return 0x4;   // >= -40 dB
   if (peak >= 0.00316) return 0x2;  // >= -60 dB
-  return 0.0;
+  return 0;
 }
 
 //inline constexpr uint8_t kTrackToLevel[8] = {0x02, 0x04, 0x06, 0x08,
