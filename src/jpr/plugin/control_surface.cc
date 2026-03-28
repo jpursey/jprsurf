@@ -738,6 +738,9 @@ void ControlSurface::InitViews() {
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kColor,
           absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(i)));
+      track_view->AddMapping(
+          ViewMapping::kWriteControl, TrackProperties::kMeter,
+          absl::StrCat(device_prefix, DeviceXTouch::Meter(i)));
       track_view->Enable();
     }
   }
