@@ -141,6 +141,7 @@ class ViewMapping final {
   void InitReadNormalizedSyncFunction();
   void InitReadTextSyncFunction();
   void InitReadColorSyncFunction();
+  void InitReadTimelinePositionSyncFunction();
 
   void InitWriteControl();
   void InitWriteToggleSyncFunction();
@@ -149,6 +150,7 @@ class ViewMapping final {
   void InitWriteNormalizedSyncFunction();
   void InitWriteTextSyncFunction();
   void InitWriteColorSyncFunction();
+  void InitWriteTimelinePositionSyncFunction();
 
   TypeFlags type_;
   View* view_;

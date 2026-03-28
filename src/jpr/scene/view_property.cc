@@ -52,6 +52,8 @@ ViewProperty::Value ViewProperty::GetValue() const {
       return ReadString();
     case Type::kColor:
       return ReadColor();
+    case Type::kTimelinePosition:
+      return ReadTimelinePosition();
   }
   return std::monostate{};
 }
@@ -73,6 +75,8 @@ bool ViewProperty::GetBool() const {
     case Type::kColor: {
       return GetLuminance(ReadColor()) > 0.5;
     }
+    case Type::kTimelinePosition:
+      return ReadTimelinePosition().GetValue() > 0.0;
   }
   return false;
 }
@@ -92,6 +96,8 @@ double ViewProperty::GetPan() const {
     case Type::kColor: {
       return std::clamp(GetLuminance(ReadColor()), 0.0, 1.0) * 2.0 - 1.0;
     }
+    case Type::kTimelinePosition:
+      return 0.0;
   }
   return 0.0;
 }
@@ -111,6 +117,8 @@ double ViewProperty::GetVolume() const {
     case Type::kColor: {
       return std::clamp(GetLuminance(ReadColor()), 0.0, 1.0);
     }
+    case Type::kTimelinePosition:
+      return 0.0;
   }
   return 0.0;
 }
@@ -130,6 +138,8 @@ double ViewProperty::GetNormalized() const {
     case Type::kColor: {
       return std::clamp(GetLuminance(ReadColor()), 0.0, 1.0);
     }
+    case Type::kTimelinePosition:
+      return 0.0;
   }
   return 0.0;
 }
@@ -160,6 +170,8 @@ std::string ViewProperty::GetText() const {
                           absl::Hex(color.g, absl::kZeroPad2),
                           absl::Hex(color.b, absl::kZeroPad2));
     }
+    case Type::kTimelinePosition:
+      return ReadTimelinePosition().ToString(GetRulerMode());
   }
   return "";
 }
@@ -186,6 +198,8 @@ Color ViewProperty::GetColor() const {
     }
     case Type::kColor:
       return ReadColor();
+    case Type::kTimelinePosition:
+      return {0, 0, 0};
   }
   return {0, 0, 0};
 }
@@ -227,6 +241,11 @@ void ViewProperty::SetValue(const Value& value) {
         WriteColor(std::get<Color>(value));
       }
       break;
+    case Type::kTimelinePosition:
+      if (std::holds_alternative<TimelinePosition>(value)) {
+        WriteTimelinePosition(std::get<TimelinePosition>(value));
+      }
+      break;
   }
 }
 
@@ -252,6 +271,8 @@ void ViewProperty::SetBool(bool value) {
       break;
     case Type::kColor:
       WriteColor(value ? Color{255, 255, 255} : Color{0, 0, 0});
+      break;
+    case Type::kTimelinePosition:
       break;
   }
 }
@@ -282,6 +303,8 @@ void ViewProperty::SetPan(double value) {
       WriteColor({color_value, color_value, color_value});
       break;
     }
+    case Type::kTimelinePosition:
+      break;
   }
 }
 
@@ -313,6 +336,8 @@ void ViewProperty::SetVolume(double value) {
       WriteColor({color_value, color_value, color_value});
       break;
     }
+    case Type::kTimelinePosition:
+      break;
   }
 }
 
@@ -342,6 +367,8 @@ void ViewProperty::SetNormalized(double value) {
       WriteColor({color_value, color_value, color_value});
       break;
     }
+    case Type::kTimelinePosition:
+      break;
   }
 }
 
@@ -381,6 +408,8 @@ void ViewProperty::SetText(std::string_view value) {
         WriteColor({r, g, b});
       }
       break;
+    case Type::kTimelinePosition:
+      break;
   }
 }
 
@@ -406,6 +435,40 @@ void ViewProperty::SetColor(const Color& value) {
     }
     case Type::kColor:
       WriteColor(value);
+      break;
+    case Type::kTimelinePosition:
+      break;
+  }
+}
+
+TimelinePosition ViewProperty::GetTimelinePosition() const {
+  switch (type_) {
+    case Type::kAction:
+    case Type::kToggle:
+    case Type::kPan:
+    case Type::kVolume:
+    case Type::kNormalized:
+    case Type::kText:
+    case Type::kColor:
+      return {};
+    case Type::kTimelinePosition:
+      return ReadTimelinePosition();
+  }
+  return {};
+}
+
+void ViewProperty::SetTimelinePosition(TimelinePosition value) {
+  switch (type_) {
+    case Type::kAction:
+    case Type::kToggle:
+    case Type::kPan:
+    case Type::kVolume:
+    case Type::kNormalized:
+    case Type::kText:
+    case Type::kColor:
+      break;
+    case Type::kTimelinePosition:
+      WriteTimelinePosition(value);
       break;
   }
 }

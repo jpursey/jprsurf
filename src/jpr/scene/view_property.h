@@ -10,6 +10,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/color.h"
+#include "jpr/common/timeline.h"
 
 namespace jpr {
 
@@ -76,12 +77,21 @@ class ViewProperty {
     // The underlying value is a Color, with the RGB values representing the
     // color of the parameter.
     kColor,
+
+    // A property that corresponds to a REAPER timeline position. This has a
+    // value that represents a position in the timeline, which can be
+    // interpreted in different modes (e.g. beats, time, frames, samples).
+    //
+    // The underlying value is a TimelinePosition.
+    kTimelinePosition,
   };
 
   // The value of the property. This is a variant that can hold any of the types
   // defined by the Type enum. The actual type of the value will depend on the
   // Type of the property (see the documentation for each Type for details).
-  using Value = std::variant<std::monostate, bool, double, std::string, Color>;
+  using Value =
+      std::variant<std::monostate, bool, double, std::string, Color,
+                   TimelinePosition>;
 
   explicit ViewProperty(std::string_view name, Type type);
   ViewProperty(const ViewProperty&) = delete;
@@ -107,6 +117,7 @@ class ViewProperty {
   double GetNormalized() const;  // Returns in range [0,1]
   std::string GetText() const;
   Color GetColor() const;
+  TimelinePosition GetTimelinePosition() const;
 
   // Sets the value of the property in REAPER.
   //
@@ -125,6 +136,7 @@ class ViewProperty {
   void SetNormalized(double value);  // Input clamped to [0,1]
   void SetText(std::string_view value);
   void SetColor(const Color& value);
+  void SetTimelinePosition(TimelinePosition value);
 
   // Runs the action associated with this property. This is only applicable for
   // properties of type kAction, and will have no effect for other types.
@@ -148,6 +160,8 @@ class ViewProperty {
   virtual void WriteString(std::string_view value) {}
   virtual Color ReadColor() const { return {0, 0, 0}; }
   virtual void WriteColor(const Color& value) {}
+  virtual TimelinePosition ReadTimelinePosition() const { return {}; }
+  virtual void WriteTimelinePosition(TimelinePosition value) {}
 
   // Derived classes should call this whenever the property value changes.
   void NotifyChanged();

@@ -122,6 +122,9 @@ void ViewMapping::InitReadControl() {
     case ViewProperty::Type::kColor:
       InitReadColorSyncFunction();
       break;
+    case ViewProperty::Type::kTimelinePosition:
+      InitReadTimelinePositionSyncFunction();
+      break;
   }
 }
 
@@ -561,6 +564,9 @@ void ViewMapping::InitWriteControl() {
     case ViewProperty::Type::kColor:
       InitWriteColorSyncFunction();
       break;
+    case ViewProperty::Type::kTimelinePosition:
+      InitWriteTimelinePositionSyncFunction();
+      break;
   }
 }
 
@@ -957,6 +963,39 @@ void ViewMapping::InitWriteColorSyncFunction() {
                           mode);
       };
     }
+    return;
+  }
+}
+
+void ViewMapping::InitReadTimelinePositionSyncFunction() {
+  Control::Inputs inputs = control_->GetInputs();
+
+  // Only delta inputs make sense for timeline position (e.g. jog wheel to
+  // scrub). Value and press inputs are not supported.
+  if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_config_.input_type = ControlInput::Type::kDelta;
+    read_control_ = [](ViewProperty& property, Control& control, InputId id) {
+      double delta = control.GetDelta(id);
+      if (delta != 0) {
+        TimelinePosition pos = property.GetTimelinePosition();
+        pos.SetValue(pos.GetValue() + delta);
+        property.SetTimelinePosition(pos);
+      }
+    };
+    return;
+  }
+}
+
+void ViewMapping::InitWriteTimelinePositionSyncFunction() {
+  Control::Outputs outputs = control_->GetOutputs();
+
+  // Only text outputs make sense for timeline position, as the position needs
+  // to be formatted for display. The mode is passed through to
+  // Control::SetTimelineText to select the timeline display format.
+  if (outputs.IsSet(ControlOutput::Type::kText)) {
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      control.SetTimelineText(property.GetTimelinePosition(), mode);
+    };
     return;
   }
 }
