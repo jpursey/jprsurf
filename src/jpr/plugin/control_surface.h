@@ -122,6 +122,7 @@ class ControlSurface final : private IReaperControlSurface {
   // Performance monitoring
   absl::Time last_log_time_;
   absl::Duration elapsed_run_time_;
+  absl::Duration max_run_time_;
   int run_count_ = 0;
 };
 

@@ -113,10 +113,14 @@ void ControlSurface::Run() {
   midi_out_runner_.Run();
 
   absl::Time end = absl::Now();
-  elapsed_run_time_ += end - start;
+  absl::Duration run_time = end - start;
+  max_run_time_ = std::max(max_run_time_, run_time);
+  elapsed_run_time_ += run_time;
   ++run_count_;
   if (last_log_time_ + kLogInterval < end) {
-    LOG(INFO) << "Run() " << run_count_ << " times, avg/run: "
+    LOG(INFO) << "Run() " << run_count_
+              << " times, max: " << absl::ToInt64Microseconds(max_run_time_)
+              << "us, avg: "
               << std::ceil(absl::ToDoubleMicroseconds(elapsed_run_time_) /
                            run_count_)
               << "us, avg/sec: "
@@ -125,6 +129,7 @@ void ControlSurface::Run() {
               << "us";
     last_log_time_ = end;
     elapsed_run_time_ = absl::ZeroDuration();
+    max_run_time_ = absl::ZeroDuration();
     run_count_ = 0;
   }
 }
