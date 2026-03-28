@@ -11,6 +11,7 @@ set(jpr_common_SOURCE
   midi_sysex.cc midi_sysex.h
   modifiers.cc modifiers.h
   runner.cc runner.h
+  timeline.cc timeline.h
   track.cc track.h
   track_cache.cc track_cache.h
   volume_utils.h
