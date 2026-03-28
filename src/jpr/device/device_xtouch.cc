@@ -155,7 +155,7 @@ const Button kButtons[] = {
 // VU meters
 //==============================================================================
 
-// Converts a linear peak amplitude to an MCU VU meter nibble value (0x0-0xD).
+// Converts a linear peak amplitude to an MCU VU meter nibble value (0x0-0xE).
 // Input is the linear amplitude from Track_GetPeakInfo (1.0 = 0dBFS).
 uint8_t PeakToMcuMeter(double peak) {
   if (peak >= 1.0) return 0xE;      // Clip
@@ -165,7 +165,7 @@ uint8_t PeakToMcuMeter(double peak) {
   if (peak >= 0.100) return 0x8;    // >= -20 dB
   if (peak >= 0.0316) return 0x6;   // >= -30 dB
   if (peak >= 0.0100) return 0x4;   // >= -40 dB
-  if (peak >= 0.00316) return 0x2;  // >= -60 dB...
+  if (peak >= 0.00316) return 0x2;  // >= -60 dB
   return 0.0;
 }
 
