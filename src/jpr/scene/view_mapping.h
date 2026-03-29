@@ -142,6 +142,7 @@ class ViewMapping final {
   void InitReadTextSyncFunction();
   void InitReadColorSyncFunction();
   void InitReadTimelinePositionSyncFunction();
+  void InitReadEnumeratedSyncFunction();
 
   void InitWriteControl();
   void InitWriteToggleSyncFunction();
@@ -151,6 +152,7 @@ class ViewMapping final {
   void InitWriteTextSyncFunction();
   void InitWriteColorSyncFunction();
   void InitWriteTimelinePositionSyncFunction();
+  void InitWriteEnumeratedSyncFunction();
 
   TypeFlags type_;
   View* view_;

@@ -46,6 +46,15 @@ std::optional<Color> GetColor(const std::optional<ViewProperty::Value>& value) {
   return std::nullopt;
 }
 
+// Extracts an int from a ViewProperty::Value, returning std::nullopt if the
+// value is not an int.
+std::optional<int> GetInt(const std::optional<ViewProperty::Value>& value) {
+  if (value.has_value() && std::holds_alternative<int>(*value)) {
+    return std::get<int>(*value);
+  }
+  return std::nullopt;
+}
+
 // Linearly interpolates a value in [0,1] to [min,max].
 double Lerp(double t, double min, double max) { return min + t * (max - min); }
 
@@ -124,6 +133,9 @@ void ViewMapping::InitReadControl() {
       break;
     case ViewProperty::Type::kTimelinePosition:
       InitReadTimelinePositionSyncFunction();
+      break;
+    case ViewProperty::Type::kEnumerated:
+      InitReadEnumeratedSyncFunction();
       break;
   }
 }
@@ -469,8 +481,7 @@ void ViewMapping::InitReadColorSyncFunction() {
         property.SetColor(control.IsPressed(id) ? max : min);
       };
     } else {
-      read_control_ = [](ViewProperty& property, Control& control,
-                         InputId id) {
+      read_control_ = [](ViewProperty& property, Control& control, InputId id) {
         property.SetBool(control.IsPressed(id));
       };
     }
@@ -489,8 +500,7 @@ void ViewMapping::InitReadColorSyncFunction() {
         property.SetColor(LerpColor(control.GetValue(id), min, max));
       };
     } else {
-      read_control_ = [](ViewProperty& property, Control& control,
-                         InputId id) {
+      read_control_ = [](ViewProperty& property, Control& control, InputId id) {
         property.SetNormalized(control.GetValue(id));
       };
     }
@@ -526,8 +536,7 @@ void ViewMapping::InitReadColorSyncFunction() {
         }
       };
     } else {
-      read_control_ = [](ViewProperty& property, Control& control,
-                         InputId id) {
+      read_control_ = [](ViewProperty& property, Control& control, InputId id) {
         if (control.GetPressCount(id) % 2 == 1) {
           property.SetBool(!property.GetBool());
         }
@@ -566,6 +575,9 @@ void ViewMapping::InitWriteControl() {
       break;
     case ViewProperty::Type::kTimelinePosition:
       InitWriteTimelinePositionSyncFunction();
+      break;
+    case ViewProperty::Type::kEnumerated:
+      InitWriteEnumeratedSyncFunction();
       break;
   }
 }
@@ -986,6 +998,77 @@ void ViewMapping::InitReadTimelinePositionSyncFunction() {
   }
 }
 
+void ViewMapping::InitReadEnumeratedSyncFunction() {
+  Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetInt(config_.read.property_min);
+  auto cfg_max = GetInt(config_.read.property_max);
+
+  // If we are configured for press/release behavior, then we set the property
+  // to the max value when pressed and the min value when released.
+  if (config_.read.press_release) {
+    input_config_.input_type = ControlInput::Type::kPress;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      property.SetInt(control.IsPressed(id) ? max : min);
+    };
+    return;
+  }
+
+  // If there is a value input, we linearly map [0,1] to the configured integer
+  // range (default [0,GetMaxValue()]).
+  if (inputs.IsSet(ControlInput::Type::kValue)) {
+    input_config_.input_type = ControlInput::Type::kValue;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      double value = control.GetValue(id);
+      int range = max - min;
+      int int_value = min + static_cast<int>(value * range + 0.5);
+      property.SetInt(std::clamp(int_value, min, max));
+    };
+    return;
+  }
+
+  // If there is a delta input, we step the integer value up or down, clamped
+  // to the configured range (default [0,GetMaxValue()]).
+  if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_config_.input_type = ControlInput::Type::kDelta;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      double delta = control.GetDelta(id);
+      if (delta != 0) {
+        int step = delta > 0 ? 1 : -1;
+        property.SetInt(std::clamp(property.GetInt() + step, min, max));
+      }
+    };
+    return;
+  }
+
+  // If there is a press input, we cycle to the next enumerated value, wrapping
+  // around from max to min.
+  if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_config_.input_type = ControlInput::Type::kPress;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      int press_count = control.GetPressCount(id);
+      if (press_count > 0) {
+        int range = max - min + 1;
+        int current = property.GetInt();
+        int new_value = min + ((current - min + press_count) % range);
+        property.SetInt(new_value);
+      }
+    };
+    return;
+  }
+}
+
 void ViewMapping::InitWriteTimelinePositionSyncFunction() {
   Control::Outputs outputs = control_->GetOutputs();
 
@@ -995,6 +1078,52 @@ void ViewMapping::InitWriteTimelinePositionSyncFunction() {
   if (outputs.IsSet(ControlOutput::Type::kText)) {
     write_control_ = [](ViewProperty& property, Control& control, int mode) {
       control.SetTimelineText(property.GetTimelinePosition(), mode);
+    };
+    return;
+  }
+}
+
+void ViewMapping::InitWriteEnumeratedSyncFunction() {
+  Control::Outputs outputs = control_->GetOutputs();
+
+  // If there is a dvalue output, we map the enumerated integer value directly
+  // to the discrete output value.
+  if (outputs.IsSet(ControlOutput::Type::kDValue)) {
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      int max_value = control.GetDValueMaxValue(mode);
+      int prop_max = property.GetMaxValue();
+      if (prop_max <= 0) {
+        control.SetDValue(0, mode);
+        return;
+      }
+      int value = property.GetInt();
+      int mapped = static_cast<int>(
+          static_cast<double>(value) / prop_max * max_value + 0.5);
+      control.SetDValue(std::clamp(mapped, 0, max_value), mode);
+    };
+    return;
+  }
+
+  // If there is a cvalue output, we normalize the enumerated value to [0,1].
+  if (outputs.IsSet(ControlOutput::Type::kCValue)) {
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      control.SetCValue(property.GetNormalized(), mode);
+    };
+    return;
+  }
+
+  // If there is a text output, let the property convert the value to text.
+  if (outputs.IsSet(ControlOutput::Type::kText)) {
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      control.SetText(property.GetText(), mode);
+    };
+    return;
+  }
+
+  // If there is a color output, let the property convert the value to a color.
+  if (outputs.IsSet(ControlOutput::Type::kColor)) {
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      control.SetColor(property.GetColor(), mode);
     };
     return;
   }
@@ -1028,8 +1157,7 @@ void ViewMapping::RefreshActive(bool parent_active) {
       property_->RegisterFlag(&property_changed_);
     }
     if (read_control_ != nullptr) {
-      input_handle_ =
-          control_->RegisterInput(input_config_, &control_changed_);
+      input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
     }
   } else {
     if (type_.IsSet(kWriteControl)) {
