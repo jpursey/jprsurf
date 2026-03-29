@@ -157,6 +157,9 @@ class DeviceXTouch final : public Device {
   // Master fader.
   static constexpr std::string_view kMasterFader = "MasterFader";
 
+  // Timecode display.
+  static constexpr std::string_view kTimecode = "Timecode";
+
   // Buttons
   static constexpr std::string_view kAssignTrack = "AssignTrack";
   static constexpr std::string_view kAssignSend = "AssignSend";

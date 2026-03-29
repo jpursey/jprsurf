@@ -169,8 +169,8 @@ uint8_t PeakToMcuMeter(double peak) {
   return 0;
 }
 
-//inline constexpr uint8_t kTrackToLevel[8] = {0x02, 0x04, 0x06, 0x08,
-//                                             0x0A, 0x0B, 0x0D, 0x0E};
+// inline constexpr uint8_t kTrackToLevel[8] = {0x02, 0x04, 0x06, 0x08,
+//                                              0x0A, 0x0B, 0x0D, 0x0E};
 
 // Output-only control that sends MCU VU meter updates for a single channel
 // strip. Must be polled every run cycle; the hardware handles decay.
@@ -186,7 +186,7 @@ class XTouchTrackMeter final : public ControlCValueOutput {
   void OnValueChanged(double value, int mode) override {
     // value is a linear amplitude [0, 1+]. Convert to MCU nibble.
     uint8_t level = PeakToMcuMeter(value);
-    //uint8_t level = kTrackToLevel[track_];
+    // uint8_t level = kTrackToLevel[track_];
     uint8_t data = static_cast<uint8_t>((track_ << 4) | level);
     // Channel Pressure on MIDI channel 0: status=0xD0, data byte=sv.
     midi_out_->QueueMessage(MidiChannelPressure(/*channel=*/0, data));
@@ -196,6 +196,164 @@ class XTouchTrackMeter final : public ControlCValueOutput {
   MidiOut* midi_out_;
   int track_;  // 0-7
 };
+
+//==============================================================================
+// Timecode display
+//==============================================================================
+
+// Number of digits in the MCU timecode display, right to left.
+static constexpr int kTimecodeDigitCount = 10;
+
+// Output control for the MCU 10-digit timecode display. Sends individual CC
+// messages (CC 64-73, right to left) with dot bits encoded in the high nibble.
+//
+// The display has fixed field widths matching the XTouch hardware:
+//   Field 0 (leftmost):  3 digits  -- bars / hours
+//   Field 1:             2 digits  -- beats / minutes
+//   Field 2:             2 digits  -- subdivisions / seconds
+//   Field 3 (rightmost): 3 digits  -- ticks / frames
+//
+// A dot is placed after each field (on the last digit of each field) except
+// the rightmost, which has no trailing dot.
+class XTouchTimecodeDisplay final : public ControlTextOutput {
+ public:
+  explicit XTouchTimecodeDisplay(MidiOut* midi_out) : midi_out_(midi_out) {}
+  XTouchTimecodeDisplay(const XTouchTimecodeDisplay&) = delete;
+  XTouchTimecodeDisplay& operator=(const XTouchTimecodeDisplay&) = delete;
+  ~XTouchTimecodeDisplay() override = default;
+
+ protected:
+  // Overrides for ControlTextOutput.
+  void OnTimelineTextChanged(TimelinePosition position,
+                             TimelineMode mode) override;
+  void OnTextChanged(std::string_view text, int mode) override;
+
+ private:
+  // Sends the 10 encoded digit bytes to the display.
+  void SendCodes(const uint8_t text[kTimecodeDigitCount]);
+
+  // Encodes one character for the MCU 7-segment display.
+  // Bits 5-0: character (must be in ASCII range 0x20-0x5F).
+  // Bit 6: dot (decimal point on this digit).
+  static uint8_t EncodeChar(char c, bool dot) {
+    uint8_t encoded = (c >= 0x20 && c <= 0x5F) ? static_cast<uint8_t>(c)
+                                               : static_cast<uint8_t>(' ');
+    return encoded | (dot ? 0x40 : 0x00);
+  }
+
+  MidiOut* midi_out_;
+};
+
+void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
+                                                  TimelineMode mode) {
+  // The display has 4 fixed-width fields with dots between them:
+  //   [FFF][FF][FF][FFF]   (widths: 3, 2, 2, 3)
+
+  // Build 4 field strings, each right-justified into their fixed width.
+  char fields[4][4] = {};  // +1 on each for null terminator from snprintf
+
+  // Whether to place a dot after each of the first 3 fields.
+  bool dots[3] = {false, false, false};
+
+  switch (mode) {
+    case TimelineMode::kBeats: {
+      BeatsPosition b = position.ToBeats();
+      snprintf(fields[0], 4, "%3d", b.measure);
+      snprintf(fields[1], 3, "%2d", b.beat);
+      dots[1] = true;
+      snprintf(fields[2], 3, "%02d", b.division);
+      snprintf(fields[3], 4, "   ");  // No ticks from REAPER beats API
+      break;
+    }
+    case TimelineMode::kTime: {
+      TimePosition t = position.ToTime();
+      if (t.hours > 0) {
+        snprintf(fields[0], 4, "%3d", t.hours);
+        dots[0] = true;
+        snprintf(fields[1], 3, "%02d", t.minutes);
+      } else {
+        snprintf(fields[0], 4, "   ");
+        snprintf(fields[1], 3, "%2d", t.minutes);
+      }
+      dots[1] = true;
+      snprintf(fields[2], 3, "%02d", t.seconds);
+      dots[2] = true;
+      snprintf(fields[3], 4, "%03d", t.milliseconds);
+      break;
+    }
+    case TimelineMode::kFrames: {
+      FramesPosition f = position.ToFrames();
+      snprintf(fields[0], 4, " %02d", f.hours);
+      dots[0] = true;
+      snprintf(fields[1], 3, "%02d", f.minutes);
+      dots[1] = true;
+      snprintf(fields[2], 3, "%02d", f.seconds);
+      dots[2] = true;
+      snprintf(fields[3], 4, "%02d ", f.frames);
+      break;
+    }
+    case TimelineMode::kSamples: {
+      OnTextChanged(absl::StrCat(position.ToSamples()), 0);
+      return;
+    }
+  }
+
+  // Lay out the 4 fields into the 10-digit display, right to left.
+  // Digit index 0 = CC 64 = rightmost display digit.
+  // Field 3 occupies digits 0-2, field 2 digits 3-4, field 1 digits 5-6,
+  // field 0 digits 7-9.
+  // Dots appear on digit 3 (last digit of field 3->2 boundary),
+  //                  digit 5 (last digit of field 2->1 boundary),
+  //                  digit 7 (last digit of field 1->0 boundary).
+  uint8_t codes[kTimecodeDigitCount] = {};
+
+  // Field 3: codes 0-2 (rightmost field, width 3, no trailing dot)
+  for (int i = 0; i < 3; ++i) {
+    codes[i] = EncodeChar(fields[3][2 - i], false);
+  }
+  // Field 2: codes 3-4 (width 2, dot on digit 3 = last char of this field)
+  codes[3] = EncodeChar(fields[2][1], /*dot=*/dots[2]);
+  codes[4] = EncodeChar(fields[2][0], false);
+  // Field 1: codes 5-6 (width 2, dot on digit 5 = last char of this field)
+  codes[5] = EncodeChar(fields[1][1], /*dot=*/dots[1]);
+  codes[6] = EncodeChar(fields[1][0], false);
+  // Field 0: codes 7-9 (leftmost field, width 3, dot on digit 7)
+  codes[7] = EncodeChar(fields[0][2], /*dot=*/dots[0]);
+  codes[8] = EncodeChar(fields[0][1], false);
+  codes[9] = EncodeChar(fields[0][0], false);
+
+  SendCodes(codes);
+}
+
+void XTouchTimecodeDisplay::OnTextChanged(std::string_view text, int mode) {
+  uint8_t codes[kTimecodeDigitCount] = {};
+  int code_index = 0;
+  bool next_dot = false;
+
+  for (int i = static_cast<int>(text.size()) - 1;
+       i >= 0 && code_index < kTimecodeDigitCount; --i) {
+    char c = text[i];
+    if (c == '.') {
+      next_dot = true;
+    } else {
+      codes[code_index++] = EncodeChar(c, next_dot);
+      next_dot = false;
+    }
+  }
+  // Pad remaining codes with spaces.
+  for (; code_index < kTimecodeDigitCount; ++code_index) {
+    codes[code_index] = EncodeChar(' ', false);
+  }
+
+  SendCodes(codes);
+}
+
+void XTouchTimecodeDisplay::SendCodes(
+    const uint8_t digits[kTimecodeDigitCount]) {
+  for (int i = 0; i < kTimecodeDigitCount; ++i) {
+    midi_out_->UpdateState(MidiCc(/*channel=*/0, 0x40 + i, digits[i]));
+  }
+}
 
 //==============================================================================
 // Scribble strip text
@@ -612,20 +770,30 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     AddControl(std::move(options));
   }
 
-  // Master fader.
-  Control::Options master_fader_options = {.name = kMasterFader};
-  master_fader_options.value_input =
-      std::make_unique<ControlValueInputMcuFader>(
-          midi_in, ControlValueInputMcuFader::MasterFader());
-  master_fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-      midi_in, ControlPressInputMidiMsg::Config{
-                   .press = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/127),
-                   .release = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/0)});
-  master_fader_options.cvalue_output =
-      std::make_unique<ControlCValueOutputMcuFader>(
-          midi_out, ControlCValueOutputMcuFader::MasterFader());
-  master_fader_options.binding = Control::Binding::kMotorized;
-  AddControl(std::move(master_fader_options));
+  if (type != Type::kExtender) {
+    // Timecode display.
+    Control::Options timecode_options = {.name = kTimecode};
+    timecode_options.text_output =
+        std::make_unique<XTouchTimecodeDisplay>(midi_out);
+    AddControl(std::move(timecode_options));
+
+    // Master fader.
+    Control::Options master_fader_options = {.name = kMasterFader};
+    master_fader_options.value_input =
+        std::make_unique<ControlValueInputMcuFader>(
+            midi_in, ControlValueInputMcuFader::MasterFader());
+    master_fader_options.press_input =
+        std::make_unique<ControlPressInputMidiMsg>(
+            midi_in,
+            ControlPressInputMidiMsg::Config{
+                .press = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/127),
+                .release = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/0)});
+    master_fader_options.cvalue_output =
+        std::make_unique<ControlCValueOutputMcuFader>(
+            midi_out, ControlCValueOutputMcuFader::MasterFader());
+    master_fader_options.binding = Control::Binding::kMotorized;
+    AddControl(std::move(master_fader_options));
+  }
 
   // Additional per-track controls.
   for (int track = 0; track < 8; ++track) {
