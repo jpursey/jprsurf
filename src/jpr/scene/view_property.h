@@ -118,14 +118,19 @@ class ViewProperty {
   // specific type. These will reinterpret the underlying value of the property
   // as the specified type (for instance mapping a toggle property to a double
   // 0.0 or 1.0 for off and on, respectively).
-  bool GetBool() const;
-  int GetInt() const;            // Returns in range [0,GetMaxValue()]
-  double GetPan() const;         // Returns in range [-1,1]
-  double GetVolume() const;      // Returns in range [0,inf)
-  double GetNormalized() const;  // Returns in range [0,1]
-  std::string GetText() const;
-  Color GetColor() const;
-  TimelinePosition GetTimelinePosition() const;
+  //
+  // These may be overridden by derived classes that have a more specific
+  // translation to the specific type. For instance, an enumerated property may
+  // want to override GetText() to provide human-readable names for the
+  // enumeration values.
+  virtual bool GetBool() const;
+  virtual int GetInt() const;            // Returns in range [0,GetMaxValue()]
+  virtual double GetPan() const;         // Returns in range [-1,1]
+  virtual double GetVolume() const;      // Returns in range [0,inf)
+  virtual double GetNormalized() const;  // Returns in range [0,1]
+  virtual std::string GetText() const;
+  virtual Color GetColor() const;
+  virtual TimelinePosition GetTimelinePosition() const;
 
   // Sets the value of the property in REAPER.
   //
@@ -138,14 +143,19 @@ class ViewProperty {
   // These will reinterpret the passed in value as the underlying type of the
   // property (for instance mapping a double value greater than 0.5 to an on
   // state for a toggle property).
-  void SetBool(bool value);
-  void SetInt(int value);            // Input clamped to [0,GetMaxValue()]
-  void SetPan(double value);         // Input clamped to [-1,1]
-  void SetVolume(double value);      // Input clamped to [0,inf)
-  void SetNormalized(double value);  // Input clamped to [0,1]
-  void SetText(std::string_view value);
-  void SetColor(const Color& value);
-  void SetTimelinePosition(TimelinePosition value);
+  //
+  // These may be overridden by derived classes that have a more specific
+  // translation from the specific type. For instance, an enumerated property
+  // ma indexy want to override SetText() to allow setting the value by name
+  // instead of by integer value.
+  virtual void SetBool(bool value);
+  virtual void SetInt(int value);        // Input clamped to [0,GetMaxValue()]
+  virtual void SetPan(double value);     // Input clamped to [-1,1]
+  virtual void SetVolume(double value);  // Input clamped to [0,inf)
+  virtual void SetNormalized(double value);  // Input clamped to [0,1]
+  virtual void SetText(std::string_view value);
+  virtual void SetColor(const Color& value);
+  virtual void SetTimelinePosition(TimelinePosition value);
 
   // Returns the maximum value for an enumerated property. This is only
   // meaningful for properties of type kEnumerated, and will return 0 for other
