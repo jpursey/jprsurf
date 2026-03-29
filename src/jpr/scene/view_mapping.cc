@@ -546,6 +546,96 @@ void ViewMapping::InitReadColorSyncFunction() {
   }
 }
 
+void ViewMapping::InitReadTimelinePositionSyncFunction() {
+  Control::Inputs inputs = control_->GetInputs();
+
+  // Only delta inputs make sense for timeline position (e.g. jog wheel to
+  // scrub). Value and press inputs are not supported.
+  if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_config_.input_type = ControlInput::Type::kDelta;
+    read_control_ = [](ViewProperty& property, Control& control, InputId id) {
+      double delta = control.GetDelta(id);
+      if (delta != 0) {
+        TimelinePosition pos = property.GetTimelinePosition();
+        pos.SetValue(pos.GetValue() + delta);
+        property.SetTimelinePosition(pos);
+      }
+    };
+    return;
+  }
+}
+
+void ViewMapping::InitReadEnumeratedSyncFunction() {
+  Control::Inputs inputs = control_->GetInputs();
+  auto cfg_min = GetInt(config_.read.property_min);
+  auto cfg_max = GetInt(config_.read.property_max);
+
+  // If we are configured for press/release behavior, then we set the property
+  // to the max value when pressed and the min value when released.
+  if (config_.read.press_release) {
+    input_config_.input_type = ControlInput::Type::kPress;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      property.SetInt(control.IsPressed(id) ? max : min);
+    };
+    return;
+  }
+
+  // If there is a value input, we linearly map [0,1] to the configured integer
+  // range (default [0,GetMaxValue()]).
+  if (inputs.IsSet(ControlInput::Type::kValue)) {
+    input_config_.input_type = ControlInput::Type::kValue;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      double value = control.GetValue(id);
+      int range = max - min;
+      int int_value = min + static_cast<int>(value * range + 0.5);
+      property.SetInt(std::clamp(int_value, min, max));
+    };
+    return;
+  }
+
+  // If there is a delta input, we step the integer value up or down, clamped
+  // to the configured range (default [0,GetMaxValue()]).
+  if (inputs.IsSet(ControlInput::Type::kDelta)) {
+    input_config_.input_type = ControlInput::Type::kDelta;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      double delta = control.GetDelta(id);
+      if (delta != 0) {
+        int step = delta > 0 ? 1 : -1;
+        property.SetInt(std::clamp(property.GetInt() + step, min, max));
+      }
+    };
+    return;
+  }
+
+  // If there is a press input, we cycle to the next enumerated value, wrapping
+  // around from max to min.
+  if (inputs.IsSet(ControlInput::Type::kPress)) {
+    input_config_.input_type = ControlInput::Type::kPress;
+    int min = cfg_min.value_or(0);
+    int max = cfg_max.value_or(property_->GetMaxValue());
+    read_control_ = [min, max](ViewProperty& property, Control& control,
+                               InputId id) {
+      int press_count = control.GetPressCount(id);
+      if (press_count > 0) {
+        int range = max - min + 1;
+        int current = property.GetInt();
+        int new_value = min + ((current - min + press_count) % range);
+        property.SetInt(new_value);
+      }
+    };
+    return;
+  }
+}
+
 void ViewMapping::InitWriteControl() {
   if (!type_.IsSet(kWriteControl)) {
     return;
@@ -975,96 +1065,6 @@ void ViewMapping::InitWriteColorSyncFunction() {
                           mode);
       };
     }
-    return;
-  }
-}
-
-void ViewMapping::InitReadTimelinePositionSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
-
-  // Only delta inputs make sense for timeline position (e.g. jog wheel to
-  // scrub). Value and press inputs are not supported.
-  if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    input_config_.input_type = ControlInput::Type::kDelta;
-    read_control_ = [](ViewProperty& property, Control& control, InputId id) {
-      double delta = control.GetDelta(id);
-      if (delta != 0) {
-        TimelinePosition pos = property.GetTimelinePosition();
-        pos.SetValue(pos.GetValue() + delta);
-        property.SetTimelinePosition(pos);
-      }
-    };
-    return;
-  }
-}
-
-void ViewMapping::InitReadEnumeratedSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
-  auto cfg_min = GetInt(config_.read.property_min);
-  auto cfg_max = GetInt(config_.read.property_max);
-
-  // If we are configured for press/release behavior, then we set the property
-  // to the max value when pressed and the min value when released.
-  if (config_.read.press_release) {
-    input_config_.input_type = ControlInput::Type::kPress;
-    int min = cfg_min.value_or(0);
-    int max = cfg_max.value_or(property_->GetMaxValue());
-    read_control_ = [min, max](ViewProperty& property, Control& control,
-                               InputId id) {
-      property.SetInt(control.IsPressed(id) ? max : min);
-    };
-    return;
-  }
-
-  // If there is a value input, we linearly map [0,1] to the configured integer
-  // range (default [0,GetMaxValue()]).
-  if (inputs.IsSet(ControlInput::Type::kValue)) {
-    input_config_.input_type = ControlInput::Type::kValue;
-    int min = cfg_min.value_or(0);
-    int max = cfg_max.value_or(property_->GetMaxValue());
-    read_control_ = [min, max](ViewProperty& property, Control& control,
-                               InputId id) {
-      double value = control.GetValue(id);
-      int range = max - min;
-      int int_value = min + static_cast<int>(value * range + 0.5);
-      property.SetInt(std::clamp(int_value, min, max));
-    };
-    return;
-  }
-
-  // If there is a delta input, we step the integer value up or down, clamped
-  // to the configured range (default [0,GetMaxValue()]).
-  if (inputs.IsSet(ControlInput::Type::kDelta)) {
-    input_config_.input_type = ControlInput::Type::kDelta;
-    int min = cfg_min.value_or(0);
-    int max = cfg_max.value_or(property_->GetMaxValue());
-    read_control_ = [min, max](ViewProperty& property, Control& control,
-                               InputId id) {
-      double delta = control.GetDelta(id);
-      if (delta != 0) {
-        int step = delta > 0 ? 1 : -1;
-        property.SetInt(std::clamp(property.GetInt() + step, min, max));
-      }
-    };
-    return;
-  }
-
-  // If there is a press input, we cycle to the next enumerated value, wrapping
-  // around from max to min.
-  if (inputs.IsSet(ControlInput::Type::kPress)) {
-    input_config_.input_type = ControlInput::Type::kPress;
-    int min = cfg_min.value_or(0);
-    int max = cfg_max.value_or(property_->GetMaxValue());
-    read_control_ = [min, max](ViewProperty& property, Control& control,
-                               InputId id) {
-      int press_count = control.GetPressCount(id);
-      if (press_count > 0) {
-        int range = max - min + 1;
-        int current = property.GetInt();
-        int new_value = min + ((current - min + press_count) % range);
-        property.SetInt(new_value);
-      }
-    };
     return;
   }
 }
