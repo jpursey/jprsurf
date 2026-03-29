@@ -15,6 +15,7 @@
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/reaper_property.h"
+#include "jpr/scene/timeline_property.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin_functions.h"
@@ -644,6 +645,10 @@ void ControlSurface::InitViews() {
                           ModifierProperty::kOpt,
                           absl::StrCat("XTouch/", DeviceXTouch::kOption),
                           {.read = {.press_release = true}});
+
+    // Timecode display
+    root_view->AddMapping(ViewMapping::kWriteControl, kTimelinePosition,
+                          absl::StrCat("XTouch/", DeviceXTouch::kTimecode));
 
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
