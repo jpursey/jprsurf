@@ -84,14 +84,21 @@ class ViewProperty {
     //
     // The underlying value is a TimelinePosition.
     kTimelinePosition,
+
+    // A property that corresponds to a REAPER parameter that has an enumerated
+    // set of discrete values. This has an integer value in the range
+    // [0..GetMaxValue()].
+    //
+    // The underlying value is an int, with 0 representing the first enumerated
+    // value and GetMaxValue() representing the last.
+    kEnumerated,
   };
 
   // The value of the property. This is a variant that can hold any of the types
   // defined by the Type enum. The actual type of the value will depend on the
   // Type of the property (see the documentation for each Type for details).
-  using Value =
-      std::variant<std::monostate, bool, double, std::string, Color,
-                   TimelinePosition>;
+  using Value = std::variant<std::monostate, bool, int, double, std::string,
+                             Color, TimelinePosition>;
 
   explicit ViewProperty(std::string_view name, Type type);
   ViewProperty(const ViewProperty&) = delete;
@@ -112,6 +119,7 @@ class ViewProperty {
   // as the specified type (for instance mapping a toggle property to a double
   // 0.0 or 1.0 for off and on, respectively).
   bool GetBool() const;
+  int GetInt() const;            // Returns in range [0,GetMaxValue()]
   double GetPan() const;         // Returns in range [-1,1]
   double GetVolume() const;      // Returns in range [0,inf)
   double GetNormalized() const;  // Returns in range [0,1]
@@ -131,12 +139,18 @@ class ViewProperty {
   // property (for instance mapping a double value greater than 0.5 to an on
   // state for a toggle property).
   void SetBool(bool value);
+  void SetInt(int value);            // Input clamped to [0,GetMaxValue()]
   void SetPan(double value);         // Input clamped to [-1,1]
   void SetVolume(double value);      // Input clamped to [0,inf)
   void SetNormalized(double value);  // Input clamped to [0,1]
   void SetText(std::string_view value);
   void SetColor(const Color& value);
   void SetTimelinePosition(TimelinePosition value);
+
+  // Returns the maximum value for an enumerated property. This is only
+  // meaningful for properties of type kEnumerated, and will return 0 for other
+  // types.
+  virtual int GetMaxValue() const { return 0; }
 
   // Runs the action associated with this property. This is only applicable for
   // properties of type kAction, and will have no effect for other types.
@@ -162,6 +176,8 @@ class ViewProperty {
   virtual void WriteColor(const Color& value) {}
   virtual TimelinePosition ReadTimelinePosition() const { return {}; }
   virtual void WriteTimelinePosition(TimelinePosition value) {}
+  virtual int ReadInt() const { return 0; }
+  virtual void WriteInt(int value) {}
 
   // Derived classes should call this whenever the property value changes.
   void NotifyChanged();

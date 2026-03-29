@@ -7,6 +7,7 @@
 
 #include <string_view>
 
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "sdk/reaper_plugin_functions.h"
 
@@ -54,6 +55,8 @@ ViewProperty::Value ViewProperty::GetValue() const {
       return ReadColor();
     case Type::kTimelinePosition:
       return ReadTimelinePosition();
+    case Type::kEnumerated:
+      return ReadInt();
   }
   return std::monostate{};
 }
@@ -77,6 +80,8 @@ bool ViewProperty::GetBool() const {
     }
     case Type::kTimelinePosition:
       return ReadTimelinePosition().GetValue() > 0.0;
+    case Type::kEnumerated:
+      return ReadInt() > 0;
   }
   return false;
 }
@@ -98,6 +103,13 @@ double ViewProperty::GetPan() const {
     }
     case Type::kTimelinePosition:
       return 0.0;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        return 0.0;
+      }
+      return static_cast<double>(ReadInt()) / max_value * 2.0 - 1.0;
+    }
   }
   return 0.0;
 }
@@ -119,6 +131,13 @@ double ViewProperty::GetVolume() const {
     }
     case Type::kTimelinePosition:
       return 0.0;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        return 0.0;
+      }
+      return static_cast<double>(ReadInt()) / max_value;
+    }
   }
   return 0.0;
 }
@@ -140,6 +159,13 @@ double ViewProperty::GetNormalized() const {
     }
     case Type::kTimelinePosition:
       return 0.0;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        return 0.0;
+      }
+      return static_cast<double>(ReadInt()) / max_value;
+    }
   }
   return 0.0;
 }
@@ -172,6 +198,8 @@ std::string ViewProperty::GetText() const {
     }
     case Type::kTimelinePosition:
       return ReadTimelinePosition().ToString(GetRulerMode());
+    case Type::kEnumerated:
+      return absl::StrCat(ReadInt());
   }
   return "";
 }
@@ -200,6 +228,17 @@ Color ViewProperty::GetColor() const {
       return ReadColor();
     case Type::kTimelinePosition:
       return {0, 0, 0};
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        return {0, 0, 0};
+      }
+      double normalized =
+          (max_value <= 0) ? 0.0 : static_cast<double>(ReadInt()) / max_value;
+      uint8_t value =
+          static_cast<uint8_t>(std::clamp(normalized * 255.0, 0.0, 255.0));
+      return {value, value, value};
+    }
   }
   return {0, 0, 0};
 }
@@ -246,6 +285,11 @@ void ViewProperty::SetValue(const Value& value) {
         WriteTimelinePosition(std::get<TimelinePosition>(value));
       }
       break;
+    case Type::kEnumerated:
+      if (std::holds_alternative<int>(value)) {
+        WriteInt(std::clamp(std::get<int>(value), 0, GetMaxValue()));
+      }
+      break;
   }
 }
 
@@ -273,6 +317,9 @@ void ViewProperty::SetBool(bool value) {
       WriteColor(value ? Color{255, 255, 255} : Color{0, 0, 0});
       break;
     case Type::kTimelinePosition:
+      break;
+    case Type::kEnumerated:
+      WriteInt(value ? GetMaxValue() : 0);
       break;
   }
 }
@@ -305,6 +352,13 @@ void ViewProperty::SetPan(double value) {
     }
     case Type::kTimelinePosition:
       break;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      double normalized = std::clamp((value + 1.0) / 2.0, 0.0, 1.0);
+      WriteInt(std::clamp(static_cast<int>(normalized * max_value + 0.5), 0,
+                          max_value));
+      break;
+    }
   }
 }
 
@@ -338,6 +392,13 @@ void ViewProperty::SetVolume(double value) {
     }
     case Type::kTimelinePosition:
       break;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      WriteInt(std::clamp(
+          static_cast<int>(std::clamp(value, 0.0, 1.0) * max_value + 0.5), 0,
+          max_value));
+      break;
+    }
   }
 }
 
@@ -369,6 +430,13 @@ void ViewProperty::SetNormalized(double value) {
     }
     case Type::kTimelinePosition:
       break;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      WriteInt(std::clamp(
+          static_cast<int>(std::clamp(value, 0.0, 1.0) * max_value + 0.5), 0,
+          max_value));
+      break;
+    }
   }
 }
 
@@ -410,6 +478,12 @@ void ViewProperty::SetText(std::string_view value) {
       break;
     case Type::kTimelinePosition:
       break;
+    case Type::kEnumerated: {
+      int int_value = 0;
+      absl::SimpleAtoi(value, &int_value);
+      WriteInt(std::clamp(int_value, 0, GetMaxValue()));
+      break;
+    }
   }
 }
 
@@ -438,6 +512,13 @@ void ViewProperty::SetColor(const Color& value) {
       break;
     case Type::kTimelinePosition:
       break;
+    case Type::kEnumerated: {
+      int max_value = GetMaxValue();
+      double luminance = std::clamp(GetLuminance(value), 0.0, 1.0);
+      WriteInt(std::clamp(static_cast<int>(luminance * max_value + 0.5), 0,
+                          max_value));
+      break;
+    }
   }
 }
 
@@ -450,6 +531,7 @@ TimelinePosition ViewProperty::GetTimelinePosition() const {
     case Type::kNormalized:
     case Type::kText:
     case Type::kColor:
+    case Type::kEnumerated:
       return {};
     case Type::kTimelinePosition:
       return ReadTimelinePosition();
@@ -466,9 +548,104 @@ void ViewProperty::SetTimelinePosition(TimelinePosition value) {
     case Type::kNormalized:
     case Type::kText:
     case Type::kColor:
+    case Type::kEnumerated:
       break;
     case Type::kTimelinePosition:
       WriteTimelinePosition(value);
+      break;
+  }
+}
+
+int ViewProperty::GetInt() const {
+  switch (type_) {
+    case Type::kAction:
+      return 0;
+    case Type::kToggle:
+      return ReadBool() ? GetMaxValue() : 0;
+    case Type::kPan:
+      return static_cast<int>(std::clamp((ReadDouble() + 1.0) / 2.0, 0.0, 1.0) *
+                                  GetMaxValue() +
+                              0.5);
+    case Type::kVolume:
+    case Type::kNormalized:
+      return static_cast<int>(
+          std::clamp(ReadDouble(), 0.0, 1.0) * GetMaxValue() + 0.5);
+    case Type::kText: {
+      int int_value = 0;
+      absl::SimpleAtoi(ReadString(), &int_value);
+      return std::clamp(int_value, 0, GetMaxValue());
+    }
+    case Type::kColor: {
+      double luminance = std::clamp(GetLuminance(ReadColor()), 0.0, 1.0);
+      return static_cast<int>(luminance * GetMaxValue() + 0.5);
+    }
+    case Type::kTimelinePosition:
+      return 0;
+    case Type::kEnumerated:
+      return ReadInt();
+  }
+  return 0;
+}
+
+void ViewProperty::SetInt(int value) {
+  switch (type_) {
+    case Type::kAction:
+      if (value > 0) {
+        TriggerAction();
+      }
+      break;
+    case Type::kToggle:
+      WriteBool(value > 0);
+      break;
+    case Type::kPan: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        WriteDouble(0.0);
+        break;
+      }
+      double pan = static_cast<double>(value) / max_value * 2.0 - 1.0;
+      WriteDouble(std::clamp(pan, -1.0, 1.0));
+      break;
+    }
+    case Type::kVolume: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        WriteDouble(0.0);
+        break;
+      }
+      double volume = static_cast<double>(value) / max_value;
+      WriteDouble(std::max(volume, 0.0));
+      break;
+    }
+    case Type::kNormalized: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        WriteDouble(0.0);
+        break;
+      }
+      double normalized = static_cast<double>(value) / max_value;
+      WriteDouble(std::clamp(normalized, 0.0, 1.0));
+      break;
+    }
+    case Type::kText:
+      WriteString(absl::StrCat(value));
+      break;
+    case Type::kColor: {
+      int max_value = GetMaxValue();
+      if (max_value <= 0) {
+        WriteColor({0, 0, 0});
+        break;
+      }
+      double normalized = static_cast<double>(value) / max_value;
+      uint8_t color_value =
+          static_cast<uint8_t>(std::clamp(normalized * 255.0, 0.0, 255.0));
+      WriteColor({color_value, color_value, color_value});
+      break;
+    }
+    case Type::kTimelinePosition:
+      break;
+    case Type::kEnumerated:
+      WriteInt(std::clamp(value, 0, GetMaxValue()));
       break;
   }
 }
