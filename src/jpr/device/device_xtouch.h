@@ -90,7 +90,7 @@ class DeviceXTouch final : public Device {
   static constexpr std::string_view kPotButton6 = "PotButton6";
   static constexpr std::string_view kMeter6 = "Meter6";
   static constexpr std::string_view kScribble6Line1 = "Scribble6Line1";
-  static constexpr std::string_view kScribble6Line2 = "Scribble3Line2";
+  static constexpr std::string_view kScribble6Line2 = "Scribble6Line2";
   static constexpr std::string_view kScribble6Color = "Scribble6Color";
 
   static constexpr std::string_view kRec7 = "Rec7";
