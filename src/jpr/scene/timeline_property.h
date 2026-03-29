@@ -64,6 +64,7 @@ class TimelinePositionProperty final : public SceneStateProperty {
 
  private:
   Source source_;
+  std::optional<TimelineMode> mode_;
   TimelinePosition position_;
 };
 

@@ -24,8 +24,23 @@ void TimelinePositionProperty::UpdateState() {
       new_position = TimelinePosition::GetEdit();
       break;
   }
+  bool changed = false;
   if (new_position.GetValue() != position_.GetValue()) {
     position_ = new_position;
+    changed = true;
+  }
+
+  // We treate a mode change as a position property change, as mappings on the
+  // position may also depend on the mode. This ensures they get updated in that
+  // case. Timeline mode changes are extremely infrequent, so even if they
+  // don't this is pretty harmless.
+  TimelineMode new_mode = GetRulerMode();
+  if (!mode_.has_value() || *mode_ != new_mode) {
+    mode_ = new_mode;
+    changed = true;
+  }
+
+  if (changed) {
     NotifyChanged();
   }
 }
