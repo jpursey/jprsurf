@@ -202,14 +202,17 @@ BeatsPosition TimelinePosition::ToBeats() const {
   format_timestr_pos(position_, timestr, std::size(timestr),
                      /*modeoverride=*/2);
 
+  bool negative = (timestr[0] == '-');
+  const char* timestr_start = (negative ? timestr + 1 : timestr);
   std::vector<std::string_view> beat_parts =
-      absl::StrSplit(timestr, absl::ByAnyChar("."));
+      absl::StrSplit(timestr_start, absl::ByAnyChar("."));
   if (beat_parts.size() != 3) {
     LOG(ERROR) << "Unexpected beat format: " << timestr;
     return {};
   }
 
   BeatsPosition beats = {};
+  beats.negative = negative;
   if (!absl::SimpleAtoi(beat_parts[0], &beats.measure) ||
       !absl::SimpleAtoi(beat_parts[1], &beats.beat) ||
       !absl::SimpleAtoi(beat_parts[2], &beats.division)) {
@@ -225,8 +228,10 @@ TimePosition TimelinePosition::ToTime() const {
   format_timestr_pos(position_, timestr, std::size(timestr),
                      /*modeoverride=*/0);
 
+  bool negative = (timestr[0] == '-');
+  const char* timestr_start = (negative ? timestr + 1 : timestr);
   std::vector<std::string_view> time_parts =
-      absl::StrSplit(timestr, absl::ByAnyChar(":."));
+      absl::StrSplit(timestr_start, absl::ByAnyChar(":."));
   // There always is at least three parts (minutes, seconds, and milliseconds),
   // with hours only being present if the position is long enough.
   if (time_parts.size() < 3 || time_parts.size() > 4) {
@@ -236,6 +241,7 @@ TimePosition TimelinePosition::ToTime() const {
 
   int minutes_index = (time_parts.size() == 4 ? 1 : 0);
   TimePosition time = {};
+  time.negative = negative;
   if (time_parts.size() == 4) {
     if (!absl::SimpleAtoi(time_parts[0], &time.hours)) {
       LOG(ERROR) << "Unexpected time format: " << timestr;
@@ -257,14 +263,17 @@ FramesPosition TimelinePosition::ToFrames() const {
   format_timestr_pos(position_, timestr, std::size(timestr),
                      /*modeoverride=*/5);
 
+  bool negative = (timestr[0] == '-');
+  const char* timestr_start = (negative ? timestr + 1 : timestr);
   std::vector<std::string_view> time_parts =
-      absl::StrSplit(timestr, absl::ByAnyChar(":"));
+      absl::StrSplit(timestr_start, absl::ByAnyChar(":"));
   if (time_parts.size() != 4) {
     LOG(ERROR) << "Unexpected time format: " << timestr;
     return {};
   }
 
   FramesPosition frames = {};
+  frames.negative = negative;
   if (!absl::SimpleAtoi(time_parts[0], &frames.hours) ||
       !absl::SimpleAtoi(time_parts[1], &frames.minutes) ||
       !absl::SimpleAtoi(time_parts[2], &frames.seconds) ||

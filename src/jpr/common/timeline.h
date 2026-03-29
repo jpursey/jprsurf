@@ -108,6 +108,7 @@ bool HasCurrentRulerSecondaryMode();
 
 // Represents a position in the timeline in terms of beats.
 struct BeatsPosition {
+  bool negative = false;
   int measure = 0;
   int beat = 0;
   int division = 0;
@@ -120,6 +121,7 @@ void AbslStringify(Sink& sink, const BeatsPosition& value) {
 
 // Represents a position in the timeline in terms of time.
 struct TimePosition {
+  bool negative = false;
   int hours = 0;
   int minutes = 0;
   int seconds = 0;
@@ -139,6 +141,7 @@ void AbslStringify(Sink& sink, const TimePosition& value) {
 
 // Represents a position in the timeline in terms of frames.
 struct FramesPosition {
+  bool negative = false;
   int hours = 0;
   int minutes = 0;
   int seconds = 0;
