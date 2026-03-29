@@ -258,7 +258,14 @@ void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
   switch (mode) {
     case TimelineMode::kBeats: {
       BeatsPosition b = position.ToBeats();
-      snprintf(fields[0], 4, "%3d", b.measure);
+      b.measure %= 1000;  // Wrap measures at 1000 for display purposes.
+      if (!b.negative) {
+        snprintf(fields[0], 4, "%3d", b.measure);
+      } else if (b.measure == 0) {
+        snprintf(fields[0], 4, " -0");
+      } else {
+        snprintf(fields[0], 4, "%3d", -b.measure);
+      }
       snprintf(fields[1], 3, "%2d", b.beat);
       dots[1] = true;
       snprintf(fields[2], 3, "%02d", b.division);
@@ -268,12 +275,22 @@ void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
     case TimelineMode::kTime: {
       TimePosition t = position.ToTime();
       if (t.hours > 0) {
-        snprintf(fields[0], 4, "%3d", t.hours);
+        if (!t.negative) {
+          snprintf(fields[0], 4, "%3d", t.hours);
+        } else {
+          snprintf(fields[0], 4, " %3d", -t.hours);
+        }
         dots[0] = true;
         snprintf(fields[1], 3, "%02d", t.minutes);
-      } else {
+      } else if (!t.negative) {
         snprintf(fields[0], 4, "   ");
         snprintf(fields[1], 3, "%2d", t.minutes);
+      } else if (t.minutes < 10) {
+        snprintf(fields[0], 4, "   ");
+        snprintf(fields[1], 3, "-%d", t.minutes);
+      } else {
+        snprintf(fields[0], 4, "  -");
+        snprintf(fields[1], 3, "%d", t.minutes);
       }
       dots[1] = true;
       snprintf(fields[2], 3, "%02d", t.seconds);
@@ -283,7 +300,11 @@ void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
     }
     case TimelineMode::kFrames: {
       FramesPosition f = position.ToFrames();
-      snprintf(fields[0], 4, " %02d", f.hours);
+      if (f.hours >= 100) {
+        snprintf(fields[0], 4, "%d", f.hours);
+      } else {
+        snprintf(fields[0], 4, "%c%02d", (f.negative ? '-' : ' '), f.hours);
+      }
       dots[0] = true;
       snprintf(fields[1], 3, "%02d", f.minutes);
       dots[1] = true;
