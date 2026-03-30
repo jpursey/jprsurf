@@ -19,3 +19,4 @@ We'll see how long this lasts, but I'll periodically update progress and changes
 - *2026-02-22:* First version working end-to-end with only track selection supported. [Demo Video](https://youtu.be/7Z1pmt_pxGU)
 - *2026-03-16:* Generalized scene / view / mapping concepts with track context and added initial support for each track mapping to a channel on the X-Touch. [Demo Video](https://youtu.be/nqRgdNaj1Y8)
 - *2026-03-24:* Support for full track navigation, modifier keys, and track colors. [Demo Video](https://youtu.be/7CKpyNhSO9o)
+- *2026-03-30:* Support for transport controls, metering lights, and timecode display. [DemoVideo](https://youtu.be/lK22xKMxtWY)
