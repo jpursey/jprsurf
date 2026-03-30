@@ -280,7 +280,8 @@ void View::SetTrackContext(Track* track, int child_context_index) {
         std::get<std::unique_ptr<TrackProperties>>(context_);
     DCHECK(track_properties != nullptr);
     track_properties->SetTrack(track);
-    SetChildContextIndex(child_context_index);
+    child_context_index_ = child_context_index;
+    RefreshChildContext();
   }
 }
 
