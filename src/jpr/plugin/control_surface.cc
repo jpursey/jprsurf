@@ -626,6 +626,9 @@ void ControlSurface::InitViews() {
     master_track_view_->AddMapping(
         ViewMapping::kReadWriteControl, TrackProperties::kVolume,
         absl::StrCat("XTouch/", DeviceXTouch::kMasterFader));
+    master_track_view_->AddMapping(
+        ViewMapping::kWriteControl, TrackProperties::kSolo,
+        absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
     master_track_view_->Enable();
 
     // Modifiers
@@ -649,6 +652,13 @@ void ControlSurface::InitViews() {
     // Timecode display
     root_view->AddMapping(ViewMapping::kWriteControl, kTimelinePosition,
                           absl::StrCat("XTouch/", DeviceXTouch::kTimecode));
+    root_view->AddMapping(ViewMapping::kWriteControl, kRulerFrames,
+                          absl::StrCat("XTouch/", DeviceXTouch::kSmpteLed));
+    root_view->AddMapping(ViewMapping::kWriteControl, kRulerBeats,
+                          absl::StrCat("XTouch/", DeviceXTouch::kBeatsLed));
+    root_view->AddMapping(
+        ViewMapping::kReadControl, kRulerMode,
+        absl::StrCat("XTouch/", DeviceXTouch::kShowTimeBeats));
 
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
