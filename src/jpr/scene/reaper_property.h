@@ -90,4 +90,28 @@ class CommandToggleProperty final : public SceneStateProperty {
   bool value_;
 };
 
+//==============================================================================
+// AnyTrackSoloProperty
+//==============================================================================
+
+inline constexpr std::string_view kAnyTrackSolo = "any_track_solo";
+
+class AnyTrackSoloProperty final : public SceneStateProperty {
+ public:
+  explicit AnyTrackSoloProperty(Scene* scene)
+      : SceneStateProperty(scene, kAnyTrackSolo, Type::kToggle) {}
+  ~AnyTrackSoloProperty() override = default;
+
+  // Overrides from SceneStateProperty.
+  void UpdateState() override;
+
+ protected:
+  // Overrides from ViewProperty.
+  bool ReadBool() const override;
+  void WriteBool(bool value) override;
+
+ private:
+  bool value_ = false;
+};
+
 }  // namespace jpr

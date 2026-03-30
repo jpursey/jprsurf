@@ -36,4 +36,25 @@ void CommandToggleProperty::WriteBool(bool value) {
   }
 }
 
+//==============================================================================
+// AnyTrackSoloProperty
+//==============================================================================
+
+void AnyTrackSoloProperty::UpdateState() {
+  bool value = AnyTrackSolo(nullptr);
+  if (value != value_) {
+    value_ = value;
+    NotifyChanged();
+  }
+}
+
+bool AnyTrackSoloProperty::ReadBool() const { return value_; }
+
+void AnyTrackSoloProperty::WriteBool(bool value) {
+  if (!value) {
+    Main_OnCommand(40340, 0);  // Unsolo all tracks.
+    UpdateState();
+  }
+}
+
 }  // namespace jpr

@@ -90,11 +90,11 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   else if (name == kRulerMode) {
     property = std::make_unique<RulerModeProperty>(this, name);
   } else if (name == kRulerBeats) {
-    property = std::make_unique<IsRulerModeProperty>(this, name,
-                                                     TimelineMode::kBeats);
+    property =
+        std::make_unique<IsRulerModeProperty>(this, name, TimelineMode::kBeats);
   } else if (name == kRulerTime) {
-    property = std::make_unique<IsRulerModeProperty>(this, name,
-                                                     TimelineMode::kTime);
+    property =
+        std::make_unique<IsRulerModeProperty>(this, name, TimelineMode::kTime);
   } else if (name == kRulerFrames) {
     property = std::make_unique<IsRulerModeProperty>(this, name,
                                                      TimelineMode::kFrames);
@@ -114,6 +114,10 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   } else if (name == kRuler2Samples) {
     property = std::make_unique<IsSecondaryRulerModeProperty>(
         this, name, TimelineMode::kSamples);
+  }
+  // Misc REAPER properties.
+  else if (name == kAnyTrackSolo) {
+    property = std::make_unique<AnyTrackSoloProperty>(this);
   }
 
   if (property != nullptr) {

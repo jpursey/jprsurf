@@ -626,9 +626,6 @@ void ControlSurface::InitViews() {
     master_track_view_->AddMapping(
         ViewMapping::kReadWriteControl, TrackProperties::kVolume,
         absl::StrCat("XTouch/", DeviceXTouch::kMasterFader));
-    master_track_view_->AddMapping(
-        ViewMapping::kWriteControl, TrackProperties::kSolo,
-        absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
     master_track_view_->Enable();
 
     // Modifiers
@@ -659,6 +656,8 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(
         ViewMapping::kReadControl, kRulerMode,
         absl::StrCat("XTouch/", DeviceXTouch::kShowTimeBeats));
+    root_view->AddMapping(ViewMapping::kWriteControl, kAnyTrackSolo,
+                          absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
 
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
