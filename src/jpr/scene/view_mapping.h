@@ -165,6 +165,7 @@ class ViewMapping final {
   ControlInputHandle input_handle_;
   bool enabled_ = true;
   bool active_ = false;
+  bool reads_property_ = false;
   bool control_changed_ = false;
   bool property_changed_ = false;
 };

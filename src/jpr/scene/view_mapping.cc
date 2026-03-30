@@ -86,6 +86,7 @@ ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
       property_(property),
       control_(control),
       config_(std::move(config)),
+      reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
   InitReadControl();
   InitWriteControl();
@@ -172,6 +173,7 @@ void ViewMapping::InitReadToggleSyncFunction() {
   // If there is a press input, we toggle the property on each press event.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_config_.input_type = ControlInput::Type::kPress;
+    reads_property_ = true;
     read_control_ = [](ViewProperty& property, Control& control, InputId id) {
       if (control.GetPressCount(id) % 2 != 0) {
         property.SetBool(!property.GetBool());
@@ -234,6 +236,7 @@ void ViewMapping::InitReadPanSyncFunction() {
     input_config_.input_type = ControlInput::Type::kDelta;
     double min = cfg_min.value_or(-1.0);
     double max = cfg_max.value_or(1.0);
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       double delta = control.GetDelta(id);
@@ -249,6 +252,7 @@ void ViewMapping::InitReadPanSyncFunction() {
     input_config_.input_type = ControlInput::Type::kPress;
     double min = cfg_min.value_or(-1.0);
     double max = cfg_max.value_or(1.0);
+    reads_property_ = true;
     // Three-way toggle (min, 0, max) if zero is strictly between min and max.
     if (min < 0.0 && max > 0.0) {
       read_control_ = [min, max](ViewProperty& property, Control& control,
@@ -315,6 +319,7 @@ void ViewMapping::InitReadVolumeSyncFunction() {
     input_config_.input_type = ControlInput::Type::kDelta;
     double min = cfg_min.value_or(0.0);
     double max = cfg_max.value_or(kMaxVolume);
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       double delta = control.GetDelta(id);
@@ -331,6 +336,7 @@ void ViewMapping::InitReadVolumeSyncFunction() {
     input_config_.input_type = ControlInput::Type::kPress;
     double min = cfg_min.value_or(0.0);
     double max = cfg_max.value_or(1.0);
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       if (control.GetPressCount(id) % 2 != 0) {
@@ -379,6 +385,7 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
     input_config_.input_type = ControlInput::Type::kDelta;
     double min = cfg_min.value_or(0.0);
     double max = cfg_max.value_or(1.0);
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       double delta = control.GetDelta(id);
@@ -396,6 +403,7 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
     input_config_.input_type = ControlInput::Type::kPress;
     double min = cfg_min.value_or(0.0);
     double max = cfg_max.value_or(1.0);
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       if (control.GetPressCount(id) % 2 != 0) {
@@ -448,6 +456,7 @@ void ViewMapping::InitReadTextSyncFunction() {
       input_config_.input_type = ControlInput::Type::kPress;
       std::string min = std::move(*cfg_min);
       std::string max = std::move(*cfg_max);
+      reads_property_ = true;
       read_control_ = [min, max](ViewProperty& property, Control& control,
                                  InputId id) {
         if (control.GetPressCount(id) % 2 != 0) {
@@ -512,6 +521,7 @@ void ViewMapping::InitReadColorSyncFunction() {
   // per-channel clamping from a single delta doesn't have clear semantics.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
     input_config_.input_type = ControlInput::Type::kDelta;
+    reads_property_ = true;
     read_control_ = [](ViewProperty& property, Control& control, InputId id) {
       double delta = control.GetDelta(id);
       if (delta != 0) {
@@ -525,6 +535,7 @@ void ViewMapping::InitReadColorSyncFunction() {
   // if specified, otherwise we toggle the boolean representation.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_config_.input_type = ControlInput::Type::kPress;
+    reads_property_ = true;
     if (cfg_min.has_value() && cfg_max.has_value()) {
       Color min = *cfg_min;
       Color max = *cfg_max;
@@ -553,6 +564,7 @@ void ViewMapping::InitReadTimelinePositionSyncFunction() {
   // scrub). Value and press inputs are not supported.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
     input_config_.input_type = ControlInput::Type::kDelta;
+    reads_property_ = true;
     read_control_ = [](ViewProperty& property, Control& control, InputId id) {
       double delta = control.GetDelta(id);
       if (delta != 0) {
@@ -605,6 +617,7 @@ void ViewMapping::InitReadEnumeratedSyncFunction() {
     input_config_.input_type = ControlInput::Type::kDelta;
     int min = cfg_min.value_or(0);
     int max = cfg_max.value_or(property_->GetMaxValue());
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       double delta = control.GetDelta(id);
@@ -622,6 +635,7 @@ void ViewMapping::InitReadEnumeratedSyncFunction() {
     input_config_.input_type = ControlInput::Type::kPress;
     int min = cfg_min.value_or(0);
     int max = cfg_max.value_or(property_->GetMaxValue());
+    reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       int press_count = control.GetPressCount(id);
@@ -1152,7 +1166,7 @@ void ViewMapping::RefreshActive(bool parent_active) {
   }
   active_ = should_be_active;
   if (active_) {
-    if (type_.IsSet(kWriteControl)) {
+    if (reads_property_) {
       property_changed_ = true;
       property_->RegisterFlag(&property_changed_);
     }
@@ -1160,7 +1174,7 @@ void ViewMapping::RefreshActive(bool parent_active) {
       input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
     }
   } else {
-    if (type_.IsSet(kWriteControl)) {
+    if (reads_property_) {
       property_->UnregisterFlag(&property_changed_);
     }
     input_handle_ = {};
