@@ -20,11 +20,13 @@ inline constexpr std::string_view kTimelinePosition = "timeline_position";
 inline constexpr std::string_view kPlaybackPosition = "playback_position";
 inline constexpr std::string_view kEditPosition = "edit_position";
 
+inline constexpr std::string_view kRulerMode = "ruler_mode";
 inline constexpr std::string_view kRulerBeats = "ruler_beats";
 inline constexpr std::string_view kRulerTime = "ruler_time";
 inline constexpr std::string_view kRulerFrames = "ruler_frames";
 inline constexpr std::string_view kRulerSamples = "ruler_samples";
 
+inline constexpr std::string_view kRuler2Mode = "ruler2_mode";
 inline constexpr std::string_view kRuler2Time = "ruler2_time";
 inline constexpr std::string_view kRuler2Frames = "ruler2_frames";
 inline constexpr std::string_view kRuler2Samples = "ruler2_samples";
@@ -69,17 +71,17 @@ class TimelinePositionProperty final : public SceneStateProperty {
 };
 
 //==============================================================================
-// RulerModeProperty
+// IsRulerModeProperty
 //==============================================================================
 
 // A toggle property that tracks whether a specific primary ruler mode is active
 // in REAPER. Writing true sets the ruler to that mode; writing false is a
 // no-op since there must always be an active primary mode.
-class RulerModeProperty final : public SceneStateProperty {
+class IsRulerModeProperty final : public SceneStateProperty {
  public:
-  RulerModeProperty(Scene* scene, std::string_view name, TimelineMode mode)
+  IsRulerModeProperty(Scene* scene, std::string_view name, TimelineMode mode)
       : SceneStateProperty(scene, name, Type::kToggle), mode_(mode) {}
-  ~RulerModeProperty() override = default;
+  ~IsRulerModeProperty() override = default;
 
   // Overrides from SceneStateProperty.
   void UpdateState() override;
@@ -95,18 +97,18 @@ class RulerModeProperty final : public SceneStateProperty {
 };
 
 //==============================================================================
-// SecondaryRulerModeProperty
+// IsSecondaryRulerModeProperty
 //==============================================================================
 
 // A toggle property that tracks whether a specific secondary ruler mode is
 // active in REAPER. Writing true sets the secondary ruler to that mode; writing
 // false clears the secondary ruler mode.
-class SecondaryRulerModeProperty final : public SceneStateProperty {
+class IsSecondaryRulerModeProperty final : public SceneStateProperty {
  public:
-  SecondaryRulerModeProperty(Scene* scene, std::string_view name,
-                             TimelineMode mode)
+  IsSecondaryRulerModeProperty(Scene* scene, std::string_view name,
+                               TimelineMode mode)
       : SceneStateProperty(scene, name, Type::kToggle), mode_(mode) {}
-  ~SecondaryRulerModeProperty() override = default;
+  ~IsSecondaryRulerModeProperty() override = default;
 
   // Overrides from SceneStateProperty.
   void UpdateState() override;
@@ -119,6 +121,64 @@ class SecondaryRulerModeProperty final : public SceneStateProperty {
  private:
   TimelineMode mode_;
   bool value_ = false;
+};
+
+//==============================================================================
+// RulerModeProperty
+//==============================================================================
+
+// An enumerated property that tracks and controls the primary ruler mode in
+// REAPER. The value is a TimelineMode integer (0=kBeats, 1=kTime, 2=kFrames,
+// 3=kSamples).
+class RulerModeProperty final : public SceneStateProperty {
+ public:
+  RulerModeProperty(Scene* scene, std::string_view name)
+      : SceneStateProperty(scene, name, Type::kEnumerated) {}
+  ~RulerModeProperty() override = default;
+
+  // Overrides from ViewProperty.
+  int GetMaxValue() const override { return 3; }
+  std::string GetText() const override;
+
+  // Overrides from SceneStateProperty.
+  void UpdateState() override;
+
+ protected:
+  // Overrides from ViewProperty.
+  int ReadInt() const override { return value_; }
+  void WriteInt(int value) override;
+
+ private:
+  int value_ = 0;
+};
+
+//==============================================================================
+// SecondaryRulerModeProperty
+//==============================================================================
+
+// An enumerated property that tracks and controls the secondary ruler mode in
+// REAPER. The value is a TimelineMode integer (0=kBeats/none, 1=kTime,
+// 2=kFrames, 3=kSamples). Setting to 0 clears the secondary ruler mode.
+class SecondaryRulerModeProperty final : public SceneStateProperty {
+ public:
+  SecondaryRulerModeProperty(Scene* scene, std::string_view name)
+      : SceneStateProperty(scene, name, Type::kEnumerated) {}
+  ~SecondaryRulerModeProperty() override = default;
+
+  // Overrides from ViewProperty.
+  int GetMaxValue() const override { return 3; }
+  std::string GetText() const override;
+
+  // Overrides from SceneStateProperty.
+  void UpdateState() override;
+
+ protected:
+  // Overrides from ViewProperty.
+  int ReadInt() const override { return value_; }
+  void WriteInt(int value) override;
+
+ private:
+  int value_ = 0;
 };
 
 }  // namespace jpr

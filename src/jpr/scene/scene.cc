@@ -87,28 +87,32 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
         this, name, TimelinePositionProperty::Source::kEdit);
   }
   // Primary ruler mode properties.
-  else if (name == kRulerBeats) {
-    property =
-        std::make_unique<RulerModeProperty>(this, name, TimelineMode::kBeats);
+  else if (name == kRulerMode) {
+    property = std::make_unique<RulerModeProperty>(this, name);
+  } else if (name == kRulerBeats) {
+    property = std::make_unique<IsRulerModeProperty>(this, name,
+                                                     TimelineMode::kBeats);
   } else if (name == kRulerTime) {
-    property =
-        std::make_unique<RulerModeProperty>(this, name, TimelineMode::kTime);
+    property = std::make_unique<IsRulerModeProperty>(this, name,
+                                                     TimelineMode::kTime);
   } else if (name == kRulerFrames) {
-    property =
-        std::make_unique<RulerModeProperty>(this, name, TimelineMode::kFrames);
+    property = std::make_unique<IsRulerModeProperty>(this, name,
+                                                     TimelineMode::kFrames);
   } else if (name == kRulerSamples) {
-    property = std::make_unique<RulerModeProperty>(this, name,
-                                                    TimelineMode::kSamples);
+    property = std::make_unique<IsRulerModeProperty>(this, name,
+                                                     TimelineMode::kSamples);
   }
   // Secondary ruler mode properties.
-  else if (name == kRuler2Time) {
-    property = std::make_unique<SecondaryRulerModeProperty>(
+  else if (name == kRuler2Mode) {
+    property = std::make_unique<SecondaryRulerModeProperty>(this, name);
+  } else if (name == kRuler2Time) {
+    property = std::make_unique<IsSecondaryRulerModeProperty>(
         this, name, TimelineMode::kTime);
   } else if (name == kRuler2Frames) {
-    property = std::make_unique<SecondaryRulerModeProperty>(
+    property = std::make_unique<IsSecondaryRulerModeProperty>(
         this, name, TimelineMode::kFrames);
   } else if (name == kRuler2Samples) {
-    property = std::make_unique<SecondaryRulerModeProperty>(
+    property = std::make_unique<IsSecondaryRulerModeProperty>(
         this, name, TimelineMode::kSamples);
   }
 

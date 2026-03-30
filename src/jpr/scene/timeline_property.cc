@@ -46,10 +46,10 @@ void TimelinePositionProperty::UpdateState() {
 }
 
 //==============================================================================
-// RulerModeProperty
+// IsRulerModeProperty
 //==============================================================================
 
-void RulerModeProperty::UpdateState() {
+void IsRulerModeProperty::UpdateState() {
   bool new_value = IsCurrentRulerMode(mode_);
   if (new_value != value_) {
     value_ = new_value;
@@ -57,7 +57,7 @@ void RulerModeProperty::UpdateState() {
   }
 }
 
-void RulerModeProperty::WriteBool(bool value) {
+void IsRulerModeProperty::WriteBool(bool value) {
   if (value) {
     SetRulerMode(mode_);
     UpdateState();
@@ -65,10 +65,10 @@ void RulerModeProperty::WriteBool(bool value) {
 }
 
 //==============================================================================
-// SecondaryRulerModeProperty
+// IsSecondaryRulerModeProperty
 //==============================================================================
 
-void SecondaryRulerModeProperty::UpdateState() {
+void IsSecondaryRulerModeProperty::UpdateState() {
   bool new_value = IsCurrentRulerSecondaryMode(mode_);
   if (new_value != value_) {
     value_ = new_value;
@@ -76,7 +76,7 @@ void SecondaryRulerModeProperty::UpdateState() {
   }
 }
 
-void SecondaryRulerModeProperty::WriteBool(bool value) {
+void IsSecondaryRulerModeProperty::WriteBool(bool value) {
   if (value) {
     SetRulerSecondaryMode(mode_);
   } else {
@@ -85,6 +85,125 @@ void SecondaryRulerModeProperty::WriteBool(bool value) {
     }
   }
   UpdateState();
+}
+
+//==============================================================================
+// RulerModeProperty
+//==============================================================================
+
+void RulerModeProperty::UpdateState() {
+  int new_value = 0;
+  switch (GetRulerMode()) {
+    case TimelineMode::kBeats:
+      new_value = 0;
+      break;
+    case TimelineMode::kTime:
+      new_value = 1;
+      break;
+    case TimelineMode::kFrames:
+      new_value = 2;
+      break;
+    case TimelineMode::kSamples:
+      new_value = 3;
+      break;
+  }
+  if (new_value != value_) {
+    value_ = new_value;
+    NotifyChanged();
+  }
+}
+
+void RulerModeProperty::WriteInt(int value) {
+  switch (value) {
+    case 0:
+      SetRulerMode(TimelineMode::kBeats);
+      break;
+    case 1:
+      SetRulerMode(TimelineMode::kTime);
+      break;
+    case 2:
+      SetRulerMode(TimelineMode::kFrames);
+      break;
+    case 3:
+      SetRulerMode(TimelineMode::kSamples);
+      break;
+  }
+  UpdateState();
+}
+
+std::string RulerModeProperty::GetText() const {
+  switch (value_) {
+    case 0:
+      return "Beats";
+    case 1:
+      return "Time";
+    case 2:
+      return "Frames";
+    case 3:
+      return "Samples";
+  }
+  return "Beats";
+}
+
+//==============================================================================
+// SecondaryRulerModeProperty
+//==============================================================================
+
+void SecondaryRulerModeProperty::UpdateState() {
+  int new_value = 0;
+  std::optional<TimelineMode> mode = GetRulerSecondaryMode();
+  if (mode.has_value()) {
+    switch (*mode) {
+      case TimelineMode::kBeats:
+        new_value = 0;
+        break;
+      case TimelineMode::kTime:
+        new_value = 1;
+        break;
+      case TimelineMode::kFrames:
+        new_value = 2;
+        break;
+      case TimelineMode::kSamples:
+        new_value = 3;
+        break;
+    }
+  }
+  if (new_value != value_) {
+    value_ = new_value;
+    NotifyChanged();
+  }
+}
+
+void SecondaryRulerModeProperty::WriteInt(int value) {
+  switch (value) {
+    case 0:
+      ClearRulerSecondaryMode();
+      break;
+    case 1:
+      SetRulerSecondaryMode(TimelineMode::kTime);
+      break;
+    case 2:
+      SetRulerSecondaryMode(TimelineMode::kFrames);
+      break;
+    case 3:
+      SetRulerSecondaryMode(TimelineMode::kSamples);
+      break;
+  }
+  UpdateState();
+}
+
+std::string SecondaryRulerModeProperty::GetText() const {
+  switch (value_) {
+    case 0:
+      return "None";
+    case 1:
+      return "Time";
+    case 2:
+      return "Frames";
+    case 3:
+      return "Samples";
+  }
+  return "None";
 }
 
 }  // namespace jpr
