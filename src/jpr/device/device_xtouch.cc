@@ -152,6 +152,21 @@ const Button kButtons[] = {
 };
 
 //==============================================================================
+// LEDs
+//==============================================================================
+
+struct Led {
+  std::string_view name;
+  uint8_t note;
+};
+
+constexpr Led kLeds[] = {
+    {DeviceXTouch::kSmpteLed, 0x71},
+    {DeviceXTouch::kBeatsLed, 0x72},
+    {DeviceXTouch::kSoloLed, 0x73},
+};
+
+//==============================================================================
 // VU meters
 //==============================================================================
 
@@ -797,6 +812,14 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     timecode_options.text_output =
         std::make_unique<XTouchTimecodeDisplay>(midi_out);
     AddControl(std::move(timecode_options));
+
+    for (const auto& led : kLeds) {
+      Control::Options led_options = {.name = led.name};
+      led_options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
+          midi_out, ControlDValueOutputMidiNote::Config{
+                        .channel = 0, .note = led.note, .use_note_off = false});
+      AddControl(std::move(led_options));
+    }
 
     // Master fader.
     Control::Options master_fader_options = {.name = kMasterFader};

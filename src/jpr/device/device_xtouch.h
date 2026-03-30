@@ -159,6 +159,9 @@ class DeviceXTouch final : public Device {
 
   // Timecode display.
   static constexpr std::string_view kTimecode = "Timecode";
+  static constexpr std::string_view kSmpteLed = "SmpteLed";
+  static constexpr std::string_view kBeatsLed = "BeatsLed";
+  static constexpr std::string_view kSoloLed = "SoloLed";
 
   // Buttons
   static constexpr std::string_view kAssignTrack = "AssignTrack";
