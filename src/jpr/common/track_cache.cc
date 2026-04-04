@@ -35,7 +35,6 @@ void TrackCache::Refresh() {
   // over the tracks.
   track_id_map_.clear();
   all_tracks_.clear();
-  top_level_tracks_.clear();
 
   // Add the stub track to the null ID.
   track_id_map_[nullptr] = stub_track_.get();
@@ -119,10 +118,7 @@ void TrackCache::AddTrack(Track* track) {
 
   MediaTrack* parent_id = GetParentTrack(track->GetTrackId());
   if (parent_id == nullptr) {
-    track->parent_track_ = nullptr;
-    track->index_ = static_cast<int>(top_level_tracks_.size());
-    top_level_tracks_.push_back(track);
-    return;
+    parent_id = master_track_->GetTrackId();
   }
 
   Track* parent_track = GetTrack(parent_id);

@@ -41,7 +41,8 @@ class TrackCache final {
   // holds all default values.
   Track* GetStubTrack() const { return stub_track_.get(); }
 
-  // Returns the master track. This always exists in REAPER.
+  // Returns the master track. This always exists in REAPER. All top-level
+  // tracks are represented as children of the master track.
   Track* GetMasterTrack() const { return master_track_.get(); }
 
   // Returns the track with the given GUID, or nullptr if no such track exists.
@@ -55,15 +56,6 @@ class TrackCache final {
   // track.
   int GetTrackCount() const { return static_cast<int>(all_tracks_.size()); }
   absl::Span<Track* const> GetTracks() const { return all_tracks_; }
-
-  // The top level tracks in the project, in order. These are tracks that have
-  // no parent track, and are the roots of the track hierarchy in REAPER.
-  int GetTopLevelTrackCount() const {
-    return static_cast<int>(top_level_tracks_.size());
-  }
-  absl::Span<Track* const> GetTopLevelTracks() const {
-    return top_level_tracks_;
-  }
 
   // The last touched track, which is the track that is the root for
   // shift-selection. This may be updated by Track when modified by
@@ -88,7 +80,6 @@ class TrackCache final {
   TrackIdMap track_id_map_;
   Track* last_touched_track_ = nullptr;
   std::vector<Track*> all_tracks_;
-  std::vector<Track*> top_level_tracks_;
   std::shared_ptr<Track> master_track_;
   std::shared_ptr<Track> stub_track_;
 };

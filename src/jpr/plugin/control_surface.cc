@@ -104,6 +104,9 @@ void ControlSurface::Run() {
     if (master_track_view_ != nullptr) {
       master_track_view_->SetTrackContext(TrackCache::Get().GetMasterTrack());
     }
+    if (!track_list_view_->GetTrackContext()->Exists()) {
+      track_list_view_->SetTrackContext(TrackCache::Get().GetMasterTrack());
+    }
     track_list_view_->RefreshChildContext();
     track_list_changed_ = false;
   }
@@ -702,6 +705,7 @@ void ControlSurface::InitViews() {
   // Add TrackList view with 8 track views, which will correspond to the 8
   // tracks on the X-Touch.
   track_list_view_ = root_view->AddChildView("TrackList");
+  track_list_view_->SetTrackContext();  // Will be the master track eventually.
   int child_view_index = 0;
   for (int d = 0; d < 2; ++d) {
     if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
@@ -799,6 +803,11 @@ void ControlSurface::EnsureTrackIsVisible(Track* track) {
   const int last_child_context_index =
       std::max(0, track_index - num_tracks_in_view + 1);
   Track* parent_track = track->GetParentTrack();
+  if (parent_track == nullptr) {
+    // Only the master track and stub tracks have no parent track, so we can't
+    // make them visible.
+    return;
+  }
 
   // If the track is already in the current view, we only need to make sure it
   // is in view, or do a minimum scroll to get it in view.
@@ -809,9 +818,6 @@ void ControlSurface::EnsureTrackIsVisible(Track* track) {
     } else if (track_index >= first_index + num_tracks_in_view) {
       track_list_view_->SetChildContextIndex(last_child_context_index);
     }
-  } else if (parent_track == nullptr) {
-    // We are switching to a top level track.
-    track_list_view_->ClearContext(last_child_context_index);
   } else {
     // We are switching to a nested track.
     track_list_view_->SetTrackContext(parent_track, last_child_context_index);
