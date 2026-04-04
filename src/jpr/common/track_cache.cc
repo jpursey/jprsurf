@@ -67,6 +67,11 @@ void TrackCache::Refresh() {
       master_track_ = new_master_track.get();
     }
 
+    // Clear child tracks. They will be added back in as we iterate over the
+    // tracks, and this ensures that any tracks that are no longer children will
+    // be removed.
+    master_track_->child_tracks_.clear();
+
     // Always refresh the master track.
     master_track_->DoRefresh(master_track_id);
   }
@@ -93,6 +98,8 @@ void TrackCache::Refresh() {
 
     // Move the old track to the new cache.
     new_track = std::move(it->second);
+    const bool track_id_changed = (new_track->GetTrackId() != track_id);
+    new_track->track_id_ = track_id;
     old_track_map.erase(it);
     track_id_map_[track_id] = new_track.get();
     AddTrack(new_track.get());
@@ -102,15 +109,11 @@ void TrackCache::Refresh() {
     // be removed.
     new_track->child_tracks_.clear();
 
-    // If the underlying track pointer hasn't changed, then we don't need to
-    // notify listeners.
-    if (new_track->GetTrackId() == track_id) {
-      continue;
+    // If the underlying track pointer hasn't changed, we don't bother
+    // refreshing the properties as an optimization.
+    if (track_id_changed) {
+      new_track->DoRefresh(track_id);
     }
-
-    // The underlying track pointer has changed, so update the cache and notify
-    // listeners.
-    new_track->DoRefresh(track_id);
   }
 
   // Now clear the ID for the remaining tracks from the old cache, as they no
@@ -148,7 +151,9 @@ void TrackCache::AddTrack(Track* track) {
 
   track->parent_track_ = parent_track;
   track->index_ = static_cast<int>(parent_track->child_tracks_.size());
-  parent_track->child_tracks_.push_back(track);
+  if (parent_track != stub_track_.get()) {
+    parent_track->child_tracks_.push_back(track);
+  }
 }
 
 Track* TrackCache::GetTrack(const Guid& guid) const {
