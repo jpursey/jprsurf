@@ -188,7 +188,7 @@ void TrackProperties::OnTrackMeterChanged(Track* track, double peak) {
   }
 }
 
-ViewProperty* TrackProperties::GetProperty(std::string_view name) {
+ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }

@@ -92,7 +92,7 @@ class TrackProperties final : public TrackListener {
   //
   // TrackProperties are bound to the track GUID. So once created it will remain
   // bound to the same track, even if underlying the MediaTrack* changes.
-  explicit TrackProperties(Track* track);
+  explicit TrackProperties(Track* track = TrackCache::Get().GetStubTrack());
   TrackProperties(const TrackProperties&) = delete;
   TrackProperties& operator=(const TrackProperties&) = delete;
   ~TrackProperties() override;
@@ -108,7 +108,7 @@ class TrackProperties final : public TrackListener {
 
   // Returns property scoped to this track with the given name, or nullptr if no
   // such property exists.
-  ViewProperty* GetProperty(std::string_view name);
+  ViewProperty* GetProperty(std::string_view name) const;
 
   // TrackListener implementation.
   void OnTrackChanged(Track* track) override;
@@ -117,8 +117,9 @@ class TrackProperties final : public TrackListener {
  private:
   // State
   std::shared_ptr<Track> track_;
-  absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>> properties_;
-  TrackMeterProperty* meter_property_ = nullptr;
+  mutable absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>>
+      properties_;
+  mutable TrackMeterProperty* meter_property_ = nullptr;
 };
 
 }  // namespace jpr

@@ -102,10 +102,10 @@ void ControlSurface::Run() {
     LOG(INFO) << "Refreshing TrackCache!";
     TrackCache::Get().Refresh();
     if (master_track_view_ != nullptr) {
-      master_track_view_->SetTrackContext(TrackCache::Get().GetMasterTrack());
+      master_track_view_->SetTrack(TrackCache::Get().GetMasterTrack());
     }
-    if (!track_list_view_->GetTrackContext()->Exists()) {
-      track_list_view_->SetTrackContext(TrackCache::Get().GetMasterTrack());
+    if (!track_list_view_->GetTrack()->Exists()) {
+      track_list_view_->SetTrack(TrackCache::Get().GetMasterTrack());
     }
     track_list_view_->RefreshChildContext();
     track_list_changed_ = false;
@@ -625,7 +625,6 @@ void ControlSurface::InitViews() {
   if (has_xtouch) {
     // Master fader
     master_track_view_ = root_view->AddChildView("MasterFader");
-    master_track_view_->SetTrackContext();
     master_track_view_->AddMapping(
         ViewMapping::kReadWriteControl, TrackProperties::kVolume,
         absl::StrCat("XTouch/", DeviceXTouch::kMasterFader));
@@ -705,7 +704,6 @@ void ControlSurface::InitViews() {
   // Add TrackList view with 8 track views, which will correspond to the 8
   // tracks on the X-Touch.
   track_list_view_ = root_view->AddChildView("TrackList");
-  track_list_view_->SetTrackContext();  // Will be the master track eventually.
   int child_view_index = 0;
   for (int d = 0; d < 2; ++d) {
     if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
@@ -715,10 +713,6 @@ void ControlSurface::InitViews() {
     for (int i = 0; i < 8; ++i) {
       View* track_view = track_list_view_->AddChildView(
           absl::StrCat("Track", ++child_view_index));
-      // Sets the context to a track context, so we can map REAPER tracks to the
-      // controls.
-      track_view->SetTrackContext();
-
       // Add all the per-track controls
       track_view->AddMapping(
           ViewMapping::kReadWriteControl, TrackProperties::kUiSelected,
@@ -767,7 +761,7 @@ void ControlSurface::InitViews() {
       track_view->Enable();
     }
   }
-  track_list_view_->SetChildContext(View::ContextType::kTrack);
+  track_list_view_->SetChildContext(View::ChildContextType::kTrack);
   if (has_xtouch) {
     track_list_view_->AddMapping(
         ViewMapping::kReadControl, View::kTrackRoot,
@@ -798,7 +792,7 @@ void ControlSurface::EnsureTrackIsVisible(Track* track) {
   if (track == nullptr) {
     return;
   }
-  const int num_tracks_in_view = track_list_view_->GetChildContextCount();
+  const int num_tracks_in_view = track_list_view_->GetChildViewCount();
   const int track_index = track->GetIndex();
   const int last_child_context_index =
       std::max(0, track_index - num_tracks_in_view + 1);
@@ -811,7 +805,7 @@ void ControlSurface::EnsureTrackIsVisible(Track* track) {
 
   // If the track is already in the current view, we only need to make sure it
   // is in view, or do a minimum scroll to get it in view.
-  if (track_list_view_->GetTrackContext() == parent_track) {
+  if (track_list_view_->GetTrack() == parent_track) {
     int first_index = track_list_view_->GetChildContextIndex();
     if (track_index < first_index) {
       track_list_view_->SetChildContextIndex(track_index);
@@ -820,7 +814,7 @@ void ControlSurface::EnsureTrackIsVisible(Track* track) {
     }
   } else {
     // We are switching to a nested track.
-    track_list_view_->SetTrackContext(parent_track, last_child_context_index);
+    track_list_view_->SetTrack(parent_track, last_child_context_index);
   }
 }
 

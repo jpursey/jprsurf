@@ -54,15 +54,9 @@ class View::TrackParentProperty : public ViewProperty {
 
  protected:
   void TriggerAction() override {
-    if (view_->GetContextType() != View::ContextType::kTrack) {
-      return;
-    }
-    auto& track_properties =
-        std::get<std::unique_ptr<TrackProperties>>(view_->context_);
-    DCHECK(track_properties != nullptr);
-    Track* parent_track = track_properties->GetTrack()->GetParentTrack();
+    Track* parent_track = view_->GetTrack()->GetParentTrack();
     if (parent_track != nullptr) {
-      view_->SetTrackContext(parent_track, 0);
+      view_->SetTrack(parent_track, 0);
     }
   }
 
@@ -78,10 +72,7 @@ class View::TrackRootProperty : public ViewProperty {
 
  protected:
   void TriggerAction() override {
-    if (view_->GetContextType() != View::ContextType::kTrack) {
-      return;
-    }
-    view_->SetTrackContext(TrackCache::Get().GetMasterTrack(), 0);
+    view_->SetTrack(TrackCache::Get().GetMasterTrack(), 0);
   }
 
  private:
@@ -96,20 +87,11 @@ class View::ParentTrackChildProperty : public ViewProperty {
 
  protected:
   void TriggerAction() override {
-    if (view_->GetContextType() != View::ContextType::kTrack ||
-        view_->GetParentView() == nullptr ||
-        view_->GetParentView()->GetChildContextType() !=
-            View::ContextType::kTrack) {
+    Track* track = view_->GetTrack();
+    if (view_->GetParentView() == nullptr || track->GetChildTrackCount() == 0) {
       return;
     }
-    auto& track_properties =
-        std::get<std::unique_ptr<TrackProperties>>(view_->context_);
-    DCHECK(track_properties != nullptr);
-    Track* track = track_properties->GetTrack();
-    if (track->GetChildTrackCount() == 0) {
-      return;
-    }
-    view_->GetParentView()->SetTrackContext(track_properties->GetTrack(), 0);
+    view_->GetParentView()->SetTrack(track, 0);
   }
 
  private:
@@ -124,29 +106,20 @@ class View::ParentTrackParentProperty : public ViewProperty {
 
  protected:
   void TriggerAction() override {
-    if (view_->GetContextType() != View::ContextType::kTrack ||
-        view_->GetParentView() == nullptr ||
-        view_->GetParentView()->GetChildContextType() !=
-            View::ContextType::kTrack) {
+    if (view_->GetParentView() == nullptr) {
       return;
     }
-    auto& track_properties =
-        std::get<std::unique_ptr<TrackProperties>>(view_->context_);
-    DCHECK(track_properties != nullptr);
-    Track* parent_track = view_->GetParentView()->GetTrackContext();
-    if (parent_track == nullptr) {
-      return;
-    }
+    Track* parent_track = view_->GetParentView()->GetTrack();
     Track* grandparent_track = parent_track->GetParentTrack();
     if (grandparent_track == nullptr) {
       // Already at the top level.
       return;
     }
     int track_count = grandparent_track->GetChildTrackCount();
-    int view_count = view_->GetParentView()->GetChildContextCount();
+    int view_count = view_->GetParentView()->GetChildViewCount();
     int start_index = std::clamp(parent_track->GetIndex() - view_count / 2, 0,
                                  std::max(0, track_count - view_count));
-    view_->GetParentView()->SetTrackContext(grandparent_track, start_index);
+    view_->GetParentView()->SetTrack(grandparent_track, start_index);
   }
 
  private:
@@ -161,14 +134,10 @@ class View::ParentTrackRootProperty : public ViewProperty {
 
  protected:
   void TriggerAction() override {
-    if (view_->GetContextType() != View::ContextType::kTrack ||
-        view_->GetParentView() == nullptr ||
-        view_->GetParentView()->GetChildContextType() !=
-            View::ContextType::kTrack) {
+    if (view_->GetParentView() == nullptr) {
       return;
     }
-    view_->GetParentView()->SetTrackContext(TrackCache::Get().GetMasterTrack(),
-                                            0);
+    view_->GetParentView()->SetTrack(TrackCache::Get().GetMasterTrack(), 0);
   }
 
  private:
@@ -258,79 +227,33 @@ View* View::GetChildView(std::string_view name) const {
   return it != child_views_by_name_.end() ? it->second : nullptr;
 }
 
-void View::SetContext(Context context, int child_context_index) {
-  context_ = std::move(context);
-  child_context_index_ = child_context_index;
-  RefreshChildContext();
-}
-
-void View::SetTrackContext(Track* track, int child_context_index) {
+void View::SetTrack(Track* track, int child_context_index) {
   if (track == nullptr) {
     track = TrackCache::Get().GetStubTrack();
   }
-  if (GetTrackContext() == track) {
+  if (GetTrack() == track) {
     SetChildContextIndex(child_context_index);
-  } else if (GetContextType() != ContextType::kTrack) {
-    SetContext(std::make_unique<TrackProperties>(track), child_context_index);
   } else {
-    auto& track_properties =
-        std::get<std::unique_ptr<TrackProperties>>(context_);
-    DCHECK(track_properties != nullptr);
-    track_properties->SetTrack(track);
+    track_properties_.SetTrack(track);
     child_context_index_ = child_context_index;
     RefreshChildContext();
   }
 }
 
-Track* View::GetTrackContext() const {
-  if (GetContextType() != ContextType::kTrack) {
-    return nullptr;
-  }
-  auto& track_properties = std::get<std::unique_ptr<TrackProperties>>(context_);
-  DCHECK(track_properties != nullptr);
-  return track_properties->GetTrack();
-}
-
-void View::ClearContext(int child_context_index) {
-  SetContext(std::monostate(), child_context_index);
-}
-
-int View::GetChildContextCount() const {
-  switch (child_context_type_) {
-    case ContextType::kNone:
-      return 0;
-    case ContextType::kTrack: {
-      int count = 0;
-      for (auto& child_view : child_views_) {
-        if (child_view->GetContextType() == ContextType::kTrack) {
-          ++count;
-        }
-      }
-      return count;
-    }
-  }
-  return 0;
-}
+Track* View::GetTrack() const { return track_properties_.GetTrack(); }
 
 int View::GetMaxChildContextIndex() const {
   switch (child_context_type_) {
-    case ContextType::kNone:
+    case ChildContextType::kNone:
       return 0;
-    case ContextType::kTrack:
-      if (GetContextType() == ContextType::kTrack) {
-        auto& track_properties =
-            std::get<std::unique_ptr<TrackProperties>>(context_);
-        DCHECK(track_properties != nullptr);
-        return std::max<int>(
-            0, track_properties->GetTrack()->GetChildTracks().size() -
-                   GetChildContextCount());
-      }
-      break;
+    case ChildContextType::kTrack:
+      return std::max<int>(
+          0, GetTrack()->GetChildTracks().size() - GetChildViewCount());
   }
   return 0;
 }
 
-void View::SetChildContext(ContextType context_type, int context_index) {
+void View::SetChildContext(ChildContextType context_type, int context_index) {
   child_context_type_ = context_type;
   child_context_index_ = context_index;
   RefreshChildContext();
@@ -349,9 +272,9 @@ void View::RefreshChildContext() {
     return;
   }
   switch (child_context_type_) {
-    case ContextType::kNone:
+    case ChildContextType::kNone:
       return;
-    case ContextType::kTrack:
+    case ChildContextType::kTrack:
       SetChildTracks();
       break;
   }
@@ -360,26 +283,14 @@ void View::RefreshChildContext() {
 void View::SetChildTracks() {
   CHECK(active_);
   CHECK(scene_ != nullptr);
-  if (GetContextType() != ContextType::kTrack) {
-    return;
-  }
-  auto& parent_track_properties =
-      std::get<std::unique_ptr<TrackProperties>>(context_);
-  DCHECK(parent_track_properties != nullptr);
-  absl::Span<Track* const> child_tracks =
-      parent_track_properties->GetTrack()->GetChildTracks();
+  absl::Span<Track* const> child_tracks = GetTrack()->GetChildTracks();
 
   int index = child_context_index_;
   for (auto& child_view : child_views_) {
-    if (child_view->GetContextType() != ContextType::kTrack) {
-      continue;
-    }
-    auto& child_track_properties =
-        std::get<std::unique_ptr<TrackProperties>>(child_view->context_);
     if (index < child_tracks.size()) {
-      child_track_properties->SetTrack(child_tracks[index]);
+      child_view->SetTrack(child_tracks[index]);
     } else {
-      child_track_properties->SetTrack(TrackCache::Get().GetStubTrack());
+      child_view->SetTrack(TrackCache::Get().GetStubTrack());
     }
     child_view->RefreshChildContext();
     ++index;
@@ -387,18 +298,9 @@ void View::SetChildTracks() {
 }
 
 ViewProperty* View::GetProperty(std::string_view name) const {
-  switch (GetContextType()) {
-    case ContextType::kNone:
-      break;
-    case ContextType::kTrack: {
-      auto& track_properties =
-          std::get<std::unique_ptr<TrackProperties>>(context_);
-      DCHECK(track_properties != nullptr);
-      if (ViewProperty* property = track_properties->GetProperty(name);
-          property != nullptr) {
-        return property;
-      }
-    } break;
+  if (ViewProperty* property = track_properties_.GetProperty(name);
+      property != nullptr) {
+    return property;
   }
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
@@ -440,14 +342,9 @@ void View::SyncMappings() {
 
   // First sync the track context if there is one, since some mappings may
   // depend on it.
-  if (GetContextType() == ContextType::kTrack) {
-    auto& track_properties =
-        std::get<std::unique_ptr<TrackProperties>>(context_);
-    DCHECK(track_properties != nullptr);
-    Track* track = track_properties->GetTrack();
-    track->Refresh();
-    track->RefreshMeter();
-  }
+  Track* track = GetTrack();
+  track->Refresh();
+  track->RefreshMeter();
 
   // Now update all active mappings for this view. This will update the REAPER
   // state and hardware controls according to the current state of the view

@@ -29,20 +29,15 @@ class Scene;
 // controls.
 class View final {
  public:
-  // Determines the type of context for this view.
-  enum class ContextType {
-    // A view with no extra context. This is the default context for all views.
+  // Determines the type of context to set for child views
+  enum class ChildContextType {
+    // No context will be set for child views.
     kNone,
 
-    // A view with a track context. This allows mappings to be made to the
-    // properties of that track, such as volume, pan, etc.
+    // Child views will be set to consecutive tracks starting from child tracks
+    // of this view.
     kTrack,
   };
-
-  // Context which corresponds to the view's context type. For example, if the
-  // context type is kTrack, the context will be a shared pointer to a Track.
-  using Context =
-      std::variant<std::monostate, std::unique_ptr<TrackProperties>>;
 
   //----------------------------------------------------------------------------
   // View-specific properties
@@ -60,29 +55,27 @@ class View final {
   static constexpr std::string_view kBankDec = "bank_dec";
   static constexpr std::string_view kBankInc = "bank_inc";
 
-  // This switches the context of this track to be its parent track if this view
-  // has a kTrack context.
+  // This switches this view's track to be its parent track, if it has a parent
+  // track. Otherwise, this does nothing.
   static constexpr std::string_view kTrackParent = "track_parent";
 
-  // This switches the context of this track to be the root track (no context)
-  // if this view has a kTrack context.
+  // This sets his view's track to be the master track.
   static constexpr std::string_view kTrackRoot = "track_root";
 
-  // Tells the parent view to be the same track view as this view if both this
-  // view has the kTrack context and its parent has a child kTrack context. This
-  // effectively results in navigating "in" to the current track.
+  // Tells the parent view to be the same track view as this view. This
+  // effectively results in navigating "in" to the current track. If there is no
+  // parent view, or this view does not child tracks, this does nothing.
   static constexpr std::string_view kParentTrackChild = "parent_track_child";
 
-  // If this view has a kTrack context, and its parent view has a child kTrack
-  // context, this will tell the parent view to switch to its parent track. This
-  // is effectively results in navigating "up" to the parent track from a child
-  // track.
+  // Tells the parent view to switch to its parent track. This is effectively
+  // results in navigating "up" to the parent track from a child track. If there
+  // is no parent view, or the parent view's track does not have a parent track,
+  // this does nothing.
   static constexpr std::string_view kParentTrackParent = "parent_track_parent";
 
-  // If this view has a kTrack context, and its parent view has a child kTrack
-  // context, this will tell the parent view to switch to the root (no context).
-  // This is effectively results in navigating "out" to the top level tracks
-  // from a child track.
+  // Tells the parent view to switch to the master track. This is effectively
+  // results in navigating "up" to the root track from a child track. If there
+  // is no parent view, this does nothing.
   static constexpr std::string_view kParentTrackRoot = "parent_track_root";
 
   //----------------------------------------------------------------------------
@@ -141,18 +134,13 @@ class View final {
   View* GetChildView(std::string_view name) const;
 
   //----------------------------------------------------------------------------
-  // View context
+  // View Context
   //----------------------------------------------------------------------------
 
-  // Sets the context for this view.
-  //
-  // The context type is implied by the type of context passed in. If set,
-  // mappings can be made to that context's properties (e.g. volume, pan, etc.).
-  // The child context index is also reset, which will update the context for
-  // all child views if there is a child context type set.
-  void SetContext(Context context, int child_context_index = 0);
+  // Returns the current track for this view.
+  Track* GetTrack() const;
 
-  // Sets the context to the specified track.
+  // Sets the track for this view.
   //
   // If track is null, this will set the context to a default stub track that
   // has no real functionality, but can be used for mappings. This is useful if
@@ -160,28 +148,11 @@ class View final {
   //
   // The child context index is also reset, which will update the context for
   // all child views if there is a child context type set.
-  void SetTrackContext(Track* track = nullptr, int child_context_index = 0);
+  void SetTrack(Track* track = nullptr, int child_context_index = 0);
 
-  // Returns the current track context for this view, or null if the context
-  // type is not kTrack.
-  Track* GetTrackContext() const;
-
-  // Clears the context for this view, setting it back to the default state with
-  // no context.
-  //
-  // The child context index is also reset, which will update the context for
-  // all child views if there is a child context type set. This is equivalent to
-  // calling SetContext with a std::monostate.
-  void ClearContext(int child_context_index = 0);
-
-  // Returns the current context type for this view
-  //
-  // This determines what kind of context this view has, what additional
-  // properties can be mapped, and how it participates in a parent view's child
-  // context setting.
-  ContextType GetContextType() const {
-    return static_cast<ContextType>(context_.index());
-  }
+  // Returns the current child context type and index for this view.
+  ChildContextType GetChildContextType() const { return child_context_type_; }
+  int GetChildContextIndex() const { return child_context_index_; }
 
   // Sets the type of context to control for child views of this view.
   //
@@ -194,7 +165,7 @@ class View final {
   // at `context_index`. If this view does not have a context, these will be
   // root level tracks, if this view has a track context, they will be children
   // of that track.
-  void SetChildContext(ContextType context_type, int context_index = 0);
+  void SetChildContext(ChildContextType context_type, int context_index = 0);
 
   // Clears the child context for this view, setting the child context type back
   // to the default state with no child context.
@@ -202,24 +173,14 @@ class View final {
   // This is equivalent to calling SetChildContext with ContextType::kNone.
   // Child views will no longer have their context driven by this view's context
   // and context index.
-  void ClearChildContext() { SetChildContext(ContextType::kNone); }
-
-  // Returns the number of child views that would be affected by the child
-  // context index based on the child context type. For example, if the child
-  // context type is kTrack, this will return the number of tracks that would be
-  // mapped to child views.
-  int GetChildContextCount() const;
-
-  // Returns the current child context type and index for this view.
-  ContextType GetChildContextType() const { return child_context_type_; }
-  int GetChildContextIndex() const { return child_context_index_; }
+  void ClearChildContext() { SetChildContext(ChildContextType::kNone); }
 
   // Returns the maximum valid child context index for this view based on the
   // child context type and the number of views of that type. For example, if
-  // the child context type is kTrack and there are 8 child views of that type,
-  // and 10 possible tracks that can be mapped to, this would return 2, since
-  // the child context index can only be 0, 1, or 2 to map to valid tracks for
-  // all child views.
+  // the child context type is kTrack and there are 8 child views, and 10
+  // possible tracks that can be mapped to, this would return 2, since the child
+  // context index can only be 0, 1, or 2 to map to valid tracks for all child
+  // views.
   int GetMaxChildContextIndex() const;
 
   // Updates the child context index for this view, which will update the
@@ -296,8 +257,8 @@ class View final {
   absl::flat_hash_map<std::string, View*> child_views_by_name_;
 
   // Context
-  Context context_;
-  ContextType child_context_type_ = ContextType::kNone;
+  TrackProperties track_properties_;
+  ChildContextType child_context_type_ = ChildContextType::kNone;
   int child_context_index_ = 0;
 
   // Properties for the view.
