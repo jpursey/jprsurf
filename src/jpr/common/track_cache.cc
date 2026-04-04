@@ -44,14 +44,30 @@ void TrackCache::Refresh() {
   MediaTrack* master_track_id = ::GetMasterTrack(nullptr);
   if (master_track_id == nullptr) {
     LOG(ERROR) << "Failed to get master track!";
-    master_track_ = nullptr;
+    master_track_ = stub_track_.get();
   } else {
     Guid master_guid(GetTrackGUID(master_track_id));
-    if (master_track_ == nullptr || master_track_->GetGuid() != master_guid) {
-      master_track_ = std::make_shared<Track>(Track::Private(), master_guid,
-                                              master_track_id);
+    std::shared_ptr<Track>& new_master_track = track_map_[master_guid];
+
+    auto it = old_track_map.find(master_guid);
+    if (it == old_track_map.end()) {
+      // Master track is new and doesn't exist in the old cache, so just
+      // initialize it.
+      new_master_track = std::make_shared<Track>(Track::Private(), master_guid,
+                                                 master_track_id);
+    } else {
+      // Move the old master track to the new cache.
+      new_master_track = std::move(it->second);
+      old_track_map.erase(it);
     }
-    track_id_map_[master_track_id] = master_track_.get();
+    track_id_map_[master_track_id] = new_master_track.get();
+
+    // Did we change the master track?
+    if (master_track_ == nullptr || master_track_->GetGuid() != master_guid) {
+      master_track_ = new_master_track.get();
+    }
+
+    // Always refresh the master track.
     master_track_->DoRefresh(master_track_id);
   }
 
