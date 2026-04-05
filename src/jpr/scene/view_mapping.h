@@ -6,7 +6,7 @@
 #pragma once
 
 #include <optional>
-#include <string_view>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -97,7 +97,7 @@ class ViewMapping final {
     // If non-empty, the name of a property in the same view scope whose value
     // determines the output mode dynamically. The mapping will also update the
     // control whenever this property changes.
-    std::string_view mode_property;
+    std::string mode_property;
 
     // Maps property values to output modes. When mode_property is set, the
     // property's current value is looked up in this map. If a match is found,
