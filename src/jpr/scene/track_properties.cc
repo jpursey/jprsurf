@@ -152,6 +152,17 @@ class TrackVolumeProperty : public TrackProperty {
   bool ui_;
 };
 
+class TrackIsFolderProperty : public TrackProperty {
+ public:
+  explicit TrackIsFolderProperty(Track* track)
+      : TrackProperty(TrackProperties::kTrackIsFolder, Type::kToggle, track) {}
+
+ protected:
+  bool ReadBool() const override {
+    return GetTrack()->GetChildTrackCount() > 0;
+  }
+};
+
 }  // namespace
 
 TrackProperties::TrackProperties(Track* track) : track_(track->GetShared()) {
@@ -266,6 +277,11 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
   if (name == kUiVolume) {
     auto& property = properties_[name] =
         std::make_unique<TrackVolumeProperty>(track_.get(), /*ui=*/true);
+    return property.get();
+  }
+  if (name == kTrackIsFolder) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackIsFolderProperty>(track_.get());
     return property.get();
   }
   return nullptr;

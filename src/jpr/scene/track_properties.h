@@ -87,6 +87,7 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kUiRecArm = "track_ui_recarm";
   static constexpr std::string_view kUiPan = "track_ui_pan";
   static constexpr std::string_view kUiVolume = "track_ui_volume";
+  static constexpr std::string_view kTrackIsFolder = "track_is_folder";
 
   // The track that these properties are tied to.
   //
