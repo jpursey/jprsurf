@@ -107,13 +107,13 @@ bool PropertyValueEquals(const ViewProperty::Value& a,
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
                          Control* control, Config config,
-                         ViewProperty* mode_property)
+                         std::vector<ViewProperty*> mode_properties)
     : type_(type),
       view_(view),
       property_(property),
       control_(control),
       config_(std::move(config)),
-      mode_property_(mode_property),
+      mode_properties_(std::move(mode_properties)),
       reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
   InitReadControl();
@@ -1197,8 +1197,8 @@ void ViewMapping::RefreshActive(bool parent_active) {
     if (reads_property_) {
       property_changed_ = true;
       property_->RegisterFlag(&property_changed_);
-      if (mode_property_ != nullptr) {
-        mode_property_->RegisterFlag(&property_changed_);
+      for (ViewProperty* mode_property : mode_properties_) {
+        mode_property->RegisterFlag(&property_changed_);
       }
     }
     if (read_control_ != nullptr) {
@@ -1207,8 +1207,8 @@ void ViewMapping::RefreshActive(bool parent_active) {
   } else {
     if (reads_property_) {
       property_->UnregisterFlag(&property_changed_);
-      if (mode_property_ != nullptr) {
-        mode_property_->UnregisterFlag(&property_changed_);
+      for (ViewProperty* mode_property : mode_properties_) {
+        mode_property->UnregisterFlag(&property_changed_);
       }
     }
     input_handle_ = {};
@@ -1242,9 +1242,10 @@ void ViewMapping::WriteControl() {
 }
 
 int ViewMapping::ResolveMode() const {
-  if (mode_property_ != nullptr) {
-    ViewProperty::Value value = mode_property_->GetValue();
-    for (const auto& [map_value, map_mode] : config_.write.mode_map) {
+  for (size_t i = 0; i < mode_properties_.size(); ++i) {
+    ViewProperty::Value value = mode_properties_[i]->GetValue();
+    for (const auto& [map_value, map_mode] :
+         config_.write.mode_overrides[i].value_to_mode) {
       if (PropertyValueEquals(value, map_value)) {
         return map_mode;
       }

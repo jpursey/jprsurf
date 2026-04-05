@@ -740,8 +740,10 @@ void ControlSurface::InitViews() {
           absl::StrCat(device_prefix, DeviceXTouch::Pot(i)),
           {.write = {
                .mode = 1,
-               .mode_property = std::string(TrackProperties::kTrackIsFolder),
-               .mode_map = {{true, 5}}}});
+               .mode_overrides = {
+                   {std::string(TrackProperties::kTrackExists), {{false, 8}}},
+                   {std::string(TrackProperties::kTrackIsFolder),
+                    {{true, 5}}}}}});
       track_view->AddMapping(
           ViewMapping::kReadControl, TrackProperties::kUiPan,
           absl::StrCat(device_prefix, DeviceXTouch::PotButton(i)),

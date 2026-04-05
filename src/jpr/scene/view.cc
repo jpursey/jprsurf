@@ -330,21 +330,22 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
                << "': control '" << control_name << "' not found";
     return false;
   }
-  ViewProperty* mode_property = nullptr;
-  if (!config.write.mode_property.empty()) {
-    mode_property = GetProperty(config.write.mode_property);
+  std::vector<ViewProperty*> mode_properties;
+  for (const auto& override : config.write.mode_overrides) {
+    ViewProperty* mode_property = GetProperty(override.property);
     if (mode_property == nullptr) {
-      mode_property = scene_->GetProperty(config.write.mode_property);
+      mode_property = scene_->GetProperty(override.property);
     }
     if (mode_property == nullptr) {
       LOG(ERROR) << "Failed to add mapping for view '" << GetName()
-                 << "': mode property '" << config.write.mode_property
-                 << "' not found";
+                 << "': mode property '" << override.property << "' not found";
       return false;
     }
+    mode_properties.push_back(mode_property);
   }
-  mappings_.push_back(absl::WrapUnique(new ViewMapping(
-      this, type, property, control, std::move(config), mode_property)));
+  mappings_.push_back(absl::WrapUnique(
+      new ViewMapping(this, type, property, control, std::move(config),
+                      std::move(mode_properties))));
   return true;
 }
 

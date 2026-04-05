@@ -86,24 +86,32 @@ class ViewMapping final {
     bool press_release = false;
   };
 
+  // A mode override maps a property's value to an output mode. When the
+  // property's current value matches an entry in the value-to-mode map, the
+  // corresponding mode is used for the control output.
+  struct ModeOverride {
+    // The name of a property in the same view scope whose value determines
+    // the output mode.
+    std::string property;
+
+    // Maps property values to output modes. The property's current value is
+    // looked up in this map; the first match is used.
+    std::vector<std::pair<ViewProperty::Value, int>> value_to_mode;
+  };
+
   struct WriteConfig {
     // The default output mode index to use when writing to the control. This is
     // passed through to the control's Set* methods. Defaults to 0.
     //
-    // If mode_property is set and the property's current value matches an entry
-    // in mode_map, the corresponding mode from the map is used instead.
+    // If any mode override matches, its mode is used instead.
     int mode = 0;
 
-    // If non-empty, the name of a property in the same view scope whose value
-    // determines the output mode dynamically. The mapping will also update the
-    // control whenever this property changes.
-    std::string mode_property;
-
-    // Maps property values to output modes. When mode_property is set, the
-    // property's current value is looked up in this map. If a match is found,
-    // the corresponding mode is used; otherwise the default mode is used.
-    // Entries are checked in order, using the first match.
-    std::vector<std::pair<ViewProperty::Value, int>> mode_map;
+    // Ordered list of mode overrides. Each override specifies a property and a
+    // value-to-mode map. Overrides are checked in order; the first override
+    // whose property value matches an entry in its map wins. If no override
+    // matches, the default mode is used. The mapping will also update the
+    // control whenever any override property changes.
+    std::vector<ModeOverride> mode_overrides;
   };
 
   struct Config {
@@ -145,7 +153,7 @@ class ViewMapping final {
 
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
               Control* control, Config config = {},
-              ViewProperty* mode_property = nullptr);
+              std::vector<ViewProperty*> mode_properties = {});
 
   // Refreshes the active state of this mapping based on whether it is enabled
   // and whether its parent view is active.
@@ -173,7 +181,7 @@ class ViewMapping final {
   void InitWriteEnumeratedSyncFunction();
 
   // Returns the current mode for writing to the control, resolved from the
-  // mode property if one is configured, or the static mode otherwise.
+  // mode override properties if configured, or the static mode otherwise.
   int ResolveMode() const;
 
   TypeFlags type_;
@@ -181,7 +189,7 @@ class ViewMapping final {
   ViewProperty* property_;
   Control* control_;
   Config config_;
-  ViewProperty* mode_property_ = nullptr;
+  std::vector<ViewProperty*> mode_properties_;
   absl::AnyInvocable<void(ViewProperty&, Control&, InputId)> read_control_;
   WriteSyncFunction* write_control_;
   InputConfig input_config_;
