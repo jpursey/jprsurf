@@ -114,6 +114,7 @@ class TrackProperties final : public TrackListener {
   // TrackListener implementation.
   void OnTrackChanged(Track* track) override;
   void OnTrackMeterChanged(Track* track, double peak) override;
+  void OnTrackHierarchyChanged(Track* track) override;
 
  private:
   // State

@@ -31,6 +31,17 @@ void TrackCache::Refresh() {
   TrackMap old_track_map;
   std::swap(track_map_, old_track_map);
 
+  // Save old child track lists so we can detect hierarchy changes after the
+  // rebuild and notify affected tracks. Moving leaves child_tracks_ empty,
+  // which is the desired initial state for the rebuild.
+  absl::flat_hash_map<Track*, std::vector<Track*>> old_child_tracks;
+  for (auto& [guid, track] : old_track_map) {
+    if (!track->child_tracks_.empty()) {
+      old_child_tracks[track.get()] = std::move(track->child_tracks_);
+      track->child_tracks_.clear();
+    }
+  }
+
   // Reset the track ID map and top level tracks, and recreate it as we iterate
   // over the tracks.
   track_id_map_.clear();
@@ -67,11 +78,6 @@ void TrackCache::Refresh() {
       master_track_ = new_master_track.get();
     }
 
-    // Clear child tracks. They will be added back in as we iterate over the
-    // tracks, and this ensures that any tracks that are no longer children will
-    // be removed.
-    master_track_->child_tracks_.clear();
-
     // Always refresh the master track.
     master_track_->DoRefresh(master_track_id);
   }
@@ -104,11 +110,6 @@ void TrackCache::Refresh() {
     track_id_map_[track_id] = new_track.get();
     AddTrack(new_track.get());
 
-    // Clear child tracks. They will be added back in as we iterate over the
-    // tracks, and this ensures that any tracks that are no longer children will
-    // be removed.
-    new_track->child_tracks_.clear();
-
     // If the underlying track pointer hasn't changed, we don't bother
     // refreshing the properties as an optimization.
     if (track_id_changed) {
@@ -123,11 +124,27 @@ void TrackCache::Refresh() {
   for (auto& [guid, old_track] : old_track_map) {
     std::shared_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
-    new_track->child_tracks_.clear();
     new_track->parent_track_ = nullptr;
     new_track->global_index_ = 0;
     new_track->index_ = 0;
     new_track->DoRefresh(nullptr);
+  }
+
+  // Notify tracks whose child hierarchy changed. This is done after the full
+  // rebuild so that listeners see the final state.
+  for (const auto& [guid, track] : track_map_) {
+    auto it = old_child_tracks.find(track.get());
+    if (it == old_child_tracks.end()) {
+      // Track had no children before; notify only if it has children now.
+      if (!track->child_tracks_.empty()) {
+        track->NotifyHierarchyChanged();
+      }
+    } else {
+      // Track had children before; notify if the child list differs.
+      if (track->child_tracks_ != it->second) {
+        track->NotifyHierarchyChanged();
+      }
+    }
   }
 }
 

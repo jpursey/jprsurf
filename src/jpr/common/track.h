@@ -38,6 +38,11 @@ class TrackListener {
   // may be greater than 1.0 if the track is clipping, and may be 0.0 if the
   // track is silent.
   virtual void OnTrackMeterChanged(Track* track, double peak) {}
+
+  // This will be called whenever the track's child hierarchy changes (children
+  // added, removed, or reordered). This is called after the full hierarchy has
+  // been rebuilt, so GetChildTracks() will return the new child list.
+  virtual void OnTrackHierarchyChanged(Track* track) {}
 };
 
 // Represents a track in REAPER, identified by a GUID.
@@ -215,6 +220,10 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
+
+  // Notifies all listeners subscribed to this track that the child hierarchy
+  // has changed.
+  void NotifyHierarchyChanged();
 
   // Toggles the internal selected state, potentially sets the last touched
   // track, and notifies listeners.

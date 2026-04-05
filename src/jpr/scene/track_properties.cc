@@ -189,6 +189,12 @@ void TrackProperties::OnTrackChanged(Track* track) {
   }
 }
 
+void TrackProperties::OnTrackHierarchyChanged(Track* track) {
+  for (auto& [name, property] : properties_) {
+    property->NotifyChanged();
+  }
+}
+
 void TrackProperties::OnTrackMeterChanged(Track* track, double peak) {
   if (meter_property_ != nullptr) {
     if (meter_property_->peak_ == 0.0 && peak <= 0.0) {

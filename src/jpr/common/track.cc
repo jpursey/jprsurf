@@ -129,6 +129,12 @@ void Track::NotifyListeners() {
   }
 }
 
+void Track::NotifyHierarchyChanged() {
+  for (TrackListener* listener : listeners_) {
+    listener->OnTrackHierarchyChanged(this);
+  }
+}
+
 //------------------------------------------------------------------------------
 // Name
 //------------------------------------------------------------------------------
