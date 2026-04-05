@@ -77,15 +77,43 @@ double ToggleDouble(double current, double min, double max) {
   return min;
 }
 
+// Compares two ViewProperty::Value instances for equality. Returns true if both
+// hold the same alternative type and their values are equal. Types that do not
+// support equality (e.g. TimelinePosition) always return false.
+bool PropertyValueEquals(const ViewProperty::Value& a,
+                         const ViewProperty::Value& b) {
+  if (a.index() != b.index()) {
+    return false;
+  }
+  return std::visit(
+      [&b](const auto& a_val) -> bool {
+        using T = std::decay_t<decltype(a_val)>;
+        if constexpr (std::is_same_v<T, std::monostate>) {
+          return true;
+        } else if constexpr (std::is_same_v<T, bool> ||
+                             std::is_same_v<T, int> ||
+                             std::is_same_v<T, double> ||
+                             std::is_same_v<T, std::string> ||
+                             std::is_same_v<T, Color>) {
+          return a_val == std::get<T>(b);
+        } else {
+          return false;
+        }
+      },
+      a);
+}
+
 }  // namespace
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-                         Control* control, Config config)
+                         Control* control, Config config,
+                         ViewProperty* mode_property)
     : type_(type),
       view_(view),
       property_(property),
       control_(control),
       config_(std::move(config)),
+      mode_property_(mode_property),
       reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
   InitReadControl();
@@ -1169,6 +1197,9 @@ void ViewMapping::RefreshActive(bool parent_active) {
     if (reads_property_) {
       property_changed_ = true;
       property_->RegisterFlag(&property_changed_);
+      if (mode_property_ != nullptr) {
+        mode_property_->RegisterFlag(&property_changed_);
+      }
     }
     if (read_control_ != nullptr) {
       input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
@@ -1176,6 +1207,9 @@ void ViewMapping::RefreshActive(bool parent_active) {
   } else {
     if (reads_property_) {
       property_->UnregisterFlag(&property_changed_);
+      if (mode_property_ != nullptr) {
+        mode_property_->UnregisterFlag(&property_changed_);
+      }
     }
     input_handle_ = {};
   }
@@ -1203,8 +1237,20 @@ void ViewMapping::ReadControl() {
 void ViewMapping::WriteControl() {
   property_changed_ = false;
   if (type_.IsSet(kWriteControl)) {
-    write_control_(*property_, *control_, config_.write.mode);
+    write_control_(*property_, *control_, ResolveMode());
   }
+}
+
+int ViewMapping::ResolveMode() const {
+  if (mode_property_ != nullptr) {
+    ViewProperty::Value value = mode_property_->GetValue();
+    for (const auto& [map_value, map_mode] : config_.write.mode_map) {
+      if (PropertyValueEquals(value, map_value)) {
+        return map_mode;
+      }
+    }
+  }
+  return config_.write.mode;
 }
 
 }  // namespace jpr

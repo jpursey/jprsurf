@@ -6,6 +6,9 @@
 #pragma once
 
 #include <optional>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "absl/functional/any_invocable.h"
 #include "gb/base/flags.h"
@@ -84,9 +87,23 @@ class ViewMapping final {
   };
 
   struct WriteConfig {
-    // The output mode index to use when writing to the control. This is passed
-    // through to the control's Set* methods. Defaults to 0.
+    // The default output mode index to use when writing to the control. This is
+    // passed through to the control's Set* methods. Defaults to 0.
+    //
+    // If mode_property is set and the property's current value matches an entry
+    // in mode_map, the corresponding mode from the map is used instead.
     int mode = 0;
+
+    // If non-empty, the name of a property in the same view scope whose value
+    // determines the output mode dynamically. The mapping will also update the
+    // control whenever this property changes.
+    std::string_view mode_property;
+
+    // Maps property values to output modes. When mode_property is set, the
+    // property's current value is looked up in this map. If a match is found,
+    // the corresponding mode is used; otherwise the default mode is used.
+    // Entries are checked in order, using the first match.
+    std::vector<std::pair<ViewProperty::Value, int>> mode_map;
   };
 
   struct Config {
@@ -127,7 +144,8 @@ class ViewMapping final {
   using WriteSyncFunction = void(ViewProperty&, Control&, int mode);
 
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-              Control* control, Config config = {});
+              Control* control, Config config = {},
+              ViewProperty* mode_property = nullptr);
 
   // Refreshes the active state of this mapping based on whether it is enabled
   // and whether its parent view is active.
@@ -154,11 +172,16 @@ class ViewMapping final {
   void InitWriteTimelinePositionSyncFunction();
   void InitWriteEnumeratedSyncFunction();
 
+  // Returns the current mode for writing to the control, resolved from the
+  // mode property if one is configured, or the static mode otherwise.
+  int ResolveMode() const;
+
   TypeFlags type_;
   View* view_;
   ViewProperty* property_;
   Control* control_;
   Config config_;
+  ViewProperty* mode_property_ = nullptr;
   absl::AnyInvocable<void(ViewProperty&, Control&, InputId)> read_control_;
   WriteSyncFunction* write_control_;
   InputConfig input_config_;

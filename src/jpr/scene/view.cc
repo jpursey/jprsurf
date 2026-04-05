@@ -330,8 +330,21 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
                << "': control '" << control_name << "' not found";
     return false;
   }
-  mappings_.push_back(absl::WrapUnique(
-      new ViewMapping(this, type, property, control, std::move(config))));
+  ViewProperty* mode_property = nullptr;
+  if (!config.write.mode_property.empty()) {
+    mode_property = GetProperty(config.write.mode_property);
+    if (mode_property == nullptr) {
+      mode_property = scene_->GetProperty(config.write.mode_property);
+    }
+    if (mode_property == nullptr) {
+      LOG(ERROR) << "Failed to add mapping for view '" << GetName()
+                 << "': mode property '" << config.write.mode_property
+                 << "' not found";
+      return false;
+    }
+  }
+  mappings_.push_back(absl::WrapUnique(new ViewMapping(
+      this, type, property, control, std::move(config), mode_property)));
   return true;
 }
 
