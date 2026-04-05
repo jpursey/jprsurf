@@ -67,6 +67,7 @@ ControlDValueOutputMidiCc::Config ControlDValueOutputMidiCc::McuEncoder(
       {.value_or = 0x50, .value_add = 1, .max_value = 10},  // Mode 5
       {.value_or = 0x60, .value_add = 1, .max_value = 10},  // Mode 6
       {.value_or = 0x70, .value_add = 1, .max_value = 5},   // Mode 7
+      {.value_or = 0x00, .value_add = 0, .max_value = 0},   // Mode 8
   };
   return Config{
       .channel = 0,

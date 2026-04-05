@@ -76,7 +76,7 @@ class ControlDValueOutputMidiCc : public ControlDValueOutput {
   };
 
   // Returns the configuration for a standard per-track encoder light-ring on an
-  // MCU device for the specified track. All 8 MCU encoder modes are included:
+  // MCU device for the specified track. All 9 MCU encoder modes are included:
   //   - Mode 0: Single LED from left to right (11 values)
   //   - Mode 1: Fill from center from left to right (11 values).
   //   - Mode 2: Fill from left from left to right (11 values).
@@ -85,6 +85,7 @@ class ControlDValueOutputMidiCc : public ControlDValueOutput {
   //   - Mode 5: Same as Mode 1, but right and left always lit.
   //   - Mode 6: Same as Mode 2, but right and left always lit.
   //   - Mode 7: Same as Mode 3, but right and left always lit.
+  //   - Mode 8: All LEDs off (always sends 0).
   static Config McuEncoder(uint8_t track);
 
   ControlDValueOutputMidiCc(MidiOut* midi_out, Config config);
