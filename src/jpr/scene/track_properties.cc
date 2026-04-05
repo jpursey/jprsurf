@@ -163,6 +163,15 @@ class TrackIsFolderProperty : public TrackProperty {
   }
 };
 
+class TrackExistsProperty : public TrackProperty {
+ public:
+  explicit TrackExistsProperty(Track* track)
+      : TrackProperty(TrackProperties::kTrackExists, Type::kToggle, track) {}
+
+ protected:
+  bool ReadBool() const override { return GetTrack()->Exists(); }
+};
+
 }  // namespace
 
 TrackProperties::TrackProperties(Track* track) : track_(track->GetShared()) {
@@ -288,6 +297,11 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
   if (name == kTrackIsFolder) {
     auto& property = properties_[name] =
         std::make_unique<TrackIsFolderProperty>(track_.get());
+    return property.get();
+  }
+  if (name == kTrackExists) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackExistsProperty>(track_.get());
     return property.get();
   }
   return nullptr;
