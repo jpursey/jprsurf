@@ -855,12 +855,16 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     Control::Options fader_options = {.name = name};
     fader_options.value_input = std::make_unique<ControlValueInputMcuFader>(
         midi_in, ControlValueInputMcuFader::Track(track));
-    fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-        midi_in,
-        ControlPressInputMidiMsg::Config{
-            .press = MidiNoteOn(/*channel=*/0, 0x68 + track, /*velocity=*/127),
-            .release =
-                MidiNoteOn(/*channel=*/0, 0x68 + track, /*velocity=*/0)});
+    // My extender unit'3 third fader lost touch sensing, so disabling the press
+    // input for just that fader to fall back on delayed feedback.
+    if (type != Type::kExtender || track != 2) {
+      fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
+          midi_in, ControlPressInputMidiMsg::Config{
+                       .press = MidiNoteOn(/*channel=*/0, 0x68 + track,
+                                           /*velocity=*/127),
+                       .release = MidiNoteOn(/*channel=*/0, 0x68 + track,
+                                             /*velocity=*/0)});
+    }
     fader_options.cvalue_output = std::make_unique<ControlCValueOutputMcuFader>(
         midi_out, ControlCValueOutputMcuFader::Track(track));
     fader_options.binding = Control::Binding::kMotorized;
