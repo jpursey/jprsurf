@@ -1,0 +1,26 @@
+{
+	"folders":
+	[
+		{
+			"path": "../game-bits/src/gb",
+		},
+		{
+			"path": "../game-bits/third_party/abseil-cpp/absl",
+		},
+		{
+			"path": "../game-bits/third_party/googletest/googletest/include/gtest",
+		},
+		{
+			"path": "../game-bits/third_party/googletest/googlemock/include/gmock",
+		},
+		{
+			"path": "../game-bits/third_party/glog/src/windows/glog",
+		},
+		{
+			"path": "../game-bits/third_party/glm/glm",
+		},
+		{
+			"path": "src",
+		},
+	],
+}
