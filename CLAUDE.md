@@ -68,7 +68,7 @@ The build also will copy the binary to the REAPER plugin directory so it can be 
 
 Testing must be performed manually by the user in REAPER. 
 
-Logs from LOG statements are written to "C:\Users\username\AppData\Roaming\jpsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to get debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events, may be retained as is helpful for persistent understanding of code flow (continuous controler and UI events generally do *not* fall into this category).
+Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jpsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to get debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events, may be retained as is helpful for persistent understanding of code flow (continuous controler and UI events generally do *not* fall into this category).
 
 ### Format
 
@@ -100,6 +100,17 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - Prefer Abseil (and other Google open source libraries already vendored in third_party/) over hand-rolled utilities.
 - C++20, built with both MSVC and clang-cl.
 - Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way.
+
+## Resources
+
+REAPER is notoriously underdocumented. The best resources are as follows:
+- REAPER C++ SDK. What is installed locally is at `../reaper-sdk`. Very light on docs. Includes the locally available ReaScript API in C++ form.
+- ReaScript API (mirrors the C++ API).
+  - Official documentation here: https://www.reaper.fm/sdk/reascript/reascripthelp.html
+  - Navigable site for REAPER functions in multiple languages: https://www.extremraym.com/cloud/reascript-doc/
+- Working plugins that does largely the same sort of thing. JPSurf is my personal replacement for these:
+  - Klinke MCU: https://github.com/jpursey/csurf_klinke_mcu_jp This was very reliable, and in C++, but missing features I wanted. This is my personal fork of the project. It is downloaded and available locally at `../csurf_klinke_mcu`.
+  - DrivenByMOSS: https://github.com/git-moss/DrivenByMoss4Reaper This was feature rich, but quite flaky in practice, and also was written in Java.
 
 ## Don't
 - Don't add new dependencies without asking.
