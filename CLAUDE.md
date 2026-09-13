@@ -55,12 +55,12 @@ If configure or build fails with a missing `cl.exe`, `rc.exe`, or Windows SDK pa
 ### Build
 
 ```
-cmake --build out/build/x64-Debug
+cmake --build out/build/x64-Release
 ```
 
-Do not build through a generated Visual Studio solution (`-G "Visual Studio 17 2022"`) instead.
+Release (`RelWithDebInfo`) is the default build. REAPER is very latency sensitive, so the extension should always be run and tested optimized. Only build `out/build/x64-Debug` when you specifically need to step through the code in a debugger.
 
-MSVC 14.44 intermittently crashes (`fatal error C1001`, occasionally `LNK1127`) in the optimizer, in a different translation unit each time. This is a toolchain problem, not an error in the code, and it only shows up in optimized (`Release` / `RelWithDebInfo`) builds -- Debug builds are reliable. Re-run the exact same command and the failing target compiles.
+Do not build through a generated Visual Studio solution (`-G "Visual Studio 17 2022"`) instead.
 
 The build also will copy the binary to the REAPER plugin directory so it can be run immediately.
 
@@ -97,6 +97,7 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - Sections in a file are separated by //===== blocks (extending to column 80) surrounding descriptive text: One line section description, and if necessary further description in additional paragraphs.
 - Sections within a class or between groups of related functions are separated by //---- blocks (otherwise the same as above).
 - All comments are // style (not /// or /*...*/)
+- Always use a brace block for the body of `if`, `else`, `for`, `while`, `do`, and similar statements, even when the body is a single statement. This forces clang-format to put the body on its own line, which keeps crash callstacks accurate to the line and lets breakpoints be set on the body separately from the condition.
 - Prefer Abseil (and other Google open source libraries already vendored in third_party/) over hand-rolled utilities.
 - C++20, built with both MSVC and clang-cl.
 - Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way.
