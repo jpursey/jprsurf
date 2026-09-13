@@ -123,11 +123,11 @@ void ControlValueInputMcuFader::OnMidiMessage(double time,
       (static_cast<int>(message.data2) << 7) | message.data1);
   double value = 0.0;
   constexpr int kLastPoint = std::size(kMcuFaderPoints) - 1;
-  if (pitch_bend <= kMcuFaderPoints[0].pitch_bend)
+  if (pitch_bend <= kMcuFaderPoints[0].pitch_bend) {
     value = kMcuFaderPoints[0].normalized;
-  else if (pitch_bend >= kMcuFaderPoints[kLastPoint].pitch_bend)
+  } else if (pitch_bend >= kMcuFaderPoints[kLastPoint].pitch_bend) {
     value = kMcuFaderPoints[kLastPoint].normalized;
-  else {
+  } else {
     for (int i = 0; i < kLastPoint; ++i) {
       if (pitch_bend >= kMcuFaderPoints[i].pitch_bend &&
           pitch_bend <= kMcuFaderPoints[i + 1].pitch_bend) {

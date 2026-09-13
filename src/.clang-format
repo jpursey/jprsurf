@@ -1,4 +1,7 @@
 ---
 Language: Cpp
 BasedOnStyle: Google
+# Always brace control statement bodies, so the body sits on its own line for
+# accurate crash callstacks and breakpoints.
+InsertBraces: true
 ...
