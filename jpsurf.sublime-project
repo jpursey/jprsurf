@@ -22,5 +22,10 @@
 		{
 			"path": "src",
 		},
-	],
+		{
+			"path": "C:/Users/johnp/AppData/Roaming",
+			"folder_exclude_patterns": ["*"],
+			"file_include_patterns": ["*.log"]
+		}
+	]
 }
