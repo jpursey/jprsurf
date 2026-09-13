@@ -102,6 +102,11 @@ class ControlSurface final : private IReaperControlSurface {
   void InitViews();
   void EnsureTrackIsVisible(Track* track);
 
+  // Re-points the views at the current track list. This is called whenever the
+  // track list changes, or a track is shown or hidden on the surface. Only a
+  // deleted parent track moves the track list view; a hidden one does not.
+  void RefreshTrackViews();
+
   // State
   std::string type_string_;
   gb::Config config_;
@@ -118,6 +123,10 @@ class ControlSurface final : private IReaperControlSurface {
   View* master_track_view_ = nullptr;
   View* track_list_view_ = nullptr;
   bool track_list_changed_ = false;
+
+  // When track visibility was last polled. This defaults to the epoch so that
+  // the first run always polls.
+  absl::Time last_visibility_time_;
 
   // Performance monitoring
   absl::Time last_log_time_;

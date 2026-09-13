@@ -159,7 +159,10 @@ class TrackIsFolderProperty : public TrackProperty {
 
  protected:
   bool ReadBool() const override {
-    return GetTrack()->GetChildTrackCount() > 0;
+    // Only children that are on the surface count, since a folder whose
+    // children are all hidden cannot be navigated into.
+    return GetTrack()->GetChildTrackCount(
+               TrackCache::Get().GetSurfaceFilter()) > 0;
   }
 };
 

@@ -88,7 +88,8 @@ class View::ParentTrackChildProperty : public ViewProperty {
  protected:
   void TriggerAction() override {
     Track* track = view_->GetTrack();
-    if (view_->GetParentView() == nullptr || track->GetChildTrackCount() == 0) {
+    if (view_->GetParentView() == nullptr ||
+        track->GetChildTrackCount(TrackCache::Get().GetSurfaceFilter()) == 0) {
       return;
     }
     view_->GetParentView()->SetTrack(track, 0);
@@ -115,10 +116,14 @@ class View::ParentTrackParentProperty : public ViewProperty {
       // Already at the top level.
       return;
     }
-    int track_count = grandparent_track->GetChildTrackCount();
+    const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+    int track_count = grandparent_track->GetChildTrackCount(filter);
     int view_count = view_->GetParentView()->GetChildViewCount();
-    int start_index = std::clamp(parent_track->GetIndex() - view_count / 2, 0,
-                                 std::max(0, track_count - view_count));
+    // If the track we are moving up from is not on the surface itself, there is
+    // no position to center on, so fall back to the start of the child list.
+    int start_index =
+        std::clamp(parent_track->GetIndex(filter).value_or(0) - view_count / 2,
+                   0, std::max(0, track_count - view_count));
     view_->GetParentView()->SetTrack(grandparent_track, start_index);
   }
 
@@ -247,8 +252,9 @@ int View::GetMaxChildContextIndex() const {
     case ChildContextType::kNone:
       return 0;
     case ChildContextType::kTrack:
-      return std::max<int>(
-          0, GetTrack()->GetChildTracks().size() - GetChildViewCount());
+      return std::max<int>(0, GetTrack()->GetChildTrackCount(
+                                  TrackCache::Get().GetSurfaceFilter()) -
+                                  GetChildViewCount());
   }
   return 0;
 }
@@ -283,17 +289,32 @@ void View::RefreshChildContext() {
 void View::SetChildTracks() {
   CHECK(active_);
   CHECK(scene_ != nullptr);
-  absl::Span<Track* const> child_tracks = GetTrack()->GetChildTracks();
+  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
 
-  int index = child_context_index_;
-  for (auto& child_view : child_views_) {
-    if (index < child_tracks.size()) {
-      child_view->SetTrack(child_tracks[index]);
-    } else {
-      child_view->SetTrack(TrackCache::Get().GetStubTrack());
+  // Walk the child tracks, skipping any that are not on the surface, and give
+  // the child views the run of them that starts at the child context index.
+  int skip_count = child_context_index_;
+  auto child_view = child_views_.begin();
+  for (Track* track : GetTrack()->GetChildTracks()) {
+    if (!track->IsVisible(filter)) {
+      continue;
     }
-    child_view->RefreshChildContext();
-    ++index;
+    if (skip_count > 0) {
+      --skip_count;
+      continue;
+    }
+    if (child_view == child_views_.end()) {
+      break;
+    }
+    (*child_view)->SetTrack(track);
+    (*child_view)->RefreshChildContext();
+    ++child_view;
+  }
+
+  // Any views left over have no track to show.
+  for (; child_view != child_views_.end(); ++child_view) {
+    (*child_view)->SetTrack(TrackCache::Get().GetStubTrack());
+    (*child_view)->RefreshChildContext();
   }
 }
 

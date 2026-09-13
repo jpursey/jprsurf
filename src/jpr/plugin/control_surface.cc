@@ -5,6 +5,8 @@
 
 #include "jpr/plugin/control_surface.h"
 
+#include <optional>
+
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
@@ -95,20 +97,28 @@ const char* ControlSurface::GetConfigString() {
 
 constexpr absl::Duration kLogInterval = absl::Seconds(5);
 
+// How often track visibility is polled. REAPER gives control surfaces no
+// notification when a track is shown or hidden, so the only way to see it is to
+// query every track in the project, which is far too much to do on every run.
+// Hiding a track is a deliberate, infrequent action taken in the Track Manager,
+// so a delay of up to this long before the surface follows is not noticeable.
+constexpr absl::Duration kVisibilityInterval = absl::Seconds(1);
+
 void ControlSurface::Run() {
   absl::Time start = absl::Now();
 
   if (track_list_changed_) {
     LOG(INFO) << "Refreshing TrackCache!";
     TrackCache::Get().Refresh();
-    if (master_track_view_ != nullptr) {
-      master_track_view_->SetTrack(TrackCache::Get().GetMasterTrack());
-    }
-    if (!track_list_view_->GetTrack()->Exists()) {
-      track_list_view_->SetTrack(TrackCache::Get().GetMasterTrack());
-    }
-    track_list_view_->RefreshChildContext();
+    RefreshTrackViews();
     track_list_changed_ = false;
+    // Refresh() re-read visibility for every track, so the poll can wait.
+    last_visibility_time_ = start;
+  } else if (last_visibility_time_ + kVisibilityInterval < start) {
+    last_visibility_time_ = start;
+    if (TrackCache::Get().RefreshVisibility()) {
+      RefreshTrackViews();
+    }
   }
 
   device_runner_.Run();
@@ -791,30 +801,58 @@ void ControlSurface::InitViews() {
   scene_->Activate(scene_runner_);
 }
 
+void ControlSurface::RefreshTrackViews() {
+  Track* master_track = TrackCache::Get().GetMasterTrack();
+  if (master_track_view_ != nullptr) {
+    master_track_view_->SetTrack(master_track);
+  }
+
+  // The track list view is parented to a track whose children fill the strips.
+  // If that track was deleted there is nothing left to show, so return to the
+  // master track. A track that is merely hidden on the surface is deliberately
+  // left in place: its strips go blank, but they come back as soon as it is
+  // shown again, and the user can navigate up explicitly if they want to.
+  if (!track_list_view_->GetTrack()->Exists()) {
+    track_list_view_->SetTrack(master_track, 0);
+  }
+
+  // Hiding tracks can shorten the child list out from under the current bank,
+  // which would otherwise leave the strips blank.
+  track_list_view_->SetChildContextIndex(
+      std::clamp(track_list_view_->GetChildContextIndex(), 0,
+                 track_list_view_->GetMaxChildContextIndex()));
+  track_list_view_->RefreshChildContext();
+}
+
 void ControlSurface::EnsureTrackIsVisible(Track* track) {
   // This can happen if we get events for tracks before the TrachCache has been
   // refreshed which happens only when Run() is called.
   if (track == nullptr) {
     return;
   }
-  const int num_tracks_in_view = track_list_view_->GetChildViewCount();
-  const int track_index = track->GetIndex();
-  const int last_child_context_index =
-      std::max(0, track_index - num_tracks_in_view + 1);
-  Track* parent_track = track->GetParentTrack();
-  if (parent_track == nullptr) {
-    // Only the master track and stub tracks have no parent track, so we can't
-    // make them visible.
+
+  // The track may be hidden in the mixer while still selectable in the arrange
+  // view, in which case it has no strip to scroll to, so leave the bank put.
+  // This also covers the master and stub tracks, which have no parent track and
+  // so can never be made visible this way.
+  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+  const std::optional<int> track_index = track->GetIndex(filter);
+  if (!track_index.has_value()) {
     return;
   }
+  Track* parent_track = track->GetParentTrack();
+
+  const int num_tracks_in_view = track_list_view_->GetChildViewCount();
+  const int last_child_context_index =
+      std::max(0, *track_index - num_tracks_in_view + 1);
 
   // If the track is already in the current view, we only need to make sure it
   // is in view, or do a minimum scroll to get it in view.
   if (track_list_view_->GetTrack() == parent_track) {
     int first_index = track_list_view_->GetChildContextIndex();
-    if (track_index < first_index) {
-      track_list_view_->SetChildContextIndex(track_index);
-    } else if (track_index >= first_index + num_tracks_in_view) {
+    if (*track_index < first_index) {
+      track_list_view_->SetChildContextIndex(*track_index);
+    } else if (*track_index >= first_index + num_tracks_in_view) {
       track_list_view_->SetChildContextIndex(last_child_context_index);
     }
   } else {

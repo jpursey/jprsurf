@@ -125,10 +125,18 @@ void TrackCache::Refresh() {
     std::shared_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
     new_track->parent_track_ = nullptr;
-    new_track->global_index_ = 0;
-    new_track->index_ = 0;
+    for (Track::FilterState& state : new_track->filter_state_) {
+      state = {};
+    }
     new_track->DoRefresh(nullptr);
   }
+
+  // Read visibility for the new track list and recompute the per-filter
+  // indices. The track list itself changed, so this is done unconditionally.
+  for (Track* track : all_tracks_) {
+    track->UpdateVisibility();
+  }
+  RebuildTrackIndices();
 
   // Notify tracks whose child hierarchy changed. This is done after the full
   // rebuild so that listeners see the final state.
@@ -148,8 +156,65 @@ void TrackCache::Refresh() {
   }
 }
 
+bool TrackCache::RefreshVisibility() {
+  // A track changing visibility changes the filtered child list of its parent,
+  // which is what hierarchy listeners care about. There is no need to diff
+  // anything: the visibility scan already knows exactly which tracks moved.
+  bool changed = false;
+  absl::flat_hash_set<Track*> changed_parents;
+  for (Track* track : all_tracks_) {
+    if (!track->UpdateVisibility()) {
+      continue;
+    }
+    changed = true;
+    if (track->parent_track_ != nullptr) {
+      changed_parents.insert(track->parent_track_);
+    }
+  }
+  if (!changed) {
+    return false;
+  }
+
+  RebuildTrackIndices();
+  for (Track* parent_track : changed_parents) {
+    parent_track->NotifyHierarchyChanged();
+  }
+  return true;
+}
+
+void TrackCache::RebuildTrackIndices() {
+  for (int i = 0; i < kTrackFilterCount; ++i) {
+    // Index within the filtered project track list.
+    int global_index = 0;
+    for (Track* track : all_tracks_) {
+      Track::FilterState& state = track->filter_state_[i];
+      state.global_index =
+          state.visible ? std::optional<int>(global_index++) : std::nullopt;
+    }
+
+    // Index within the parent's filtered child list, and the number of children
+    // the filter includes. Every track's index is assigned by the pass over its
+    // parent, so the master track is walked as well as the track list itself.
+    // Tracks whose parent could not be resolved are left as AddTrack() set
+    // them.
+    master_track_->filter_state_[i].child_count =
+        AssignChildIndices(master_track_, i);
+    for (Track* track : all_tracks_) {
+      track->filter_state_[i].child_count = AssignChildIndices(track, i);
+    }
+  }
+}
+
+int TrackCache::AssignChildIndices(Track* track, int filter_index) {
+  int index = 0;
+  for (Track* child : track->child_tracks_) {
+    Track::FilterState& state = child->filter_state_[filter_index];
+    state.index = state.visible ? std::optional<int>(index++) : std::nullopt;
+  }
+  return index;
+}
+
 void TrackCache::AddTrack(Track* track) {
-  track->global_index_ = static_cast<int>(all_tracks_.size());
   all_tracks_.push_back(track);
 
   MediaTrack* parent_id = GetParentTrack(track->GetTrackId());
@@ -161,16 +226,20 @@ void TrackCache::AddTrack(Track* track) {
   if (parent_track == nullptr) {
     LOG(ERROR) << "Failed to find parent track for track " << track->GetGuid()
                << " with parent ID " << parent_id;
-    track->parent_track_ = nullptr;
-    track->index_ = 0;
+  }
+  track->parent_track_ = parent_track;
+
+  // The stub track never holds children, and a track whose parent could not be
+  // resolved has no place in any child list. RebuildTrackIndices() assigns
+  // indices by walking parents, so neither is ever reached there and both must
+  // be cleared here.
+  if (parent_track == nullptr || parent_track == stub_track_.get()) {
+    for (Track::FilterState& state : track->filter_state_) {
+      state.index = std::nullopt;
+    }
     return;
   }
-
-  track->parent_track_ = parent_track;
-  track->index_ = static_cast<int>(parent_track->child_tracks_.size());
-  if (parent_track != stub_track_.get()) {
-    parent_track->child_tracks_.push_back(track);
-  }
+  parent_track->child_tracks_.push_back(track);
 }
 
 Track* TrackCache::GetTrack(const Guid& guid) const {

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,6 +20,36 @@ namespace jpr {
 
 class Track;
 class TrackCache;
+
+//==============================================================================
+// Track filtering
+//
+// REAPER independently tracks whether each track is visible in the mixer
+// control panel (MCP) and in the track control panel (TCP), which the user
+// manages through the Track Manager. There is only ever one track list and one
+// child track list; a filter selects which of those tracks are included, and
+// each Track caches its index and child count under every filter so callers can
+// work in whichever space is relevant to them.
+//==============================================================================
+
+enum class TrackFilter {
+  kAll,  // Every track that exists in REAPER.
+  kMcp,  // Only tracks visible in the mixer control panel.
+  kTcp,  // Only tracks visible in the track control panel.
+};
+
+// The number of TrackFilter values. TrackFilter values are contiguous starting
+// at zero, and are used directly as indices into the per-filter track state.
+inline constexpr int kTrackFilterCount = 3;
+
+// Converts a track filter to its index within the per-filter track state.
+inline constexpr int GetTrackFilterIndex(TrackFilter filter) {
+  return static_cast<int>(filter);
+}
+
+//==============================================================================
+// Track listener
+//==============================================================================
 
 // This is a listener interface for track changes.
 //
@@ -75,6 +106,18 @@ class Track final : public std::enable_shared_from_this<Track> {
   // effect.
   bool Exists() const { return track_id_ != nullptr; }
 
+  // Returns true if this track is included by the given filter. This is always
+  // true for kAll, and is always true for the master track, which has no
+  // per-panel visibility state of this form. This is updated whenever
+  // TrackCache::Refresh() or TrackCache::RefreshVisibility() is called.
+  //
+  // This does *not* imply Exists(): the stub track and tracks that have been
+  // deleted report the default, which is visible. Callers that need a track
+  // they can actually operate on must check Exists() as well.
+  bool IsVisible(TrackFilter filter) const {
+    return filter_state_[GetTrackFilterIndex(filter)].visible;
+  }
+
   // Refreshes the track by querying REAPER for the current track ID for this
   // track's GUID and updates its internal state.
   void Refresh();
@@ -122,10 +165,13 @@ class Track final : public std::enable_shared_from_this<Track> {
   //   proportionally.
   //
   // Selected:
-  // - Ctrl+Shift: Selects all tracks between the last selected track and this
-  //   regardless of parent track. (In REAPER this is Shift)
-  // - Shift: Selects all tracks between the last selected track and this track
-  //   that share the same parent track. (Not available in REAPER)
+  // - (Ctrl+)Shift: Selects all tracks between the last selected track and this
+  //   track. If Ctrl is not pressed, this only includes tracks that share the
+  //   same parent track (not available in REAPER). If Ctrl is pressed, this
+  //   includes all tracks regardless of parent track (in REAPER this is Shift).
+  //   This does nothing at all if the last selected track or this track is not
+  //   on the control surface, as there is no range to select. Holding shift
+  //   always means "select a range", never one of the behaviors below.
   // - Ctrl: Toggles selection of this track without affecting any other tracks.
   //   Sets the last touched track. (Same ias in REAPER)
   // - Default: Selects this track and unselects all other tracks. Sets the last
@@ -140,10 +186,15 @@ class Track final : public std::enable_shared_from_this<Track> {
   //   track. (Not available in REAPER)
   // - Alt: Clears the property for all tracks, including this track. (In REAPER
   //   this is Ctrl).
-  // - Ctrl+Shift: Sets the property for all tracks between the last touched
-  //   track and this track to be the value of the last touced track's property
-  //   value regardless of parent track. Track grouping is ignored. (Not
-  //   available in REAPER)
+  // - (Ctrl+)Shift: Sets the property for all tracks between the last touched
+  //   track and this track to be the value of the last touched track's property
+  //   value. Track grouping is ignored. If Ctrl is not pressed, this only
+  //   includes tracks that share the same parent track. If Ctrl is pressed,
+  //   this includes all tracks regardless of parent track. This does nothing at
+  //   all if the last touched track or this track is not on the control
+  //   surface, as there is no range to act on. Holding shift without alt always
+  //   means "set a range", never one of the behaviors below. (Not available in
+  //   REAPER)
   // - Shift: Sets the property for all tracks between the last touched track
   //   and this track to be the value of the last touced track's property value
   //   if they have the same parent track. Track grouping is ignored. (Not
@@ -170,22 +221,45 @@ class Track final : public std::enable_shared_from_this<Track> {
   // is called.
   Track* GetParentTrack() const { return parent_track_; }
 
-  // Returns the index of this track within its parent track.
+  // Returns the index of this track within its parent track's filtered child
+  // track list, or nullopt if the track has no place in that list.
   //
   // If this is a top level track, this will return the index within all
-  // top-level tracks. If the track does not currently exist in REAPER, this
-  // will return zero. This is updated whenever TrackCache::Refresh() is called.
-  int GetIndex() const { return index_; }
-
-  // Returns the global index of this track within all tracks in the project.
-  int GetGlobalIndex() const { return global_index_; }
-
-  // Immediate child tracks of this track in order. These are updated
-  // whenever TrackCache::Refresh() is called.
-  int GetChildTrackCount() const {
-    return static_cast<int>(child_tracks_.size());
+  // top-level tracks.
+  //
+  // Nullopt covers every reason the track is not in the list: it is excluded by
+  // the filter, it does not currently exist in REAPER, or it has no parent (the
+  // master and stub tracks). A returned value is always a valid index into
+  // GetParentTrack()->GetChildTracks(filter), so callers that have one may
+  // dereference it without a further check. This is updated whenever
+  // TrackCache::Refresh() or TrackCache::RefreshVisibility() is called.
+  //
+  // Note that IsVisible() is not sufficient to imply a value here, as the
+  // master track is always visible but never appears in a track list.
+  std::optional<int> GetIndex(TrackFilter filter) const {
+    return filter_state_[GetTrackFilterIndex(filter)].index;
   }
+
+  // Returns the global index of this track within all filtered tracks in the
+  // project, or nullopt if the track has no place in that list. This has the
+  // same semantics as GetIndex(), against TrackCache::GetTracks(filter).
+  std::optional<int> GetGlobalIndex(TrackFilter filter) const {
+    return filter_state_[GetTrackFilterIndex(filter)].global_index;
+  }
+
+  // All immediate child tracks of this track, in order, regardless of filter.
+  // Callers that want only the children included by a filter should iterate
+  // these and skip any for which IsVisible(filter) is false; the count of those
+  // is cached by GetChildTrackCount(). This is updated whenever
+  // TrackCache::Refresh() is called.
   absl::Span<Track* const> GetChildTracks() const { return child_tracks_; }
+
+  // The number of immediate child tracks included by the filter. This is
+  // updated whenever TrackCache::Refresh() or TrackCache::RefreshVisibility()
+  // is called.
+  int GetChildTrackCount(TrackFilter filter) const {
+    return filter_state_[GetTrackFilterIndex(filter)].child_count;
+  }
 
   // Subscribes to track changes for this track.
   //
@@ -214,9 +288,39 @@ class Track final : public std::enable_shared_from_this<Track> {
   using SetPropertyFn = int (*)(MediaTrack* track, int value, int ingroupflags);
   using GetPropertyFn = bool (*)(MediaTrack* track);
 
+  // Everything about this track under one TrackFilter, held as one entry per
+  // filter in filter_state_.
+  //
+  // Visibility is the input, read from REAPER by UpdateVisibility(); the rest
+  // is derived from it by TrackCache::RebuildTrackIndices(). Note that the
+  // child count is meaningful even for a track the filter excludes, and for the
+  // master track, neither of which appears in a track list at all.
+  struct FilterState {
+    // True if the filter includes this track.
+    bool visible = true;
+
+    // Index of this track within TrackCache::GetTracks() once the filter is
+    // applied, or nullopt if the filter excludes it, it does not exist, or it
+    // is the master track.
+    std::optional<int> global_index;
+
+    // Index of this track within its parent's child tracks once the filter is
+    // applied, or nullopt if there is no such place: the filter excludes it, it
+    // does not exist, or it has no parent track.
+    std::optional<int> index;
+
+    // Number of this track's immediate child tracks the filter includes.
+    int child_count = 0;
+  };
+
   // Performs the actual refresh logic to update both the track ID and the
   // corresponding cached state for this track.
   void DoRefresh(MediaTrack* track_id);
+
+  // Re-reads this track's panel visibility flags from REAPER, returning true if
+  // any of them changed. This is called only by the TrackCache, which owns
+  // recomputing the per-filter indices when visibility changes.
+  bool UpdateVisibility();
 
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
@@ -248,10 +352,12 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool solo_ = false;
   bool rec_arm_ = false;
 
-  // Track hierarchy.
+  // Track hierarchy. There is a single child track list holding every child,
+  // and membership of a filtered list is derived from each child's visibility.
+  // The indices and counts are the part that cannot be derived without a scan,
+  // so those are cached alongside it, one entry per TrackFilter.
   Track* parent_track_ = nullptr;
-  int global_index_ = 0;  // Index of the track within the project.
-  int index_ = 0;         // Index of the track within the parent.
+  FilterState filter_state_[kTrackFilterCount];
   std::vector<Track*> child_tracks_;
 
   // Listeners subscribed to this track for changes.

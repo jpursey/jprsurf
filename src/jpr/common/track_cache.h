@@ -36,6 +36,22 @@ class TrackCache final {
   // list changes.
   void Refresh();
 
+  // Re-reads the panel visibility of every track from REAPER, recomputing the
+  // per-filter indices and notifying affected tracks if anything changed.
+  // Returns true if any track's visibility changed.
+  //
+  // REAPER provides no control surface notification when a track is shown or
+  // hidden in the mixer or track control panel, so this must be polled.
+  bool RefreshVisibility();
+
+  // The filter used when enumerating tracks for display on the control surface,
+  // and for ranged track operations driven from it.
+  //
+  // This defaults to kMcp, as a physical control surface is the equivalent of
+  // REAPER's mixer control panel.
+  TrackFilter GetSurfaceFilter() const { return surface_filter_; }
+  void SetSurfaceFilter(TrackFilter filter) { surface_filter_ = filter; }
+
   // Returns the stub track, which is a special non-null track that represents
   // no track at all. The track GUID is empty and the track ID is null, and it
   // holds all default values.
@@ -53,7 +69,9 @@ class TrackCache final {
   Track* GetTrack(MediaTrack* track_id) const;
 
   // Returns all tracks in the project, in order, not including the master
-  // track.
+  // track, regardless of filter. Callers that want only the tracks included by
+  // a filter should iterate these and use Track::GetGlobalIndex(filter), which
+  // is nullopt for tracks the filter excludes.
   int GetTrackCount() const { return static_cast<int>(all_tracks_.size()); }
   absl::Span<Track* const> GetTracks() const { return all_tracks_; }
 
@@ -72,9 +90,19 @@ class TrackCache final {
 
   TrackCache();
 
-  // This helper callsed by Refresh() adds the given track to the relevant track
-  // lists and to its parent track's child track list, if it has a parent track.
+  // This helper called by Refresh() adds the given track to the track list and
+  // to its parent track's child track list, if it has a parent track.
   void AddTrack(Track* track);
+
+  // Recomputes the per-filter indices and child counts for every track from the
+  // track lists and the current per-track visibility. This is called by
+  // Refresh() and RefreshVisibility() once the lists and visibility are up to
+  // date.
+  void RebuildTrackIndices();
+
+  // Assigns the index within the given filter for each child of the track, and
+  // returns how many of those children the filter includes.
+  static int AssignChildIndices(Track* track, int filter_index);
 
   // Maps for all Tracks that have ever existed in this REAPER session. This is
   // never cleared, with deleted tracks remaining in a "non-existing" state,
@@ -94,6 +122,9 @@ class TrackCache final {
 
   // All non-master tracks that currently exist in REAPER, in order.
   std::vector<Track*> all_tracks_;
+
+  // Filter used when enumerating tracks for the control surface.
+  TrackFilter surface_filter_ = TrackFilter::kMcp;
 
   // The single master track, which is not included in the track list. This
   // is the root of all tracks.

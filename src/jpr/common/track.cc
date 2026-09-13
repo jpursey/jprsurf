@@ -5,6 +5,8 @@
 
 #include "jpr/common/track.h"
 
+#include <optional>
+
 #include "absl/log/log.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
@@ -111,6 +113,32 @@ void Track::DoRefresh(MediaTrack* track_id) {
   }
 }
 
+bool Track::UpdateVisibility() {
+  if (track_id_ == nullptr) {
+    return false;
+  }
+
+  // The master track has no B_SHOWINMIXER / B_SHOWINTCP state, and is always
+  // included: a control surface has a dedicated master fader, so hiding it the
+  // way REAPER's UI does is meaningless here.
+  if (this == TrackCache::Get().GetMasterTrack()) {
+    return false;
+  }
+
+  const bool mcp = GetMediaTrackInfo_Value(track_id_, "B_SHOWINMIXER") != 0.0;
+  const bool tcp = GetMediaTrackInfo_Value(track_id_, "B_SHOWINTCP") != 0.0;
+  FilterState& mcp_state =
+      filter_state_[GetTrackFilterIndex(TrackFilter::kMcp)];
+  FilterState& tcp_state =
+      filter_state_[GetTrackFilterIndex(TrackFilter::kTcp)];
+  if (mcp_state.visible == mcp && tcp_state.visible == tcp) {
+    return false;
+  }
+  mcp_state.visible = mcp;
+  tcp_state.visible = tcp;
+  return true;
+}
+
 void Track::RefreshMeter() {
   if (track_id_ == nullptr) {
     return;
@@ -213,27 +241,47 @@ void Track::UiSelected() {
   }
 
   // Shift is used to toggle selection of all tracks between the last selected
-  // track and this track.
-  Track* last_selected_track = TrackCache::Get().GetLastTouchedTrack();
-  if (AreModifiersOn(kModShift) && last_selected_track != nullptr) {
+  // track and this track. The range is relative to what is actually on the
+  // surface, so it operates in the surface filter's index space, and both ends
+  // must have a place in it.
+  if (AreModifiersOn(kModShift)) {
+    const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+    Track* last_selected_track = TrackCache::Get().GetLastTouchedTrack();
+    const std::optional<int> anchor_index =
+        last_selected_track != nullptr
+            ? last_selected_track->GetGlobalIndex(filter)
+            : std::nullopt;
+    const std::optional<int> this_index = GetGlobalIndex(filter);
+
+    // An end without a place in that list (it may have been touched from the
+    // arrange view, deleted, or cleared by REAPER, which reports the stub
+    // track) leaves no range to select. Holding shift asks for a range, so do
+    // nothing rather than silently performing one of the other behaviors, which
+    // would replace the selection the user was trying to extend.
+    if (!anchor_index.has_value() || !this_index.has_value()) {
+      return;
+    }
+
     // Unlike REAPER's default behavior "Shift" on its own will only select
     // tracks with the same parent as the starting track. This is more desirable
     // on a control surface. To get the standard "all tracks" the control
     // modifier must also be pressed.
     bool require_same_parent = !AreModifiersOn(kModCtrl);
 
-    // We iterate over *all* tracks in the project, and only select tracks which
-    // are between the last selected track and this track in the track list.
-    int first_index = last_selected_track->GetGlobalIndex();
-    int last_index = GetGlobalIndex();
+    // The range itself is expressed in filtered indices, but we iterate over
+    // *all* tracks in the project so that tracks which are not on the surface
+    // still get unselected. Leaving a track selected that the user cannot see
+    // is worse than unselecting one they did not aim at.
+    int first_index = *anchor_index;
+    int last_index = *this_index;
     if (first_index > last_index) {
       std::swap(first_index, last_index);
     }
 
-    auto tracks = TrackCache::Get().GetTracks();
-    for (int i = 0; i < tracks.size(); ++i) {
-      Track* track = tracks[i];
-      bool selected = (i >= first_index && i <= last_index);
+    for (Track* track : TrackCache::Get().GetTracks()) {
+      const std::optional<int> index = track->GetGlobalIndex(filter);
+      bool selected =
+          index.has_value() && *index >= first_index && *index <= last_index;
       if (selected && require_same_parent &&
           track->GetParentTrack() != last_selected_track->GetParentTrack()) {
         selected = false;
@@ -377,7 +425,9 @@ void Track::SetRecArm(bool rec_arm) {
 void Track::DoUiProperty(bool& property, const char* undo_entry,
                          GetPropertyFn get_property,
                          SetPropertyFn set_property) {
-  // Handle clear/set-only functionality.
+  // Handle clear/set-only functionality. "Clear all" means all tracks in the
+  // project, not just the ones on the surface: a mute the user can neither see
+  // nor clear is a bad state to be able to create.
   if (AreModifiersOn(kModAlt)) {
     // First, we clear the property for all tracks.
     bool this_track_changed = false;
@@ -420,25 +470,44 @@ void Track::DoUiProperty(bool& property, const char* undo_entry,
     return;
   }
 
-  // Handle ranged set/clear functionality
+  // Handle ranged set/clear functionality. Like ranged selection, this operates
+  // in the surface filter's index space, and requires both ends of the range to
+  // have a place in it.
   if (AreModifiersOn(kModShift)) {
+    const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
     Track* last_touched_track = TrackCache::Get().GetLastTouchedTrack();
+    const std::optional<int> anchor_index =
+        last_touched_track != nullptr
+            ? last_touched_track->GetGlobalIndex(filter)
+            : std::nullopt;
+    const std::optional<int> this_index = GetGlobalIndex(filter);
+
+    // An end without a place in that list leaves no range to act on. Holding
+    // shift asks for a range, so do nothing rather than silently toggling this
+    // track instead. An anchor with an index always exists, so its track ID is
+    // safe to read below.
+    if (!anchor_index.has_value() || !this_index.has_value()) {
+      return;
+    }
+
     bool require_same_parent = !AreModifiersOn(kModCtrl);
 
-    // We iterate over *all* tracks in the project, and only set the property
+    // We iterate over the tracks on the surface, and only set the property
     // value of tracks which are between the last touched track and this track
-    // in the track list.
-    int first_index = last_touched_track->GetGlobalIndex();
-    int last_index = GetGlobalIndex();
+    // in that list.
+    int first_index = *anchor_index;
+    int last_index = *this_index;
     if (first_index > last_index) {
       std::swap(first_index, last_index);
     }
 
-    auto tracks = TrackCache::Get().GetTracks();
     bool value = get_property(last_touched_track->track_id_);
     bool any_changed = false;
-    for (int i = first_index; i <= last_index; ++i) {
-      Track* track = tracks[i];
+    for (Track* track : TrackCache::Get().GetTracks()) {
+      const std::optional<int> index = track->GetGlobalIndex(filter);
+      if (!index.has_value() || *index < first_index || *index > last_index) {
+        continue;
+      }
       if (require_same_parent &&
           track->GetParentTrack() != last_touched_track->GetParentTrack()) {
         continue;
