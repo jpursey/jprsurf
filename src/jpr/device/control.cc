@@ -211,6 +211,37 @@ void Control::SetColor(Color color, int mode) {
   }
 }
 
+ControlOutputHandle Control::RegisterOutputWriter() {
+  ++output_writer_count_;
+  return ControlOutputHandle(this);
+}
+
+void Control::UnregisterOutputWriter() {
+  if (--output_writer_count_ == 0) {
+    // Any pending output came from a writer that has been removed. If a new
+    // writer is registered before the next run, it will write its own value.
+    pending_output_.reset();
+    clear_check_pending_ = true;
+    UpdateRunHandle();
+  }
+}
+
+void Control::ClearOutputs() {
+  if (cvalue_output_ != nullptr) {
+    SetCValue(0.0);
+  }
+  if (dvalue_output_ != nullptr) {
+    SetDValue(dvalue_output_->GetClearedValue(),
+              dvalue_output_->GetClearedMode());
+  }
+  if (text_output_ != nullptr) {
+    SetText("");
+  }
+  if (color_output_ != nullptr) {
+    SetColor({0, 0, 0});
+  }
+}
+
 ControlInputHandle Control::RegisterInput(const InputConfig& config,
                                           bool* flag) {
   InputId id = next_input_id_++;
@@ -590,7 +621,8 @@ void Control::DeliverDoublePress(PressGroup& group) {
 }
 
 void Control::UpdateRunHandle() {
-  bool need_run = HasRegistrations() || pending_output_.has_value();
+  bool need_run =
+      HasRegistrations() || pending_output_.has_value() || clear_check_pending_;
   if (need_run && !run_handle_.IsRegistered()) {
     run_handle_ =
         run_registry_.AddRunnable([this](const RunTime& time) { OnRun(time); });
@@ -603,6 +635,12 @@ void Control::OnRun(const RunTime& time) {
   last_run_time_ = time.precise;
   ResetVirtualInputs();
   UpdatePressTimers(time.precise);
+  if (clear_check_pending_) {
+    clear_check_pending_ = false;
+    if (output_writer_count_ == 0) {
+      ClearOutputs();
+    }
+  }
   SendPendingOutput();
   UpdateRunHandle();
 }

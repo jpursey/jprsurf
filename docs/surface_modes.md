@@ -44,6 +44,20 @@ root                  global: master fader, transport, modifiers, timecode,
 
 Only one mode view is enabled at a time.
 
+### Clearing unmapped controls
+
+- When a control has no active write mappings, its outputs are reset to a
+  cleared state, so nothing is left showing stale values from another mode (for
+  instance, Rec and Solo lights in Send/Receive mode).
+- Each output type has a generic cleared state (off, zero, blank text, black).
+  A device overrides it where the hardware needs something else, like the MCU
+  encoder ring's all-off mode.
+- Write mappings register with their control while active. When the last one
+  unregisters, the control checks again on its next run and only clears if
+  there are still no writers. A mode switch unregisters and registers mappings
+  between two runs, so a control used by both modes is never cleared, and there
+  is no flicker or motor fader dip.
+
 ### Send/Receive mode
 
 - Context is a single track. The track hierarchy has no meaning in this mode.
@@ -241,8 +255,30 @@ CL id.
 
 ### Phase 2: Mode switching
 
+- [x] **D2 (device): Clear control outputs with no writers**
+  - Output types get a cleared state: CValue 0, DValue a configurable value and
+    mode (default 0), empty text, and black. The X-Touch encoder rings clear to
+    their all-off mode.
+  - `Control::RegisterOutputWriter()` returns a `ControlOutputHandle` (RAII,
+    like `ControlInputHandle`), and the control counts registered writers. When
+    the count drops to zero, pending output is dropped, and the next `OnRun()`
+    clears the outputs if there are still no writers.
+  - **Verify:** every CL checks. First used in S6.
+
+- [ ] **S6 (scene): Mappings register as output writers**
+  - Depends on: D2.
+  - A mapping that writes to its control registers as an output writer while it
+    is active, and unregisters when it becomes inactive.
+  - **Verify:**
+    - Every CL checks, paying attention to startup and track navigation, which
+      activate and deactivate mappings.
+    - Local-only check, not committed: a button that toggles the `TrackMode`
+      view. Disabling it clears every strip (faders down, pot rings off, lights
+      off, scribbles blank, meters off); enabling it restores them without
+      flicker.
+
 - [ ] **P3 (plugin): Switch mode views**
-  - Depends on: P2.
+  - Depends on: P2, S6.
   - Add an empty `SendReceiveMode` view. Enable only the view for the current
     mode.
   - Track mode press returns via `EnsureTrackIsVisible` on the Send/Receive

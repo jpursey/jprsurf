@@ -124,6 +124,17 @@ class ControlDValueOutput : public ControlOutput {
   // valid range.
   void SetValue(int value, int mode = 0);
 
+  // The value and mode this output is set to when it is cleared, because
+  // nothing is writing to it any more (see Control::RegisterOutputWriter()).
+  // This defaults to value 0 in mode 0, and should be changed by devices where
+  // that does not turn the output off.
+  int GetClearedValue() const { return cleared_value_; }
+  int GetClearedMode() const { return cleared_mode_; }
+  void SetCleared(int value, int mode) {
+    cleared_value_ = value;
+    cleared_mode_ = mode;
+  }
+
   // Implements ControlOutput.
   Type GetType() const override { return Type::kDValue; }
 
@@ -139,6 +150,8 @@ class ControlDValueOutput : public ControlOutput {
 
  private:
   std::vector<int> max_values_;
+  int cleared_value_ = 0;
+  int cleared_mode_ = 0;
 };
 
 //==============================================================================

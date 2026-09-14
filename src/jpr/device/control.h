@@ -20,6 +20,7 @@
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output.h"
+#include "jpr/device/control_output_handle.h"
 
 namespace jpr {
 
@@ -255,8 +256,24 @@ class Control final {
   // output, this does nothing.
   void SetColor(Color color, int mode = 0);
 
+  //----------------------------------------------------------------------------
+  // Output writers
+  //----------------------------------------------------------------------------
+
+  // Registers something that writes to this control's outputs, such as an
+  // active view mapping. The writer stays registered until the returned handle
+  // is destroyed or reset.
+  //
+  // When the last writer is unregistered, every output is cleared on the next
+  // run: CValue outputs are set to 0.0, DValue outputs to their cleared value
+  // and mode, Text outputs to empty text, and Color outputs to black. If a
+  // writer is registered again before then, nothing is cleared, so writers can
+  // be swapped without the outputs changing in between.
+  ControlOutputHandle RegisterOutputWriter();
+
  private:
   friend class ControlInputHandle;
+  friend class ControlOutputHandle;
 
   // Per-registration state for a virtual input.
   struct InputRegistration {
@@ -319,6 +336,8 @@ class Control final {
   void ResetVirtualInputs();
   void UpdatePressTimers(double current_time);
   void SendPendingOutput();
+  void UnregisterOutputWriter();
+  void ClearOutputs();
   void SetInputListener(ControlInput::Type input_type);
   void ClearInputListener(ControlInput::Type input_type);
   void OnValueInputChanged();
@@ -355,6 +374,11 @@ class Control final {
   double last_run_time_ = 0.0;
   std::optional<double> last_input_time_;
   std::optional<PendingOutput> pending_output_;
+
+  // Output writer state. The outputs are cleared on the next run after the
+  // writer count drops to zero, if it is still zero.
+  int output_writer_count_ = 0;
+  bool clear_check_pending_ = false;
 
   // Input registration state.
   int next_input_id_ = 1;

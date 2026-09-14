@@ -861,6 +861,8 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
         midi_in, ControlDeltaInputMidiCcOnesComp::McuEncoder(track));
     pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
         midi_out, ControlDValueOutputMidiCc::McuEncoder(track));
+    // Value 0 still lights an LED in most modes, but mode 8 turns them all off.
+    pan_options.dvalue_output->SetCleared(0, /*mode=*/8);
     AddControl(std::move(pan_options));
 
     // Faders.
