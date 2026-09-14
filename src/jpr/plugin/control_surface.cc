@@ -108,12 +108,15 @@ void ControlSurface::Run() {
   absl::Time start = absl::Now();
 
   if (track_list_changed_) {
-    LOG(INFO) << "Refreshing TrackCache!";
     TrackCache::Get().Refresh();
     RefreshTrackViews();
     track_list_changed_ = false;
     // Refresh() re-read visibility for every track, so the poll can wait.
     last_visibility_time_ = start;
+    // The refresh is the first work done this run, so this is its duration.
+    LOG(INFO) << "Refreshed TrackCache with "
+              << TrackCache::Get().GetTrackCount() << " tracks in "
+              << absl::ToInt64Microseconds(absl::Now() - start) << "us";
   } else if (last_visibility_time_ + kVisibilityInterval < start) {
     last_visibility_time_ = start;
     if (TrackCache::Get().RefreshVisibility()) {

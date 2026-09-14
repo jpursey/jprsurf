@@ -147,14 +147,15 @@ CL id.
   - **Verify:** every CL checks, paying attention to all button lights still
     turning fully on and off. Blinking is tested in D1.
 
-- [ ] **P0 (plugin): Log refresh duration**
-  - Log how long `TrackCache::Refresh()` plus `RefreshTrackViews()` take, as
-    part of the existing "Refreshing TrackCache!" log. This is an infrequent
-    event, so the log stays.
+- [x] **P0 (plugin): Log refresh duration**
+  - Log how long `TrackCache::Refresh()` plus `RefreshTrackViews()` take, and
+    the track count, replacing the "Refreshing TrackCache!" log. This is an
+    infrequent event, so the log stays.
   - **Verify:**
     - Every CL checks.
     - Add, delete, and reorder tracks in a large project, and record the logged
-      refresh times as a baseline for C2.
+      refresh times as a baseline.
+    - Baseline (after C2): ~200us for 103 tracks with sends and receives.
 
 - [x] **D1 (device): Blink output mode for MIDI note lights**
   - Depends on: C4.
