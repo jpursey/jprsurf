@@ -714,9 +714,13 @@ void ControlSurface::InitViews() {
   }
   root_view->Enable();
 
+  // Add the Track mode view, which holds everything that is specific to Track
+  // mode.
+  track_mode_view_ = root_view->AddChildView("TrackMode");
+
   // Add TrackList view with 8 track views, which will correspond to the 8
   // tracks on the X-Touch.
-  track_list_view_ = root_view->AddChildView("TrackList");
+  track_list_view_ = track_mode_view_->AddChildView("TrackList");
   int child_view_index = 0;
   for (int d = 0; d < 2; ++d) {
     if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
@@ -798,6 +802,7 @@ void ControlSurface::InitViews() {
         absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
   }
   track_list_view_->Enable();
+  track_mode_view_->Enable();
 
   // Finally activate the scene, which will start it running and activate all
   // enabled views.

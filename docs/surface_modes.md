@@ -198,10 +198,8 @@ CL id.
       many sends. Refresh times stay in the low milliseconds.
     - Route correctness is tested in P2 (availability) and P4 (route strips).
 
-- [ ] **P1 (plugin): Restructure views for modes** (no behavior change)
+- [x] **P1 (plugin): Restructure views for modes** (no behavior change)
   - Move the track list under a `TrackMode` view.
-  - Extract the per-strip track mappings into a helper so the Info strip can
-    reuse them later.
   - **Verify:**
     - Every CL checks. The smoke test is the main check here, since everything
       it covers was moved.
@@ -339,8 +337,9 @@ CL id.
 
 - [ ] **P5 (plugin): Info strip**
   - Depends on: P4.
-  - `Info` view on the last X-Touch strip, using the Track mode strip helper for
-    fader, pot, mute, solo, rec arm, and meter.
+  - Extract the Track mode per-strip track mappings (fader, pot, mute, solo,
+    rec arm, meter, name, color) into a helper shared with the Info strip.
+  - `Info` view on the last X-Touch strip, using that helper.
   - Scribble shows the track name and "Send" / "Recv". Select is unmapped.
   - **Verify:**
     - Every CL checks.
