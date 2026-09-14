@@ -361,46 +361,48 @@ void MidiOut::UpdateState(const MidiMessage& message) {
   if (auto last_it = last_sent_.find(info->key); last_it != last_sent_.end()) {
     const MidiMessage& last = last_it->second;
 
+    bool same_as_last_sent = false;
     switch (info->type) {
       case StateType::kNote: {
-        // For notes, we only send if the on/off state changes:
-        //   - If last sent was note-on, only queue note-off changes.
-        //   - If last sent was note-off, only queue note-on changes.
+        // For notes, all off messages (note-off, or note-on with velocity 0)
+        // are equivalent, but on messages are only equivalent if they have the
+        // same velocity. Devices may give different velocities a different
+        // meaning (for instance, MCU lights blink for velocity 1).
         bool last_was_on = IsNoteOn(last);
         bool new_is_on = IsNoteOn(message);
-        if (last_was_on == new_is_on) {
-          return;
-        }
+        same_as_last_sent = (last_was_on == new_is_on &&
+                             (!new_is_on || last.data2 == message.data2));
         break;
       }
       case StateType::kCc7: {
         // For CC, compare the value byte (data2).
-        if (last.data2 == message.data2) {
-          return;
-        }
+        same_as_last_sent = (last.data2 == message.data2);
         break;
       }
       case StateType::kPitchBend: {
         // For pitch bend, compare the full 14-bit value (data1 + data2).
-        if (last.data1 == message.data1 && last.data2 == message.data2) {
-          return;
-        }
+        same_as_last_sent =
+            (last.data1 == message.data1 && last.data2 == message.data2);
         break;
       }
       case StateType::kChannelPressure: {
         // For channel pressure, compare the pressure byte (data1).
-        if (last.data1 == message.data1) {
-          return;
-        }
+        same_as_last_sent = (last.data1 == message.data1);
         break;
       }
       case StateType::kPolyPressure: {
         // For polyphonic pressure, compare the pressure byte (data2).
-        if (last.data2 == message.data2) {
-          return;
-        }
+        same_as_last_sent = (last.data2 == message.data2);
         break;
       }
+    }
+
+    // The device already has this state, so any change still pending for it
+    // is stale and must not be sent.
+    if (same_as_last_sent) {
+      pending_.erase(info->key);
+      pending_keys_.erase(info->key);
+      return;
     }
   }
 
