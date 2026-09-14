@@ -815,9 +815,7 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
             .release = MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/0)});
     if (button.has_light) {
       options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
-          midi_out,
-          ControlDValueOutputMidiNote::Config{
-              .channel = 0, .note = button.note, .use_note_off = false});
+          midi_out, ControlDValueOutputMidiNote::McuLight(button.note));
     }
     AddControl(std::move(options));
   }
@@ -832,8 +830,7 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     for (const auto& led : kLeds) {
       Control::Options led_options = {.name = led.name};
       led_options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
-          midi_out, ControlDValueOutputMidiNote::Config{
-                        .channel = 0, .note = led.note, .use_note_off = false});
+          midi_out, ControlDValueOutputMidiNote::McuLight(led.note));
       AddControl(std::move(led_options));
     }
 

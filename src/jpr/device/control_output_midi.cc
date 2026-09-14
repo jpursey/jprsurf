@@ -37,19 +37,38 @@ std::vector<int> GetMaxValues(
 // ControlDValueOutputMidiNote
 //==============================================================================
 
+ControlDValueOutputMidiNote::Config ControlDValueOutputMidiNote::McuLight(
+    uint8_t note) {
+  static constexpr Mode kModes[] = {
+      {.on_velocity = 0x7F},  // Mode 0: On
+      {.on_velocity = 0x01},  // Mode 1: Blinking
+  };
+  return Config{
+      .channel = 0,
+      .note = note,
+      .use_note_off = false,
+      .modes = kModes,
+  };
+}
+
 ControlDValueOutputMidiNote::ControlDValueOutputMidiNote(MidiOut* midi_out,
                                                          Config config)
-    : ControlDValueOutput(/*max_value=*/1), midi_out_(midi_out) {
-  messages_[0] =
-      (config.use_note_off ? MidiNoteOff(config.channel, config.note, 0x00)
-                           : MidiNoteOn(config.channel, config.note, 0x00));
-  messages_[1] = MidiNoteOn(config.channel, config.note, 0x7F);
+    : ControlDValueOutput(std::vector<int>(config.modes.size(), 1)),
+      midi_out_(midi_out),
+      off_message_(config.use_note_off
+                       ? MidiNoteOff(config.channel, config.note, 0x00)
+                       : MidiNoteOn(config.channel, config.note, 0x00)) {
+  on_messages_.reserve(config.modes.size());
+  for (const Mode& mode : config.modes) {
+    on_messages_.push_back(
+        MidiNoteOn(config.channel, config.note, mode.on_velocity));
+  }
 }
 
 ControlDValueOutputMidiNote::~ControlDValueOutputMidiNote() = default;
 
 void ControlDValueOutputMidiNote::OnValueChanged(int value, int mode) {
-  midi_out_->UpdateState(messages_[value]);
+  midi_out_->UpdateState(value == 0 ? off_message_ : on_messages_[mode]);
 }
 
 //==============================================================================

@@ -136,6 +136,17 @@ CL id.
 
 ### Phase 1: Mode buttons
 
+- [x] **C4 (common): MIDI note state tracks on velocity**
+  - `MidiOut::UpdateState` only sent note changes between on and off, so
+    changing a light from on (velocity 127) to blinking (velocity 1) was
+    dropped. Off messages stay equivalent; on messages now also compare
+    velocity.
+  - Also fixes a stale pending change being sent: an update matching the last
+    sent state now cancels any pending change for that key (for example, a
+    light going on, off, and on again within one frame no longer ends off).
+  - **Verify:** every CL checks, paying attention to all button lights still
+    turning fully on and off. Blinking is tested in D1.
+
 - [ ] **P0 (plugin): Log refresh duration**
   - Log how long `TrackCache::Refresh()` plus `RefreshTrackViews()` take, as
     part of the existing "Refreshing TrackCache!" log. This is an infrequent
@@ -145,7 +156,8 @@ CL id.
     - Add, delete, and reorder tracks in a large project, and record the logged
       refresh times as a baseline for C2.
 
-- [ ] **D1 (device): Blink output mode for MIDI note lights**
+- [x] **D1 (device): Blink output mode for MIDI note lights**
+  - Depends on: C4.
   - Add output modes to `ControlDValueOutputMidiNote`: mode 0 sends 0/127,
     mode 1 sends 0/1. `max_value` stays 1, so existing toggle mappings are
     unchanged.

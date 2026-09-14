@@ -21,15 +21,22 @@ namespace jpr {
 // on/off message.
 //
 // The value 0 corresponds to note off (or note on with velocity 0), and the
-// value 1 corresponds to note on with velocity 127. This is generally used for
-// controls that only have two states, such as an indicator LED, but can be
-// used for any control that can be represented with a discrete value.
+// value 1 corresponds to note on with the velocity for the current mode. This
+// is generally used for controls that only have two states, such as an
+// indicator LED, but can be used for any control that can be represented with a
+// discrete value.
 class ControlDValueOutputMidiNote : public ControlDValueOutput {
  public:
+  // A mode defines the note on velocity sent for value 1. Value 0 sends the
+  // same message in every mode.
+  struct Mode {
+    uint8_t on_velocity = 0x7F;
+  };
+
   // The configuration for a ControlDValueOutputMidiNote, which specifies the
-  // MIDI channel and note number to use for the note on/off messages, and
-  // whether to use note off messages or note on messages with velocity 0 for
-  // the off state.
+  // MIDI channel and note number to use for the note on/off messages, whether
+  // to use note off messages or note on messages with velocity 0 for the off
+  // state, and one or more modes that define the on state.
   struct Config {
     uint8_t channel = 0;
     uint8_t note = 0;
@@ -37,7 +44,15 @@ class ControlDValueOutputMidiNote : public ControlDValueOutput {
     // If true, value 0 sends a note off message. If false, value 0 sends a note
     // on message with velocity 0.
     bool use_note_off = false;
+
+    absl::Span<const Mode> modes;  // One or more modes.
   };
+
+  // Returns the configuration for a button or indicator light on an MCU device
+  // for the specified note. Both MCU light modes are included:
+  //   - Mode 0: Off or on.
+  //   - Mode 1: Off or blinking.
+  static Config McuLight(uint8_t note);
 
   ControlDValueOutputMidiNote(MidiOut* midi_out, Config config);
   ~ControlDValueOutputMidiNote() override;
@@ -47,7 +62,8 @@ class ControlDValueOutputMidiNote : public ControlDValueOutput {
   void OnValueChanged(int value, int mode) override;
 
   MidiOut* midi_out_;
-  MidiMessage messages_[2];
+  MidiMessage off_message_;
+  std::vector<MidiMessage> on_messages_;  // One per mode.
 };
 
 //==============================================================================
