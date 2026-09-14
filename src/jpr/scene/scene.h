@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -43,6 +44,18 @@ class Scene final {
   Control* GetControl(std::string_view name) const;
   ViewProperty* GetProperty(std::string_view name);
 
+  // Adds a property created outside the scene (for instance, by the plugin), so
+  // it can be mapped by name like any built-in property.
+  //
+  // This returns the added property, or null if the name is already used by
+  // another property or reserved for a built-in property. On failure the
+  // property is destroyed.
+  template <typename PropertyType>
+    requires std::derived_from<PropertyType, ViewProperty>
+  PropertyType* AddProperty(std::unique_ptr<PropertyType> property) {
+    return static_cast<PropertyType*>(AddViewProperty(std::move(property)));
+  }
+
   // Adds a new toggle property that can be mapped to an unused modifier flag.
   //
   // If no more modifier flags are available, or the property name is already
@@ -63,6 +76,9 @@ class Scene final {
   friend class SceneStateProperty;
 
   void OnRun(const RunTime& time);
+
+  // Implements AddProperty() for any property type.
+  ViewProperty* AddViewProperty(std::unique_ptr<ViewProperty> property);
 
   // Called by stateful properties that are being listened to, to register for
   // updates.

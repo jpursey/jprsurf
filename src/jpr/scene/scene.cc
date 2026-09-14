@@ -128,6 +128,17 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   return nullptr;
 }
 
+ViewProperty* Scene::AddViewProperty(std::unique_ptr<ViewProperty> property) {
+  // GetProperty() also finds built-in properties that are created on demand,
+  // so their names can't be taken either.
+  if (property == nullptr || GetProperty(property->GetName()) != nullptr) {
+    return nullptr;
+  }
+  ViewProperty* added_property = property.get();
+  properties_.emplace(added_property->GetName(), std::move(property));
+  return added_property;
+}
+
 Modifiers Scene::AddModifierProperty(std::string_view name) {
   if (next_modifier_flag_ == 0 || properties_.contains(name)) {
     return 0;

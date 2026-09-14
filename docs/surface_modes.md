@@ -167,12 +167,16 @@ CL id.
     - Local-only check, not committed: map a button light with
       `.write = {.mode = 1}` and confirm it blinks on the X-Touch.
 
-- [ ] **S1 (scene): Plugin-registered properties**
+- [x] **S1 (scene): Plugin-registered properties**
   - `Scene::AddProperty(std::unique_ptr<ViewProperty>)`, failing on a name
-    collision.
-  - Generic property types: a plain-state toggle (set by code, notifies on
-    change) and a callback action (invokes a function on trigger).
-  - **Verify:** every CL checks. First used in P2.
+    collision, including built-in names created on demand.
+  - Generic property types in `value_property.h`: `ToggleValueProperty` (set by
+    code, notifies on change) and `CallbackActionProperty` (invokes a function
+    on trigger).
+  - **Verify:** every CL checks. Tested with a temporary Send button mapping
+    (removed before submitting): duplicate and built-in names are rejected, and
+    a callback cycling the light through off, solid, and blinking covered every
+    transition. First used in P2.
 
 - [x] **C1 (common): Single selected track**
   - `TrackCache` exposes the selected track when exactly one non-master track
