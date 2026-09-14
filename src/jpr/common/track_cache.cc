@@ -252,4 +252,12 @@ Track* TrackCache::GetTrack(MediaTrack* track_id) const {
   return it != track_id_map_.end() ? it->second : nullptr;
 }
 
+Track* TrackCache::GetOnlySelectedTrack() const {
+  // CountSelectedTracks and GetSelectedTrack both exclude the master track.
+  if (CountSelectedTracks(nullptr) != 1) {
+    return nullptr;
+  }
+  return GetTrack(GetSelectedTrack(nullptr, 0));
+}
+
 }  // namespace jpr

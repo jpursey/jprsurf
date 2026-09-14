@@ -82,6 +82,18 @@ class TrackCache final {
   Track* GetLastTouchedTrack() const { return last_touched_track_; }
   void SetLastTouchedTrack(Track* track) { last_touched_track_ = track; }
 
+  // Returns the selected track if exactly one track is selected, or nullptr if
+  // no tracks or multiple tracks are selected. The master track is never
+  // returned, and its selection state is ignored.
+  //
+  // Like the other track accessors, this does not apply any filter. Callers
+  // that only want tracks on the surface must also check
+  // Track::IsVisible(GetSurfaceFilter()).
+  //
+  // This queries REAPER directly rather than the cached Track state, as that is
+  // only refreshed for tracks mapped on the surface.
+  Track* GetOnlySelectedTrack() const;
+
  private:
   friend class absl::NoDestructor<TrackCache>;
 

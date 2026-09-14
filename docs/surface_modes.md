@@ -28,7 +28,8 @@ Status key: `[ ]` not started, `[~]` in progress, `[x]` submitted.
 - Each mode button is written from an `available` toggle property, with a
   `mode_override` on an `active` toggle property selecting the blink mode.
 - Track is always available. Send is available when exactly one non-master track
-  is selected in REAPER and it has sends or receives.
+  is selected in REAPER, it is visible on the surface, and it has sends or
+  receives.
 
 ### View structure
 
@@ -161,10 +162,12 @@ CL id.
     change) and a callback action (invokes a function on trigger).
   - **Verify:** every CL checks. First used in P2.
 
-- [ ] **C1 (common): Single selected track**
+- [x] **C1 (common): Single selected track**
   - `TrackCache` exposes the selected track when exactly one non-master track
-    is selected, or null otherwise.
-  - **Verify:** every CL checks. First used in P2.
+    is selected, or null otherwise. It doesn't filter by visibility; callers
+    check that themselves.
+  - **Verify:** every CL checks. Tested with temporary logging in
+    `SetSurfaceSelected` (removed before submitting). First used in P2.
 
 - [ ] **C2 (common): Route lists on `Track`**
   - Depends on: P0 (for measuring).
@@ -196,9 +199,13 @@ CL id.
     `kAssignTrack` and `kAssignSend`.
   - Pressing an available mode button changes the mode and moves the blink.
     No views change yet.
+  - Don't call `GetOnlySelectedTrack()` every run. Recompute Send availability
+    only when REAPER reports a selection change (`SetSurfaceSelected`) or the
+    track list refreshes.
   - **Verify:**
-    - Every CL checks, including steady state performance, since availability
-      is computed every run.
+    - Every CL checks, including steady state performance. Availability should
+      only be recomputed on selection changes and refreshes, so the steady
+      state cost shouldn't change.
     - On REAPER start, Track blinks and Send is off.
     - Send light in Track mode (Track blinking throughout):
       - One track with sends selected: Send is solid.
@@ -206,6 +213,7 @@ CL id.
       - One track with no sends or receives selected: Send is off.
       - Two tracks with sends selected: Send is off.
       - Only the master track selected: Send is off.
+      - One track with sends selected, but hidden in the MCP: Send is off.
       - No tracks selected: Send is off.
       - Add a send to the selected track in REAPER: Send turns solid. Remove it:
         Send turns off.
