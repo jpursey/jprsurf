@@ -206,7 +206,7 @@ CL id.
     - Also check folder navigation (double press into a folder, long press out,
       Global to the top), and hidden tracks in the MCP.
 
-- [ ] **P2 (plugin): Surface mode state and mode button lights**
+- [x] **P2 (plugin): Surface mode state and mode button lights**
   - Depends on: D1, S1, C1, C2, P1.
   - `SurfaceMode { kTrack, kSendReceive }`, current mode, and pending request
     handling after the scene runs.

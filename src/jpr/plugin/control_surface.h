@@ -21,6 +21,17 @@
 
 namespace jpr {
 
+class ToggleValueProperty;
+
+// The top level modes of the control surface, which determine what the channel
+// strips control. Values are contiguous starting at zero, and are used directly
+// as indices into per-mode state.
+enum class SurfaceMode {
+  kTrack,        // Channel strips show tracks in the track hierarchy.
+  kSendReceive,  // Channel strips show the sends or receives of one track.
+};
+inline constexpr int kSurfaceModeCount = 2;
+
 class ControlSurface final : private IReaperControlSurface {
  public:
   // Returns the control surface registration struct used to register this
@@ -107,6 +118,17 @@ class ControlSurface final : private IReaperControlSurface {
   // deleted parent track moves the track list view; a hidden one does not.
   void RefreshTrackViews();
 
+  // Surface modes
+  //
+  // Each mode has a button that is lit when the mode is available, and blinks
+  // when it is the current mode. Pressing a button only records the requested
+  // mode, as presses are handled while the scene is running. The request is
+  // applied by ApplyRequestedMode() once the scene has finished.
+  void InitModeButtons(bool has_xtouch);
+  bool IsModeAvailable(SurfaceMode mode) const;
+  void UpdateModeButtons();
+  void ApplyRequestedMode();
+
   // State
   std::string type_string_;
   gb::Config config_;
@@ -124,6 +146,21 @@ class ControlSurface final : private IReaperControlSurface {
   View* master_track_view_ = nullptr;
   View* track_list_view_ = nullptr;
   bool track_list_changed_ = false;
+
+  // Surface mode state.
+  struct ModeButton {
+    ToggleValueProperty* available = nullptr;  // Lights the button.
+    ToggleValueProperty* active = nullptr;     // Makes the light blink.
+  };
+  SurfaceMode mode_ = SurfaceMode::kTrack;
+  std::optional<SurfaceMode> requested_mode_;
+  ModeButton mode_buttons_[kSurfaceModeCount];
+
+  // Set when mode availability may have changed, so the mode buttons are
+  // updated on the next run. Availability depends on the track selection and
+  // routing, which only change when REAPER notifies the surface, so there is no
+  // need to check them every run.
+  bool mode_buttons_changed_ = true;
 
   // When track visibility was last polled. This defaults to the epoch so that
   // the first run always polls.

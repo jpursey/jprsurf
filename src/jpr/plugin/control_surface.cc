@@ -18,6 +18,7 @@
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/reaper_property.h"
 #include "jpr/scene/timeline_property.h"
+#include "jpr/scene/value_property.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin_functions.h"
@@ -29,6 +30,16 @@ namespace {
 const GUID kEmptyGuid = {};
 constexpr const char kTypeString[] = "JPRSurf";
 constexpr const char kDescString[] = "Jovian Path Control Surface";
+
+// The name and X-Touch button for each SurfaceMode, indexed by the mode.
+struct ModeInfo {
+  std::string_view name;
+  std::string_view button;
+};
+constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
+    {"track", DeviceXTouch::kAssignTrack},
+    {"send_receive", DeviceXTouch::kAssignSend},
+};
 
 }  // namespace
 
@@ -117,16 +128,26 @@ void ControlSurface::Run() {
     LOG(INFO) << "Refreshed TrackCache with "
               << TrackCache::Get().GetTrackCount() << " tracks in "
               << absl::ToInt64Microseconds(absl::Now() - start) << "us";
+    mode_buttons_changed_ = true;
   } else if (last_visibility_time_ + kVisibilityInterval < start) {
     last_visibility_time_ = start;
     if (TrackCache::Get().RefreshVisibility()) {
       RefreshTrackViews();
+      mode_buttons_changed_ = true;
     }
+  }
+  if (mode_buttons_changed_) {
+    UpdateModeButtons();
   }
 
   device_runner_.Run();
   midi_in_runner_.Run();
   scene_runner_.Run();
+
+  // Mode button presses are only recorded while the scene runs, so a requested
+  // mode change is applied once it has finished.
+  ApplyRequestedMode();
+
   midi_out_runner_.Run();
 
   absl::Time end = absl::Now();
@@ -174,6 +195,9 @@ void ControlSurface::SetSurfaceMute(MediaTrack* track_id, bool mute) {
 void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
   VLOG_REAPER() << "SetSurfaceSelected(track_id=" << track_id
                 << ", selected=" << selected << ")";
+
+  // Mode availability depends on which track is selected.
+  mode_buttons_changed_ = true;
 }
 
 void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
@@ -712,6 +736,7 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRecord,
                           absl::StrCat("XTouch/", DeviceXTouch::kRecord));
   }
+  InitModeButtons(has_xtouch);
   root_view->Enable();
 
   // Add the Track mode view, which holds everything that is specific to Track
@@ -807,6 +832,85 @@ void ControlSurface::InitViews() {
   // Finally activate the scene, which will start it running and activate all
   // enabled views.
   scene_->Activate(scene_runner_);
+}
+
+//------------------------------------------------------------------------------
+// Surface modes
+//------------------------------------------------------------------------------
+
+void ControlSurface::InitModeButtons(bool has_xtouch) {
+  View* root_view = scene_->GetRootView();
+  for (int i = 0; i < kSurfaceModeCount; ++i) {
+    const SurfaceMode mode = static_cast<SurfaceMode>(i);
+    const ModeInfo& info = kModeInfo[i];
+    const std::string available_name =
+        absl::StrCat("mode_", info.name, "_available");
+    const std::string active_name = absl::StrCat("mode_", info.name, "_active");
+    const std::string select_name = absl::StrCat("mode_", info.name, "_select");
+
+    ModeButton& button = mode_buttons_[i];
+    button.available = scene_->AddProperty(
+        std::make_unique<ToggleValueProperty>(available_name));
+    button.active =
+        scene_->AddProperty(std::make_unique<ToggleValueProperty>(active_name));
+    CHECK(button.available != nullptr && button.active != nullptr);
+    scene_->AddProperty(std::make_unique<CallbackActionProperty>(
+        select_name, [this, mode] { requested_mode_ = mode; }));
+
+    if (!has_xtouch) {
+      continue;
+    }
+    const std::string control = absl::StrCat("XTouch/", info.button);
+    root_view->AddMapping(
+        ViewMapping::kWriteControl, available_name, control,
+        {.write = {.mode_overrides = {{active_name, {{true, 1}}}}}});
+    root_view->AddMapping(ViewMapping::kReadControl, select_name, control);
+  }
+}
+
+bool ControlSurface::IsModeAvailable(SurfaceMode mode) const {
+  switch (mode) {
+    case SurfaceMode::kTrack:
+      return true;
+    case SurfaceMode::kSendReceive: {
+      const Track* track = TrackCache::Get().GetOnlySelectedTrack();
+      return track != nullptr &&
+             track->IsVisible(TrackCache::Get().GetSurfaceFilter()) &&
+             (!track->GetSends().empty() || !track->GetReceives().empty());
+    }
+  }
+  return false;
+}
+
+void ControlSurface::UpdateModeButtons() {
+  mode_buttons_changed_ = false;
+  for (int i = 0; i < kSurfaceModeCount; ++i) {
+    const SurfaceMode mode = static_cast<SurfaceMode>(i);
+    const bool active = (mode == mode_);
+    // The current mode stays lit even if it is no longer available, so it is
+    // always clear which mode the surface is in.
+    mode_buttons_[i].available->SetBool(active || IsModeAvailable(mode));
+    mode_buttons_[i].active->SetBool(active);
+  }
+}
+
+void ControlSurface::ApplyRequestedMode() {
+  if (!requested_mode_.has_value()) {
+    return;
+  }
+  const SurfaceMode mode = *requested_mode_;
+  requested_mode_.reset();
+
+  // Pressing the button for the current mode or an unlit button does nothing.
+  if (mode == mode_ ||
+      !mode_buttons_[static_cast<int>(mode)].available->GetBool()) {
+    return;
+  }
+  LOG(INFO) << "Surface mode changed from "
+            << kModeInfo[static_cast<int>(mode_)].name << " to "
+            << kModeInfo[static_cast<int>(mode)].name;
+  mode_ = mode;
+  UpdateModeButtons();
 }
 
 void ControlSurface::RefreshTrackViews() {
