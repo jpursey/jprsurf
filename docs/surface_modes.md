@@ -169,7 +169,7 @@ CL id.
   - **Verify:** every CL checks. Tested with temporary logging in
     `SetSurfaceSelected` (removed before submitting). First used in P2.
 
-- [ ] **C2 (common): Route lists on `Track`**
+- [x] **C2 (common): Route lists on `Track`**
   - Depends on: P0 (for measuring).
   - `TrackRoute` struct and `Track::GetSends()` / `GetReceives()`.
   - Built in `TrackCache::Refresh()`: other track pointer per route. Hardware

@@ -76,6 +76,18 @@ class TrackListener {
   virtual void OnTrackHierarchyChanged(Track* track) {}
 };
 
+//==============================================================================
+// Track routes
+//==============================================================================
+
+// A send from a track to another track, or a receive into a track from another
+// track. Hardware outputs are not included.
+struct TrackRoute {
+  // The destination track for a send, or the source track for a receive. This
+  // is never null.
+  Track* other_track;
+};
+
 // Represents a track in REAPER, identified by a GUID.
 //
 // This class provides methods to get and set various properties of the track,
@@ -261,6 +273,14 @@ class Track final : public std::enable_shared_from_this<Track> {
     return filter_state_[GetTrackFilterIndex(filter)].child_count;
   }
 
+  // Sends from this track to other tracks, and receives into this track from
+  // other tracks, in REAPER's order. The index of a route in these lists is its
+  // send or receive index in REAPER. These are empty for the master track and
+  // for tracks that do not currently exist. This is updated whenever
+  // TrackCache::Refresh() is called.
+  absl::Span<const TrackRoute> GetSends() const { return sends_; }
+  absl::Span<const TrackRoute> GetReceives() const { return receives_; }
+
   // Subscribes to track changes for this track.
   //
   // This will be called whenever the underlying MediaTrack* changes (including
@@ -322,6 +342,11 @@ class Track final : public std::enable_shared_from_this<Track> {
   // recomputing the per-filter indices when visibility changes.
   bool UpdateVisibility();
 
+  // Rebuilds the send and receive lists from REAPER. This is called only by the
+  // TrackCache during Refresh() for tracks that exist, once every existing
+  // track can be looked up by its track ID.
+  void UpdateRoutes();
+
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
 
@@ -359,6 +384,10 @@ class Track final : public std::enable_shared_from_this<Track> {
   Track* parent_track_ = nullptr;
   FilterState filter_state_[kTrackFilterCount];
   std::vector<Track*> child_tracks_;
+
+  // Track routing, rebuilt by UpdateRoutes().
+  std::vector<TrackRoute> sends_;
+  std::vector<TrackRoute> receives_;
 
   // Listeners subscribed to this track for changes.
   absl::flat_hash_set<TrackListener*> listeners_;

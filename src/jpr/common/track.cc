@@ -21,6 +21,31 @@ namespace {
 constexpr int kNoGrouping = 1;
 constexpr int kNoGanging = 2;
 
+// Categories for GetTrackNumSends and GetSetTrackSendInfo.
+constexpr int kReceiveCategory = -1;
+constexpr int kSendCategory = 0;
+
+// Returns the routes for one category, where other_track_param names the
+// GetSetTrackSendInfo parameter for the track at the other end of the route.
+std::vector<TrackRoute> BuildRoutes(MediaTrack* track_id, int category,
+                                    const char* other_track_param) {
+  std::vector<TrackRoute> routes;
+  const int count = GetTrackNumSends(track_id, category);
+  routes.reserve(count);
+  for (int i = 0; i < count; ++i) {
+    auto* other_track_id = static_cast<MediaTrack*>(
+        GetSetTrackSendInfo(track_id, category, i, other_track_param, nullptr));
+    Track* other_track = TrackCache::Get().GetTrack(other_track_id);
+    if (other_track == nullptr) {
+      LOG(ERROR) << "Failed to find " << other_track_param << " for route " << i
+                 << " in category " << category;
+      other_track = TrackCache::Get().GetStubTrack();
+    }
+    routes.push_back({.other_track = other_track});
+  }
+  return routes;
+}
+
 }  // namespace
 
 Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
@@ -137,6 +162,11 @@ bool Track::UpdateVisibility() {
   mcp_state.visible = mcp;
   tcp_state.visible = tcp;
   return true;
+}
+
+void Track::UpdateRoutes() {
+  sends_ = BuildRoutes(track_id_, kSendCategory, "P_DESTTRACK");
+  receives_ = BuildRoutes(track_id_, kReceiveCategory, "P_SRCTRACK");
 }
 
 void Track::RefreshMeter() {

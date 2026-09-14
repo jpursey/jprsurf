@@ -128,13 +128,18 @@ void TrackCache::Refresh() {
     for (Track::FilterState& state : new_track->filter_state_) {
       state = {};
     }
+    new_track->sends_.clear();
+    new_track->receives_.clear();
     new_track->DoRefresh(nullptr);
   }
 
-  // Read visibility for the new track list and recompute the per-filter
-  // indices. The track list itself changed, so this is done unconditionally.
+  // Read visibility and routing for the new track list and recompute the
+  // per-filter indices. The track list itself changed, so this is done
+  // unconditionally. Routes are read here, after every track has been added to
+  // the track ID map, so the other end of every route can be looked up.
   for (Track* track : all_tracks_) {
     track->UpdateVisibility();
+    track->UpdateRoutes();
   }
   RebuildTrackIndices();
 
