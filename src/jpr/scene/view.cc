@@ -12,6 +12,17 @@
 
 namespace jpr {
 
+namespace {
+
+// Returns the type of route shown by a kSends or kReceives child context.
+TrackRouteType GetChildRouteType(View::ChildContextType context_type) {
+  return context_type == View::ChildContextType::kSends
+             ? TrackRouteType::kSend
+             : TrackRouteType::kReceive;
+}
+
+}  // namespace
+
 // A view property that changes the child context index by a specified offset
 // when triggered. This is used for the child_inc, child_dec, child_bank_inc,
 // and child_bank_dec properties.
@@ -255,6 +266,12 @@ int View::GetMaxChildContextIndex() const {
       return std::max<int>(0, GetTrack()->GetChildTrackCount(
                                   TrackCache::Get().GetSurfaceFilter()) -
                                   GetChildViewCount());
+    case ChildContextType::kSends:
+    case ChildContextType::kReceives: {
+      const int route_count = static_cast<int>(
+          GetTrack()->GetRoutes(GetChildRouteType(child_context_type_)).size());
+      return std::max(0, route_count - GetChildViewCount());
+    }
   }
   return 0;
 }
@@ -282,6 +299,10 @@ void View::RefreshChildContext() {
       return;
     case ChildContextType::kTrack:
       SetChildTracks();
+      break;
+    case ChildContextType::kSends:
+    case ChildContextType::kReceives:
+      SetChildRoutes();
       break;
   }
 }
@@ -318,8 +339,32 @@ void View::SetChildTracks() {
   }
 }
 
+void View::SetChildRoutes() {
+  CHECK(active_);
+  CHECK(scene_ != nullptr);
+  const TrackRouteType type = GetChildRouteType(child_context_type_);
+  Track* track = GetTrack();
+  absl::Span<const TrackRoute> routes = track->GetRoutes(type);
+
+  // Views past the last route still refer to the route index they would show,
+  // but have no route, and no track to show.
+  int index = child_context_index_;
+  for (auto& child_view : child_views_) {
+    child_view->route_properties_.SetRoute(track, type, index);
+    child_view->SetTrack(index < static_cast<int>(routes.size())
+                             ? routes[index].other_track
+                             : TrackCache::Get().GetStubTrack());
+    child_view->RefreshChildContext();
+    ++index;
+  }
+}
+
 ViewProperty* View::GetProperty(std::string_view name) const {
   if (ViewProperty* property = track_properties_.GetProperty(name);
+      property != nullptr) {
+    return property;
+  }
+  if (ViewProperty* property = route_properties_.GetProperty(name);
       property != nullptr) {
     return property;
   }
@@ -380,6 +425,13 @@ void View::SyncMappings() {
   Track* track = GetTrack();
   track->Refresh();
   track->RefreshMeter();
+
+  // REAPER doesn't reliably report route volume, pan, and mute changes, so they
+  // are polled for the track whose routes are shown by the child views.
+  if (child_context_type_ == ChildContextType::kSends ||
+      child_context_type_ == ChildContextType::kReceives) {
+    track->RefreshRoutes();
+  }
 
   // Now update all active mappings for this view. This will update the REAPER
   // state and hardware controls according to the current state of the view

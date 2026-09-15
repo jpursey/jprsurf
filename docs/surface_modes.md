@@ -361,7 +361,7 @@ CL id.
     refreshed).
   - **Verify:** every CL checks. First used in P4.
 
-- [ ] **S3 (scene): Route child context**
+- [x] **S3 (scene): Route child context**
   - Depends on: S2.
   - `ChildContextType::kSends` / `kReceives`. Child views get consecutive
     routes starting at the child context index, and resolve route properties.
@@ -385,6 +385,9 @@ CL id.
   - `Routes` view with fader, pot, mute, scribble, color, and select mappings.
   - Bank/Channel navigation over routes.
   - Entering shows sends, else receives.
+  - Call `RefreshChildContext()` on the routes view when the track list changes
+    (routes are only added or removed then), as `RefreshTrackViews()` does for
+    the track list.
   - **Verify:**
     - Every CL checks, including steady state performance in Send/Receive mode
       on a track with many sends.

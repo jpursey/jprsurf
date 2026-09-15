@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "jpr/scene/route_properties.h"
 #include "jpr/scene/track_properties.h"
 #include "jpr/scene/view_mapping.h"
 
@@ -37,6 +38,14 @@ class View final {
     // Child views will be set to consecutive tracks starting from child tracks
     // of this view.
     kTrack,
+
+    // Child views will be set to consecutive sends (kSends) or receives
+    // (kReceives) of this view's track. Each child view's route properties
+    // refer to its route, and its track is the track at the other end of the
+    // route. If there are fewer routes than child views, the remaining child
+    // views have no route (route_exists is false) and the stub track.
+    kSends,
+    kReceives,
   };
 
   //----------------------------------------------------------------------------
@@ -189,6 +198,9 @@ class View final {
 
   // Refreshes the context for all child views with the matching child context
   // type, if the view is active.
+  //
+  // This must be called whenever the track list changes, as that is when the
+  // tracks and routes available to child views change.
   void RefreshChildContext();
 
   //----------------------------------------------------------------------------
@@ -243,6 +255,12 @@ class View final {
   // context type is kTrack.
   void SetChildTracks();
 
+  // Sets the route and track context for all child views to consecutive routes
+  // of this view's track, starting at the child context index. This should only
+  // be called when this view is active, and the child context type is kSends or
+  // kReceives.
+  void SetChildRoutes();
+
   // Constructed state
   Scene* scene_;
   View* parent_view_;
@@ -258,6 +276,7 @@ class View final {
 
   // Context
   TrackProperties track_properties_;
+  RouteProperties route_properties_;  // Set by a parent that shows routes.
   ChildContextType child_context_type_ = ChildContextType::kNone;
   int child_context_index_ = 0;
 
