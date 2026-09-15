@@ -280,6 +280,22 @@ CL id.
       off, scribbles blank, meters off); enabling it restores them without
       flicker.
 
+- [x] **P10 (plugin): Clear the surface on shutdown**
+  - Depends on: S6.
+  - When the control surface is destroyed, deactivate the scene and run the
+    devices and MIDI output once more, so every mapped control is cleared
+    instead of showing the last state.
+  - **Verify:**
+    - Every CL checks.
+    - Close REAPER: faders drop, all lights and pot rings turn off, scribble
+      strips and the timecode display go blank, and meters stop.
+    - Remove the surface in Preferences > Control/OSC/web: the surface clears.
+      Add it back: it initializes normally.
+    - Both the X-Touch and the Extender clear. Without a wait after the final
+      send, the Extender didn't: MIDI still being sent is lost when a port is
+      destroyed, and its port is destroyed first. The destructor now waits
+      100ms, as Klinke does.
+
 - [ ] **P3 (plugin): Switch mode views**
   - Depends on: P2, S6.
   - Add an empty `SendReceiveMode` view. Enable only the view for the current

@@ -11,6 +11,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/time/clock.h"
 #include "gb/config/text_config.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/track_cache.h"
@@ -90,7 +91,25 @@ ControlSurface::ControlSurface(std::string type_string,
   InitViews();
 }
 
-ControlSurface::~ControlSurface() { LOG(INFO) << "ControlSurface destroyed"; }
+ControlSurface::~ControlSurface() {
+  // Clear the surface, so it doesn't keep showing the last state after REAPER
+  // exits or the surface is removed. Deactivating the scene releases every
+  // mapping's output writer, which clears each control on its next run. There
+  // are no more calls to Run(), so run the devices to clear their controls, and
+  // then MIDI output to send it.
+  if (scene_ != nullptr) {
+    scene_->Deactivate();
+    device_runner_.Run();
+    midi_out_runner_.Run();
+
+    // The MIDI ports are destroyed right after this, and MIDI still being sent
+    // when a port is destroyed is lost (the X-Touch Extender, whose port is
+    // destroyed first, did not clear without this). REAPER has no way to flush
+    // a port, so give them time to finish sending.
+    absl::SleepFor(absl::Milliseconds(100));
+  }
+  LOG(INFO) << "ControlSurface destroyed";
+}
 
 //------------------------------------------------------------------------------
 // Reaper callbacks
