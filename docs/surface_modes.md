@@ -85,7 +85,9 @@ Only one mode view is enabled at a time.
   else receives, else empty strips). The surface is not forced out of the mode.
 - Pressing Track returns to Track mode showing the current track among its
   siblings (`EnsureTrackIsVisible`).
-- If the current track is deleted, return to Track mode at the top level.
+- If the current track is deleted, return to Track mode, with the track list
+  where it was when Send/Receive mode was entered (or the top level, if that
+  parent track was deleted too).
 
 ### Holding Send in Track mode
 
@@ -296,13 +298,14 @@ CL id.
       destroyed, and its port is destroyed first. The destructor now waits
       100ms, as Klinke does.
 
-- [ ] **P3 (plugin): Switch mode views**
+- [x] **P3 (plugin): Switch mode views**
   - Depends on: P2, S6.
   - Add an empty `SendReceiveMode` view. Enable only the view for the current
     mode.
   - Track mode press returns via `EnsureTrackIsVisible` on the Send/Receive
     track.
-  - If the Send/Receive track is deleted, return to Track mode at the top level.
+  - If the Send/Receive track is deleted, return to Track mode with the track
+    list where it was.
   - Log mode changes and how long they take. This is an infrequent event, so
     the log stays.
   - **Verify:**
@@ -314,15 +317,14 @@ CL id.
       mute doesn't change REAPER).
     - Bank/Channel/Global buttons do nothing in Send/Receive mode.
     - Press Track: all strips restore to the current REAPER state.
-    - Return position:
-      - Select a track in the current bank, enter, and return: the bank is
-        unchanged.
-      - Select a track outside the current bank in REAPER, enter, and return:
-        the surface scrolls to show it.
-      - Select a track inside a folder while viewing the top level, enter, and
-        return: the surface shows the folder's children, including that track.
+    - Return position: returning always shows the Send/Receive track among its
+      siblings, scrolled into view, even if the surface showed other tracks
+      before entering.
+    - Measured: mode switches take ~50us, and steady state is unchanged.
     - Delete the Send/Receive track while in the mode: the surface returns to
-      Track mode at the top level.
+      Track mode, showing the tracks it showed before entering.
+    - Enter on a track inside a folder, then delete the whole folder: the
+      surface returns to Track mode at the top level.
     - Hide the Send/Receive track in the MCP while in the mode: the mode stays.
     - Rapidly toggle modes several times: no stuck lights or motor fights.
 

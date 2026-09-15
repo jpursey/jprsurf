@@ -6,6 +6,7 @@
 #include "jpr/plugin/control_surface.h"
 
 #include <optional>
+#include <utility>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -148,6 +149,13 @@ void ControlSurface::Run() {
               << TrackCache::Get().GetTrackCount() << " tracks in "
               << absl::ToInt64Microseconds(absl::Now() - start) << "us";
     mode_buttons_changed_ = true;
+
+    // If the track shown in Send/Receive mode was deleted, there is nothing
+    // left to show.
+    if (mode_ == SurfaceMode::kSendReceive && !send_receive_track_->Exists()) {
+      LOG(INFO) << "Send/Receive track was deleted";
+      EnterTrackMode();
+    }
   } else if (last_visibility_time_ + kVisibilityInterval < start) {
     last_visibility_time_ = start;
     if (TrackCache::Get().RefreshVisibility()) {
@@ -848,6 +856,10 @@ void ControlSurface::InitViews() {
   track_list_view_->Enable();
   track_mode_view_->Enable();
 
+  // Add the Send/Receive mode view, which starts disabled as the surface starts
+  // in Track mode.
+  send_receive_mode_view_ = root_view->AddChildView("SendReceiveMode");
+
   // Finally activate the scene, which will start it running and activate all
   // enabled views.
   scene_->Activate(scene_runner_);
@@ -920,16 +932,56 @@ void ControlSurface::ApplyRequestedMode() {
   const SurfaceMode mode = *requested_mode_;
   requested_mode_.reset();
 
-  // Pressing the button for the current mode or an unlit button does nothing.
-  if (mode == mode_ ||
-      !mode_buttons_[static_cast<int>(mode)].available->GetBool()) {
+  // Pressing the button for the current mode or an unavailable mode does
+  // nothing. Availability is checked again rather than using the button light,
+  // as the selection may have changed since the light was last updated.
+  if (mode == mode_ || !IsModeAvailable(mode)) {
     return;
   }
-  LOG(INFO) << "Surface mode changed from "
-            << kModeInfo[static_cast<int>(mode_)].name << " to "
-            << kModeInfo[static_cast<int>(mode)].name;
-  mode_ = mode;
+  switch (mode) {
+    case SurfaceMode::kTrack:
+      EnterTrackMode();
+      break;
+    case SurfaceMode::kSendReceive:
+      EnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
+      break;
+  }
+}
+
+void ControlSurface::EnterTrackMode() {
+  const absl::Time start = absl::Now();
+  const SurfaceMode old_mode = mode_;
+  Track* track = std::exchange(send_receive_track_, nullptr);
+  mode_ = SurfaceMode::kTrack;
+  send_receive_mode_view_->Disable();
+  track_mode_view_->Enable();
+
+  // Show the track that was shown in Send/Receive mode among its siblings. This
+  // does nothing if it was deleted or is hidden, leaving the track list where
+  // it was.
+  if (track != nullptr) {
+    EnsureTrackIsVisible(track);
+  }
+  FinishModeChange(old_mode, start);
+}
+
+void ControlSurface::EnterSendReceiveMode(Track* track) {
+  DCHECK(track != nullptr);
+  const absl::Time start = absl::Now();
+  const SurfaceMode old_mode = mode_;
+  send_receive_track_ = track;
+  mode_ = SurfaceMode::kSendReceive;
+  track_mode_view_->Disable();
+  send_receive_mode_view_->Enable();
+  FinishModeChange(old_mode, start);
+}
+
+void ControlSurface::FinishModeChange(SurfaceMode old_mode, absl::Time start) {
   UpdateModeButtons();
+  LOG(INFO) << "Surface mode changed from "
+            << kModeInfo[static_cast<int>(old_mode)].name << " to "
+            << kModeInfo[static_cast<int>(mode_)].name << " in "
+            << absl::ToInt64Microseconds(absl::Now() - start) << "us";
 }
 
 void ControlSurface::RefreshTrackViews() {
