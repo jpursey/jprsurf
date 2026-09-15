@@ -351,17 +351,23 @@ CL id.
     cached hardware output count stays current.
   - **Verify:** every CL checks. First used in P4.
 
-- [ ] **S2 (scene): Route properties**
+- [x] **S2 (scene): Route properties**
   - Depends on: C3.
   - `RouteProperties`, analogous to `TrackProperties`, bound to
-    (track, sends or receives, index): other track name, other track color,
-    volume, pan, mute, exists.
+    (track, sends or receives, index): volume, pan, mute, exists.
+  - The other track's name and color are not route properties. S3 gives each
+    route view the other track as its track context, so the existing
+    `TrackProperties` show them (and `View::SyncMappings()` keeps that track
+    refreshed).
   - **Verify:** every CL checks. First used in P4.
 
 - [ ] **S3 (scene): Route child context**
   - Depends on: S2.
   - `ChildContextType::kSends` / `kReceives`. Child views get consecutive
     routes starting at the child context index, and resolve route properties.
+    Each child view's track context is the track at the other end of its route
+    (or the stub track past the end), so its name, color, and so on come from
+    `TrackProperties`.
   - Max child context index and banking based on the route count.
   - The view with this context refreshes its track's routes during sync.
   - **Verify:** every CL checks. First used in P4.

@@ -6,6 +6,7 @@
 set(jpr_scene_SOURCE
   modifier_property.h
   reaper_property.cc reaper_property.h
+  route_properties.cc route_properties.h
   scene.cc scene.h
   scene_state_property.cc scene_state_property.h
   timeline_property.cc timeline_property.h
