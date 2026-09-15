@@ -16,6 +16,7 @@
 #include "gb/config/text_config.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/common/undo.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/reaper_property.h"
@@ -175,6 +176,10 @@ void ControlSurface::Run() {
   // Mode button presses are only recorded while the scene runs, so a requested
   // mode change is applied once it has finished.
   ApplyRequestedMode();
+
+  // Create undo points for continuous changes made this run, or earlier, once
+  // they have stopped.
+  ContinuousUndo::Get().Update(start);
 
   midi_out_runner_.Run();
 

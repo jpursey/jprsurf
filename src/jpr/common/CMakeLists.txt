@@ -14,12 +14,14 @@ set(jpr_common_SOURCE
   timeline.cc timeline.h
   track.cc track.h
   track_cache.cc track_cache.h
+  undo.cc undo.h
   volume_utils.h
 )
 
 set(jpr_common_DEPS
   absl::log
   absl::log_initialize
+  absl::time
   gb_config
   reaper_sdk
 )

@@ -418,17 +418,24 @@ CL id.
       disappears and later strips shift left.
     - Delete a destination track while its send is shown: the strips update.
 
-- [ ] **C5 (common): Undo for route volume and pan**
+- [x] **C5 (common): Undo for route volume and pan**
   - Depends on: C3 (found while testing P4).
   - `SetTrackSendUIVol` / `SetTrackSendUIPan` with `isend=0` don't create undo
     points. (Mute changes do, as `ToggleTrackSendUIMute` creates its own.)
     Klinke ends the edit with `isend=1` when the fader is released, but
     mappings don't know when an edit ends.
-  - Find an approach that matches track volume and pan, which use
-    `CSurf_OnVolumeChangeEx` / `CSurf_OnPanChangeEx`. Candidates:
-    `CSurf_OnSendVolumeChange` / `CSurf_OnRecvVolumeChange` and the pan
-    equivalents (index convention to be verified), or an explicit
-    `Undo_OnStateChangeEx`.
+  - REAPER creates "(via surface)" undo points for track volume and pan, but
+    not for routes: `CSurf_OnSendVolumeChange` and friends didn't create undo
+    points either, even with `CSurf_FlushUndo`.
+  - `ContinuousUndo` (common) creates an undo point with
+    `Undo_OnStateChangeEx` once a series of changes with the same description
+    has stopped for 500ms, or earlier when a change with a different
+    description comes in. Route volume and pan use "JPR: Adjust send/receive
+    volume/pan". `ControlSurface::Run()` calls `Update()` every run.
+  - Route mute flushes pending changes first, so they aren't included in its
+    own undo point.
+  - Known limitation: other changes made within the 500ms that don't create
+    their own undo point are included in the pending one.
   - **Verify:**
     - Every CL checks.
     - Change a send's and a receive's volume and pan from the surface, then

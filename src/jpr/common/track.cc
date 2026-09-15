@@ -10,6 +10,7 @@
 #include "absl/log/log.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/common/undo.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -686,6 +687,12 @@ void Track::SetRouteVolume(TrackRouteType type, int index, double volume) {
   }
   SetTrackSendUIVol(track_id_, GetTrackSendUiIndex(type, index), volume,
                     /*isend=*/0);
+  // REAPER does not create undo points for route changes from a control
+  // surface, so create one once the changes stop.
+  ContinuousUndo::Get().OnChange(type == TrackRouteType::kSend
+                                     ? "JPR: Adjust send volume"
+                                     : "JPR: Adjust receive volume",
+                                 UNDO_STATE_TRACKCFG);
   route->volume = volume;
   NotifyRoutesChanged();
 }
@@ -697,6 +704,11 @@ void Track::SetRoutePan(TrackRouteType type, int index, double pan) {
   }
   SetTrackSendUIPan(track_id_, GetTrackSendUiIndex(type, index), pan,
                     /*isend=*/0);
+  // See SetRouteVolume().
+  ContinuousUndo::Get().OnChange(type == TrackRouteType::kSend
+                                     ? "JPR: Adjust send pan"
+                                     : "JPR: Adjust receive pan",
+                                 UNDO_STATE_TRACKCFG);
   route->pan = pan;
   NotifyRoutesChanged();
 }
@@ -713,6 +725,9 @@ void Track::SetRouteMute(TrackRouteType type, int index, bool mute) {
   TrackRoute current = *route;
   ReadRouteValues(type, index, current);
   if (current.mute != mute) {
+    // Toggling mute creates its own undo point, which shouldn't include pending
+    // volume or pan changes.
+    ContinuousUndo::Get().Flush();
     ToggleTrackSendUIMute(track_id_, GetTrackSendUiIndex(type, index));
   }
   if (route->mute == mute) {
