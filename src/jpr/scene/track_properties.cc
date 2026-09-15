@@ -175,6 +175,18 @@ class TrackExistsProperty : public TrackProperty {
   bool ReadBool() const override { return GetTrack()->Exists(); }
 };
 
+class TrackHasRoutesProperty : public TrackProperty {
+ public:
+  explicit TrackHasRoutesProperty(Track* track)
+      : TrackProperty(TrackProperties::kTrackHasRoutes, Type::kToggle, track) {}
+
+ protected:
+  bool ReadBool() const override {
+    return !GetTrack()->GetSends().empty() ||
+           !GetTrack()->GetReceives().empty();
+  }
+};
+
 }  // namespace
 
 TrackProperties::TrackProperties(Track* track) : track_(track->GetShared()) {
@@ -204,6 +216,12 @@ void TrackProperties::OnTrackChanged(Track* track) {
 void TrackProperties::OnTrackHierarchyChanged(Track* track) {
   for (auto& [name, property] : properties_) {
     property->NotifyChanged();
+  }
+}
+
+void TrackProperties::OnTrackRoutesChanged(Track* track) {
+  if (has_routes_property_ != nullptr) {
+    has_routes_property_->NotifyChanged();
   }
 }
 
@@ -305,6 +323,12 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
   if (name == kTrackExists) {
     auto& property = properties_[name] =
         std::make_unique<TrackExistsProperty>(track_.get());
+    return property.get();
+  }
+  if (name == kTrackHasRoutes) {
+    auto& property = properties_[name] =
+        std::make_unique<TrackHasRoutesProperty>(track_.get());
+    has_routes_property_ = property.get();
     return property.get();
   }
   return nullptr;

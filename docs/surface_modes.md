@@ -510,7 +510,7 @@ CL id.
       state and toggles it normally, but shows any-track-solo and does nothing
       while Shift is held.
 
-- [ ] **S7 (scene): Track has routes property**
+- [x] **S7 (scene): Track has routes property**
   - `TrackProperties::kTrackHasRoutes`: a read-only toggle, true if the track
     has any sends or receives.
   - **Verify:** every CL checks. First used in P9.

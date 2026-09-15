@@ -89,6 +89,7 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kUiVolume = "track_ui_volume";
   static constexpr std::string_view kTrackIsFolder = "track_is_folder";
   static constexpr std::string_view kTrackExists = "track_exists";
+  static constexpr std::string_view kTrackHasRoutes = "track_has_routes";
 
   // The track that these properties are tied to.
   //
@@ -116,6 +117,7 @@ class TrackProperties final : public TrackListener {
   void OnTrackChanged(Track* track) override;
   void OnTrackMeterChanged(Track* track, double peak) override;
   void OnTrackHierarchyChanged(Track* track) override;
+  void OnTrackRoutesChanged(Track* track) override;
 
  private:
   // State
@@ -123,6 +125,11 @@ class TrackProperties final : public TrackListener {
   mutable absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>>
       properties_;
   mutable TrackMeterProperty* meter_property_ = nullptr;
+
+  // The only property that depends on the track's routes, if it was created.
+  // Route values change often (for instance, while a send fader is moving), so
+  // only it is notified when the routes change.
+  mutable TrackProperty* has_routes_property_ = nullptr;
 };
 
 }  // namespace jpr
