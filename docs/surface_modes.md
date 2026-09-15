@@ -515,8 +515,23 @@ CL id.
     has any sends or receives.
   - **Verify:** every CL checks. First used in P9.
 
+- [x] **S8 (scene): Public toggle between sends and receives**
+  - `View::ToggleChildRouteType()`, moved out of the `child_route_toggle`
+    action (which now calls it), so the plugin can switch on Send release.
+  - **Verify:** every CL checks, including P6's tests (Send still toggles).
+    First used by the plugin in P9.
+
 - [ ] **P9 (plugin): Hold Send to pick a track**
-  - Depends on: P3, S5, S7.
+  - Depends on: P3, S5, S7, S8.
+  - Send press only records the current mode. Its action runs after the scene
+    once Send is no longer held, if the mode is unchanged: enter Send/Receive
+    mode from Track mode, or `ToggleChildRouteType()` in Send/Receive mode.
+    A tap shorter than a frame never sets the hold modifier, but the press is
+    still recorded, so it is treated as released. The P6 toggle mapping is
+    removed.
+  - Each Track mode strip gets a callback action (requiring `send_hold`) that
+    records its track; entering uses that track (if it exists, is visible, and
+    has routes) instead of the selected track.
   - Send holds a modifier property (`send_hold`).
   - Select lights switch with conditions: the existing `track_ui_selected`
     light only while `send_hold` is off, and a new `track_has_routes` light only

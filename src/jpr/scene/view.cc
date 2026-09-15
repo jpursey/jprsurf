@@ -211,25 +211,7 @@ class View::ChildRouteToggleProperty : public ViewProperty {
   ~ChildRouteToggleProperty() override = default;
 
  protected:
-  void TriggerAction() override {
-    ChildContextType other_context_type;
-    switch (view_->child_context_type_) {
-      case ChildContextType::kSends:
-        other_context_type = ChildContextType::kReceives;
-        break;
-      case ChildContextType::kReceives:
-        other_context_type = ChildContextType::kSends;
-        break;
-      default:
-        return;
-    }
-    if (view_->GetTrack()
-            ->GetRoutes(GetChildRouteType(other_context_type))
-            .empty()) {
-      return;
-    }
-    view_->SetChildContext(other_context_type);
-  }
+  void TriggerAction() override { view_->ToggleChildRouteType(); }
 
  private:
   View* const view_;
@@ -396,6 +378,25 @@ void View::SetChildContext(ChildContextType context_type, int context_index) {
     child_route_type_name_property_->OnChildContextChanged();
   }
   RefreshChildContext();
+}
+
+bool View::ToggleChildRouteType() {
+  ChildContextType other_context_type;
+  switch (child_context_type_) {
+    case ChildContextType::kSends:
+      other_context_type = ChildContextType::kReceives;
+      break;
+    case ChildContextType::kReceives:
+      other_context_type = ChildContextType::kSends;
+      break;
+    default:
+      return false;
+  }
+  if (GetTrack()->GetRoutes(GetChildRouteType(other_context_type)).empty()) {
+    return false;
+  }
+  SetChildContext(other_context_type);
+  return true;
 }
 
 void View::SetChildContextIndex(int context_index) {

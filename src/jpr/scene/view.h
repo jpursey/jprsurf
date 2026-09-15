@@ -203,6 +203,12 @@ class View final {
   // and context index.
   void ClearChildContext() { SetChildContext(ChildContextType::kNone); }
 
+  // Switches the child context between kSends and kReceives, starting from the
+  // first route. This does nothing if the child context type is neither, or
+  // this view's track has no routes of the other type. Returns true if it
+  // switched.
+  bool ToggleChildRouteType();
+
   // Returns the maximum valid child context index for this view based on the
   // child context type and the number of views of that type. For example, if
   // the child context type is kTrack and there are 8 child views, and 10
