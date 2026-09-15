@@ -940,6 +940,15 @@ void ControlSurface::InitViews() {
     send_receive_mode_view_->AddMapping(
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
         absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
+
+    // Pressing the Send/Receive mode button while already in the mode switches
+    // between sends and receives. This only applies once the mode is active,
+    // so the press that enters the mode doesn't also switch.
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kReadControl, View::kChildRouteToggle,
+        absl::StrCat(
+            "XTouch/",
+            kModeInfo[static_cast<int>(SurfaceMode::kSendReceive)].button));
   }
   // Bank left/right pages through all the route strips at once.
   send_receive_mode_view_->SetBankSize(

@@ -462,7 +462,7 @@ CL id.
     - Navigate via select: the info strip updates to the new track and
       category.
 
-- [ ] **P6 (plugin): Toggle sends and receives**
+- [x] **P6 (plugin): Toggle sends and receives**
   - Depends on: P4.
   - Pressing Send in Send/Receive mode toggles if the track has both.
   - **Verify:**
