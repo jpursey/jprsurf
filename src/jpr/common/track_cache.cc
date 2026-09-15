@@ -117,6 +117,9 @@ void TrackCache::Refresh() {
     }
   }
 
+  // Tracks whose routes changed, notified once the refresh is complete.
+  std::vector<Track*> routes_changed;
+
   // Now clear the ID for the remaining tracks from the old cache, as they no
   // longer exist in REAPER. We keep the track however, as it may come back
   // through an undo action or project load, and we want to retain the cached
@@ -124,13 +127,9 @@ void TrackCache::Refresh() {
   for (auto& [guid, old_track] : old_track_map) {
     std::shared_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
-    new_track->parent_track_ = nullptr;
-    for (Track::FilterState& state : new_track->filter_state_) {
-      state = {};
+    if (new_track->OnRemoved()) {
+      routes_changed.push_back(new_track.get());
     }
-    new_track->sends_.clear();
-    new_track->receives_.clear();
-    new_track->DoRefresh(nullptr);
   }
 
   // Read visibility and routing for the new track list and recompute the
@@ -139,7 +138,9 @@ void TrackCache::Refresh() {
   // the track ID map, so the other end of every route can be looked up.
   for (Track* track : all_tracks_) {
     track->UpdateVisibility();
-    track->UpdateRoutes();
+    if (track->UpdateRoutes()) {
+      routes_changed.push_back(track);
+    }
   }
   RebuildTrackIndices();
 
@@ -158,6 +159,11 @@ void TrackCache::Refresh() {
         track->NotifyHierarchyChanged();
       }
     }
+  }
+
+  // Notify tracks whose routes changed, also after the full rebuild.
+  for (Track* track : routes_changed) {
+    track->NotifyRoutesChanged();
   }
 }
 

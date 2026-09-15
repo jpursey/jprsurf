@@ -24,27 +24,7 @@ constexpr int kNoGanging = 2;
 // Categories for GetTrackNumSends and GetSetTrackSendInfo.
 constexpr int kReceiveCategory = -1;
 constexpr int kSendCategory = 0;
-
-// Returns the routes for one category, where other_track_param names the
-// GetSetTrackSendInfo parameter for the track at the other end of the route.
-std::vector<TrackRoute> BuildRoutes(MediaTrack* track_id, int category,
-                                    const char* other_track_param) {
-  std::vector<TrackRoute> routes;
-  const int count = GetTrackNumSends(track_id, category);
-  routes.reserve(count);
-  for (int i = 0; i < count; ++i) {
-    auto* other_track_id = static_cast<MediaTrack*>(
-        GetSetTrackSendInfo(track_id, category, i, other_track_param, nullptr));
-    Track* other_track = TrackCache::Get().GetTrack(other_track_id);
-    if (other_track == nullptr) {
-      LOG(ERROR) << "Failed to find " << other_track_param << " for route " << i
-                 << " in category " << category;
-      other_track = TrackCache::Get().GetStubTrack();
-    }
-    routes.push_back({.other_track = other_track});
-  }
-  return routes;
-}
+constexpr int kHardwareOutputCategory = 1;
 
 }  // namespace
 
@@ -164,9 +144,27 @@ bool Track::UpdateVisibility() {
   return true;
 }
 
-void Track::UpdateRoutes() {
-  sends_ = BuildRoutes(track_id_, kSendCategory, "P_DESTTRACK");
-  receives_ = BuildRoutes(track_id_, kReceiveCategory, "P_SRCTRACK");
+bool Track::UpdateRoutes() {
+  hardware_output_count_ = GetTrackNumSends(track_id_, kHardwareOutputCategory);
+  std::vector<TrackRoute> sends = BuildRoutes(TrackRouteType::kSend);
+  std::vector<TrackRoute> receives = BuildRoutes(TrackRouteType::kReceive);
+  const bool changed = (sends != sends_ || receives != receives_);
+  sends_ = std::move(sends);
+  receives_ = std::move(receives);
+  return changed;
+}
+
+bool Track::OnRemoved() {
+  parent_track_ = nullptr;
+  for (FilterState& state : filter_state_) {
+    state = {};
+  }
+  const bool routes_changed = !sends_.empty() || !receives_.empty();
+  hardware_output_count_ = 0;
+  sends_.clear();
+  receives_.clear();
+  DoRefresh(nullptr);
+  return routes_changed;
 }
 
 void Track::RefreshMeter() {
@@ -190,6 +188,12 @@ void Track::NotifyListeners() {
 void Track::NotifyHierarchyChanged() {
   for (TrackListener* listener : listeners_) {
     listener->OnTrackHierarchyChanged(this);
+  }
+}
+
+void Track::NotifyRoutesChanged() {
+  for (TrackListener* listener : listeners_) {
+    listener->OnTrackRoutesChanged(this);
   }
 }
 
@@ -582,6 +586,140 @@ void Track::DoUiProperty(bool& property, const char* undo_entry,
   TrackCache::Get().SetLastTouchedTrack(this);
   NotifyListeners();
   Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
+}
+
+//------------------------------------------------------------------------------
+// Routes
+//------------------------------------------------------------------------------
+
+std::vector<TrackRoute> Track::BuildRoutes(TrackRouteType type) const {
+  const bool is_send = (type == TrackRouteType::kSend);
+  const int category = is_send ? kSendCategory : kReceiveCategory;
+  const char* other_track_param = is_send ? "P_DESTTRACK" : "P_SRCTRACK";
+  std::vector<TrackRoute> routes;
+  const int count = GetTrackNumSends(track_id_, category);
+  routes.reserve(count);
+  for (int i = 0; i < count; ++i) {
+    auto* other_track_id = static_cast<MediaTrack*>(GetSetTrackSendInfo(
+        track_id_, category, i, other_track_param, nullptr));
+    Track* other_track = TrackCache::Get().GetTrack(other_track_id);
+    if (other_track == nullptr) {
+      LOG(ERROR) << "Failed to find " << other_track_param << " for route " << i
+                 << " in category " << category;
+      other_track = TrackCache::Get().GetStubTrack();
+    }
+    TrackRoute& route =
+        routes.emplace_back(TrackRoute{.other_track = other_track});
+    ReadRouteValues(type, i, route);
+  }
+  return routes;
+}
+
+// REAPER's UI route functions do not index routes the same way as
+// GetSetTrackSendInfo. In all of them, sends are indexed after the track's
+// hardware outputs. Receives use their plain index in the GetTrackReceiveUI*
+// functions, but -1 - index in the *TrackSendUI* functions.
+int Track::GetTrackSendUiIndex(TrackRouteType type, int index) const {
+  return type == TrackRouteType::kSend ? hardware_output_count_ + index
+                                       : -1 - index;
+}
+
+bool Track::ReadRouteValues(TrackRouteType type, int index,
+                            TrackRoute& route) const {
+  double volume = 0.0;
+  double pan = 0.0;
+  bool mute = false;
+  if (type == TrackRouteType::kSend) {
+    const int ui_index = GetTrackSendUiIndex(type, index);
+    if (!GetTrackSendUIVolPan(track_id_, ui_index, &volume, &pan) ||
+        !GetTrackSendUIMute(track_id_, ui_index, &mute)) {
+      return false;
+    }
+  } else {
+    if (!GetTrackReceiveUIVolPan(track_id_, index, &volume, &pan) ||
+        !GetTrackReceiveUIMute(track_id_, index, &mute)) {
+      return false;
+    }
+  }
+  route.volume = volume;
+  route.pan = pan;
+  route.mute = mute;
+  return true;
+}
+
+void Track::RefreshRoutes() {
+  if (track_id_ == nullptr) {
+    return;
+  }
+  bool changed = false;
+  for (TrackRouteType type :
+       {TrackRouteType::kSend, TrackRouteType::kReceive}) {
+    std::vector<TrackRoute>& routes =
+        (type == TrackRouteType::kSend ? sends_ : receives_);
+    for (int i = 0; i < static_cast<int>(routes.size()); ++i) {
+      TrackRoute route = routes[i];
+      if (ReadRouteValues(type, i, route) && route != routes[i]) {
+        routes[i] = route;
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    NotifyRoutesChanged();
+  }
+}
+
+TrackRoute* Track::GetMutableRoute(TrackRouteType type, int index) {
+  std::vector<TrackRoute>& routes =
+      (type == TrackRouteType::kSend ? sends_ : receives_);
+  if (track_id_ == nullptr || index < 0 ||
+      index >= static_cast<int>(routes.size())) {
+    return nullptr;
+  }
+  return &routes[index];
+}
+
+void Track::SetRouteVolume(TrackRouteType type, int index, double volume) {
+  TrackRoute* route = GetMutableRoute(type, index);
+  if (route == nullptr || route->volume == volume) {
+    return;
+  }
+  SetTrackSendUIVol(track_id_, GetTrackSendUiIndex(type, index), volume,
+                    /*isend=*/0);
+  route->volume = volume;
+  NotifyRoutesChanged();
+}
+
+void Track::SetRoutePan(TrackRouteType type, int index, double pan) {
+  TrackRoute* route = GetMutableRoute(type, index);
+  if (route == nullptr || route->pan == pan) {
+    return;
+  }
+  SetTrackSendUIPan(track_id_, GetTrackSendUiIndex(type, index), pan,
+                    /*isend=*/0);
+  route->pan = pan;
+  NotifyRoutesChanged();
+}
+
+void Track::SetRouteMute(TrackRouteType type, int index, bool mute) {
+  TrackRoute* route = GetMutableRoute(type, index);
+  if (route == nullptr) {
+    return;
+  }
+
+  // REAPER only provides a way to toggle mute from its UI, so the cached value
+  // can't be trusted to decide whether to toggle: it may have changed in
+  // REAPER since the routes were last refreshed.
+  TrackRoute current = *route;
+  ReadRouteValues(type, index, current);
+  if (current.mute != mute) {
+    ToggleTrackSendUIMute(track_id_, GetTrackSendUiIndex(type, index));
+  }
+  if (route->mute == mute) {
+    return;
+  }
+  route->mute = mute;
+  NotifyRoutesChanged();
 }
 
 //------------------------------------------------------------------------------

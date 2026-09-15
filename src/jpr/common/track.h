@@ -74,18 +74,38 @@ class TrackListener {
   // added, removed, or reordered). This is called after the full hierarchy has
   // been rebuilt, so GetChildTracks() will return the new child list.
   virtual void OnTrackHierarchyChanged(Track* track) {}
+
+  // This will be called whenever the track's sends or receives change. This
+  // includes routes being added or removed (when the TrackCache is refreshed),
+  // and their volume, pan, or mute changing (when they are set, or refreshed
+  // with Track::RefreshRoutes()).
+  virtual void OnTrackRoutesChanged(Track* track) {}
 };
 
 //==============================================================================
 // Track routes
 //==============================================================================
 
+// The kinds of routes between tracks. Hardware outputs are not included.
+enum class TrackRouteType {
+  kSend,     // From a track to another track.
+  kReceive,  // Into a track from another track.
+};
+
 // A send from a track to another track, or a receive into a track from another
-// track. Hardware outputs are not included.
+// track.
 struct TrackRoute {
   // The destination track for a send, or the source track for a receive. This
   // is never null.
   Track* other_track;
+
+  // The route's volume (1.0 is unity gain), pan (-1.0 to 1.0), and mute, as
+  // shown in REAPER's UI.
+  double volume = 0.0;
+  double pan = 0.0;
+  bool mute = false;
+
+  bool operator==(const TrackRoute&) const = default;
 };
 
 // Represents a track in REAPER, identified by a GUID.
@@ -276,10 +296,25 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Sends from this track to other tracks, and receives into this track from
   // other tracks, in REAPER's order. The index of a route in these lists is its
   // send or receive index in REAPER. These are empty for the master track and
-  // for tracks that do not currently exist. This is updated whenever
-  // TrackCache::Refresh() is called.
+  // for tracks that do not currently exist. The lists are rebuilt whenever
+  // TrackCache::Refresh() is called, and route values are also updated by
+  // RefreshRoutes().
   absl::Span<const TrackRoute> GetSends() const { return sends_; }
   absl::Span<const TrackRoute> GetReceives() const { return receives_; }
+  absl::Span<const TrackRoute> GetRoutes(TrackRouteType type) const {
+    return type == TrackRouteType::kSend ? sends_ : receives_;
+  }
+
+  // Re-reads the volume, pan, and mute of every route from REAPER, and notifies
+  // listeners if any changed. REAPER does not report these changes reliably, so
+  // this must be polled, but only for tracks whose routes are actually shown.
+  void RefreshRoutes();
+
+  // Sets the volume, pan, or mute of a route, as if it was changed in REAPER's
+  // UI. These do nothing if the track does not exist or has no such route.
+  void SetRouteVolume(TrackRouteType type, int index, double volume);
+  void SetRoutePan(TrackRouteType type, int index, double pan);
+  void SetRouteMute(TrackRouteType type, int index, bool mute);
 
   // Subscribes to track changes for this track.
   //
@@ -342,10 +377,34 @@ class Track final : public std::enable_shared_from_this<Track> {
   // recomputing the per-filter indices when visibility changes.
   bool UpdateVisibility();
 
-  // Rebuilds the send and receive lists from REAPER. This is called only by the
-  // TrackCache during Refresh() for tracks that exist, once every existing
-  // track can be looked up by its track ID.
-  void UpdateRoutes();
+  // Rebuilds the send and receive lists from REAPER, returning true if they
+  // changed. This is called only by the TrackCache during Refresh() for tracks
+  // that exist, once every existing track can be looked up by its track ID.
+  // The TrackCache notifies listeners once the refresh is complete.
+  bool UpdateRoutes();
+
+  // Resets this track after it has been removed from REAPER, so it no longer
+  // has a track ID, parent, place in any track list, or routes. This is called
+  // only by the TrackCache during Refresh(). Like UpdateRoutes(), it returns
+  // true if the routes changed, and the TrackCache notifies listeners once the
+  // refresh is complete.
+  bool OnRemoved();
+
+  // Returns the routes of one type from REAPER. This must only be called for a
+  // track that exists, once hardware_output_count_ is up to date.
+  std::vector<TrackRoute> BuildRoutes(TrackRouteType type) const;
+
+  // Returns the index REAPER's *TrackSendUI* functions (SetTrackSendUIVol,
+  // SetTrackSendUIPan, and ToggleTrackSendUIMute) use for a route.
+  int GetTrackSendUiIndex(TrackRouteType type, int index) const;
+
+  // Reads the UI volume, pan, and mute of a route into `route`, returning false
+  // (and leaving `route` unchanged) if REAPER has no such route.
+  bool ReadRouteValues(TrackRouteType type, int index, TrackRoute& route) const;
+
+  // Returns the route, or null if this track does not exist or has no such
+  // route.
+  TrackRoute* GetMutableRoute(TrackRouteType type, int index);
 
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
@@ -353,6 +412,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Notifies all listeners subscribed to this track that the child hierarchy
   // has changed.
   void NotifyHierarchyChanged();
+
+  // Notifies all listeners subscribed to this track that its routes changed.
+  void NotifyRoutesChanged();
 
   // Toggles the internal selected state, potentially sets the last touched
   // track, and notifies listeners.
@@ -385,7 +447,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   FilterState filter_state_[kTrackFilterCount];
   std::vector<Track*> child_tracks_;
 
-  // Track routing, rebuilt by UpdateRoutes().
+  // Track routing, rebuilt by UpdateRoutes(). REAPER notifies the TrackCache
+  // when hardware outputs are added or removed, so the count stays up to date.
+  int hardware_output_count_ = 0;
   std::vector<TrackRoute> sends_;
   std::vector<TrackRoute> receives_;
 

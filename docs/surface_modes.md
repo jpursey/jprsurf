@@ -330,12 +330,25 @@ CL id.
 
 ### Phase 3: Send/Receive mode
 
-- [ ] **C3 (common): Route values and setters**
+- [x] **C3 (common): Route values and setters**
   - Depends on: C2.
+  - `TrackRouteType` (send or receive), and `TrackRoute` volume, pan, and mute,
+    read when the route lists are rebuilt.
   - `Track::RefreshRoutes()` polls volume, pan, and mute for each route.
   - Setters for volume, pan, and mute for sends and receives, using the
-    `SetTrackSendUI*` family.
-  - `TrackListener` notification when route values change.
+    `SetTrackSendUI*` family. REAPER's UI route functions index sends after
+    hardware outputs, and receives as -1 - index when setting; this is kept in
+    one place in `track.cc`.
+  - `TrackListener::OnTrackRoutesChanged()` when routes are rebuilt with
+    changes, or their values change.
+  - `Track::OnRemoved()` resets a track that no longer exists in REAPER, instead
+    of the TrackCache changing its members directly.
+  - Verified with temporary logging and a button that changed the first route
+    (removed before submitting): values match REAPER for sends and receives,
+    changes go both ways, the right route changes with hardware outputs
+    present, and surface changes can be undone. REAPER calls
+    `SetTrackListChange()` when hardware outputs are added or removed, so the
+    cached hardware output count stays current.
   - **Verify:** every CL checks. First used in P4.
 
 - [ ] **S2 (scene): Route properties**
