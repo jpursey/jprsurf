@@ -44,6 +44,44 @@ constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
     {"send_receive", DeviceXTouch::kAssignSend},
 };
 
+// The X-Touch strip that shows the Send/Receive mode track itself.
+constexpr int kInfoStrip = 7;
+
+// Adds the mappings for the channel strip controls that show a track the same
+// way in every mode: mute, solo, record arm, pan, volume, name, color, and
+// meter. The select button and the bottom scribble line are left to the caller,
+// as their meaning depends on the mode.
+void AddTrackStripMappings(View* view, std::string_view device_prefix,
+                           int strip) {
+  view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiMute,
+                   absl::StrCat(device_prefix, DeviceXTouch::Mute(strip)));
+  view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiSolo,
+                   absl::StrCat(device_prefix, DeviceXTouch::Solo(strip)));
+  view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiRecArm,
+                   absl::StrCat(device_prefix, DeviceXTouch::Rec(strip)));
+  view->AddMapping(
+      ViewMapping::kReadWriteControl, TrackProperties::kUiPan,
+      absl::StrCat(device_prefix, DeviceXTouch::Pot(strip)),
+      {.write = {
+           .mode = 1,
+           .mode_overrides = {
+               {std::string(TrackProperties::kTrackExists), {{false, 8}}},
+               {std::string(TrackProperties::kTrackIsFolder), {{true, 5}}}}}});
+  view->AddMapping(ViewMapping::kReadControl, TrackProperties::kUiPan,
+                   absl::StrCat(device_prefix, DeviceXTouch::PotButton(strip)),
+                   {.read = {.property_min = 0.0, .property_max = 0.0}});
+  view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiVolume,
+                   absl::StrCat(device_prefix, DeviceXTouch::Fader(strip)));
+  view->AddMapping(
+      ViewMapping::kWriteControl, TrackProperties::kName,
+      absl::StrCat(device_prefix, DeviceXTouch::Scribble(strip, 0)));
+  view->AddMapping(
+      ViewMapping::kWriteControl, TrackProperties::kColor,
+      absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(strip)));
+  view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kMeter,
+                   absl::StrCat(device_prefix, DeviceXTouch::Meter(strip)));
+}
+
 }  // namespace
 
 #define LOG_REAPER() LOG(INFO) << "REAPER: "
@@ -801,43 +839,10 @@ void ControlSurface::InitViews() {
           ViewMapping::kReadControl, View::kParentTrackParent,
           absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
           {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-      track_view->AddMapping(
-          ViewMapping::kReadWriteControl, TrackProperties::kUiMute,
-          absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
-      track_view->AddMapping(
-          ViewMapping::kReadWriteControl, TrackProperties::kUiSolo,
-          absl::StrCat(device_prefix, DeviceXTouch::Solo(i)));
-      track_view->AddMapping(ViewMapping::kReadWriteControl,
-                             TrackProperties::kUiRecArm,
-                             absl::StrCat(device_prefix, DeviceXTouch::Rec(i)));
-      track_view->AddMapping(
-          ViewMapping::kReadWriteControl, TrackProperties::kUiPan,
-          absl::StrCat(device_prefix, DeviceXTouch::Pot(i)),
-          {.write = {
-               .mode = 1,
-               .mode_overrides = {
-                   {std::string(TrackProperties::kTrackExists), {{false, 8}}},
-                   {std::string(TrackProperties::kTrackIsFolder),
-                    {{true, 5}}}}}});
-      track_view->AddMapping(
-          ViewMapping::kReadControl, TrackProperties::kUiPan,
-          absl::StrCat(device_prefix, DeviceXTouch::PotButton(i)),
-          {.read = {.property_min = 0.0, .property_max = 0.0}});
-      track_view->AddMapping(
-          ViewMapping::kReadWriteControl, TrackProperties::kUiVolume,
-          absl::StrCat(device_prefix, DeviceXTouch::Fader(i)));
-      track_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kName,
-          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 0)));
+      AddTrackStripMappings(track_view, device_prefix, i);
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiVolume,
           absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)));
-      track_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kColor,
-          absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(i)));
-      track_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kMeter,
-          absl::StrCat(device_prefix, DeviceXTouch::Meter(i)));
       track_view->Enable();
     }
   }
@@ -876,6 +881,10 @@ void ControlSurface::InitViews() {
     }
     std::string device_prefix = (d == 0) ? "XTouchExt/" : "XTouch/";
     for (int i = 0; i < 8; ++i) {
+      // The Info strip on the X-Touch (d == 1) shows the track, not a route.
+      if (d == 1 && i == kInfoStrip) {
+        continue;
+      }
       View* route_view = send_receive_mode_view_->AddChildView(
           absl::StrCat("Route", ++route_view_index));
       // Select navigates across the route to the track at its other end.
@@ -923,7 +932,18 @@ void ControlSurface::InitViews() {
     send_receive_mode_view_->AddMapping(
         ViewMapping::kReadControl, View::kBankInc,
         absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
+
+    // The Info strip shows the Send/Receive mode track itself, the same as in
+    // Track mode, except the bottom scribble line shows whether its sends or
+    // receives are shown.
+    AddTrackStripMappings(send_receive_mode_view_, "XTouch/", kInfoStrip);
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kWriteControl, View::kChildRouteTypeName,
+        absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
   }
+  // Bank left/right pages through all the route strips at once.
+  send_receive_mode_view_->SetBankSize(
+      send_receive_mode_view_->GetChildViewCount());
 
   // Finally activate the scene, which will start it running and activate all
   // enabled views.

@@ -443,7 +443,7 @@ CL id.
       doesn't create an undo point per step.
     - The right route still changes with hardware outputs present.
 
-- [ ] **P5 (plugin): Info strip**
+- [x] **P5 (plugin): Info strip**
   - Depends on: P4.
   - Extract the Track mode per-strip track mappings (fader, pot, mute, solo,
     rec arm, meter, name, color) into a helper shared with the Info strip.
