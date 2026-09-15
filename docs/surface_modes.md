@@ -372,7 +372,7 @@ CL id.
   - The view with this context refreshes its track's routes during sync.
   - **Verify:** every CL checks. First used in P4.
 
-- [ ] **S4 (scene): Route view actions and properties**
+- [x] **S4 (scene): Route view actions and properties**
   - Depends on: S3.
   - Route navigation action on a child view: points the parent view at the
     other track and flips between sends and receives.
@@ -388,6 +388,9 @@ CL id.
   - Call `RefreshChildContext()` on the routes view when the track list changes
     (routes are only added or removed then), as `RefreshTrackViews()` does for
     the track list.
+  - Route navigation (`parent_route_other_track`) changes the routes view's
+    track without the plugin knowing, so use the routes view's track as the
+    Send/Receive track rather than storing it separately.
   - **Verify:**
     - Every CL checks, including steady state performance in Send/Receive mode
       on a track with many sends.
@@ -418,7 +421,9 @@ CL id.
   - Depends on: P4.
   - Extract the Track mode per-strip track mappings (fader, pot, mute, solo,
     rec arm, meter, name, color) into a helper shared with the Info strip.
-  - `Info` view on the last X-Touch strip, using that helper.
+  - Info strip mappings on the last X-Touch strip, using that helper. They go
+    on the routes view itself: its track context is the Send/Receive track, and
+    it has the `child_route_type_name` property.
   - Scribble shows the track name and "Send" / "Recv". Select is unmapped.
   - **Verify:**
     - Every CL checks.

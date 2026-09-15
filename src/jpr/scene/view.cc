@@ -160,6 +160,106 @@ class View::ParentTrackRootProperty : public ViewProperty {
   View* const view_;
 };
 
+class View::ParentRouteOtherTrackProperty : public ViewProperty {
+ public:
+  explicit ParentRouteOtherTrackProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~ParentRouteOtherTrackProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    View* parent_view = view_->GetParentView();
+    if (parent_view == nullptr ||
+        (parent_view->child_context_type_ != ChildContextType::kSends &&
+         parent_view->child_context_type_ != ChildContextType::kReceives)) {
+      return;
+    }
+    const TrackRoute* route = view_->route_properties_.GetRoute();
+    if (route == nullptr) {
+      return;
+    }
+    Track* track = parent_view->GetTrack();
+    Track* other_track = route->other_track;
+    const ChildContextType other_context_type =
+        parent_view->child_context_type_ == ChildContextType::kSends
+            ? ChildContextType::kReceives
+            : ChildContextType::kSends;
+
+    // Scroll so the route back to the original track is shown.
+    absl::Span<const TrackRoute> other_routes =
+        other_track->GetRoutes(GetChildRouteType(other_context_type));
+    const int view_count = parent_view->GetChildViewCount();
+    int start_index = 0;
+    for (int i = 0; i < static_cast<int>(other_routes.size()); ++i) {
+      if (other_routes[i].other_track == track) {
+        start_index = std::max(0, i - view_count + 1);
+        break;
+      }
+    }
+    parent_view->SetChildContext(other_context_type);
+    parent_view->SetTrack(other_track, start_index);
+  }
+
+ private:
+  View* const view_;
+};
+
+class View::ChildRouteToggleProperty : public ViewProperty {
+ public:
+  explicit ChildRouteToggleProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kAction), view_(view) {}
+  ~ChildRouteToggleProperty() override = default;
+
+ protected:
+  void TriggerAction() override {
+    ChildContextType other_context_type;
+    switch (view_->child_context_type_) {
+      case ChildContextType::kSends:
+        other_context_type = ChildContextType::kReceives;
+        break;
+      case ChildContextType::kReceives:
+        other_context_type = ChildContextType::kSends;
+        break;
+      default:
+        return;
+    }
+    if (view_->GetTrack()
+            ->GetRoutes(GetChildRouteType(other_context_type))
+            .empty()) {
+      return;
+    }
+    view_->SetChildContext(other_context_type);
+  }
+
+ private:
+  View* const view_;
+};
+
+class View::ChildRouteTypeNameProperty : public ViewProperty {
+ public:
+  explicit ChildRouteTypeNameProperty(View* view, std::string_view name)
+      : ViewProperty(name, Type::kText), view_(view) {}
+  ~ChildRouteTypeNameProperty() override = default;
+
+  // Called by the view when its child context type changes.
+  void OnChildContextChanged() { NotifyChanged(); }
+
+ protected:
+  std::string ReadString() const override {
+    switch (view_->child_context_type_) {
+      case ChildContextType::kSends:
+        return "Send";
+      case ChildContextType::kReceives:
+        return "Recv";
+      default:
+        return "";
+    }
+  }
+
+ private:
+  View* const view_;
+};
+
 View::View(Scene* scene, View* parent_view, std::string_view name)
     : scene_(scene), parent_view_(parent_view), name_(name) {
   // Add properties for changing the child context index.
@@ -185,6 +285,18 @@ View::View(Scene* scene, View* parent_view, std::string_view name)
   properties_.emplace(
       kParentTrackRoot,
       std::make_unique<ParentTrackRootProperty>(this, kParentTrackRoot));
+  // Add properties for navigating and showing route contexts.
+  properties_.emplace(kParentRouteOtherTrack,
+                      std::make_unique<ParentRouteOtherTrackProperty>(
+                          this, kParentRouteOtherTrack));
+  properties_.emplace(
+      kChildRouteToggle,
+      std::make_unique<ChildRouteToggleProperty>(this, kChildRouteToggle));
+  auto child_route_type_name_property =
+      std::make_unique<ChildRouteTypeNameProperty>(this, kChildRouteTypeName);
+  child_route_type_name_property_ = child_route_type_name_property.get();
+  properties_.emplace(kChildRouteTypeName,
+                      std::move(child_route_type_name_property));
 }
 
 void View::Enable() {
@@ -277,8 +389,12 @@ int View::GetMaxChildContextIndex() const {
 }
 
 void View::SetChildContext(ChildContextType context_type, int context_index) {
+  const bool type_changed = (child_context_type_ != context_type);
   child_context_type_ = context_type;
   child_context_index_ = context_index;
+  if (type_changed) {
+    child_route_type_name_property_->OnChildContextChanged();
+  }
   RefreshChildContext();
 }
 

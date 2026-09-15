@@ -87,6 +87,25 @@ class View final {
   // is no parent view, this does nothing.
   static constexpr std::string_view kParentTrackRoot = "parent_track_root";
 
+  // Tells the parent view to show the routes of the track at the other end of
+  // this view's route, switching between sends and receives. This effectively
+  // navigates across the route: from a send to the destination track's
+  // receives, or from a receive to the source track's sends. The parent view is
+  // scrolled so the route back to the original track is shown. If this view has
+  // no route, or the parent view is not showing routes, this does nothing.
+  static constexpr std::string_view kParentRouteOtherTrack =
+      "parent_route_other_track";
+
+  // Switches this view's child views between showing sends and receives. This
+  // does nothing if this view is not showing routes, or its track has no routes
+  // of the other type.
+  static constexpr std::string_view kChildRouteToggle = "child_route_toggle";
+
+  // A text property with the name of the routes shown by this view's child
+  // views: "Send" or "Recv", or empty if this view is not showing routes.
+  static constexpr std::string_view kChildRouteTypeName =
+      "child_route_type_name";
+
   //----------------------------------------------------------------------------
   // Construction / Destruction
   //----------------------------------------------------------------------------
@@ -239,6 +258,9 @@ class View final {
   class ParentTrackChildProperty;
   class ParentTrackParentProperty;
   class ParentTrackRootProperty;
+  class ParentRouteOtherTrackProperty;
+  class ChildRouteToggleProperty;
+  class ChildRouteTypeNameProperty;
 
   View(Scene* scene, View* parent_view, std::string_view name);
 
@@ -283,6 +305,7 @@ class View final {
   // Properties for the view.
   int bank_size_ = 8;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
+  ChildRouteTypeNameProperty* child_route_type_name_property_ = nullptr;
 
   // Mappings for this view.
   std::vector<std::unique_ptr<ViewMapping>> mappings_;
