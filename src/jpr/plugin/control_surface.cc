@@ -15,6 +15,7 @@
 #include "absl/time/clock.h"
 #include "gb/config/text_config.h"
 #include "jpr/common/midi_port.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
 #include "jpr/device/device_xtouch.h"
@@ -46,6 +47,22 @@ constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
 
 // The X-Touch strip that shows the Send/Receive mode track itself.
 constexpr int kInfoStrip = 7;
+
+// The modifier property that is on while the Send/Receive mode button is held.
+constexpr std::string_view kSendHold = "mod_send_hold";
+
+// The Send/Receive mode button only acts when released if it was pressed for
+// less than this. Holding it longer only shows which tracks have routes. This
+// matches the long press duration of controls.
+constexpr absl::Duration kSendHoldDuration = absl::Milliseconds(350);
+
+// Returns true if Send/Receive mode can show this track: it exists, is on the
+// surface, and has sends or receives.
+bool CanShowRoutes(const Track* track) {
+  return track != nullptr && track->Exists() &&
+         track->IsVisible(TrackCache::Get().GetSurfaceFilter()) &&
+         (!track->GetSends().empty() || !track->GetReceives().empty());
+}
 
 // Adds the mappings for the channel strip controls that show a track the same
 // way in every mode: mute, solo, record arm, pan, volume, name, color, and
@@ -214,6 +231,11 @@ void ControlSurface::Run() {
   // Mode button presses are only recorded while the scene runs, so a requested
   // mode change is applied once it has finished.
   ApplyRequestedMode();
+
+  // The Send/Receive mode button acts when it is released, which is also only
+  // recorded while the scene runs. This is after any mode change, so a track
+  // picked while it was held is already applied.
+  ApplySendRelease(start);
 
   // Create undo points for continuous changes made this run, or earlier, once
   // they have stopped.
@@ -838,19 +860,45 @@ void ControlSurface::InitViews() {
     for (int i = 0; i < 8; ++i) {
       View* track_view = track_list_view_->AddChildView(
           absl::StrCat("Track", ++child_view_index));
-      // Add all the per-track controls
+      // Select, double press, and long press navigate the track hierarchy.
+      // While Send is held, pressing select instead picks the track for
+      // Send/Receive mode. This uses required modifiers rather than a
+      // condition, so holding Send never resets a pending press.
+      const std::string select =
+          absl::StrCat(device_prefix, DeviceXTouch::Select(i));
+      track_view->AddMapping(ViewMapping::kReadControl,
+                             TrackProperties::kUiSelected, select);
       track_view->AddMapping(
-          ViewMapping::kReadWriteControl, TrackProperties::kUiSelected,
-          absl::StrCat(device_prefix, DeviceXTouch::Select(i)));
-      track_view->AddMapping(
-          ViewMapping::kReadControl, View::kParentTrackChild,
-          absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
+          ViewMapping::kReadControl, View::kParentTrackChild, select,
           {.read = {.press_behavior =
                         InputConfig::PressBehavior::kDoublePress}});
       track_view->AddMapping(
-          ViewMapping::kReadControl, View::kParentTrackParent,
-          absl::StrCat(device_prefix, DeviceXTouch::Select(i)),
+          ViewMapping::kReadControl, View::kParentTrackParent, select,
           {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+      const std::string pick_name =
+          absl::StrCat("pick_send_receive_track_", child_view_index);
+      scene_->AddProperty(std::make_unique<CallbackActionProperty>(
+          pick_name, [this, track_view] {
+            requested_mode_ = SurfaceMode::kSendReceive;
+            requested_send_receive_track_ = track_view->GetTrack();
+            // Send was held to pick a track, so releasing it does nothing, even
+            // if the picked track has no routes.
+            send_press_mode_.reset();
+          }));
+      track_view->AddMapping(
+          ViewMapping::kReadControl, pick_name, select,
+          {.read = {.required_modifiers = send_hold_modifier_}});
+
+      // The select light shows whether the track is selected, or while Send is
+      // held, whether it has routes to show in Send/Receive mode.
+      track_view->AddMapping(
+          ViewMapping::kWriteControl, TrackProperties::kUiSelected, select,
+          {.condition = ViewMapping::Condition{
+               .property = std::string(kSendHold), .value = false}});
+      track_view->AddMapping(
+          ViewMapping::kWriteControl, TrackProperties::kTrackHasRoutes, select,
+          {.condition = ViewMapping::Condition{
+               .property = std::string(kSendHold), .value = true}});
       AddTrackStripMappings(track_view, device_prefix, i);
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiVolume,
@@ -952,15 +1000,6 @@ void ControlSurface::InitViews() {
     send_receive_mode_view_->AddMapping(
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
         absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
-
-    // Pressing the Send/Receive mode button while already in the mode switches
-    // between sends and receives. This only applies once the mode is active,
-    // so the press that enters the mode doesn't also switch.
-    send_receive_mode_view_->AddMapping(
-        ViewMapping::kReadControl, View::kChildRouteToggle,
-        absl::StrCat(
-            "XTouch/",
-            kModeInfo[static_cast<int>(SurfaceMode::kSendReceive)].button));
   }
   // Bank left/right pages through all the route strips at once.
   send_receive_mode_view_->SetBankSize(
@@ -977,6 +1016,12 @@ void ControlSurface::InitViews() {
 
 void ControlSurface::InitModeButtons(bool has_xtouch) {
   View* root_view = scene_->GetRootView();
+
+  // On while the Send/Receive mode button is held. This is added even without
+  // an X-Touch, as Track mode mappings refer to it.
+  send_hold_modifier_ = scene_->AddModifierProperty(kSendHold);
+  CHECK(send_hold_modifier_ != 0);
+
   for (int i = 0; i < kSurfaceModeCount; ++i) {
     const SurfaceMode mode = static_cast<SurfaceMode>(i);
     const ModeInfo& info = kModeInfo[i];
@@ -991,8 +1036,17 @@ void ControlSurface::InitModeButtons(bool has_xtouch) {
     button.active =
         scene_->AddProperty(std::make_unique<ToggleValueProperty>(active_name));
     CHECK(button.available != nullptr && button.active != nullptr);
-    scene_->AddProperty(std::make_unique<CallbackActionProperty>(
-        select_name, [this, mode] { requested_mode_ = mode; }));
+    scene_->AddProperty(
+        std::make_unique<CallbackActionProperty>(select_name, [this, mode] {
+          // The Send/Receive mode button acts when it is released, so it can be
+          // held to pick a track instead (see ApplySendRelease()).
+          if (mode == SurfaceMode::kSendReceive) {
+            send_press_mode_ = mode_;
+            send_press_time_ = absl::Now();
+          } else {
+            requested_mode_ = mode;
+          }
+        }));
 
     if (!has_xtouch) {
       continue;
@@ -1002,6 +1056,10 @@ void ControlSurface::InitModeButtons(bool has_xtouch) {
         ViewMapping::kWriteControl, available_name, control,
         {.write = {.mode_overrides = {{active_name, {{true, 1}}}}}});
     root_view->AddMapping(ViewMapping::kReadControl, select_name, control);
+    if (mode == SurfaceMode::kSendReceive) {
+      root_view->AddMapping(ViewMapping::kReadControl, kSendHold, control,
+                            {.read = {.press_release = true}});
+    }
   }
 }
 
@@ -1009,12 +1067,8 @@ bool ControlSurface::IsModeAvailable(SurfaceMode mode) const {
   switch (mode) {
     case SurfaceMode::kTrack:
       return true;
-    case SurfaceMode::kSendReceive: {
-      const Track* track = TrackCache::Get().GetOnlySelectedTrack();
-      return track != nullptr &&
-             track->IsVisible(TrackCache::Get().GetSurfaceFilter()) &&
-             (!track->GetSends().empty() || !track->GetReceives().empty());
-    }
+    case SurfaceMode::kSendReceive:
+      return CanShowRoutes(TrackCache::Get().GetOnlySelectedTrack());
   }
   return false;
 }
@@ -1037,11 +1091,10 @@ void ControlSurface::ApplyRequestedMode() {
   }
   const SurfaceMode mode = *requested_mode_;
   requested_mode_.reset();
+  Track* picked_track = std::exchange(requested_send_receive_track_, nullptr);
 
-  // Pressing the button for the current mode or an unavailable mode does
-  // nothing. Availability is checked again rather than using the button light,
-  // as the selection may have changed since the light was last updated.
-  if (mode == mode_ || !IsModeAvailable(mode)) {
+  // Requesting the current mode does nothing.
+  if (mode == mode_) {
     return;
   }
   switch (mode) {
@@ -1049,7 +1102,43 @@ void ControlSurface::ApplyRequestedMode() {
       EnterTrackMode();
       break;
     case SurfaceMode::kSendReceive:
-      EnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
+      // A track picked by holding Send and pressing its select button, or
+      // otherwise the selected track.
+      TryEnterSendReceiveMode(picked_track != nullptr
+                                  ? picked_track
+                                  : TrackCache::Get().GetOnlySelectedTrack());
+      break;
+  }
+}
+
+void ControlSurface::TryEnterSendReceiveMode(Track* track) {
+  // This is checked here rather than using the button light, as the selection
+  // may have changed since the light was last updated.
+  if (CanShowRoutes(track)) {
+    EnterSendReceiveMode(track);
+  }
+}
+
+void ControlSurface::ApplySendRelease(absl::Time now) {
+  // A press shorter than a frame never turns on the hold modifier, but the
+  // press is still recorded, so it is handled as released too.
+  if (!send_press_mode_.has_value() || AreModifiersOn(send_hold_modifier_)) {
+    return;
+  }
+  const SurfaceMode press_mode = *send_press_mode_;
+  send_press_mode_.reset();
+
+  // Releasing Send does nothing if it was held rather than pressed (to see
+  // which tracks have routes), or if the mode changed while it was held.
+  if (now - send_press_time_ >= kSendHoldDuration || press_mode != mode_) {
+    return;
+  }
+  switch (mode_) {
+    case SurfaceMode::kTrack:
+      TryEnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
+      break;
+    case SurfaceMode::kSendReceive:
+      send_receive_mode_view_->ToggleChildRouteType();
       break;
   }
 }

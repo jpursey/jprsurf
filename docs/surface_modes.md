@@ -521,11 +521,13 @@ CL id.
   - **Verify:** every CL checks, including P6's tests (Send still toggles).
     First used by the plugin in P9.
 
-- [ ] **P9 (plugin): Hold Send to pick a track**
+- [x] **P9 (plugin): Hold Send to pick a track**
   - Depends on: P3, S5, S7, S8.
-  - Send press only records the current mode. Its action runs after the scene
-    once Send is no longer held, if the mode is unchanged: enter Send/Receive
-    mode from Track mode, or `ToggleChildRouteType()` in Send/Receive mode.
+  - Send press only records the current mode and time. Its action runs after
+    the scene once Send is no longer held, if it was pressed for less than
+    350ms (a hold only shows which tracks have routes), no select was used
+    while held, and the mode is unchanged: enter Send/Receive mode from Track
+    mode, or `ToggleChildRouteType()` in Send/Receive mode.
     A tap shorter than a frame never sets the hold modifier, but the press is
     still recorded, so it is treated as released. The P6 toggle mapping is
     removed.

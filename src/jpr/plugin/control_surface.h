@@ -135,6 +135,15 @@ class ControlSurface final : private IReaperControlSurface {
   void EnterTrackMode();
   void EnterSendReceiveMode(Track* track);
 
+  // Enters Send/Receive mode for `track`, if it can be shown: it exists, is on
+  // the surface, and has sends or receives.
+  void TryEnterSendReceiveMode(Track* track);
+
+  // Handles the Send/Receive mode button once it is released (see
+  // send_press_mode_), if it was pressed rather than held. This must not be
+  // called while the scene is running.
+  void ApplySendRelease(absl::Time now);
+
   // Shows the routes of `track` in Send/Receive mode: its receives if it has
   // only receives, and otherwise its sends (even if it has no routes at all).
   void SetSendReceiveTrack(Track* track);
@@ -171,6 +180,18 @@ class ControlSurface final : private IReaperControlSurface {
   SurfaceMode mode_ = SurfaceMode::kTrack;
   std::optional<SurfaceMode> requested_mode_;
   ModeButton mode_buttons_[kSurfaceModeCount];
+
+  // A track picked for Send/Receive mode by pressing its select button while
+  // holding the Send/Receive mode button. Applied with requested_mode_.
+  Track* requested_send_receive_track_ = nullptr;
+
+  // The Send/Receive mode button acts when it is released rather than pressed,
+  // and only if it wasn't held, so it can be held to pick a track. This is the
+  // modifier that is on while it is held, and the mode and time when it was
+  // pressed, until the release is handled.
+  Modifiers send_hold_modifier_ = 0;
+  std::optional<SurfaceMode> send_press_mode_;
+  absl::Time send_press_time_;
 
   // Set when mode availability may have changed, so the mode buttons are
   // updated on the next run. Availability depends on the track selection and
