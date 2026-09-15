@@ -152,7 +152,8 @@ void ControlSurface::Run() {
 
     // If the track shown in Send/Receive mode was deleted, there is nothing
     // left to show.
-    if (mode_ == SurfaceMode::kSendReceive && !send_receive_track_->Exists()) {
+    if (mode_ == SurfaceMode::kSendReceive &&
+        !send_receive_mode_view_->GetTrack()->Exists()) {
       LOG(INFO) << "Send/Receive track was deleted";
       EnterTrackMode();
     }
@@ -860,6 +861,65 @@ void ControlSurface::InitViews() {
   // in Track mode.
   send_receive_mode_view_ = root_view->AddChildView("SendReceiveMode");
 
+  // Add a route view for each channel strip, which will show consecutive sends
+  // or receives of the Send/Receive mode track. Each route view's track is the
+  // track at the other end of its route.
+  int route_view_index = 0;
+  for (int d = 0; d < 2; ++d) {
+    if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
+      continue;
+    }
+    std::string device_prefix = (d == 0) ? "XTouchExt/" : "XTouch/";
+    for (int i = 0; i < 8; ++i) {
+      View* route_view = send_receive_mode_view_->AddChildView(
+          absl::StrCat("Route", ++route_view_index));
+      // Select navigates across the route to the track at its other end.
+      route_view->AddMapping(
+          ViewMapping::kReadControl, View::kParentRouteOtherTrack,
+          absl::StrCat(device_prefix, DeviceXTouch::Select(i)));
+      route_view->AddMapping(
+          ViewMapping::kReadWriteControl, RouteProperties::kMute,
+          absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
+      route_view->AddMapping(
+          ViewMapping::kReadWriteControl, RouteProperties::kPan,
+          absl::StrCat(device_prefix, DeviceXTouch::Pot(i)),
+          {.write = {.mode = 1,
+                     .mode_overrides = {{std::string(RouteProperties::kExists),
+                                         {{false, 8}}}}}});
+      route_view->AddMapping(
+          ViewMapping::kReadControl, RouteProperties::kPan,
+          absl::StrCat(device_prefix, DeviceXTouch::PotButton(i)),
+          {.read = {.property_min = 0.0, .property_max = 0.0}});
+      route_view->AddMapping(
+          ViewMapping::kReadWriteControl, RouteProperties::kVolume,
+          absl::StrCat(device_prefix, DeviceXTouch::Fader(i)));
+      route_view->AddMapping(
+          ViewMapping::kWriteControl, TrackProperties::kName,
+          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 0)));
+      route_view->AddMapping(
+          ViewMapping::kWriteControl, RouteProperties::kVolume,
+          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)));
+      route_view->AddMapping(
+          ViewMapping::kWriteControl, TrackProperties::kColor,
+          absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(i)));
+      route_view->Enable();
+    }
+  }
+  if (has_xtouch) {
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kReadControl, View::kChildDec,
+        absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kReadControl, View::kChildInc,
+        absl::StrCat("XTouch/", DeviceXTouch::kChannelRight));
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kReadControl, View::kBankDec,
+        absl::StrCat("XTouch/", DeviceXTouch::kBankLeft));
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kReadControl, View::kBankInc,
+        absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
+  }
+
   // Finally activate the scene, which will start it running and activate all
   // enabled views.
   scene_->Activate(scene_runner_);
@@ -951,9 +1011,12 @@ void ControlSurface::ApplyRequestedMode() {
 void ControlSurface::EnterTrackMode() {
   const absl::Time start = absl::Now();
   const SurfaceMode old_mode = mode_;
-  Track* track = std::exchange(send_receive_track_, nullptr);
+  Track* track =
+      (mode_ == SurfaceMode::kSendReceive ? send_receive_mode_view_->GetTrack()
+                                          : nullptr);
   mode_ = SurfaceMode::kTrack;
   send_receive_mode_view_->Disable();
+  send_receive_mode_view_->SetTrack(nullptr);
   track_mode_view_->Enable();
 
   // Show the track that was shown in Send/Receive mode among its siblings. This
@@ -969,8 +1032,13 @@ void ControlSurface::EnterSendReceiveMode(Track* track) {
   DCHECK(track != nullptr);
   const absl::Time start = absl::Now();
   const SurfaceMode old_mode = mode_;
-  send_receive_track_ = track;
   mode_ = SurfaceMode::kSendReceive;
+
+  // Show the track's sends, or its receives if it has no sends.
+  send_receive_mode_view_->SetChildContext(
+      track->GetSends().empty() ? View::ChildContextType::kReceives
+                                : View::ChildContextType::kSends);
+  send_receive_mode_view_->SetTrack(track);
   track_mode_view_->Disable();
   send_receive_mode_view_->Enable();
   FinishModeChange(old_mode, start);
@@ -1005,6 +1073,13 @@ void ControlSurface::RefreshTrackViews() {
       std::clamp(track_list_view_->GetChildContextIndex(), 0,
                  track_list_view_->GetMaxChildContextIndex()));
   track_list_view_->RefreshChildContext();
+
+  // Routes are only added or removed when the track list changes, which can
+  // also shorten the route list out from under the current bank.
+  send_receive_mode_view_->SetChildContextIndex(
+      std::clamp(send_receive_mode_view_->GetChildContextIndex(), 0,
+                 send_receive_mode_view_->GetMaxChildContextIndex()));
+  send_receive_mode_view_->RefreshChildContext();
 }
 
 void ControlSurface::EnsureTrackIsVisible(Track* track) {

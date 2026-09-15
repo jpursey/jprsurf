@@ -346,7 +346,8 @@ CL id.
   - Verified with temporary logging and a button that changed the first route
     (removed before submitting): values match REAPER for sends and receives,
     changes go both ways, the right route changes with hardware outputs
-    present, and surface changes can be undone. REAPER calls
+    present, and mute changes can be undone (volume and pan changes can't; see
+    C5). REAPER calls
     `SetTrackListChange()` when hardware outputs are added or removed, so the
     cached hardware output count stays current.
   - **Verify:** every CL checks. First used in P4.
@@ -380,7 +381,7 @@ CL id.
   - Text property for the current category ("Send" / "Recv").
   - **Verify:** every CL checks. First used in P4–P6.
 
-- [ ] **P4 (plugin): Route strips**
+- [x] **P4 (plugin): Route strips**
   - Depends on: P3, S4.
   - `Routes` view with fader, pot, mute, scribble, color, and select mappings.
   - Bank/Channel navigation over routes.
@@ -416,6 +417,24 @@ CL id.
     - Add a send to the current track in REAPER: it appears. Delete a send: it
       disappears and later strips shift left.
     - Delete a destination track while its send is shown: the strips update.
+
+- [ ] **C5 (common): Undo for route volume and pan**
+  - Depends on: C3 (found while testing P4).
+  - `SetTrackSendUIVol` / `SetTrackSendUIPan` with `isend=0` don't create undo
+    points. (Mute changes do, as `ToggleTrackSendUIMute` creates its own.)
+    Klinke ends the edit with `isend=1` when the fader is released, but
+    mappings don't know when an edit ends.
+  - Find an approach that matches track volume and pan, which use
+    `CSurf_OnVolumeChangeEx` / `CSurf_OnPanChangeEx`. Candidates:
+    `CSurf_OnSendVolumeChange` / `CSurf_OnRecvVolumeChange` and the pan
+    equivalents (index convention to be verified), or an explicit
+    `Undo_OnStateChangeEx`.
+  - **Verify:**
+    - Every CL checks.
+    - Change a send's and a receive's volume and pan from the surface, then
+      undo in REAPER: each change is undone, and a continuous fader move
+      doesn't create an undo point per step.
+    - The right route still changes with hardware outputs present.
 
 - [ ] **P5 (plugin): Info strip**
   - Depends on: P4.

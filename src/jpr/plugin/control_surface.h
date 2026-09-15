@@ -151,8 +151,10 @@ class ControlSurface final : private IReaperControlSurface {
   std::unique_ptr<MidiIn> xtouch_ext_in_;
   std::unique_ptr<MidiOut> xtouch_ext_out_;
   std::unique_ptr<Scene> scene_;
-  View* track_mode_view_ = nullptr;         // Parent of all Track mode views.
-  View* send_receive_mode_view_ = nullptr;  // Parent of Send/Receive views.
+  View* track_mode_view_ = nullptr;  // Parent of all Track mode views.
+  // The Send/Receive mode view. Its track is the track whose routes are shown
+  // (which route navigation can change), and its child views show the routes.
+  View* send_receive_mode_view_ = nullptr;
   View* master_track_view_ = nullptr;
   View* track_list_view_ = nullptr;
   bool track_list_changed_ = false;
@@ -165,10 +167,6 @@ class ControlSurface final : private IReaperControlSurface {
   SurfaceMode mode_ = SurfaceMode::kTrack;
   std::optional<SurfaceMode> requested_mode_;
   ModeButton mode_buttons_[kSurfaceModeCount];
-
-  // The track shown in Send/Receive mode, or null in any other mode. Tracks are
-  // never freed by the TrackCache, so this stays valid even if it is deleted.
-  Track* send_receive_track_ = nullptr;
 
   // Set when mode availability may have changed, so the mode buttons are
   // updated on the next run. Availability depends on the track selection and
