@@ -14,6 +14,7 @@
 #include "gb/base/flags.h"
 #include "jpr/device/control.h"
 #include "jpr/device/control_input_handle.h"
+#include "jpr/device/control_output_handle.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
@@ -194,6 +195,7 @@ class ViewMapping final {
   WriteSyncFunction* write_control_;
   InputConfig input_config_;
   ControlInputHandle input_handle_;
+  ControlOutputHandle output_handle_;  // Registered while active and writing.
   bool enabled_ = true;
   bool active_ = false;
   bool reads_property_ = false;

@@ -265,10 +265,13 @@ CL id.
     clears the outputs if there are still no writers.
   - **Verify:** every CL checks. First used in S6.
 
-- [ ] **S6 (scene): Mappings register as output writers**
+- [x] **S6 (scene): Mappings register as output writers**
   - Depends on: D2.
-  - A mapping that writes to its control registers as an output writer while it
-    is active, and unregisters when it becomes inactive.
+  - A mapping that writes to its control holds a `ControlOutputHandle` while it
+    is active, and releases it when it becomes inactive.
+  - A mapping that can't write anything for its property (an action property,
+    or no suitable output) is no longer treated as a write mapping, so it never
+    keeps a control from being cleared.
   - **Verify:**
     - Every CL checks, paying attention to startup and track navigation, which
       activate and deactivate mappings.

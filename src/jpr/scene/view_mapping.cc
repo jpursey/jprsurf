@@ -686,7 +686,7 @@ void ViewMapping::InitWriteControl() {
     case ViewProperty::Type::kAction:
       // Action properties have no state, so they don't need to write to the
       // control.
-      return;
+      break;
     case ViewProperty::Type::kToggle:
       InitWriteToggleSyncFunction();
       break;
@@ -711,6 +711,13 @@ void ViewMapping::InitWriteControl() {
     case ViewProperty::Type::kEnumerated:
       InitWriteEnumeratedSyncFunction();
       break;
+  }
+
+  // If nothing can be written to the control for this property, this is not a
+  // write mapping. In particular, it must not register as an output writer, or
+  // the control would never be cleared.
+  if (write_control_ == NoOpSyncFunction) {
+    type_.Clear(kWriteControl);
   }
 }
 
@@ -1204,6 +1211,9 @@ void ViewMapping::RefreshActive(bool parent_active) {
     if (read_control_ != nullptr) {
       input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
     }
+    if (type_.IsSet(kWriteControl)) {
+      output_handle_ = control_->RegisterOutputWriter();
+    }
   } else {
     if (reads_property_) {
       property_->UnregisterFlag(&property_changed_);
@@ -1212,6 +1222,7 @@ void ViewMapping::RefreshActive(bool parent_active) {
       }
     }
     input_handle_ = {};
+    output_handle_ = {};
   }
 }
 
