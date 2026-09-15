@@ -603,11 +603,23 @@ void ControlSurface::OnSetFocusedFx(MediaTrack* track_id,
 
 void ControlSurface::OnSetLastTouchedTrack(MediaTrack* track_id) {
   VLOG_REAPER() << "OnSetLastTouchedTrack(track_id=" << track_id << ")";
-  if (track_list_view_ != nullptr) {
-    Track* track = TrackCache::Get().GetTrack(track_id);
-    EnsureTrackIsVisible(TrackCache::Get().GetTrack(track_id));
-    TrackCache::Get().SetLastTouchedTrack(TrackCache::Get().GetTrack(track_id));
+  if (track_list_view_ == nullptr) {
+    return;
   }
+  Track* track = TrackCache::Get().GetTrack(track_id);
+  if (mode_ == SurfaceMode::kSendReceive) {
+    // Follow the touched track, unless it is already shown, or it couldn't be
+    // shown by entering Send/Receive mode from Track mode: it doesn't exist, is
+    // the master track, or isn't on the surface.
+    if (track != nullptr && track != send_receive_mode_view_->GetTrack() &&
+        track->Exists() && track != TrackCache::Get().GetMasterTrack() &&
+        track->IsVisible(TrackCache::Get().GetSurfaceFilter())) {
+      SetSendReceiveTrack(track);
+    }
+  } else {
+    EnsureTrackIsVisible(track);
+  }
+  TrackCache::Get().SetLastTouchedTrack(track);
 }
 
 void ControlSurface::OnSetMixerScroll(MediaTrack* track_id) {
@@ -1067,15 +1079,19 @@ void ControlSurface::EnterSendReceiveMode(Track* track) {
   const absl::Time start = absl::Now();
   const SurfaceMode old_mode = mode_;
   mode_ = SurfaceMode::kSendReceive;
-
-  // Show the track's sends, or its receives if it has no sends.
-  send_receive_mode_view_->SetChildContext(
-      track->GetSends().empty() ? View::ChildContextType::kReceives
-                                : View::ChildContextType::kSends);
-  send_receive_mode_view_->SetTrack(track);
+  SetSendReceiveTrack(track);
   track_mode_view_->Disable();
   send_receive_mode_view_->Enable();
   FinishModeChange(old_mode, start);
+}
+
+void ControlSurface::SetSendReceiveTrack(Track* track) {
+  const bool show_receives =
+      track->GetSends().empty() && !track->GetReceives().empty();
+  send_receive_mode_view_->SetChildContext(
+      show_receives ? View::ChildContextType::kReceives
+                    : View::ChildContextType::kSends);
+  send_receive_mode_view_->SetTrack(track);
 }
 
 void ControlSurface::FinishModeChange(SurfaceMode old_mode, absl::Time start) {

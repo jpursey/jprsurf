@@ -135,6 +135,10 @@ class ControlSurface final : private IReaperControlSurface {
   void EnterTrackMode();
   void EnterSendReceiveMode(Track* track);
 
+  // Shows the routes of `track` in Send/Receive mode: its receives if it has
+  // only receives, and otherwise its sends (even if it has no routes at all).
+  void SetSendReceiveTrack(Track* track);
+
   // Completes a mode change started at `start` from `old_mode`.
   void FinishModeChange(SurfaceMode old_mode, absl::Time start);
 

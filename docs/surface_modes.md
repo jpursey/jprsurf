@@ -81,8 +81,8 @@ Only one mode view is enabled at a time.
   - Select: unmapped for now.
 - Pressing Send again toggles between sends and receives if the track has both.
   Otherwise it does nothing.
-- REAPER changing the last touched track moves the view to that track (sends,
-  else receives, else empty strips). The surface is not forced out of the mode.
+- REAPER changing the last touched track moves the view to that track (its
+  receives if it only has receives, otherwise its sends, which may be empty). The surface is not forced out of the mode.
 - Pressing Track returns to Track mode showing the current track among its
   siblings (`EnsureTrackIsVisible`).
 - If the current track is deleted, return to Track mode, with the track list
@@ -474,7 +474,7 @@ CL id.
     - After navigating to another track via select, toggling reflects that
       track's routes.
 
-- [ ] **P7 (plugin): Follow REAPER's last touched track**
+- [x] **P7 (plugin): Follow REAPER's last touched track**
   - Depends on: P4.
   - In Send/Receive mode, `OnSetLastTouchedTrack` moves the view to that track
     (sends, else receives, else empty).
