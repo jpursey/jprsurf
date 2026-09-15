@@ -525,9 +525,22 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
     }
     mode_properties.push_back(mode_property);
   }
+  ViewProperty* condition_property = nullptr;
+  if (config.condition.has_value()) {
+    condition_property = GetProperty(config.condition->property);
+    if (condition_property == nullptr) {
+      condition_property = scene_->GetProperty(config.condition->property);
+    }
+    if (condition_property == nullptr) {
+      LOG(ERROR) << "Failed to add mapping for view '" << GetName()
+                 << "': condition property '" << config.condition->property
+                 << "' not found";
+      return false;
+    }
+  }
   mappings_.push_back(absl::WrapUnique(
       new ViewMapping(this, type, property, control, std::move(config),
-                      std::move(mode_properties))));
+                      std::move(mode_properties), condition_property)));
   return true;
 }
 
@@ -552,10 +565,10 @@ void View::SyncMappings() {
   // Now update all active mappings for this view. This will update the REAPER
   // state and hardware controls according to the current state of the view
   // properties.
+  // Inactive mappings are synced too, so a change to their condition can
+  // activate them.
   for (auto& mapping : mappings_) {
-    if (mapping->IsActive()) {
-      mapping->Sync();
-    }
+    mapping->Sync();
   }
 
   // Sync all child views.

@@ -107,13 +107,15 @@ bool PropertyValueEquals(const ViewProperty::Value& a,
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
                          Control* control, Config config,
-                         std::vector<ViewProperty*> mode_properties)
+                         std::vector<ViewProperty*> mode_properties,
+                         ViewProperty* condition_property)
     : type_(type),
       view_(view),
       property_(property),
       control_(control),
       config_(std::move(config)),
       mode_properties_(std::move(mode_properties)),
+      condition_property_(condition_property),
       reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
   InitReadControl();
@@ -121,10 +123,10 @@ ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
 }
 
 ViewMapping::~ViewMapping() {
-  if (active_) {
-    enabled_ = false;
-    RefreshActive(false);
-  }
+  // This releases everything the mapping has registered, including watching
+  // its condition.
+  enabled_ = false;
+  RefreshActive(false);
 }
 
 void ViewMapping::InitReadControl() {
@@ -1195,7 +1197,19 @@ void ViewMapping::Disable() {
 }
 
 void ViewMapping::RefreshActive(bool parent_active) {
-  bool should_be_active = enabled_ && parent_active;
+  // The condition determines whether the mapping is active, so it is watched
+  // whenever the parent view is active, whether or not the mapping is.
+  if (condition_property_ != nullptr && parent_active != parent_active_) {
+    if (parent_active) {
+      condition_property_->RegisterFlag(&condition_changed_);
+    } else {
+      condition_property_->UnregisterFlag(&condition_changed_);
+    }
+  }
+  parent_active_ = parent_active;
+  condition_changed_ = false;
+
+  bool should_be_active = enabled_ && parent_active && IsConditionMet();
   if (active_ == should_be_active) {
     return;
   }
@@ -1226,7 +1240,15 @@ void ViewMapping::RefreshActive(bool parent_active) {
   }
 }
 
+bool ViewMapping::IsConditionMet() const {
+  return condition_property_ == nullptr ||
+         condition_property_->GetBool() == config_.condition->value;
+}
+
 void ViewMapping::Sync() {
+  if (condition_changed_) {
+    RefreshActive(parent_active_);
+  }
   if (!active_) {
     return;
   }

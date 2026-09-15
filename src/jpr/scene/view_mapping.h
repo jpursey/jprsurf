@@ -115,9 +115,30 @@ class ViewMapping final {
     std::vector<ModeOverride> mode_overrides;
   };
 
+  // A condition that must be met for a mapping to be active. This allows
+  // several mappings to share a control, with only one of them active
+  // depending on some state (for instance, while a modifier is held).
+  //
+  // Note: A read mapping registers its input when it becomes active and
+  // unregisters it when it becomes inactive. Registration changes rebuild the
+  // control's press timing state, so a pending press on that control (waiting
+  // for a long or double press) is lost when the condition changes. For reads
+  // that should switch with a modifier, prefer ReadConfig::required_modifiers,
+  // which keeps every registration in place. Conditions are best suited to
+  // write mappings, which have no timing state.
+  struct Condition {
+    // The name of a property in the same view scope. The condition is met
+    // while its value, as a bool (see ViewProperty::GetBool()), equals value.
+    std::string property;
+    bool value = true;
+  };
+
   struct Config {
     ReadConfig read;
     WriteConfig write;
+
+    // If set, the mapping is only active while this condition is met.
+    std::optional<Condition> condition;
   };
 
   ViewMapping(const ViewMapping&) = delete;
@@ -134,12 +155,13 @@ class ViewMapping final {
   void Disable();
 
   // Returns true if this mapping is actively synchronizing the view property
-  // and control. A mapping is active if it is both enabled and its parent view
-  // is active.
+  // and control. A mapping is active if it is enabled, its parent view is
+  // active, and its condition (if any) is met.
   bool IsActive() const { return active_; }
 
   // Synchronizes the view property and control according to the type of the
-  // mapping. This should be called whenever the mapping is active.
+  // mapping. This should be called whenever the parent view is active, even if
+  // the mapping is not, so a change to its condition can activate it.
   void Sync();
 
   // Read or write to the control. These are called by the Scene when the
@@ -154,11 +176,15 @@ class ViewMapping final {
 
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
               Control* control, Config config = {},
-              std::vector<ViewProperty*> mode_properties = {});
+              std::vector<ViewProperty*> mode_properties = {},
+              ViewProperty* condition_property = nullptr);
 
-  // Refreshes the active state of this mapping based on whether it is enabled
-  // and whether its parent view is active.
+  // Refreshes the active state of this mapping based on whether it is enabled,
+  // whether its parent view is active, and whether its condition is met.
   void RefreshActive(bool parent_active);
+
+  // Returns true if the mapping has no condition, or its condition is met.
+  bool IsConditionMet() const;
 
   void InitReadControl();
   void InitReadActionSyncFunction();
@@ -191,6 +217,7 @@ class ViewMapping final {
   Control* control_;
   Config config_;
   std::vector<ViewProperty*> mode_properties_;
+  ViewProperty* condition_property_;  // Null if there is no condition.
   absl::AnyInvocable<void(ViewProperty&, Control&, InputId)> read_control_;
   WriteSyncFunction* write_control_;
   InputConfig input_config_;
@@ -198,6 +225,11 @@ class ViewMapping final {
   ControlOutputHandle output_handle_;  // Registered while active and writing.
   bool enabled_ = true;
   bool active_ = false;
+
+  // Whether the parent view is active. The condition property is watched
+  // (condition_changed_ is registered) whenever it is.
+  bool parent_active_ = false;
+  bool condition_changed_ = false;
   bool reads_property_ = false;
   bool control_changed_ = false;
   bool property_changed_ = false;

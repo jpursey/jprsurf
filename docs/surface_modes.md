@@ -494,23 +494,39 @@ CL id.
 
 ### Phase 4: Holding Send in Track mode
 
-- [ ] **S5 (scene): Same-track child context**
-  - `ChildContextType::kSameTrack`: child views get this view's track.
-  - **Verify:** every CL checks. First used in P8.
-
-- [ ] **P8 (plugin): Split Track mode strips into sub-views** (no behavior
-  change)
-  - Depends on: S5.
-  - Move the select mappings into a per-strip sub-view so a different select
-    mapping can replace them while Send is held.
+- [x] **S5 (scene): Conditional mappings**
+  - Replaces the original plan of a `kSameTrack` child context plus per-strip
+    select sub-views (the old P8): a condition on the mapping itself is less
+    code overall, and keeps the plugin declarative.
+  - `ViewMapping::Config::condition`: a property in the view's scope and a bool
+    value. The mapping is only active while its view is active, it is enabled,
+    and the property's value (as a bool) matches.
+  - The condition property is watched whenever the view is active, and a change
+    activates or deactivates the mapping on its next `Sync()`.
+    `View::SyncMappings()` syncs inactive mappings too so this can happen.
   - **Verify:**
     - Every CL checks.
-    - Select buttons specifically: lights follow REAPER selection; press,
-      double press into a folder, long press out; Shift and Ctrl selection
-      behaviors; banking keeps select lights correct.
+    - Local-only check, not committed: the Flip button shows the metronome
+      state and toggles it normally, but shows any-track-solo and does nothing
+      while Shift is held.
+
+- [ ] **S7 (scene): Track has routes property**
+  - `TrackProperties::kTrackHasRoutes`: a read-only toggle, true if the track
+    has any sends or receives.
+  - **Verify:** every CL checks. First used in P9.
 
 - [ ] **P9 (plugin): Hold Send to pick a track**
-  - Depends on: P3, P8.
+  - Depends on: P3, S5, S7.
+  - Send holds a modifier property (`send_hold`).
+  - Select lights switch with conditions: the existing `track_ui_selected`
+    light only while `send_hold` is off, and a new `track_has_routes` light only
+    while it is on.
+  - Select presses switch with `required_modifiers`, not conditions: a new press
+    mapping requiring `send_hold` enters Send/Receive mode for that track, and
+    the existing press, double press, and long press mappings are excluded while
+    it is held by the modifier masks. This keeps every registration in place,
+    so holding Send never resets a pending select press (conditions on read
+    mappings re-register inputs, which resets press timing).
   - Send becomes a hold modifier. Its normal action (enter, or toggle sends and
     receives) moves to release, and only runs if the mode is unchanged since
     the press.
