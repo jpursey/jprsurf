@@ -20,3 +20,4 @@ We'll see how long this lasts, but I'll periodically update progress and changes
 - *2026-03-16:* Generalized scene / view / mapping concepts with track context and added initial support for each track mapping to a channel on the X-Touch. [Demo Video](https://youtu.be/nqRgdNaj1Y8)
 - *2026-03-24:* Support for full track navigation, modifier keys, and track colors. [Demo Video](https://youtu.be/7CKpyNhSO9o)
 - *2026-03-30:* Support for transport controls, metering lights, and timecode display. [DemoVideo](https://youtu.be/lK22xKMxtWY)
+- *2026-09-16:* Support for MCP visibility and a send/receive routing mode separate from "track" mode. [DemoVideo](https://youtu.be/gqKYDM84J3M)
