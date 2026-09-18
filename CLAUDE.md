@@ -64,11 +64,30 @@ Do not build through a generated Visual Studio solution (`-G "Visual Studio 17 2
 
 The build also will copy the binary to the REAPER plugin directory so it can be run immediately.
 
+A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Ask the user to close REAPER before building, and treat a copy or permission failure at the end of a build as "REAPER is open" rather than debugging the build.
+
 ### Testing and Logging
 
 Testing must be performed manually by the user in REAPER. 
 
-Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jpsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to get debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events, may be retained as is helpful for persistent understanding of code flow (continuous controler and UI events generally do *not* fall into this category).
+Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to get debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events, may be retained as is helpful for persistent understanding of code flow (continuous controler and UI events generally do *not* fall into this category).
+
+Every change is checked as follows:
+- It builds cleanly in Release (`out/build/x64-Release`).
+- Touched files pass `clang-format --dry-run -Werror`.
+- REAPER loads the extension, and `jprsurf.log` has no new errors.
+- **Smoke test:** existing behavior still works: faders, pots, pot buttons, mute, solo, rec arm, select (press, double press, long press), folder navigation, bank/channel navigation, Global, master fader, transport, timecode, meters, scribble names and colors, and mode buttons.
+- Any feature specific checks for the change (see Feature workflow below).
+
+Many changes have no user-visible effect until a later change uses them. These can be verified with temporary code (extra logging, or a test mapping on a spare button) that is removed before the change is committed.
+
+#### Performance
+
+REAPER is realtime and the extension runs on its UI thread, so performance is checked by running REAPER and reading `jprsurf.log`:
+- **Steady state:** the periodic `Run()` log line stays in the low hundreds of microseconds (avg), and doesn't regress from before the change.
+- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. These events log their own duration, and the `max` value in the `Run()` log line also catches spikes. Test with a large project (100+ tracks, with sends and receives).
+
+Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
 
 ### Format
 
@@ -101,6 +120,15 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - Prefer Abseil (and other Google open source libraries already vendored in third_party/) over hand-rolled utilities.
 - C++20, built with both MSVC and clang-cl.
 - Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way.
+
+## Feature workflow
+
+New features are designed first, then built and reviewed as a series of small changes (CLs):
+- Break the feature into CLs that are each limited to one library where possible, built in dependency order: `common`, then `device`, then `scene`, then `plugin`.
+- Track the plan in `docs/<feature>.md`: a design summary, then each CL with its dependencies, a status (`[ ]` not started, `[~]` in progress, `[x]` submitted), and **Verify** steps. The steps are the checks every change gets (see Testing and Logging), plus feature-specific tests and any performance measurements.
+- After writing each CL, self-review it before handing it to the user. Check that it is correct, clean, simple, and not wasteful, and look for brittle design: ask "what does a caller have to remember to get this right?" (paired Add/Remove or Register/Unregister calls, state that must be manually kept in sync, ordering assumptions). Prefer designs that enforce it, such as RAII handles, private internals, and types that make misuse impossible, and call out any remaining brittleness.
+- Build, then the user tests in REAPER. Once the user approves, mark the CL complete in the plan and commit it.
+- When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, reusable building blocks, and future ideas), so the doc stays a useful reference.
 
 ## Resources
 
