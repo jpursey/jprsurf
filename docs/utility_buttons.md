@@ -22,6 +22,10 @@ The Solo LED (lit while any track is soloed) keeps its current behavior.
 The standalone Solo button (above the transport) still toggles solo in front
 when pressed, and holding it unsolos all tracks (solo defeat).
 
+In Track mode, the Global button is lit while the track list is below the top
+level, so Global (up one level) or holding it (to the top) would do something.
+It is off at the top level and in Send/Receive mode.
+
 ## Design
 
 All of these are plain REAPER commands, so they are `kCmd*` constants in
@@ -56,6 +60,22 @@ Mappings, all in the root view with the other global XTouch mappings:
   adds a `kLongPress` read mapping to `kCmdSoloDefeat`. With a long press on the
   button, a short press (solo in front) is delivered on release instead of
   immediately, like other buttons with a long press.
+
+### Global light
+
+`TrackProperties::kTrackHasParent` is a toggle that is true while a track has a
+parent track, alongside `kTrackIsFolder` and `kTrackExists`. Only the master
+track (and the stub track) has none, so on the track list view's track it is
+true exactly when `View::kTrackParent` would move up a level. It needs no
+polling: it notifies when the view's track changes, and when the track is
+removed (a removed track has no parent). Moving a track in REAPER never takes
+its parent away, since a top level track's parent is the master track, so
+there is nothing else to notify on.
+
+It is mapped as a write to Global on the track list view, which is only active
+in Track mode. When the mapping is inactive nothing writes to Global, and a
+control with no writers clears its output, so the light is off in Send/Receive
+mode without any extra mapping.
 
 ### Compile time property names
 
@@ -272,3 +292,33 @@ Depends on: CL7.
   tracks off the surface), and turns off the Solo LED. It doesn't toggle solo
   in front.
 - Holding Solo with nothing soloed does nothing.
+
+### CL12 [x] scene: TrackProperties::kTrackHasParent
+
+Depends on: none.
+
+- `kTrackHasParent` and `TrackHasParentProperty` in `track_properties.h`/`.cc`.
+- Unused, so there is no visible change yet.
+
+**Verify**
+- Standard checks.
+- Covered by CL13.
+
+### CL13 [ ] plugin: Light Global below the top level
+
+Depends on: CL12.
+
+- `kWriteControl` mapping from `kTrackHasParent` to Global on the track list
+  view.
+
+**Verify**
+- Standard checks.
+- Global is off at the top level, and lit after going into a folder (double
+  press select). It stays lit in nested folders.
+- Going up with Global turns it off on reaching the top level. Holding Global
+  (to the top) turns it off.
+- Moving the folder being shown to the top level in REAPER leaves it lit (it
+  is still below the top level). Deleting it in REAPER updates the light to
+  wherever the track list ends up.
+- In Send/Receive mode it is off, and it comes back when returning to Track
+  mode.

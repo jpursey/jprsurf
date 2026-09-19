@@ -88,6 +88,9 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kUiPan = "track_ui_pan";
   static constexpr std::string_view kUiVolume = "track_ui_volume";
   static constexpr std::string_view kTrackIsFolder = "track_is_folder";
+  // True if the track has a parent track, which is every track except the
+  // master track (and the stub track).
+  static constexpr std::string_view kTrackHasParent = "track_has_parent";
   static constexpr std::string_view kTrackExists = "track_exists";
   static constexpr std::string_view kTrackHasRoutes = "track_has_routes";
 
