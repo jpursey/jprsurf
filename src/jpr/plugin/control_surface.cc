@@ -1001,14 +1001,16 @@ void ControlSurface::InitViews() {
   }
   track_list_view_->SetChildContext(View::ChildContextType::kTrack);
   if (has_xtouch) {
-    // Global navigates up one level, or all the way to the root when held.
+    // Global navigates up one level, or all the way to the root when held. It
+    // is lit while there is a level to go up to.
+    const std::string global = absl::StrCat("XTouch/", DeviceXTouch::kGlobal);
+    track_list_view_->AddMapping(ViewMapping::kReadControl, View::kTrackParent,
+                                 global);
     track_list_view_->AddMapping(
-        ViewMapping::kReadControl, View::kTrackParent,
-        absl::StrCat("XTouch/", DeviceXTouch::kGlobal));
-    track_list_view_->AddMapping(
-        ViewMapping::kReadControl, View::kTrackRoot,
-        absl::StrCat("XTouch/", DeviceXTouch::kGlobal),
+        ViewMapping::kReadControl, View::kTrackRoot, global,
         {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+    track_list_view_->AddMapping(ViewMapping::kWriteControl,
+                                 TrackProperties::kTrackHasParent, global);
     track_list_view_->AddMapping(
         ViewMapping::kReadControl, View::kChildDec,
         absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));

@@ -304,7 +304,7 @@ Depends on: none.
 - Standard checks.
 - Covered by CL13.
 
-### CL13 [ ] plugin: Light Global below the top level
+### CL13 [x] plugin: Light Global below the top level
 
 Depends on: CL12.
 
