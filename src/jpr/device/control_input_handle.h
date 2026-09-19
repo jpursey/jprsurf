@@ -38,14 +38,12 @@ struct InputConfig {
   // types and is ignored for value and delta inputs.
   enum class PressBehavior {
     // Normal press behavior. The press is delivered immediately unless a
-    // sibling
-    // registration (same input type and modifier set) requires deferral (e.g.
-    // a long press or double press sibling exists).
+    // sibling registration (same input type and modifier set) requires deferral
+    // (e.g. a long press or double press sibling exists).
     kNormal,
 
     // Long press behavior. The press is delivered only after the button has
-    // been
-    // held for a configurable duration.
+    // been held for a configurable duration.
     kLongPress,
 
     // Double press behavior. The press is delivered only after the button has
