@@ -229,12 +229,3 @@ The general process, smoke test, and performance budget are in CLAUDE.md. For
 modes, check the steady state `Run()` cost in every mode. Measured when the
 modes were finished: ~200us to refresh 103 tracks with routes, and ~50us per
 mode switch.
-
-## Future ideas
-
-- Modes for the other assign buttons.
-- Local surface-only selection within routes, for grouped volume, pan, and
-  mute changes.
-- Info strip select button behavior.
-- Rec and Solo on route strips.
-- Generalizing strip construction for more than one extender.

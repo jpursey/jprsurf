@@ -128,7 +128,14 @@ New features are designed first, then built and reviewed as a series of small ch
 - Track the plan in `docs/worklog/<feature>.md`: a design summary, then each CL with its dependencies, a status (`[ ]` not started, `[~]` in progress, `[x]` submitted), and **Verify** steps. The steps are the checks every change gets (see Testing and Logging), plus feature-specific tests and any performance measurements.
 - After writing each CL, self-review it before handing it to the user. Check that it is correct, clean, simple, and not wasteful, and look for brittle design: ask "what does a caller have to remember to get this right?" (paired Add/Remove or Register/Unregister calls, state that must be manually kept in sync, ordering assumptions). Prefer designs that enforce it, such as RAII handles, private internals, and types that make misuse impossible, and call out any remaining brittleness.
 - Build, then the user tests in REAPER. Once the user approves, mark the CL complete in the plan and commit it.
-- When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, reusable building blocks, and future ideas), so the doc stays a useful reference.
+- When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, and reusable building blocks), so the doc stays a useful reference. Anything still undone goes to the backlog instead of into the summary.
+
+### Backlog
+
+`docs/backlog.md` is the one home for work that isn't being done yet, so ideas don't scatter across the worklogs. It is a flat list in rough stack rank order, each item a heading with **Layers**, **Size**, **Depends on**, and **Background** fields, then a short description. Worklog docs have no "Future ideas" section of their own.
+- When summarizing a finished feature, move anything left undone into the backlog: ideas raised and set aside, known limitations worth fixing, and follow-ups the user asked for. Do this as part of writing the summary, so the ideas aren't lost with the plan.
+- Anything noticed at any other time that is worth doing but out of scope belongs there too, rather than in a comment or a worklog.
+- When an item is picked up, it moves into its own `docs/worklog/<feature>.md` plan and comes out of the backlog.
 
 ## Parallel sessions
 

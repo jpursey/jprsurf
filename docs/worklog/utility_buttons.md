@@ -156,19 +156,3 @@ Measured in a large, real project (103 tracks, hundreds of items):
   the equivalent key press would: unselect all items ~14-17ms, remove time
   selection and loop points ~85ms (even with nothing to remove), and in this
   project undo up to ~1.3s and save ~1s.
-
-## Future ideas
-
-- **Cheaper polling**, if a polled read becomes a problem (from
-  `kStateAnyItemSelected` or a future one), in order:
-  1. Throttle: give each `kPolledToggles` row a poll interval in runs, and have
-     `PolledToggleProperty::UpdateState()` only read every Nth run. Polling
-     `kStateAnyItemSelected` every 4th run would cut its cost to ~2-3us, with
-     the light lagging by up to ~130ms.
-  2. Gate reads on `GetProjectStateChangeCount(nullptr)`, which REAPER
-     increments whenever the project changes, and only re-read when it moves.
-     This could be a single switch for every polled state and command toggle
-     state that can use it. It isn't the first choice, as whether a selection
-     change bumps the count depends on the user's undo preferences.
-- **More polled lights**: anything with a cheap REAPER query is a table row and
-  a write mapping.

@@ -162,15 +162,3 @@ and the alternatives) each pay a UI refresh: ~2–9ms for mute and solo, and
 
 This is REAPER's own UI work on the UI thread, and doesn't affect realtime
 audio. The anchor mappings add nothing measurable to the steady state `Run()`.
-
-## Future ideas
-
-- Ranges in Send/Receive mode (route mute, and selecting routes).
-- Move the empty strip check into `common`, so any holder of a track anchor
-  gets it (for instance, `Track` falling back to a normal press when the range
-  is empty).
-- Holding Send and a select anchor at the same time leaves select buttons with
-  no matching press group, so select does nothing. Unlikely in practice.
-- Read-only toggle mappings still register for property change notices, so
-  they call `WriteControl()` (which does nothing) on every change. Registering
-  only when the mapping writes the control would avoid it.
