@@ -41,6 +41,14 @@ inline constexpr std::string_view kCmdAutoModeRead = "cmd:40401";
 inline constexpr std::string_view kCmdAutoModeTouch = "cmd:40402";
 inline constexpr std::string_view kCmdAutoModeTrim = "cmd:40400";
 inline constexpr std::string_view kCmdAutoModeWrite = "cmd:40403";
+inline constexpr std::string_view kCmdUndo = "cmd:40029";
+inline constexpr std::string_view kCmdRedo = "cmd:40030";
+inline constexpr std::string_view kCmdSaveProject = "cmd:40026";
+inline constexpr std::string_view kCmdSaveNewProjectVersion = "cmd:41895";
+inline constexpr std::string_view kCmdUnselectAllItems = "cmd:40289";
+inline constexpr std::string_view kCmdRemoveTimeSelection = "cmd:40020";
+inline constexpr std::string_view kCmdInsertMidiItem = "cmd:40214";
+inline constexpr std::string_view kCmdInsertEmptyItem = "cmd:40142";
 
 //==============================================================================
 // CommandActionProperty

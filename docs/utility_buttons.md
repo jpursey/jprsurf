@@ -6,12 +6,12 @@ toggle.
 
 ## Behavior
 
-| Button | Press                | Shift + press                | Long press                                           |
-| ------ | -------------------- | ---------------------------- | ---------------------------------------------------- |
-| Undo   | Undo                 | Redo                         | (same as press)                                      |
-| Save   | Save project         | Save new version of project  | (same as press)                                      |
-| Cancel | Unselect all items   | Unselect all items           | Unselect all items, and remove time selection/loop   |
-| Enter  | Insert new MIDI item | Insert empty item            | (same as press)                                      |
+| Button | Press                | Shift + press                                |
+| ------ | -------------------- | -------------------------------------------- |
+| Undo   | Undo                 | Redo                                         |
+| Save   | Save project         | Save new version of project                  |
+| Cancel | Unselect all items   | Remove time selection and loop points        |
+| Enter  | Insert new MIDI item | Insert empty item                            |
 
 The Solo LED (lit while any track is soloed) keeps its current behavior.
 
@@ -39,10 +39,8 @@ Mappings, all in the root view with the other global XTouch mappings:
 - Shift variants use `ReadConfig::required_modifiers = kModShift`. `Control`
   masks off shift for the unmodified registration, so each press runs exactly
   one of the two commands.
-- Cancel's long press is two `kLongPress` mappings on the same control (unselect
-  items and remove time selection), the same way Select maps several long press
-  registrations. The normal press is deferred until the long press window
-  expires, like other buttons with a long press.
+- There are no long presses. A long press on Cancel that both unselected items
+  and removed the time selection ran two commands, leaving two undo points.
 
 `AnyTrackSoloProperty` stays as it is. It looks like it could be a
 `CommandToggleProperty` for "Track: Unsolo all tracks" (40340), but REAPER
@@ -63,7 +61,7 @@ Depends on: none.
 - Standard checks (Release build, clang-format, extension loads, log has no new
   errors, smoke test).
 
-### CL2 [ ] scene: Utility button commands
+### CL2 [x] scene: Utility button commands
 
 Depends on: none.
 
@@ -75,7 +73,7 @@ Depends on: none.
 - Standard checks.
 - Covered by CL3.
 
-### CL3 [ ] plugin: Map the utility buttons
+### CL3 [~] plugin: Map the utility buttons
 
 Depends on: CL2.
 
@@ -87,7 +85,7 @@ Depends on: CL2.
 - Save saves the project. Shift + Save saves a new version (project file name
   incremented).
 - Cancel unselects all items and leaves the time selection and loop points.
-  Holding Cancel unselects all items and removes the time selection and loop
-  points. Shift + Cancel acts like Cancel.
+  Shift + Cancel removes the time selection and loop points, and leaves the
+  item selection.
 - Enter opens insert new MIDI item. Shift + Enter inserts an empty item.
 - Each press runs one command (check the undo history for a single entry).
