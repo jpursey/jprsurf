@@ -118,6 +118,8 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   // Misc REAPER properties.
   else if (name == kAnyTrackSolo) {
     property = std::make_unique<AnyTrackSoloProperty>(this);
+  } else if (name == kCanRedo) {
+    property = std::make_unique<CanRedoProperty>(this);
   }
 
   if (property != nullptr) {

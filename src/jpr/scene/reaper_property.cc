@@ -57,4 +57,18 @@ void AnyTrackSoloProperty::WriteBool(bool value) {
   }
 }
 
+//==============================================================================
+// CanRedoProperty
+//==============================================================================
+
+void CanRedoProperty::UpdateState() {
+  bool value = (Undo_CanRedo2(nullptr) != nullptr);
+  if (value != value_) {
+    value_ = value;
+    NotifyChanged();
+  }
+}
+
+bool CanRedoProperty::ReadBool() const { return value_; }
+
 }  // namespace jpr

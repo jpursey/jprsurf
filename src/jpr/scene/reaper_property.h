@@ -128,4 +128,29 @@ class AnyTrackSoloProperty final : public SceneStateProperty {
   bool value_ = false;
 };
 
+//==============================================================================
+// CanRedoProperty
+//==============================================================================
+
+inline constexpr std::string_view kCanRedo = "can_redo";
+
+// This read-only property is true while the current project has anything to
+// redo.
+class CanRedoProperty final : public SceneStateProperty {
+ public:
+  explicit CanRedoProperty(Scene* scene)
+      : SceneStateProperty(scene, kCanRedo, Type::kToggle) {}
+  ~CanRedoProperty() override = default;
+
+  // Overrides from SceneStateProperty.
+  void UpdateState() override;
+
+ protected:
+  // Overrides from ViewProperty.
+  bool ReadBool() const override;
+
+ private:
+  bool value_ = false;
+};
+
 }  // namespace jpr

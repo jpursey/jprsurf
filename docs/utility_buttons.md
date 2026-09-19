@@ -13,6 +13,8 @@ toggle.
 | Cancel | Unselect all items   | Remove time selection and loop points        |
 | Enter  | Insert new MIDI item | Insert empty item                            |
 
+The Undo button is lit while there is anything to redo.
+
 The Solo LED (lit while any track is soloed) keeps its current behavior.
 
 ## Design
@@ -41,6 +43,14 @@ Mappings, all in the root view with the other global XTouch mappings:
   one of the two commands.
 - There are no long presses. A long press on Cancel that both unselected items
   and removed the time selection ran two commands, leaving two undo points.
+
+The Undo LED comes from a new read-only toggle, `CanRedoProperty`
+(`kCanRedo`), in `scene/reaper_property.h`. It is a `SceneStateProperty`, like
+`AnyTrackSoloProperty`, whose `UpdateState()` checks
+`Undo_CanRedo2(nullptr) != nullptr` each run and notifies when it changes.
+Writes are ignored. REAPER has no control surface notification for undo history
+changes, so it is polled; `Undo_CanRedo2` only returns a string REAPER already
+has, so this should be cheap.
 
 `AnyTrackSoloProperty` stays as it is. It looks like it could be a
 `CommandToggleProperty` for "Track: Unsolo all tracks" (40340), but REAPER
@@ -89,3 +99,29 @@ Depends on: CL2.
   item selection.
 - Enter opens insert new MIDI item. Shift + Enter inserts an empty item.
 - Each press runs one command (check the undo history for a single entry).
+
+### CL4 [x] scene: CanRedoProperty
+
+Depends on: none.
+
+- `CanRedoProperty` and `kCanRedo` in `reaper_property.h`/`.cc`, created on
+  demand by `Scene::GetProperty()`.
+- Unused, so there is no visible change yet.
+
+**Verify**
+- Standard checks.
+- Covered by CL5.
+
+### CL5 [ ] plugin: Light Undo while there is anything to redo
+
+Depends on: CL4.
+
+- `kWriteControl` mapping from `kCanRedo` to the Undo button.
+
+**Verify**
+- Standard checks.
+- Undo is dark with nothing to redo. It lights after an Undo (from the surface
+  or REAPER), stays lit through further undos, and goes dark after redoing
+  everything or making a new edit.
+- It updates when switching project tabs.
+- Steady state `Run()` time doesn't regress.
