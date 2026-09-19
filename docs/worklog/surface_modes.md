@@ -73,8 +73,8 @@ root                      global mappings: modifiers (including mod_send_hold),
   button, volume, name, color, meter), plus select and the volume on the bottom
   scribble line.
 - Holding select, mute, solo, or rec arm anchors a range of tracks (see
-  `docs/ranged_track_actions.md`). These anchor mappings are only in Track
-  mode, not on the Send/Receive Info strip.
+  `docs/worklog/ranged_track_actions.md`). These anchor mappings are only in
+  Track mode, not on the Send/Receive Info strip.
 
 ### Holding Send
 
