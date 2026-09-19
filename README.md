@@ -5,6 +5,9 @@ The Jovian Path Reaper control surface Plugin
 This currently supports Windows only and the X-Touch Universal and X-Touch
 Extender control surfaces via the MCU and Behringer XCTL protocols.
 
+**[Read the User Guide](docs/user_guide.md)** for how to install JPRSurf in
+REAPER, and what every control on the surface does.
+
 ## Building the code
 
 The JPRSurf project is built using [GameBits](https://github.com/jpursey/game-bits) and the [Reaper SDK](https://github.com/justinfrankel/reaper-sdk). In order to build any JPRSurf code, you must have the following set up:
