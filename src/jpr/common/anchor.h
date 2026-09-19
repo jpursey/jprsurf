@@ -59,9 +59,10 @@ class AnchorHold final {
 // anchor and cleared when the hold is released. The first hold wins: holding an
 // anchor that is already held returns an empty hold.
 //
-// An anchor may optionally be given a modifier bit, which is on exactly while
-// the anchor is held. This keeps the modifier in sync with the anchor however
-// it is released or cleared.
+// A hold may optionally be given a modifier bit, which is on exactly while it
+// is held. This keeps the modifier in sync with the anchor however it is
+// released or cleared. The modifier belongs to the hold rather than the anchor,
+// so an anchor that outlives whoever allocated the modifier never keeps it.
 class AnchorBase {
  public:
   AnchorBase(const AnchorBase&) = delete;
@@ -73,19 +74,14 @@ class AnchorBase {
   // Clears the anchor, making its hold (if any) empty.
   void Clear();
 
-  // The modifier bit (or bits) that is on while the anchor is held, or zero for
-  // none. Changing it while held turns off the old modifier and turns on the
-  // new one.
-  Modifiers GetModifier() const { return modifier_; }
-  void SetModifier(Modifiers modifier);
-
  protected:
   AnchorBase() = default;
   ~AnchorBase() { Clear(); }
 
-  // Holds the anchor on the object, or returns an empty hold if the object is
-  // null or the anchor is already held.
-  AnchorHold DoHold(void* object);
+  // Holds the anchor on the object, turning on the modifier bit (or bits) until
+  // it is released. Returns an empty hold if the object is null or the anchor
+  // is already held.
+  AnchorHold DoHold(void* object, Modifiers modifier);
 
   // Returns the held object, or null if the anchor is not held.
   void* DoGet() const { return held_; }
@@ -95,7 +91,7 @@ class AnchorBase {
 
   void* held_ = nullptr;
   AnchorHold* hold_ = nullptr;  // Non-null exactly when held_ is non-null.
-  Modifiers modifier_ = 0;
+  Modifiers modifier_ = 0;      // The hold's modifier, zero when not held.
 };
 
 //==============================================================================
@@ -112,9 +108,12 @@ class Anchor final : public AnchorBase {
   Anchor() = default;
   ~Anchor() = default;
 
-  // Holds the anchor on the object, or returns an empty hold if the object is
-  // null or the anchor is already held.
-  AnchorHold Hold(T* object) { return DoHold(object); }
+  // Holds the anchor on the object, turning on the modifier bit (or bits), if
+  // any, until it is released. Returns an empty hold if the object is null or
+  // the anchor is already held.
+  AnchorHold Hold(T* object, Modifiers modifier = 0) {
+    return DoHold(object, modifier);
+  }
 
   // Returns the held object, or null if the anchor is not held.
   T* Get() const { return static_cast<T*>(DoGet()); }

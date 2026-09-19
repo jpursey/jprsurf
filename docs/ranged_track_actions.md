@@ -85,9 +85,12 @@ A generic RAII anchor, not specific to tracks:
   (or destroying the slot) empties the hold, so a hold never refers to a slot it
   no longer holds, and they may be destroyed in any order. Clearing is how an
   anchor on a deleted track is dropped.
-- A slot may optionally be given a modifier bit that is on exactly while the
-  slot is held. This keeps the modifier in sync with the anchor in every case
-  (release, clear, destruction) without any caller having to remember it.
+- A hold may optionally be given a modifier bit (`Hold(object, modifier)`) that
+  is on exactly while it is held. This keeps the modifier in sync with the
+  anchor in every case (release, clear, destruction) without any caller having
+  to remember it. The modifier belongs to the hold rather than the slot, as the
+  slots are global (in `TrackCache`) but modifier bits are allocated by a
+  surface's scene, and the hold lives no longer than the view that owns it.
 
 `TrackCache` owns one `Anchor<Track>` per `TrackAnchor` (`kSelect`, `kMute`,
 `kSolo`, `kRecArm`), and clears a track's anchors when it is removed, the same as
@@ -105,7 +108,7 @@ anchors or why:
 - `SetAnchor(AnchorHold)` replaces (and so releases) any anchor the view already
   holds. Only one anchor is needed at a time, so starting an anchor of another
   type replaces the last one.
-- `ReleaseAnchor(const AnchorBase&)` releases the view's anchor only if it is
+- `ReleaseAnchor(const AnchorBase*)` releases the view's anchor only if it is
   held on that slot. That way releasing a button whose anchor was already
   replaced does not release the anchor that replaced it.
 - The view releases its anchor whenever its context actually changes (track or
@@ -137,7 +140,7 @@ track that was left, sharing code with `kParentTrackParent`.
   - Long press: `kUiSelected` (normal select behavior) and
     `anchor_select_<n>` with `press_release`.
   - `kUiSelected` requiring the `mod_select_anchor` modifier (set by the select
-    anchor slot). This puts other select buttons in a press group without a
+    anchor's hold). This puts other select buttons in a press group without a
     double press while an anchor is held, so the ranged press acts immediately
     rather than after release, and cannot become a double press into a folder.
     This is the same approach as holding Send.
@@ -226,7 +229,7 @@ Depends on: CL5.
 **Verify**
 - Standard checks, including Shift ranges (with and without Ctrl) for select,
   mute, solo, rec arm, which are unchanged.
-- Covered by CL10.
+- Covered by CL11.
 
 ### CL7 [x] common: Batch REAPER's UI refresh in multi-track Track actions
 
@@ -265,7 +268,7 @@ Depends on: CL4.
 **Verify**
 - Standard checks, including Send/Receive mode (scrolling routes, toggling
   sends and receives, and navigating across a route).
-- Covered by CL10.
+- Covered by CL11.
 
 ### CL9 [x] scene: CallbackToggleProperty
 
@@ -276,14 +279,29 @@ Depends on: none.
 
 **Verify**
 - Standard checks.
-- Covered by CL10.
+- Covered by CL11.
 
-### CL10 [ ] plugin: Hold to act on a range of tracks
+### CL10 [x] common: Anchor modifier belongs to the hold
 
-Depends on: CL2, CL3, CL6, CL7, CL8, CL9.
+Depends on: CL4.
+
+- `Anchor<T>::Hold(T*, Modifiers modifier = 0)` turns the modifier on while the
+  hold is held, replacing `AnchorBase::SetModifier()`/`GetModifier()` on the
+  slot. A global slot no longer keeps a modifier bit from a surface that may be
+  gone.
+- Update the anchor unit tests.
+
+**Verify**
+- Standard checks.
+- `jpr_common_test` passes.
+- Covered by CL11.
+
+### CL11 [ ] plugin: Hold to act on a range of tracks
+
+Depends on: CL2, CL3, CL6, CL7, CL8, CL9, CL10.
 
 - `anchor_<action>_<n>` properties and mappings for select, mute, solo, rec
-  arm, and the `mod_select_anchor` modifier for the select anchor slot.
+  arm, and the `mod_select_anchor` modifier for the select anchor's hold.
 - Update the README changelog.
 
 **Verify**

@@ -92,8 +92,7 @@ TEST_F(AnchorTest, DestroyAnchorEmptiesHold) {
   AnchorHold hold;
   {
     Anchor<int> anchor;
-    anchor.SetModifier(kAnchorModifier);
-    hold = anchor.Hold(&a_);
+    hold = anchor.Hold(&a_, kAnchorModifier);
     EXPECT_TRUE(hold.IsHeld());
   }
   EXPECT_FALSE(hold.IsHeld());
@@ -140,15 +139,12 @@ TEST_F(AnchorTest, MoveAssignReleasesPrevious) {
 
 TEST_F(AnchorTest, ModifierOnWhileHeld) {
   Anchor<int> anchor;
-  anchor.SetModifier(kAnchorModifier);
-  EXPECT_TRUE(AreModifiersOff(kAnchorModifier));
-
-  AnchorHold hold = anchor.Hold(&a_);
+  AnchorHold hold = anchor.Hold(&a_, kAnchorModifier);
   EXPECT_TRUE(AreModifiersOn(kAnchorModifier));
   hold.Reset();
   EXPECT_TRUE(AreModifiersOff(kAnchorModifier));
 
-  hold = anchor.Hold(&a_);
+  hold = anchor.Hold(&a_, kAnchorModifier);
   EXPECT_TRUE(AreModifiersOn(kAnchorModifier));
   anchor.Clear();
   EXPECT_TRUE(AreModifiersOff(kAnchorModifier));
@@ -156,21 +152,25 @@ TEST_F(AnchorTest, ModifierOnWhileHeld) {
 
 TEST_F(AnchorTest, ModifierNotAffectedByEmptyHold) {
   Anchor<int> anchor;
-  anchor.SetModifier(kAnchorModifier);
-  AnchorHold hold_a = anchor.Hold(&a_);
-  AnchorHold hold_b = anchor.Hold(&b_);
+  AnchorHold hold_a = anchor.Hold(&a_, kAnchorModifier);
+  AnchorHold hold_b = anchor.Hold(&b_, kOtherModifier);
+  EXPECT_TRUE(AreModifiersOff(kOtherModifier));
   hold_b.Reset();
   EXPECT_TRUE(AreModifiersOn(kAnchorModifier));
 }
 
-TEST_F(AnchorTest, ChangeModifierWhileHeld) {
+TEST_F(AnchorTest, ModifierBelongsToHold) {
   Anchor<int> anchor;
-  anchor.SetModifier(kAnchorModifier);
-  AnchorHold hold = anchor.Hold(&a_);
-  anchor.SetModifier(kOtherModifier);
+  AnchorHold hold = anchor.Hold(&a_, kAnchorModifier);
+  hold.Reset();
+
+  hold = anchor.Hold(&a_);
+  EXPECT_TRUE(AreModifiersOff(kAnchorModifier));
+  hold.Reset();
+
+  hold = anchor.Hold(&a_, kOtherModifier);
   EXPECT_TRUE(AreModifiersOff(kAnchorModifier));
   EXPECT_TRUE(AreModifiersOn(kOtherModifier));
-
   hold.Reset();
   EXPECT_TRUE(AreModifiersOff(kOtherModifier));
 }

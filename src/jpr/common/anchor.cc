@@ -52,22 +52,15 @@ void AnchorBase::Clear() {
   hold_->anchor_ = nullptr;
   hold_ = nullptr;
   held_ = nullptr;
-  SetModifiers(modifier_, false);
+  SetModifiers(std::exchange(modifier_, 0), false);
 }
 
-void AnchorBase::SetModifier(Modifiers modifier) {
-  if (held_ != nullptr) {
-    SetModifiers(modifier_, false);
-    SetModifiers(modifier, true);
-  }
-  modifier_ = modifier;
-}
-
-AnchorHold AnchorBase::DoHold(void* object) {
+AnchorHold AnchorBase::DoHold(void* object, Modifiers modifier) {
   if (object == nullptr || held_ != nullptr) {
     return {};
   }
   held_ = object;
+  modifier_ = modifier;
   SetModifiers(modifier_, true);
   return AnchorHold(this);
 }
