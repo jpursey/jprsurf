@@ -112,7 +112,7 @@ Depends on: none.
 - Standard checks.
 - Covered by CL5.
 
-### CL5 [ ] plugin: Light Undo while there is anything to redo
+### CL5 [x] plugin: Light Undo while there is anything to redo
 
 Depends on: CL4.
 

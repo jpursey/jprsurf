@@ -844,6 +844,7 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, undo);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, undo,
                           {.read = {.required_modifiers = kModShift}});
+    root_view->AddMapping(ViewMapping::kWriteControl, kCanRedo, undo);
     const std::string save = absl::StrCat("XTouch/", DeviceXTouch::kSave);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, save);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
