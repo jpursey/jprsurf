@@ -139,6 +139,9 @@ inline constexpr std::string_view kStateCanRedo = kStateName<1>;
 // "undo/prompt to save" is disabled in REAPER's preferences.
 inline constexpr std::string_view kStateProjectDirty = kStateName<2>;
 
+// True while any media items are selected in the current project.
+inline constexpr std::string_view kStateAnyItemSelected = kStateName<3>;
+
 // This read-only property represents REAPER state that is read with a function,
 // and polled each run. It can be mapped to control outputs that represent a
 // binary value.

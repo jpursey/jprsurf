@@ -56,6 +56,8 @@ constexpr PolledToggle kPolledToggles[] = {
     {kStateAnyTrackSolo, [] { return AnyTrackSolo(nullptr); }},
     {kStateCanRedo, [] { return Undo_CanRedo2(nullptr) != nullptr; }},
     {kStateProjectDirty, [] { return IsProjectDirty(nullptr) != 0; }},
+    {kStateAnyItemSelected,
+     [] { return CountSelectedMediaItems(nullptr) > 0; }},
 };
 
 // Returns true if every row in kPolledToggles is named kStateName<index> for

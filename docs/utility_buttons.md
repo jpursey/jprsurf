@@ -26,6 +26,10 @@ In Track mode, the Global button is lit while the track list is below the top
 level, so Global (up one level) or holding it (to the top) would do something.
 It is off at the top level and in Send/Receive mode.
 
+The Cancel button is lit while any media items are selected, so a press of
+Cancel (unselect all items) would clear something. Shift + Cancel (remove time
+selection and loop points) doesn't affect it.
+
 ## Design
 
 All of these are plain REAPER commands, so they are `kCmd*` constants in
@@ -118,14 +122,33 @@ order or a mistyped index fails the build. The only mistake it can't catch is a
 name constant with no row, which fails gracefully at runtime (the property is
 not found). Adding a polled toggle only touches `reaper_property.h` and `.cc`:
 
-| Property             | Read function                       | Used by  |
-| -------------------- | ----------------------------------- | -------- |
-| `kStateAnyTrackSolo` | `AnyTrackSolo(nullptr)`             | Solo LED |
-| `kStateCanRedo`      | `Undo_CanRedo2(nullptr) != nullptr` | Undo LED |
-| `kStateProjectDirty` | `IsProjectDirty(nullptr) != 0`      | Save LED |
+| Property                | Read function                          | Used by    |
+| ----------------------- | -------------------------------------- | ---------- |
+| `kStateAnyTrackSolo`    | `AnyTrackSolo(nullptr)`                | Solo LED   |
+| `kStateCanRedo`         | `Undo_CanRedo2(nullptr) != nullptr`    | Undo LED   |
+| `kStateProjectDirty`    | `IsProjectDirty(nullptr) != 0`         | Save LED   |
+| `kStateAnyItemSelected` | `CountSelectedMediaItems(nullptr) > 0` | Cancel LED |
 
-Each read function only returns state REAPER already has, so polling should be
-cheap.
+The first three only return state REAPER already has, so polling them is cheap
+(the steady state `Run()` average stayed around 22us with all three).
+`CountSelectedMediaItems()` walks every item in the project, and REAPER has no
+control surface notification for item selection changes, so it is the one
+polled read whose cost grows with the project. Measured in a large, real
+project (103 tracks, hundreds of items), it adds a steady ~10us to the `Run()`
+average (74-76us to 85-86us), the same with no items, a few, or all of them
+selected. That is ~1.6ms of UI thread time a second, and was accepted as is.
+
+If polled reads become a problem (from this one, or a future one), the options
+are, in order:
+1. Throttle: give each `kPolledToggles` row a poll interval in runs, and have
+   `PolledToggleProperty::UpdateState()` only read on every Nth run. Polling
+   `kStateAnyItemSelected` every 4th run would cut its cost to ~2-3us, with the
+   light lagging by up to ~130ms, which is fine for an indicator.
+2. Gate polled reads on `GetProjectStateChangeCount(nullptr)`, which REAPER
+   increments whenever the project changes, and only re-read when it moves.
+   This could be a single switch for every polled state (and command toggle
+   state) that can use it. It isn't the first choice, as whether a selection
+   change bumps the count depends on the user's undo preferences.
 
 `kStateCanRedo` started as its own `CanRedoProperty` (CL4), and
 `kStateAnyTrackSolo` as `AnyTrackSoloProperty`, which were the same code apart
@@ -322,3 +345,46 @@ Depends on: CL12.
   wherever the track list ends up.
 - In Send/Receive mode it is off, and it comes back when returning to Track
   mode.
+
+### CL14 [x] scene: kStateAnyItemSelected
+
+Depends on: CL8.
+
+- `kStateAnyItemSelected` (`kStateName<3>`) and its `kPolledToggles` row
+  reading `CountSelectedMediaItems(nullptr) > 0`.
+- Unused, so there is no visible change yet, but it is polled once CL15 maps
+  it, so it is measured with CL15.
+
+**Verify**
+- Standard checks.
+- Performance, in a large, real project (many tracks and items):
+  - Baseline: the `Run()` avg and max with the build before this CL (CL13),
+    with no items selected, and with some selected.
+  - With CL14 and CL15: the same measurements. No items selected is the worst
+    case, if counting scans every item.
+  - If the steady state avg rises noticeably, fall back to the plan in Polled
+    REAPER state before committing.
+
+**Results** (103 tracks, hundreds of items)
+- Baseline (CL13): `Run()` avg 73-79us (usually 74-76us), max per 5s window
+  107-262us.
+- CL14 and CL15: avg 82-89us (usually 85-86us), max 121-227us, the same with
+  no items, a few, or all of them selected. ~10us more per run, accepted.
+- Windows with REAPER out of focus drop to ~40us avg in either build.
+- Spikes are REAPER running the commands: unselect all items (Cancel) ~14-17ms,
+  remove time selection and loop points (Shift + Cancel) ~85ms even with
+  nothing to remove, undo up to ~1.3s and save ~1s in this project.
+
+### CL15 [ ] plugin: Light Cancel while items are selected
+
+Depends on: CL14.
+
+- `kWriteControl` mapping from `kStateAnyItemSelected` to the Cancel button.
+
+**Verify**
+- Standard checks.
+- Cancel is off with no items selected, and lit with one or more selected
+  (selected on the surface, e.g. Enter to insert an item, or in REAPER).
+- Pressing Cancel unselects the items and turns it off. Shift + Cancel leaves
+  it as is.
+- It follows the project when switching project tabs.
