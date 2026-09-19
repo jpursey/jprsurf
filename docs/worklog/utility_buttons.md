@@ -10,13 +10,13 @@ state that has to be polled shares one read-only property type.
 
 ### Buttons
 
-| Button | Press                | Shift + press                         | Hold        |
-| ------ | -------------------- | ------------------------------------- | ----------- |
-| Undo   | Undo                 | Redo                                  |             |
-| Save   | Save project         | Save new version of project           |             |
-| Cancel | Unselect all items   | Remove time selection and loop points |             |
-| Enter  | Insert new MIDI item | Insert empty item                     |             |
-| Solo   | Toggle solo in front |                                       | Solo defeat |
+| Button | Press                | Shift + press                         | Ctrl + press        | Hold        |
+| ------ | -------------------- | ------------------------------------- | ------------------- | ----------- |
+| Undo   | Undo                 | Redo                                  |                     |             |
+| Save   | Save project         | Save new version of project           |                     |             |
+| Cancel | Unselect all items   | Remove time selection and loop points |                     |             |
+| Enter  | Insert new MIDI item | Insert empty item                     | Insert click source |             |
+| Solo   | Toggle solo in front |                                       |                     | Solo defeat |
 
 - Each press runs exactly one REAPER command, so it adds at most one undo point.
   The utility buttons have no long press. An earlier long press on Cancel that
@@ -61,6 +61,7 @@ and a `CommandActionProperty` otherwise. The commands added here:
 | `kCmdRemoveTimeSelection`   | 40020 | Time selection: Remove time selection and loop points      |
 | `kCmdInsertMidiItem`        | 40214 | Insert new MIDI item...                                    |
 | `kCmdInsertEmptyItem`       | 40142 | Insert empty item                                          |
+| `kCmdInsertClickSource`     | 40013 | Insert click source                                        |
 | `kCmdSoloDefeat`            | 40340 | Track: Unsolo all tracks                                   |
 
 ### scene: polled state (reaper_property.h/.cc)

@@ -862,6 +862,8 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem, enter);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem, enter,
                           {.read = {.required_modifiers = kModShift}});
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
+                          enter, {.read = {.required_modifiers = kModCtrl}});
 
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,

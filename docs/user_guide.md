@@ -213,12 +213,12 @@ mode. It is never re-purposed.
 
 ### Utility buttons
 
-| Button     | Short press          | Shift + short press                   | Lit when                    |
-| ---------- | -------------------- | ------------------------------------- | --------------------------- |
-| **Undo**   | Undo                 | Redo                                  | There is something to redo  |
-| **Save**   | Save project         | Save a new version of the project     | Blinking: unsaved changes   |
-| **Cancel** | Unselect all items   | Remove time selection and loop points | Any media items are selected |
-| **Enter**  | Insert new MIDI item | Insert empty item                     |                             |
+| Button     | Short press          | Shift + press                         | Ctrl + press        | Lit when                     |
+| ---------- | -------------------- | ------------------------------------- | ------------------- | ---------------------------- |
+| **Undo**   | Undo                 | Redo                                  |                     | There is something to redo   |
+| **Save**   | Save project         | Save a new version of the project     |                     | Blinking: unsaved changes    |
+| **Cancel** | Unselect all items   | Remove time selection and loop points |                     | Any media items are selected |
+| **Enter**  | Insert new MIDI item | Insert empty item                     | Insert click source |                              |
 
 The Cancel light follows the item selection only, which is what a plain press
 clears. Shift + Cancel doesn't affect it.
@@ -254,14 +254,14 @@ with **no track** has its ring completely off.
 
 ### Select
 
-| Action              | Result                                                          |
-| ------------------- | --------------------------------------------------------------- |
-| Short press         | Select only this track (or unselect it, if it was the only one) |
-| Double press        | Navigate into this track, if it is a folder                     |
-| Long press          | Select the track, and anchor it for a range (see below)         |
-| Ctrl + short press  | Add or remove this track from the selection                     |
-| Shift + short press | Select the range from the last track you touched                |
-| Shift + Ctrl        | The same, but crossing folder boundaries                        |
+| Action               | Result                                                          |
+| -------------------- | --------------------------------------------------------------- |
+| Short press          | Select only this track (or unselect it, if it was the only one) |
+| Double press         | Navigate into this track, if it is a folder                     |
+| Long press           | Select the track, and anchor it for a range (see below)         |
+| Ctrl + press         | Add or remove this track from the selection                     |
+| Shift +  press       | Select the range from the last track you touched                |
+| Shift + Ctrl + press | The same, but crossing folder boundaries                        |
 
 A plain Shift range only covers tracks with the same parent as the starting
 track. This differs from REAPER's default, and is usually what you want on a
@@ -421,25 +421,25 @@ other, it does nothing.
 
 ### Global buttons
 
-| Button          | Short press            | Shift + short press   | Long press                    |
-| --------------- | ---------------------- | --------------------- | ----------------------------- |
-| Undo            | Undo                   | Redo                  |                               |
-| Save            | Save                   | Save new version      |                               |
-| Cancel          | Unselect all items     | Remove time selection |                               |
-| Enter           | Insert MIDI item       | Insert empty item     |                               |
-| Rewind          | Previous measure       |                       |                               |
-| Forward         | Next measure           |                       |                               |
-| Nudge           | Toggle moving by beat  |                       |                               |
-| Marker          | Toggle moving by marker |                      |                               |
-| Stop            | Stop                   |                       |                               |
-| Play            | Play / pause           |                       |                               |
-| Record          | Start or stop recording |                      |                               |
-| Cycle           | Toggle repeat          |                       |                               |
-| Click           | Toggle metronome       |                       |                               |
-| Solo            | Solo in front          |                       | Unsolo all tracks             |
-| SMPTE/Beats     | Cycle the ruler mode   |                       |                               |
-| Track           | Track mode             |                       |                               |
-| Send            | Send mode              |                       | Show routing on select lights |
+| Button      | Short press             | Shift + press         | Ctrl + press        | Long press                    |
+| ----------- | ----------------------- | --------------------- | ------------------- | ----------------------------- |
+| Undo        | Undo                    | Redo                  |                     |                               |
+| Save        | Save                    | Save new version      |                     |                               |
+| Cancel      | Unselect all items      | Remove time selection |                     |                               |
+| Enter       | Insert MIDI item        | Insert empty item     | Insert click source |                               |
+| Rewind      | Previous measure        |                       |                     |                               |
+| Forward     | Next measure            |                       |                     |                               |
+| Nudge       | Toggle moving by beat   |                       |                     |                               |
+| Marker      | Toggle moving by marker |                       |                     |                               |
+| Stop        | Stop                    |                       |                     |                               |
+| Play        | Play / pause            |                       |                     |                               |
+| Record      | Start or stop recording |                       |                     |                               |
+| Cycle       | Toggle repeat           |                       |                     |                               |
+| Click       | Toggle metronome        |                       |                     |                               |
+| Solo        | Solo in front           |                       |                     | Unsolo all tracks             |
+| SMPTE/Beats | Cycle the ruler mode    |                       |                     |                               |
+| Track       | Track mode              |                       |                     |                               |
+| Send        | Send mode               |                       |                     | Show routing on select lights |
 
 ### Channel strip, by mode
 

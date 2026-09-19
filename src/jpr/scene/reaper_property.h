@@ -61,6 +61,7 @@ inline constexpr std::string_view kCmdUnselectAllItems = kCmdName<40289>;
 inline constexpr std::string_view kCmdRemoveTimeSelection = kCmdName<40020>;
 inline constexpr std::string_view kCmdInsertMidiItem = kCmdName<40214>;
 inline constexpr std::string_view kCmdInsertEmptyItem = kCmdName<40142>;
+inline constexpr std::string_view kCmdInsertClickSource = kCmdName<40013>;
 inline constexpr std::string_view kCmdSoloDefeat = kCmdName<40340>;
 
 //==============================================================================
