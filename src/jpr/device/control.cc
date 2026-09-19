@@ -515,15 +515,7 @@ void Control::OnPressInputChangedWithRelease() {
     // press, identified by is_pressed state or pending state machine state.
     for (auto& group : press_groups_) {
       if (group.long_press_ids.empty() && group.double_press_ids.empty()) {
-        for (InputId id : group.normal_ids) {
-          auto it = registrations_.find(id);
-          if (it != registrations_.end()) {
-            if (it->second.is_pressed) {
-              it->second.is_pressed = false;
-              *it->second.flag = true;
-            }
-          }
-        }
+        ReleasePressed(group.normal_ids);
       } else if (group.state == PressGroup::State::kPendingLong ||
                  group.state == PressGroup::State::kPendingRelease) {
         if (!group.double_press_ids.empty() &&
@@ -534,6 +526,10 @@ void Control::OnPressInputChangedWithRelease() {
           DeliverNormalPress(group);
           group.state = PressGroup::State::kIdle;
         }
+      } else {
+        // A delivered long press leaves the group idle, but stays pressed until
+        // release.
+        ReleasePressed(group.long_press_ids);
       }
     }
   }
@@ -605,6 +601,7 @@ void Control::DeliverLongPress(PressGroup& group) {
     auto it = registrations_.find(id);
     if (it != registrations_.end()) {
       it->second.press_count++;
+      it->second.is_pressed = true;
       *it->second.flag = true;
     }
   }
@@ -615,6 +612,16 @@ void Control::DeliverDoublePress(PressGroup& group) {
     auto it = registrations_.find(id);
     if (it != registrations_.end()) {
       it->second.press_count++;
+      *it->second.flag = true;
+    }
+  }
+}
+
+void Control::ReleasePressed(const std::vector<InputId>& ids) {
+  for (InputId id : ids) {
+    auto it = registrations_.find(id);
+    if (it != registrations_.end() && it->second.is_pressed) {
+      it->second.is_pressed = false;
       *it->second.flag = true;
     }
   }

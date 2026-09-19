@@ -175,7 +175,7 @@ Depends on: CL1.
 - Holding select no longer navigates. Double press still goes into a folder.
   A single press still selects.
 
-### CL3 [ ] device: IsPressed for long press registrations
+### CL3 [x] device: IsPressed for long press registrations
 
 Depends on: none.
 
@@ -244,8 +244,9 @@ Depends on: CL2, CL3, CL5, CL6.
 - Select: hold one track's select (it becomes the only selected track), press
   another: exactly the range is selected. Works in both directions, across the
   X-Touch and extender, and with Shift/Ctrl/Alt/Option held (ignored). Press a
-  third track while still holding: the range is redone. Holding past 350ms then
-  releasing with no other press is the same as a single press.
+  third track while still holding: the range is redone. Holding past 350ms
+  selects the track at that point (the same as a single press), and releasing
+  with no other press leaves it that way.
 - Select timing: press the second button quickly and release both quickly: the
   range is selected, and not replaced by either track's own select. A double
   press of the second button while holding does not navigate.

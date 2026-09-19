@@ -221,6 +221,11 @@ class Control final {
   // Returns true if the Press input for the given registered input is currently
   // pressed, or false if the input ID is not valid or not a Press input, or it
   // is not currently pressed, or it does not support release signals.
+  //
+  // A long press input is pressed from when its long press is delivered until
+  // the button is released. A normal press input only reports pressed if no
+  // long press or double press input shares its modifiers, as otherwise its
+  // press is deferred.
   bool IsPressed(InputId id) const;
 
   //----------------------------------------------------------------------------
@@ -352,6 +357,7 @@ class Control final {
   void DeliverNormalPress(PressGroup& group);
   void DeliverLongPress(PressGroup& group);
   void DeliverDoublePress(PressGroup& group);
+  void ReleasePressed(const std::vector<InputId>& ids);
   bool HasRegistrations() const { return !registrations_.empty(); }
 
   // Constructed state.
