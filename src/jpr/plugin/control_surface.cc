@@ -870,8 +870,12 @@ void ControlSurface::InitViews() {
                           absl::StrCat("XTouch/", DeviceXTouch::kCycle));
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome,
                           absl::StrCat("XTouch/", DeviceXTouch::kClick));
+    const std::string solo = absl::StrCat("XTouch/", DeviceXTouch::kSolo);
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdSoloInFront,
-                          absl::StrCat("XTouch/", DeviceXTouch::kSolo));
+                          solo);
+    root_view->AddMapping(
+        ViewMapping::kReadControl, kCmdSoloDefeat, solo,
+        {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
 
     // Transport controls
     root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevMeasure,

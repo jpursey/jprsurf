@@ -259,7 +259,7 @@ Depends on: CL9.
 - Save blinks while the project has unsaved changes, and is off otherwise
   (same cases as CL9).
 
-### CL11 [ ] plugin: Hold Solo for solo defeat
+### CL11 [x] plugin: Hold Solo for solo defeat
 
 Depends on: CL7.
 
