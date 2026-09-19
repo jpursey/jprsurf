@@ -849,7 +849,8 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, save);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
                           save, {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty, save);
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty, save,
+                          {.write = {.mode = 1}});  // Blinking
     const std::string cancel = absl::StrCat("XTouch/", DeviceXTouch::kCancel);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
                           cancel);

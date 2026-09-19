@@ -13,11 +13,14 @@ polled each run shares one read-only property type.
 | Cancel | Unselect all items   | Remove time selection and loop points        |
 | Enter  | Insert new MIDI item | Insert empty item                            |
 
-The Undo button is lit while there is anything to redo. The Save button is lit
+The Undo button is lit while there is anything to redo. The Save button blinks
 while the project has unsaved changes (this needs "undo/prompt to save" enabled
 in REAPER's preferences, or REAPER never reports the project as dirty).
 
 The Solo LED (lit while any track is soloed) keeps its current behavior.
+
+The standalone Solo button (above the transport) still toggles solo in front
+when pressed, and holding it unsolos all tracks (solo defeat).
 
 ## Design
 
@@ -44,8 +47,15 @@ Mappings, all in the root view with the other global XTouch mappings:
 - Shift variants use `ReadConfig::required_modifiers = kModShift`. `Control`
   masks off shift for the unmodified registration, so each press runs exactly
   one of the two commands.
-- There are no long presses. A long press on Cancel that both unselected items
-  and removed the time selection ran two commands, leaving two undo points.
+- There are no long presses on the utility buttons. A long press on Cancel that
+  both unselected items and removed the time selection ran two commands,
+  leaving two undo points.
+- The Save light uses output mode 1 (blinking), from the MCU light modes in
+  `ControlDValueOutputMidiNote::McuLight()`, so unsaved changes stand out.
+- The standalone Solo button keeps its `kCmdSoloInFront` read/write mapping, and
+  adds a `kLongPress` read mapping to `kCmdSoloDefeat`. With a long press on the
+  button, a short press (solo in front) is delivered on release instead of
+  immediately, like other buttons with a long press.
 
 ### Compile time property names
 
@@ -99,11 +109,11 @@ cheap.
 
 `kStateCanRedo` started as its own `CanRedoProperty` (CL4), and
 `kStateAnyTrackSolo` as `AnyTrackSoloProperty`, which were the same code apart
-from the REAPER call.
-`AnyTrackSoloProperty` also unsoloed all tracks when written false, but nothing
-used that, and it doesn't belong on a state property. That action is now its own
-command, `kCmdSoloDefeat` ("solo defeat" is the usual name for it). It can't
-replace `kStateAnyTrackSolo`, as REAPER reports no toggle state for 40340.
+from the REAPER call. `AnyTrackSoloProperty` also unsoloed all tracks when
+written false, but nothing used that, and it doesn't belong on a state property.
+That action is now its own command, `kCmdSoloDefeat` ("solo defeat" is the usual
+name for it), mapped to holding the Solo button. It can't replace
+`kStateAnyTrackSolo`, as REAPER reports no toggle state for 40340.
 
 ## CLs
 
@@ -237,3 +247,28 @@ Depends on: CL8.
   bar.
 - It updates when switching project tabs.
 - Steady state `Run()` time doesn't regress.
+
+### CL10 [x] plugin: Blink Save while the project is dirty
+
+Depends on: CL9.
+
+- The `kStateProjectDirty` mapping to the Save button uses `.write.mode = 1`.
+
+**Verify**
+- Standard checks.
+- Save blinks while the project has unsaved changes, and is off otherwise
+  (same cases as CL9).
+
+### CL11 [ ] plugin: Hold Solo for solo defeat
+
+Depends on: CL7.
+
+- `kLongPress` mapping from the standalone Solo button to `kCmdSoloDefeat`.
+
+**Verify**
+- Standard checks.
+- A short press of Solo still toggles solo in front, and its light follows it.
+- Holding Solo unsolos every track (including from REAPER's own solos, and
+  tracks off the surface), and turns off the Solo LED. It doesn't toggle solo
+  in front.
+- Holding Solo with nothing soloed does nothing.
