@@ -6,6 +6,7 @@
 #pragma once
 
 #include <string_view>
+#include <utility>
 
 #include "absl/functional/any_invocable.h"
 #include "jpr/scene/view_property.h"
@@ -61,6 +62,37 @@ class CallbackActionProperty final : public ViewProperty {
  protected:
   // Overrides from ViewProperty.
   void TriggerAction() override { callback_(); }
+
+ private:
+  Callback callback_;
+};
+
+//==============================================================================
+// CallbackToggleProperty
+//==============================================================================
+
+// A toggle property that invokes a callback with each value written to it. It
+// holds no value, and always reads false.
+//
+// This is for mapping a control's press and release to code (for instance, with
+// a press_release mapping). The callback is called for every write, even if the
+// value is the same as the last one, so it should do nothing if the value is
+// already in effect.
+//
+// Like CallbackActionProperty, the callback runs while the scene is
+// synchronizing its views, so it must not enable, disable, or otherwise
+// restructure views directly.
+class CallbackToggleProperty final : public ViewProperty {
+ public:
+  using Callback = absl::AnyInvocable<void(bool)>;
+
+  CallbackToggleProperty(std::string_view name, Callback callback)
+      : ViewProperty(name, Type::kToggle), callback_(std::move(callback)) {}
+  ~CallbackToggleProperty() override = default;
+
+ protected:
+  // Overrides from ViewProperty.
+  void WriteBool(bool value) override { callback_(value); }
 
  private:
   Callback callback_;

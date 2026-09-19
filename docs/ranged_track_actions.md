@@ -267,7 +267,7 @@ Depends on: CL4.
   sends and receives, and navigating across a route).
 - Covered by CL10.
 
-### CL9 [ ] scene: CallbackToggleProperty
+### CL9 [x] scene: CallbackToggleProperty
 
 Depends on: none.
 
