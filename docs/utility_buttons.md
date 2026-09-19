@@ -375,7 +375,7 @@ Depends on: CL8.
   remove time selection and loop points (Shift + Cancel) ~85ms even with
   nothing to remove, undo up to ~1.3s and save ~1s in this project.
 
-### CL15 [ ] plugin: Light Cancel while items are selected
+### CL15 [x] plugin: Light Cancel while items are selected
 
 Depends on: CL14.
 

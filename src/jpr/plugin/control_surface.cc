@@ -854,6 +854,8 @@ void ControlSurface::InitViews() {
     const std::string cancel = absl::StrCat("XTouch/", DeviceXTouch::kCancel);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
                           cancel);
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyItemSelected,
+                          cancel);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdRemoveTimeSelection,
                           cancel, {.read = {.required_modifiers = kModShift}});
     const std::string enter = absl::StrCat("XTouch/", DeviceXTouch::kEnter);
