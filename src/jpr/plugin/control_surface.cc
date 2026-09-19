@@ -860,10 +860,10 @@ void ControlSurface::InitViews() {
     for (int i = 0; i < 8; ++i) {
       View* track_view = track_list_view_->AddChildView(
           absl::StrCat("Track", ++child_view_index));
-      // Select, double press, and long press navigate the track hierarchy.
-      // While Send is held, pressing select instead picks the track for
-      // Send/Receive mode. This uses required modifiers rather than a
-      // condition, so holding Send never resets a pending press.
+      // Select selects the track, and double press navigates into it. While
+      // Send is held, pressing select instead picks the track for Send/Receive
+      // mode. This uses required modifiers rather than a condition, so holding
+      // Send never resets a pending press.
       const std::string select =
           absl::StrCat(device_prefix, DeviceXTouch::Select(i));
       track_view->AddMapping(ViewMapping::kReadControl,
@@ -872,9 +872,6 @@ void ControlSurface::InitViews() {
           ViewMapping::kReadControl, View::kParentTrackChild, select,
           {.read = {.press_behavior =
                         InputConfig::PressBehavior::kDoublePress}});
-      track_view->AddMapping(
-          ViewMapping::kReadControl, View::kParentTrackParent, select,
-          {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
       const std::string pick_name =
           absl::StrCat("pick_send_receive_track_", child_view_index);
       scene_->AddProperty(std::make_unique<CallbackActionProperty>(
@@ -908,9 +905,14 @@ void ControlSurface::InitViews() {
   }
   track_list_view_->SetChildContext(View::ChildContextType::kTrack);
   if (has_xtouch) {
+    // Global navigates up one level, or all the way to the root when held.
+    track_list_view_->AddMapping(
+        ViewMapping::kReadControl, View::kTrackParent,
+        absl::StrCat("XTouch/", DeviceXTouch::kGlobal));
     track_list_view_->AddMapping(
         ViewMapping::kReadControl, View::kTrackRoot,
-        absl::StrCat("XTouch/", DeviceXTouch::kGlobal));
+        absl::StrCat("XTouch/", DeviceXTouch::kGlobal),
+        {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
     track_list_view_->AddMapping(
         ViewMapping::kReadControl, View::kChildDec,
         absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));

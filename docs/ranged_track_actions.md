@@ -158,13 +158,12 @@ Depends on: none.
   errors, smoke test).
 - Covered by CL2.
 
-### CL2 [ ] plugin: Global goes up one level, long press to root
+### CL2 [x] plugin: Global goes up one level, long press to root
 
 Depends on: CL1.
 
 - Global: `kTrackParent` on press, `kTrackRoot` on long press.
 - Remove the select long press to `kParentTrackParent`.
-- Update the README changelog.
 
 **Verify**
 - Standard checks.
