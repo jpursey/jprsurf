@@ -96,6 +96,12 @@ class CommandToggleProperty final : public SceneStateProperty {
 
 inline constexpr std::string_view kAnyTrackSolo = "any_track_solo";
 
+// This property is true while any track is soloed, and writing false unsolos
+// all tracks.
+//
+// This can't be a CommandToggleProperty for "Track: Unsolo all tracks" (40340),
+// as REAPER reports no toggle state for that command. The state must be read
+// with the SDK AnyTrackSolo() function instead.
 class AnyTrackSoloProperty final : public SceneStateProperty {
  public:
   explicit AnyTrackSoloProperty(Scene* scene)
