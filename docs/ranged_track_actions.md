@@ -296,13 +296,12 @@ Depends on: CL4.
 - `jpr_common_test` passes.
 - Covered by CL11.
 
-### CL11 [ ] plugin: Hold to act on a range of tracks
+### CL11 [x] plugin: Hold to act on a range of tracks
 
 Depends on: CL2, CL3, CL6, CL7, CL8, CL9, CL10.
 
 - `anchor_<action>_<n>` properties and mappings for select, mute, solo, rec
   arm, and the `mod_select_anchor` modifier for the select anchor's hold.
-- Update the README changelog.
 
 **Verify**
 - Standard checks.

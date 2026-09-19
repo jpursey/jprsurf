@@ -51,6 +51,10 @@ constexpr int kInfoStrip = 7;
 // The modifier property that is on while the Send/Receive mode button is held.
 constexpr std::string_view kSendHold = "mod_send_hold";
 
+// The modifier property that is on while a select button is held as the anchor
+// for a range of tracks.
+constexpr std::string_view kSelectAnchor = "mod_select_anchor";
+
 // The Send/Receive mode button only acts when released if it was pressed for
 // less than this. Holding it longer only shows which tracks have routes. This
 // matches the long press duration of controls.
@@ -97,6 +101,38 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
       absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(strip)));
   view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kMeter,
                    absl::StrCat(device_prefix, DeviceXTouch::Meter(strip)));
+}
+
+// Adds a property (anchor_<action>_<strip_index>) that anchors the view's track
+// for a ranged track action while the control is held, and maps it to the
+// control. Pressing the same control on another strip then acts on the range
+// from the anchor (see Track). The anchor is released when the control is
+// released, or when the view releases it (see View::SetAnchor()). The modifier,
+// if any, is on while the anchor is held.
+void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
+                           TrackAnchor type, std::string_view action,
+                           std::string_view control,
+                           InputConfig::PressBehavior press_behavior =
+                               InputConfig::PressBehavior::kNormal,
+                           Modifiers modifier = 0) {
+  const std::string name = absl::StrCat("anchor_", action, "_", strip_index);
+  scene->AddProperty(std::make_unique<CallbackToggleProperty>(
+      name, [view, type, modifier](bool pressed) {
+        Anchor<Track>& anchor = TrackCache::Get().GetAnchor(type);
+        if (!pressed) {
+          view->ReleaseAnchor(&anchor);
+          return;
+        }
+        // An empty strip has no place in a range.
+        Track* track = view->GetTrack();
+        if (!track->Exists()) {
+          return;
+        }
+        view->SetAnchor(anchor.Hold(track, modifier));
+      }));
+  view->AddMapping(
+      ViewMapping::kReadControl, name, control,
+      {.read = {.press_behavior = press_behavior, .press_release = true}});
 }
 
 }  // namespace
@@ -848,6 +884,11 @@ void ControlSurface::InitViews() {
   // mode.
   track_mode_view_ = root_view->AddChildView("TrackMode");
 
+  // On while a track's select button is held as the anchor for a range.
+  const Modifiers select_anchor_modifier =
+      scene_->AddModifierProperty(kSelectAnchor);
+  CHECK(select_anchor_modifier != 0);
+
   // Add TrackList view with 8 track views, which will correspond to the 8
   // tracks on the X-Touch.
   track_list_view_ = track_mode_view_->AddChildView("TrackList");
@@ -872,6 +913,22 @@ void ControlSurface::InitViews() {
           ViewMapping::kReadControl, View::kParentTrackChild, select,
           {.read = {.press_behavior =
                         InputConfig::PressBehavior::kDoublePress}});
+
+      // Holding select (a long press) selects the track and anchors it, so
+      // pressing another track's select selects the range between them. The
+      // select anchor turns on a modifier, which puts the other select
+      // buttons in a group with no double press, so the range is selected as
+      // soon as they are pressed.
+      track_view->AddMapping(
+          ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
+          {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
+                            TrackAnchor::kSelect, "select", select,
+                            InputConfig::PressBehavior::kLongPress,
+                            select_anchor_modifier);
+      track_view->AddMapping(
+          ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
+          {.read = {.required_modifiers = select_anchor_modifier}});
       const std::string pick_name =
           absl::StrCat("pick_send_receive_track_", child_view_index);
       scene_->AddProperty(std::make_unique<CallbackActionProperty>(
@@ -897,6 +954,19 @@ void ControlSurface::InitViews() {
           {.condition = ViewMapping::Condition{
                .property = std::string(kSendHold), .value = true}});
       AddTrackStripMappings(track_view, device_prefix, i);
+
+      // Holding mute, solo, or record arm anchors the track, so pressing the
+      // same button on another track sets the range between them to the held
+      // track's value.
+      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
+                            TrackAnchor::kMute, "mute",
+                            absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
+      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
+                            TrackAnchor::kSolo, "solo",
+                            absl::StrCat(device_prefix, DeviceXTouch::Solo(i)));
+      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
+                            TrackAnchor::kRecArm, "rec_arm",
+                            absl::StrCat(device_prefix, DeviceXTouch::Rec(i)));
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiVolume,
           absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)));
