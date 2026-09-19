@@ -148,7 +148,7 @@ Side sessions run in their own git worktree, for work that can be verified witho
 - The side task's prompt names the main session to message back, by its name and reference as ListAgents shows it (such as `XTouch utility buttons [0eff92]`). Message exactly that session. If the prompt names none, or that session isn't reachable, tell the user instead of picking another session.
 - If a change turns out to need testing in REAPER, say so and hand it back to the main session rather than deploying it.
 
-When the main session suggests a side task, its prompt should be self-contained and include these instructions, along with the main session's own name and reference (ListAgents reports it as "This session is ...").
+When the main session starts a side task, whether by spawning it directly or by suggesting one the user can start later, **call ListAgents first**, before writing the prompt. Its first line gives this session's own name and reference ("This session is `<name> [<hash>]`"), which cannot be worked out any other way and is different in every session. The prompt must be self-contained, and must include these instructions along with that name and reference, so the side session knows who to report back to. A prompt written without it strands the side session, which then has to ask the user who to message.
 
 ## Resources
 
