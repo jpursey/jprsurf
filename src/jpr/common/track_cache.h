@@ -10,10 +10,25 @@
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "jpr/common/anchor.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/track.h"
 
 namespace jpr {
+
+// Track actions that each have their own anchor in the TrackCache. While an
+// action's anchor is held on a track, that action on another track acts on the
+// range of tracks between them.
+enum class TrackAnchor {
+  kSelect,
+  kMute,
+  kSolo,
+  kRecArm,
+};
+
+// The number of TrackAnchor values. TrackAnchor values are contiguous starting
+// at zero.
+inline constexpr int kTrackAnchorCount = 4;
 
 // This singleton class maintains the cached state for all tracks in REAPER.
 //
@@ -82,6 +97,12 @@ class TrackCache final {
   Track* GetLastTouchedTrack() const { return last_touched_track_; }
   void SetLastTouchedTrack(Track* track) { last_touched_track_ = track; }
 
+  // The anchor for a track action. The anchor is cleared if its track is
+  // removed from REAPER.
+  Anchor<Track>& GetAnchor(TrackAnchor type) {
+    return anchors_[static_cast<int>(type)];
+  }
+
   // Returns the selected track if exactly one track is selected, or nullptr if
   // no tracks or multiple tracks are selected. The master track is never
   // returned, and its selection state is ignored.
@@ -131,6 +152,9 @@ class TrackCache final {
   // The last touched track, which may be set to indicate the starting point
   // for shift-selection.
   Track* last_touched_track_ = nullptr;
+
+  // Anchors for each TrackAnchor action.
+  Anchor<Track> anchors_[kTrackAnchorCount];
 
   // All non-master tracks that currently exist in REAPER, in order.
   std::vector<Track*> all_tracks_;

@@ -202,7 +202,7 @@ Depends on: none.
   destroying the anchor emptying the hold, an old hold not releasing a new one,
   move, and the modifier bit.
 
-### CL5 [~] common: TrackCache anchors
+### CL5 [x] common: TrackCache anchors
 
 Depends on: CL4.
 

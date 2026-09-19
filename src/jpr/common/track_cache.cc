@@ -130,6 +130,11 @@ void TrackCache::Refresh() {
     if (new_track->OnRemoved()) {
       routes_changed.push_back(new_track.get());
     }
+    for (Anchor<Track>& anchor : anchors_) {
+      if (anchor.Get() == new_track.get()) {
+        anchor.Clear();
+      }
+    }
   }
 
   // Read visibility and routing for the new track list and recompute the
