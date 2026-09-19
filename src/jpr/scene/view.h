@@ -65,7 +65,9 @@ class View final {
   static constexpr std::string_view kBankInc = "bank_inc";
 
   // This switches this view's track to be its parent track, if it has a parent
-  // track. Otherwise, this does nothing.
+  // track. Otherwise, this does nothing. This is effectively navigating "up"
+  // one level. The child context index is set so the track that was left is
+  // centered in the child views, if possible.
   static constexpr std::string_view kTrackParent = "track_parent";
 
   // This sets his view's track to be the master track.
@@ -79,7 +81,7 @@ class View final {
   // Tells the parent view to switch to its parent track. This is effectively
   // results in navigating "up" to the parent track from a child track. If there
   // is no parent view, or the parent view's track does not have a parent track,
-  // this does nothing.
+  // this does nothing. This is the same as kTrackParent on the parent view.
   static constexpr std::string_view kParentTrackParent = "parent_track_parent";
 
   // Tells the parent view to switch to the master track. This is effectively

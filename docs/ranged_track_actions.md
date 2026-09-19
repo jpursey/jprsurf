@@ -145,7 +145,7 @@ track that was left, sharing code with `kParentTrackParent`.
 
 ## CLs
 
-### CL1 [ ] scene: kTrackParent centers on the track that was left
+### CL1 [x] scene: kTrackParent centers on the track that was left
 
 Depends on: none.
 

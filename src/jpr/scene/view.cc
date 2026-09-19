@@ -21,6 +21,27 @@ TrackRouteType GetChildRouteType(View::ChildContextType context_type) {
              : TrackRouteType::kReceive;
 }
 
+// Switches the view's track to its parent track, with the child context index
+// centering the track that was left in the child views. This does nothing if
+// the track has no parent track.
+void SetTrackToParent(View* view) {
+  Track* track = view->GetTrack();
+  Track* parent_track = track->GetParentTrack();
+  if (parent_track == nullptr) {
+    // Already at the top level.
+    return;
+  }
+  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+  int track_count = parent_track->GetChildTrackCount(filter);
+  int view_count = view->GetChildViewCount();
+  // If the track we are moving up from is not on the surface itself, there is
+  // no position to center on, so fall back to the start of the child list.
+  int start_index =
+      std::clamp(track->GetIndex(filter).value_or(0) - view_count / 2, 0,
+                 std::max(0, track_count - view_count));
+  view->SetTrack(parent_track, start_index);
+}
+
 }  // namespace
 
 // A view property that changes the child context index by a specified offset
@@ -64,12 +85,7 @@ class View::TrackParentProperty : public ViewProperty {
   ~TrackParentProperty() override = default;
 
  protected:
-  void TriggerAction() override {
-    Track* parent_track = view_->GetTrack()->GetParentTrack();
-    if (parent_track != nullptr) {
-      view_->SetTrack(parent_track, 0);
-    }
-  }
+  void TriggerAction() override { SetTrackToParent(view_); }
 
  private:
   View* const view_;
@@ -118,24 +134,9 @@ class View::ParentTrackParentProperty : public ViewProperty {
 
  protected:
   void TriggerAction() override {
-    if (view_->GetParentView() == nullptr) {
-      return;
+    if (view_->GetParentView() != nullptr) {
+      SetTrackToParent(view_->GetParentView());
     }
-    Track* parent_track = view_->GetParentView()->GetTrack();
-    Track* grandparent_track = parent_track->GetParentTrack();
-    if (grandparent_track == nullptr) {
-      // Already at the top level.
-      return;
-    }
-    const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
-    int track_count = grandparent_track->GetChildTrackCount(filter);
-    int view_count = view_->GetParentView()->GetChildViewCount();
-    // If the track we are moving up from is not on the surface itself, there is
-    // no position to center on, so fall back to the start of the child list.
-    int start_index =
-        std::clamp(parent_track->GetIndex(filter).value_or(0) - view_count / 2,
-                   0, std::max(0, track_count - view_count));
-    view_->GetParentView()->SetTrack(grandparent_track, start_index);
   }
 
  private:
