@@ -226,7 +226,7 @@ Depends on: CL5.
 **Verify**
 - Standard checks, including Shift ranges (with and without Ctrl) for select,
   mute, solo, rec arm, which are unchanged.
-- Covered by CL9.
+- Covered by CL10.
 
 ### CL7 [x] common: Batch REAPER's UI refresh in multi-track Track actions
 
@@ -253,22 +253,34 @@ call ~1µs and pays the refresh once: ~2.5ms, or 9–16ms for rec arm.
   undo) rather than 70–80ms, and rec arm is under ~20ms rather than ~205ms. Alt
   on a 100+ track project stays in the low milliseconds (rec arm aside).
 
-### CL8 [ ] scene: View anchor and CallbackToggleProperty
+### CL8 [x] scene: View anchor
 
 Depends on: CL4.
 
-- `View::SetAnchor()` and `View::ReleaseAnchor()`, holding a single
-  `AnchorHold` that is released when the view's context changes or it is
-  deactivated.
-- `CallbackToggleProperty`.
+- `View::SetAnchor()`, `View::ReleaseAnchor()`, and `View::ClearAnchor()`,
+  holding a single `AnchorHold` that is released when the view's context
+  changes or it is deactivated.
+- `View::SetRoute()` sets the route and the track at its other end together.
+
+**Verify**
+- Standard checks, including Send/Receive mode (scrolling routes, toggling
+  sends and receives, and navigating across a route).
+- Covered by CL10.
+
+### CL9 [ ] scene: CallbackToggleProperty
+
+Depends on: none.
+
+- `CallbackToggleProperty`, which calls a callback with each value written to
+  it.
 
 **Verify**
 - Standard checks.
-- Covered by CL9.
+- Covered by CL10.
 
-### CL9 [ ] plugin: Hold to act on a range of tracks
+### CL10 [ ] plugin: Hold to act on a range of tracks
 
-Depends on: CL2, CL3, CL6, CL7, CL8.
+Depends on: CL2, CL3, CL6, CL7, CL8, CL9.
 
 - `anchor_<action>_<n>` properties and mappings for select, mute, solo, rec
   arm, and the `mod_select_anchor` modifier for the select anchor slot.

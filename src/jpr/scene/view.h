@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "jpr/common/anchor.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/track_properties.h"
 #include "jpr/scene/view_mapping.h"
@@ -231,6 +232,27 @@ class View final {
   void RefreshChildContext();
 
   //----------------------------------------------------------------------------
+  // Anchor
+  //----------------------------------------------------------------------------
+
+  // A view holds at most one anchor, which is released when the view's context
+  // changes (its track or route), or the view is deactivated. The view does not
+  // know what is anchored or why.
+
+  // Holds the anchor, replacing (and so releasing) any anchor the view already
+  // holds. An empty hold is ignored, so the view keeps any anchor it holds. The
+  // hold is released right away if the view is not active.
+  void SetAnchor(AnchorHold hold);
+
+  // Releases the view's anchor if it is held on `anchor`. Otherwise this does
+  // nothing, so releasing an anchor that was already replaced does not release
+  // the anchor that replaced it.
+  void ReleaseAnchor(const AnchorBase* anchor);
+
+  // Releases the view's anchor, whatever it is held on.
+  void ClearAnchor() { anchor_hold_.Reset(); }
+
+  //----------------------------------------------------------------------------
   // Property settings
   //----------------------------------------------------------------------------
 
@@ -291,6 +313,11 @@ class View final {
   // kReceives.
   void SetChildRoutes();
 
+  // Sets the route for this view's route properties, and the view's track to
+  // the track at the other end of the route (or the stub track if there is no
+  // such route). The anchor is released if the route changed.
+  void SetRoute(Track* track, TrackRouteType type, int index);
+
   // Constructed state
   Scene* scene_;
   View* parent_view_;
@@ -309,6 +336,9 @@ class View final {
   RouteProperties route_properties_;  // Set by a parent that shows routes.
   ChildContextType child_context_type_ = ChildContextType::kNone;
   int child_context_index_ = 0;
+
+  // Anchor held for this view's context.
+  AnchorHold anchor_hold_;
 
   // Properties for the view.
   int bank_size_ = 8;

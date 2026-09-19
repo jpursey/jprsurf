@@ -5,6 +5,8 @@
 
 #include "jpr/scene/view.h"
 
+#include <utility>
+
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
@@ -310,6 +312,8 @@ void View::RefreshActive() {
     active_ = should_be_active;
     if (active_) {
       RefreshChildContext();
+    } else {
+      ClearAnchor();
     }
   }
 
@@ -345,6 +349,7 @@ void View::SetTrack(Track* track, int child_context_index) {
   if (GetTrack() == track) {
     SetChildContextIndex(child_context_index);
   } else {
+    ClearAnchor();
     track_properties_.SetTrack(track);
     child_context_index_ = child_context_index;
     RefreshChildContext();
@@ -352,6 +357,17 @@ void View::SetTrack(Track* track, int child_context_index) {
 }
 
 Track* View::GetTrack() const { return track_properties_.GetTrack(); }
+
+void View::SetRoute(Track* track, TrackRouteType type, int index) {
+  if (route_properties_.GetTrack() != track ||
+      route_properties_.GetType() != type ||
+      route_properties_.GetIndex() != index) {
+    ClearAnchor();
+  }
+  route_properties_.SetRoute(track, type, index);
+  const TrackRoute* route = route_properties_.GetRoute();
+  SetTrack(route != nullptr ? route->other_track : nullptr);
+}
 
 int View::GetMaxChildContextIndex() const {
   switch (child_context_type_) {
@@ -425,6 +441,19 @@ void View::RefreshChildContext() {
   }
 }
 
+void View::SetAnchor(AnchorHold hold) {
+  if (!hold.IsHeld() || !active_) {
+    return;
+  }
+  anchor_hold_ = std::move(hold);
+}
+
+void View::ReleaseAnchor(const AnchorBase* anchor) {
+  if (anchor_hold_.GetAnchor() == anchor) {
+    ClearAnchor();
+  }
+}
+
 void View::SetChildTracks() {
   CHECK(active_);
   CHECK(scene_ != nullptr);
@@ -462,16 +491,12 @@ void View::SetChildRoutes() {
   CHECK(scene_ != nullptr);
   const TrackRouteType type = GetChildRouteType(child_context_type_);
   Track* track = GetTrack();
-  absl::Span<const TrackRoute> routes = track->GetRoutes(type);
 
   // Views past the last route still refer to the route index they would show,
   // but have no route, and no track to show.
   int index = child_context_index_;
   for (auto& child_view : child_views_) {
-    child_view->route_properties_.SetRoute(track, type, index);
-    child_view->SetTrack(index < static_cast<int>(routes.size())
-                             ? routes[index].other_track
-                             : TrackCache::Get().GetStubTrack());
+    child_view->SetRoute(track, type, index);
     child_view->RefreshChildContext();
     ++index;
   }
