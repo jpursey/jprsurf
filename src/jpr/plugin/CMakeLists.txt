@@ -22,9 +22,11 @@ set(reaper_jprsurf_DEPS
 gb_add_shared_library(reaper_jprsurf)
 target_include_directories(reaper_jprsurf PUBLIC "../..")
 
-add_custom_command(TARGET reaper_jprsurf POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    $<TARGET_FILE:reaper_jprsurf>
-    "${REAPER_PLUGINS_DIR}/reaper_jprsurf.dll"
-    COMMENT "Deploying plugin to Reaper..."
-)
+if(JPR_DEPLOY_TO_REAPER)
+  add_custom_command(TARGET reaper_jprsurf POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_FILE:reaper_jprsurf>
+      "${REAPER_PLUGINS_DIR}/reaper_jprsurf.dll"
+      COMMENT "Deploying plugin to Reaper..."
+  )
+endif()

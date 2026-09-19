@@ -47,6 +47,19 @@ endif()
 file(TO_CMAKE_PATH "$ENV{REAPER_EXTENSION_SDK}" REAPER_EXTENSION_SDK)
 set(REAPER_PLUGINS_DIR "$ENV{APPDATA}/REAPER/UserPlugins")
 
+# REAPER loads a single copy of the plugin, so by default only the main checkout
+# deploys it. Git worktrees (where .git is a file rather than a directory) are
+# used for side work that must not replace the plugin being tested in REAPER.
+if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  set(JPR_DEPLOY_TO_REAPER_DEFAULT ON)
+else()
+  set(JPR_DEPLOY_TO_REAPER_DEFAULT OFF)
+endif()
+option(JPR_DEPLOY_TO_REAPER
+  "Copy the built plugin into REAPER's UserPlugins directory"
+  ${JPR_DEPLOY_TO_REAPER_DEFAULT})
+message(STATUS "JPR_DEPLOY_TO_REAPER: ${JPR_DEPLOY_TO_REAPER}")
+
 ###############################################################################
 ## Sub Directories
 ###############################################################################

@@ -62,7 +62,7 @@ Release (`RelWithDebInfo`) is the default build. REAPER is very latency sensitiv
 
 Do not build through a generated Visual Studio solution (`-G "Visual Studio 17 2022"`) instead.
 
-The build also will copy the binary to the REAPER plugin directory so it can be run immediately.
+The build also will copy the binary to the REAPER plugin directory so it can be run immediately. This is controlled by the `JPR_DEPLOY_TO_REAPER` CMake option, which defaults to ON in the main checkout and OFF in a git worktree (see Parallel sessions below).
 
 A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Ask the user to close REAPER before building, and treat a copy or permission failure at the end of a build as "REAPER is open" rather than debugging the build.
 
@@ -129,6 +129,19 @@ New features are designed first, then built and reviewed as a series of small ch
 - After writing each CL, self-review it before handing it to the user. Check that it is correct, clean, simple, and not wasteful, and look for brittle design: ask "what does a caller have to remember to get this right?" (paired Add/Remove or Register/Unregister calls, state that must be manually kept in sync, ordering assumptions). Prefer designs that enforce it, such as RAII handles, private internals, and types that make misuse impossible, and call out any remaining brittleness.
 - Build, then the user tests in REAPER. Once the user approves, mark the CL complete in the plan and commit it.
 - When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, reusable building blocks, and future ideas), so the doc stays a useful reference.
+
+## Parallel sessions
+
+REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs testing in REAPER happens one change at a time in the main session, in the main checkout.
+
+Side sessions run in their own git worktree, for work that can be verified without REAPER: unit-testable code (such as `jpr_common_test`), documentation and comment cleanup, research, and reviews.
+- A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.
+- Build and run any unit tests in the worktree, then get the user's review and commit on the worktree's branch as usual. Never merge or push to `main`.
+- Once the user approves and the change is committed, send a message to the main session with the commit hash, the branch, and a short summary of the change and how it was verified. The main session cherry-picks it onto `main`, builds, and hands anything that needs a REAPER check to the user.
+- The side task's prompt names the main session to message back, by its name and reference as ListAgents shows it (such as `XTouch utility buttons [0eff92]`). Message exactly that session. If the prompt names none, or that session isn't reachable, tell the user instead of picking another session.
+- If a change turns out to need testing in REAPER, say so and hand it back to the main session rather than deploying it.
+
+When the main session suggests a side task, its prompt should be self-contained and include these instructions, along with the main session's own name and reference (ListAgents reports it as "This session is ...").
 
 ## Resources
 
