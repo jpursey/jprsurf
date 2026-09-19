@@ -839,6 +839,25 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kWriteControl, kAnyTrackSolo,
                           absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
 
+    // Utility buttons
+    const std::string undo = absl::StrCat("XTouch/", DeviceXTouch::kUndo);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, undo);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, undo,
+                          {.read = {.required_modifiers = kModShift}});
+    const std::string save = absl::StrCat("XTouch/", DeviceXTouch::kSave);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, save);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
+                          save, {.read = {.required_modifiers = kModShift}});
+    const std::string cancel = absl::StrCat("XTouch/", DeviceXTouch::kCancel);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
+                          cancel);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdRemoveTimeSelection,
+                          cancel, {.read = {.required_modifiers = kModShift}});
+    const std::string enter = absl::StrCat("XTouch/", DeviceXTouch::kEnter);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem, enter);
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem, enter,
+                          {.read = {.required_modifiers = kModShift}});
+
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
                           absl::StrCat("XTouch/", DeviceXTouch::kMarker));

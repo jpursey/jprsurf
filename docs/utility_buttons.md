@@ -73,7 +73,7 @@ Depends on: none.
 - Standard checks.
 - Covered by CL3.
 
-### CL3 [~] plugin: Map the utility buttons
+### CL3 [x] plugin: Map the utility buttons
 
 Depends on: CL2.
 
