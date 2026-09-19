@@ -269,16 +269,16 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // Parent track of this track.
   //
-  // If the track is a top level track, or does not currently exist in REAPER,
-  // this will return nullptr. This is updated whenever TrackCache::Refresh()
-  // is called.
+  // Top-level tracks return the master track. The master track, the stub
+  // track, and tracks that do not currently exist in REAPER return nullptr.
+  // This is updated whenever TrackCache::Refresh() is called.
   Track* GetParentTrack() const { return parent_track_; }
 
   // Returns the index of this track within its parent track's filtered child
   // track list, or nullopt if the track has no place in that list.
   //
-  // If this is a top level track, this will return the index within all
-  // top-level tracks.
+  // If this is a top-level track, its parent is the master track, so this will
+  // return the index within all top-level tracks.
   //
   // Nullopt covers every reason the track is not in the list: it is excluded by
   // the filter, it does not currently exist in REAPER, or it has no parent (the
