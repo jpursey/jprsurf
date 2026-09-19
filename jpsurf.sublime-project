@@ -20,6 +20,9 @@
 			"path": "../game-bits/third_party/glm/glm",
 		},
 		{
+			"path": "docs",
+		},
+		{
 			"path": "src",
 		},
 		{
