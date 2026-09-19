@@ -223,7 +223,7 @@ Depends on: CL7.
 - Standard checks.
 - Covered by CL9.
 
-### CL9 [ ] plugin: Light Save while the project is dirty
+### CL9 [x] plugin: Light Save while the project is dirty
 
 Depends on: CL8.
 
