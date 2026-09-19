@@ -5,6 +5,10 @@
 
 #include "jpr/scene/reaper_property.h"
 
+#include <cstddef>
+#include <iterator>
+#include <utility>
+
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -37,38 +41,50 @@ void CommandToggleProperty::WriteBool(bool value) {
 }
 
 //==============================================================================
-// AnyTrackSoloProperty
+// PolledToggleProperty
 //==============================================================================
 
-void AnyTrackSoloProperty::UpdateState() {
-  bool value = AnyTrackSolo(nullptr);
+namespace {
+
+struct PolledToggle {
+  std::string_view name;
+  PolledToggleProperty::ReadFunction read;
+};
+
+// Indexed by the index in each name.
+constexpr PolledToggle kPolledToggles[] = {
+    {kAnyTrackSolo, [] { return AnyTrackSolo(nullptr); }},
+    {kCanRedo, [] { return Undo_CanRedo2(nullptr) != nullptr; }},
+};
+
+// Returns true if every row in kPolledToggles is named kStateName<index> for
+// its own index.
+template <size_t... kIndices>
+constexpr bool PolledToggleNamesMatchIndices(std::index_sequence<kIndices...>) {
+  return ((kPolledToggles[kIndices].name == kStateName<kIndices>) && ...);
+}
+static_assert(PolledToggleNamesMatchIndices(
+                  std::make_index_sequence<std::size(kPolledToggles)>()),
+              "kPolledToggles rows must be named kStateName<index> in order");
+
+}  // namespace
+
+PolledToggleProperty::ReadFunction PolledToggleProperty::GetReadFunction(
+    int index) {
+  if (index < 0 || index >= static_cast<int>(std::size(kPolledToggles))) {
+    return nullptr;
+  }
+  return kPolledToggles[index].read;
+}
+
+void PolledToggleProperty::UpdateState() {
+  bool value = read_();
   if (value != value_) {
     value_ = value;
     NotifyChanged();
   }
 }
 
-bool AnyTrackSoloProperty::ReadBool() const { return value_; }
-
-void AnyTrackSoloProperty::WriteBool(bool value) {
-  if (!value) {
-    Main_OnCommand(40340, 0);  // Unsolo all tracks.
-    UpdateState();
-  }
-}
-
-//==============================================================================
-// CanRedoProperty
-//==============================================================================
-
-void CanRedoProperty::UpdateState() {
-  bool value = (Undo_CanRedo2(nullptr) != nullptr);
-  if (value != value_) {
-    value_ = value;
-    NotifyChanged();
-  }
-}
-
-bool CanRedoProperty::ReadBool() const { return value_; }
+bool PolledToggleProperty::ReadBool() const { return value_; }
 
 }  // namespace jpr

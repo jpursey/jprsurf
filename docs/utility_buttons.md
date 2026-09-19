@@ -186,7 +186,7 @@ Depends on: none.
 - `jpr_common_test` passes: a prefix with a single digit, multiple digits, zero,
   and an empty prefix.
 
-### CL7 [ ] scene: PolledToggleProperty and compile time names
+### CL7 [x] scene: PolledToggleProperty and compile time names
 
 Depends on: CL4, CL6.
 

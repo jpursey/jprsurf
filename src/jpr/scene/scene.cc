@@ -56,9 +56,10 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }
-  if (name.starts_with("cmd:")) {
+  if (name.starts_with(kCmdPrefix)) {
     int command_id = 0;
-    if (!absl::SimpleAtoi(name.substr(4), &command_id) || command_id == 0) {
+    if (!absl::SimpleAtoi(name.substr(kCmdPrefix.size()), &command_id) ||
+        command_id == 0) {
       return nullptr;
     }
     int state = GetToggleCommandState(command_id);
@@ -69,6 +70,21 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
       property = std::make_unique<CommandToggleProperty>(this, name, command_id,
                                                          state > 0);
     }
+    auto property_ptr = property.get();
+    properties_[name] = std::move(property);
+    return property_ptr;
+  }
+  if (name.starts_with(kStatePrefix)) {
+    int index = 0;
+    if (!absl::SimpleAtoi(name.substr(kStatePrefix.size()), &index)) {
+      return nullptr;
+    }
+    PolledToggleProperty::ReadFunction read =
+        PolledToggleProperty::GetReadFunction(index);
+    if (read == nullptr) {
+      return nullptr;
+    }
+    auto property = std::make_unique<PolledToggleProperty>(this, name, read);
     auto property_ptr = property.get();
     properties_[name] = std::move(property);
     return property_ptr;
@@ -114,12 +130,6 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   } else if (name == kRuler2Samples) {
     property = std::make_unique<IsSecondaryRulerModeProperty>(
         this, name, TimelineMode::kSamples);
-  }
-  // Misc REAPER properties.
-  else if (name == kAnyTrackSolo) {
-    property = std::make_unique<AnyTrackSoloProperty>(this);
-  } else if (name == kCanRedo) {
-    property = std::make_unique<CanRedoProperty>(this);
   }
 
   if (property != nullptr) {
