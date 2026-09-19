@@ -28,6 +28,19 @@ constexpr int kReceiveCategory = -1;
 constexpr int kSendCategory = 0;
 constexpr int kHardwareOutputCategory = 1;
 
+// Defers REAPER's UI refresh until the end of the scope.
+//
+// REAPER refreshes its UI after every track setter call, which costs ~2ms or
+// more each (9-17ms for record arm). Changing several tracks within one scope
+// pays that cost once, when the scope ends, rather than once per track.
+class ScopedPreventUiRefresh final {
+ public:
+  ScopedPreventUiRefresh() { PreventUIRefresh(1); }
+  ScopedPreventUiRefresh(const ScopedPreventUiRefresh&) = delete;
+  ScopedPreventUiRefresh& operator=(const ScopedPreventUiRefresh&) = delete;
+  ~ScopedPreventUiRefresh() { PreventUIRefresh(-1); }
+};
+
 // A range of tracks on the control surface, for ranged UI actions.
 struct SurfaceRange {
   // Returns true if the track is in the range.
@@ -381,6 +394,7 @@ void Track::SelectRange(const Track* anchor_track, bool require_same_parent) {
   // We iterate over *all* tracks in the project so that tracks which are not
   // on the surface still get unselected. Leaving a track selected that the user
   // cannot see is worse than unselecting one they did not aim at.
+  ScopedPreventUiRefresh prevent_ui_refresh;
   for (Track* track : TrackCache::Get().GetTracks()) {
     const bool selected = range->Contains(track);
     if (selected != IsTrackSelected(track->track_id_)) {
@@ -510,39 +524,43 @@ void Track::DoUiProperty(bool& property, TrackAnchor anchor,
   // project, not just the ones on the surface: a mute the user can neither see
   // nor clear is a bad state to be able to create.
   if (AreModifiersOn(kModAlt)) {
-    // First, we clear the property for all tracks.
     bool this_track_changed = false;
     bool other_tracks_changed = false;
-    for (Track* track : TrackCache::Get().GetTracks()) {
-      if (get_property(track->track_id_)) {
-        if (track->track_id_ == track_id_) {
-          this_track_changed = true;
-        } else {
-          other_tracks_changed = true;
+    {
+      ScopedPreventUiRefresh prevent_ui_refresh;
+
+      // First, we clear the property for all tracks.
+      for (Track* track : TrackCache::Get().GetTracks()) {
+        if (get_property(track->track_id_)) {
+          if (track->track_id_ == track_id_) {
+            this_track_changed = true;
+          } else {
+            other_tracks_changed = true;
+          }
+          set_property(track->track_id_, false, kNoGrouping | kNoGanging);
         }
-        set_property(track->track_id_, false, kNoGrouping | kNoGanging);
       }
-    }
-    if (AreModifiersOn(kModCtrl)) {
-      set_property(track_id_, true, kNoGrouping | kNoGanging);
-      TrackCache::Get().SetLastTouchedTrack(this);
-      if (!property) {
-        this_track_changed = !this_track_changed;
-        property = true;
-        NotifyListeners();
-      }
-    } else if (AreModifiersOn(kModShift)) {
-      set_property(track_id_, true, /*ingroupflags=*/0);
-      TrackCache::Get().SetLastTouchedTrack(this);
-      if (!property) {
-        this_track_changed = this_track_changed;
-        property = true;
-        NotifyListeners();
-      }
-    } else {
-      if (property) {
-        property = false;
-        NotifyListeners();
+      if (AreModifiersOn(kModCtrl)) {
+        set_property(track_id_, true, kNoGrouping | kNoGanging);
+        TrackCache::Get().SetLastTouchedTrack(this);
+        if (!property) {
+          this_track_changed = !this_track_changed;
+          property = true;
+          NotifyListeners();
+        }
+      } else if (AreModifiersOn(kModShift)) {
+        set_property(track_id_, true, /*ingroupflags=*/0);
+        TrackCache::Get().SetLastTouchedTrack(this);
+        if (!property) {
+          this_track_changed = this_track_changed;
+          property = true;
+          NotifyListeners();
+        }
+      } else {
+        if (property) {
+          property = false;
+          NotifyListeners();
+        }
       }
     }
     if (this_track_changed || other_tracks_changed) {
@@ -560,21 +578,26 @@ void Track::DoUiProperty(bool& property, TrackAnchor anchor,
   }
 
   if (AreModifiersOn(kModOpt)) {
-    set_property(track_id_, !property ? 1 : 0, kNoGrouping | kNoGanging);
-    if (IsTrackSelected(track_id_)) {
-      TrackCache::Get().SetLastTouchedTrack(this);
-      int selected_count = CountSelectedTracks(nullptr);
-      for (int i = 0; i < selected_count; ++i) {
-        Track* track = TrackCache::Get().GetTrack(GetSelectedTrack(nullptr, i));
-        if (track->GetTrackId() == track_id_) {
-          continue;
+    {
+      ScopedPreventUiRefresh prevent_ui_refresh;
+      set_property(track_id_, !property ? 1 : 0, kNoGrouping | kNoGanging);
+      if (IsTrackSelected(track_id_)) {
+        TrackCache::Get().SetLastTouchedTrack(this);
+        int selected_count = CountSelectedTracks(nullptr);
+        for (int i = 0; i < selected_count; ++i) {
+          Track* track =
+              TrackCache::Get().GetTrack(GetSelectedTrack(nullptr, i));
+          if (track->GetTrackId() == track_id_) {
+            continue;
+          }
+          set_property(track->track_id_,
+                       !get_property(track->track_id_) ? 1 : 0,
+                       kNoGrouping | kNoGanging);
         }
-        set_property(track->track_id_, !get_property(track->track_id_) ? 1 : 0,
-                     kNoGrouping | kNoGanging);
       }
+      property = !property;
+      NotifyListeners();
     }
-    property = !property;
-    NotifyListeners();
     Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
     return;
   }
@@ -604,10 +627,13 @@ void Track::SetPropertyRange(const Track* anchor_track,
   // is safe to read.
   const bool value = get_property(anchor_track->track_id_);
   bool any_changed = false;
-  for (Track* track : TrackCache::Get().GetTracks()) {
-    if (range->Contains(track) && value != get_property(track->track_id_)) {
-      set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
-      any_changed = true;
+  {
+    ScopedPreventUiRefresh prevent_ui_refresh;
+    for (Track* track : TrackCache::Get().GetTracks()) {
+      if (range->Contains(track) && value != get_property(track->track_id_)) {
+        set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
+        any_changed = true;
+      }
     }
   }
   if (any_changed) {
