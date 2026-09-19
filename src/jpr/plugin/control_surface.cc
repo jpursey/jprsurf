@@ -836,7 +836,7 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(
         ViewMapping::kReadControl, kRulerMode,
         absl::StrCat("XTouch/", DeviceXTouch::kShowTimeBeats));
-    root_view->AddMapping(ViewMapping::kWriteControl, kAnyTrackSolo,
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyTrackSolo,
                           absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
 
     // Utility buttons
@@ -844,7 +844,7 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, undo);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, undo,
                           {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kWriteControl, kCanRedo, undo);
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateCanRedo, undo);
     const std::string save = absl::StrCat("XTouch/", DeviceXTouch::kSave);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, save);
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,

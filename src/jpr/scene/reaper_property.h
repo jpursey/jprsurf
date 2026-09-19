@@ -130,10 +130,14 @@ inline constexpr std::string_view kStateName =
 //
 // This can't be a CommandToggleProperty for kCmdSoloDefeat, as REAPER reports
 // no toggle state for that command.
-inline constexpr std::string_view kAnyTrackSolo = kStateName<0>;
+inline constexpr std::string_view kStateAnyTrackSolo = kStateName<0>;
 
 // True while the current project has anything to redo.
-inline constexpr std::string_view kCanRedo = kStateName<1>;
+inline constexpr std::string_view kStateCanRedo = kStateName<1>;
+
+// True while the current project has unsaved changes. This is always false if
+// "undo/prompt to save" is disabled in REAPER's preferences.
+inline constexpr std::string_view kStateProjectDirty = kStateName<2>;
 
 // This read-only property represents REAPER state that is read with a function,
 // and polled each run. It can be mapped to control outputs that represent a

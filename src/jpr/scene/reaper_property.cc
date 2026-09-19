@@ -53,8 +53,9 @@ struct PolledToggle {
 
 // Indexed by the index in each name.
 constexpr PolledToggle kPolledToggles[] = {
-    {kAnyTrackSolo, [] { return AnyTrackSolo(nullptr); }},
-    {kCanRedo, [] { return Undo_CanRedo2(nullptr) != nullptr; }},
+    {kStateAnyTrackSolo, [] { return AnyTrackSolo(nullptr); }},
+    {kStateCanRedo, [] { return Undo_CanRedo2(nullptr) != nullptr; }},
+    {kStateProjectDirty, [] { return IsProjectDirty(nullptr) != 0; }},
 };
 
 // Returns true if every row in kPolledToggles is named kStateName<index> for

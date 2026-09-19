@@ -56,7 +56,7 @@ drift from what `Scene::GetProperty()` parses:
 
 ```cpp
 inline constexpr std::string_view kCmdUndo = kCmdName<40029>;
-inline constexpr std::string_view kAnyTrackSolo = kStateName<0>;
+inline constexpr std::string_view kStateAnyTrackSolo = kStateName<0>;
 ```
 
 `kCmdName<Id>` and `kStateName<Index>` in `reaper_property.h` are aliases for
@@ -88,21 +88,22 @@ order or a mistyped index fails the build. The only mistake it can't catch is a
 name constant with no row, which fails gracefully at runtime (the property is
 not found). Adding a polled toggle only touches `reaper_property.h` and `.cc`:
 
-| Property        | Read function                         | Used by   |
-| --------------- | ------------------------------------- | --------- |
-| `kAnyTrackSolo` | `AnyTrackSolo(nullptr)`               | Solo LED  |
-| `kCanRedo`      | `Undo_CanRedo2(nullptr) != nullptr`   | Undo LED  |
-| `kProjectDirty` | `IsProjectDirty(nullptr) != 0`        | Save LED  |
+| Property             | Read function                       | Used by  |
+| -------------------- | ----------------------------------- | -------- |
+| `kStateAnyTrackSolo` | `AnyTrackSolo(nullptr)`             | Solo LED |
+| `kStateCanRedo`      | `Undo_CanRedo2(nullptr) != nullptr` | Undo LED |
+| `kStateProjectDirty` | `IsProjectDirty(nullptr) != 0`      | Save LED |
 
 Each read function only returns state REAPER already has, so polling should be
 cheap.
 
-`kCanRedo` started as its own `CanRedoProperty` (CL4), and `kAnyTrackSolo` as
-`AnyTrackSoloProperty`, which were the same code apart from the REAPER call.
+`kStateCanRedo` started as its own `CanRedoProperty` (CL4), and
+`kStateAnyTrackSolo` as `AnyTrackSoloProperty`, which were the same code apart
+from the REAPER call.
 `AnyTrackSoloProperty` also unsoloed all tracks when written false, but nothing
 used that, and it doesn't belong on a state property. That action is now its own
 command, `kCmdSoloDefeat` ("solo defeat" is the usual name for it). It can't
-replace `kAnyTrackSolo`, as REAPER reports no toggle state for 40340.
+replace `kStateAnyTrackSolo`, as REAPER reports no toggle state for 40340.
 
 ## CLs
 
@@ -150,8 +151,8 @@ Depends on: CL2.
 
 Depends on: none.
 
-- `CanRedoProperty` and `kCanRedo` in `reaper_property.h`/`.cc`, created on
-  demand by `Scene::GetProperty()`.
+- `CanRedoProperty` and `kCanRedo` (later `kStateCanRedo`) in
+  `reaper_property.h`/`.cc`, created on demand by `Scene::GetProperty()`.
 - Unused, so there is no visible change yet.
 
 **Verify**
@@ -208,11 +209,14 @@ Depends on: CL4, CL6.
   transport, click, cycle, solo in front, the utility buttons, and automation
   modes).
 
-### CL8 [ ] scene: kProjectDirty
+### CL8 [x] scene: kStateProjectDirty
 
 Depends on: CL7.
 
-- `kProjectDirty` and its `kPolledToggles` entry reading `IsProjectDirty()`.
+- `kStateProjectDirty` and its `kPolledToggles` entry reading `IsProjectDirty()`.
+- Rename `kAnyTrackSolo` and `kCanRedo` to `kStateAnyTrackSolo` and
+  `kStateCanRedo`, matching the `kCmd*` constants (this touches their mappings
+  in `ControlSurface`).
 - Unused, so there is no visible change yet.
 
 **Verify**
@@ -223,7 +227,7 @@ Depends on: CL7.
 
 Depends on: CL8.
 
-- `kWriteControl` mapping from `kProjectDirty` to the Save button.
+- `kWriteControl` mapping from `kStateProjectDirty` to the Save button.
 
 **Verify**
 - Standard checks.
