@@ -16,20 +16,6 @@
 
 namespace jpr {
 
-// Track actions that each have their own anchor in the TrackCache. While an
-// action's anchor is held on a track, that action on another track acts on the
-// range of tracks between them.
-enum class TrackAnchor {
-  kSelect,
-  kMute,
-  kSolo,
-  kRecArm,
-};
-
-// The number of TrackAnchor values. TrackAnchor values are contiguous starting
-// at zero.
-inline constexpr int kTrackAnchorCount = 4;
-
 // This singleton class maintains the cached state for all tracks in REAPER.
 //
 // Tracks can be looked up by their GUID, which is stable across track renaming,

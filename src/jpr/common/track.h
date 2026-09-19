@@ -47,6 +47,20 @@ inline constexpr int GetTrackFilterIndex(TrackFilter filter) {
   return static_cast<int>(filter);
 }
 
+// Track actions that each have their own anchor in the TrackCache. While an
+// action's anchor is held on a track, that action on another track acts on the
+// range of tracks between them.
+enum class TrackAnchor {
+  kSelect,
+  kMute,
+  kSolo,
+  kRecArm,
+};
+
+// The number of TrackAnchor values. TrackAnchor values are contiguous starting
+// at zero.
+inline constexpr int kTrackAnchorCount = 4;
+
 //==============================================================================
 // Track listener
 //==============================================================================
@@ -189,6 +203,13 @@ class Track final : public std::enable_shared_from_this<Track> {
   // surface, which provide similar behavior to REAPER, but the mappings are
   // different. Mappings are checked in the declared order as listed below. The
   // first set of modifiers that match will trigger the behavior.
+  //
+  // Selected, mute, solo, and record arm also each have an anchor in the
+  // TrackCache (see TrackAnchor). If the property's anchor is held on another
+  // track, this acts on the range between the anchor track and this track
+  // instead, the same as Shift without Ctrl but using the anchor track rather
+  // than the last touched track. This takes precedence over all modifiers,
+  // which are ignored.
   //
   // Volume and Pan:
   // - Ctrl: Changes only this track, ignoring any grouping or ganging.
@@ -420,9 +441,21 @@ class Track final : public std::enable_shared_from_this<Track> {
   // track, and notifies listeners.
   void DoToggleSelected();
 
-  // Generic form for a UI property.
-  void DoUiProperty(bool& property, const char* undo_entry,
+  // Generic form for a UI property, where anchor is the property's anchor type.
+  void DoUiProperty(bool& property, TrackAnchor anchor, const char* undo_entry,
                     GetPropertyFn get_property, SetPropertyFn set_property);
+
+  // Selects exactly the tracks in the range between anchor_track and this
+  // track, and unselects all others. See GetSurfaceRange() for which tracks
+  // are in the range.
+  void SelectRange(const Track* anchor_track, bool require_same_parent);
+
+  // Sets the property of the tracks in the range between anchor_track and this
+  // track to the anchor track's value, ignoring grouping and ganging. See
+  // GetSurfaceRange() for which tracks are in the range.
+  void SetPropertyRange(const Track* anchor_track, bool require_same_parent,
+                        const char* undo_entry, GetPropertyFn get_property,
+                        SetPropertyFn set_property);
 
   // Track identification. The Guid may be empty and the track_id may be null.
   Guid guid_;

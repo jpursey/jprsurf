@@ -5,6 +5,7 @@
 
 #include "jpr/common/track.h"
 
+#include <algorithm>
 #include <optional>
 
 #include "absl/log/log.h"
@@ -26,6 +27,56 @@ constexpr int kNoGanging = 2;
 constexpr int kReceiveCategory = -1;
 constexpr int kSendCategory = 0;
 constexpr int kHardwareOutputCategory = 1;
+
+// A range of tracks on the control surface, for ranged UI actions.
+struct SurfaceRange {
+  // Returns true if the track is in the range.
+  bool Contains(const Track* track) const {
+    const std::optional<int> index = track->GetGlobalIndex(filter);
+    if (!index.has_value() || *index < first_index || *index > last_index) {
+      return false;
+    }
+    return !require_same_parent || track->GetParentTrack() == parent_track;
+  }
+
+  TrackFilter filter;
+  int first_index;
+  int last_index;
+  bool require_same_parent;
+  const Track* parent_track;
+};
+
+// Returns the range of tracks between the anchor track and this track.
+//
+// The range is relative to what is actually on the surface, so it operates in
+// the surface filter's index space, and both ends must have a place in it. An
+// end without one (the anchor may be null, touched from the arrange view,
+// deleted, or cleared by REAPER, which reports the stub track) leaves no range,
+// and this returns nullopt. A range was asked for, so callers should then do
+// nothing rather than silently performing some other behavior.
+//
+// If require_same_parent is true, the range only includes tracks with the same
+// parent as the anchor track. Otherwise, it includes all tracks between them,
+// including the children of any folders.
+std::optional<SurfaceRange> GetSurfaceRange(const Track* anchor_track,
+                                            const Track* this_track,
+                                            bool require_same_parent) {
+  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+  const std::optional<int> anchor_index =
+      anchor_track != nullptr ? anchor_track->GetGlobalIndex(filter)
+                              : std::nullopt;
+  const std::optional<int> this_index = this_track->GetGlobalIndex(filter);
+  if (!anchor_index.has_value() || !this_index.has_value()) {
+    return std::nullopt;
+  }
+  return SurfaceRange{
+      .filter = filter,
+      .first_index = std::min(*anchor_index, *this_index),
+      .last_index = std::max(*anchor_index, *this_index),
+      .require_same_parent = require_same_parent,
+      .parent_track = anchor_track->GetParentTrack(),
+  };
+}
 
 }  // namespace
 
@@ -275,56 +326,24 @@ void Track::UiSelected() {
     return;
   }
 
-  // Shift is used to toggle selection of all tracks between the last selected
-  // track and this track. The range is relative to what is actually on the
-  // surface, so it operates in the surface filter's index space, and both ends
-  // must have a place in it.
+  // An anchor held on another track selects the range from it, ignoring all
+  // modifiers.
+  const Track* anchor_track =
+      TrackCache::Get().GetAnchor(TrackAnchor::kSelect).Get();
+  if (anchor_track != nullptr && anchor_track != this) {
+    SelectRange(anchor_track, /*require_same_parent=*/true);
+    return;
+  }
+
+  // Shift is used to select all tracks between the last selected track and
+  // this track.
   if (AreModifiersOn(kModShift)) {
-    const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
-    Track* last_selected_track = TrackCache::Get().GetLastTouchedTrack();
-    const std::optional<int> anchor_index =
-        last_selected_track != nullptr
-            ? last_selected_track->GetGlobalIndex(filter)
-            : std::nullopt;
-    const std::optional<int> this_index = GetGlobalIndex(filter);
-
-    // An end without a place in that list (it may have been touched from the
-    // arrange view, deleted, or cleared by REAPER, which reports the stub
-    // track) leaves no range to select. Holding shift asks for a range, so do
-    // nothing rather than silently performing one of the other behaviors, which
-    // would replace the selection the user was trying to extend.
-    if (!anchor_index.has_value() || !this_index.has_value()) {
-      return;
-    }
-
     // Unlike REAPER's default behavior "Shift" on its own will only select
     // tracks with the same parent as the starting track. This is more desirable
     // on a control surface. To get the standard "all tracks" the control
     // modifier must also be pressed.
-    bool require_same_parent = !AreModifiersOn(kModCtrl);
-
-    // The range itself is expressed in filtered indices, but we iterate over
-    // *all* tracks in the project so that tracks which are not on the surface
-    // still get unselected. Leaving a track selected that the user cannot see
-    // is worse than unselecting one they did not aim at.
-    int first_index = *anchor_index;
-    int last_index = *this_index;
-    if (first_index > last_index) {
-      std::swap(first_index, last_index);
-    }
-
-    for (Track* track : TrackCache::Get().GetTracks()) {
-      const std::optional<int> index = track->GetGlobalIndex(filter);
-      bool selected =
-          index.has_value() && *index >= first_index && *index <= last_index;
-      if (selected && require_same_parent &&
-          track->GetParentTrack() != last_selected_track->GetParentTrack()) {
-        selected = false;
-      }
-      if (selected != IsTrackSelected(track->track_id_)) {
-        SetTrackSelected(track->track_id_, selected);
-      }
-    }
+    SelectRange(TrackCache::Get().GetLastTouchedTrack(),
+                /*require_same_parent=*/!AreModifiersOn(kModCtrl));
     return;
   }
 
@@ -352,6 +371,24 @@ void Track::UiSelected() {
   DoToggleSelected();
 }
 
+void Track::SelectRange(const Track* anchor_track, bool require_same_parent) {
+  const std::optional<SurfaceRange> range =
+      GetSurfaceRange(anchor_track, this, require_same_parent);
+  if (!range.has_value()) {
+    return;
+  }
+
+  // We iterate over *all* tracks in the project so that tracks which are not
+  // on the surface still get unselected. Leaving a track selected that the user
+  // cannot see is worse than unselecting one they did not aim at.
+  for (Track* track : TrackCache::Get().GetTracks()) {
+    const bool selected = range->Contains(track);
+    if (selected != IsTrackSelected(track->track_id_)) {
+      SetTrackSelected(track->track_id_, selected);
+    }
+  }
+}
+
 void Track::SetSelected(bool selected) {
   if (track_id_ == nullptr || selected_ == selected) {
     return;
@@ -377,7 +414,7 @@ void Track::UiMute() {
     return;
   }
   DoUiProperty(
-      mute_, "JPR:Toggle Mute",
+      mute_, TrackAnchor::kMute, "JPR:Toggle Mute",
       +[](MediaTrack* track_id) {
         int flags = 0;
         GetTrackState(track_id, &flags);
@@ -405,7 +442,7 @@ void Track::UiSolo() {
     return;
   }
   DoUiProperty(
-      solo_, "JPR:Toggle Solo",
+      solo_, TrackAnchor::kSolo, "JPR:Toggle Solo",
       +[](MediaTrack* track_id) {
         int flags = 0;
         GetTrackState(track_id, &flags);
@@ -433,7 +470,7 @@ void Track::UiRecArm() {
     return;
   }
   DoUiProperty(
-      rec_arm_, "JPR:Toggle Record Arm",
+      rec_arm_, TrackAnchor::kRecArm, "JPR:Toggle Record Arm",
       +[](MediaTrack* track_id) {
         int flags = 0;
         GetTrackState(track_id, &flags);
@@ -457,9 +494,18 @@ void Track::SetRecArm(bool rec_arm) {
 // all have similar behavior with ganging, grouping, and modifiers.
 //------------------------------------------------------------------------------
 
-void Track::DoUiProperty(bool& property, const char* undo_entry,
-                         GetPropertyFn get_property,
+void Track::DoUiProperty(bool& property, TrackAnchor anchor,
+                         const char* undo_entry, GetPropertyFn get_property,
                          SetPropertyFn set_property) {
+  // An anchor held on another track sets the range from it, ignoring all
+  // modifiers.
+  const Track* anchor_track = TrackCache::Get().GetAnchor(anchor).Get();
+  if (anchor_track != nullptr && anchor_track != this) {
+    SetPropertyRange(anchor_track, /*require_same_parent=*/true, undo_entry,
+                     get_property, set_property);
+    return;
+  }
+
   // Handle clear/set-only functionality. "Clear all" means all tracks in the
   // project, not just the ones on the surface: a mute the user can neither see
   // nor clear is a bad state to be able to create.
@@ -505,56 +551,11 @@ void Track::DoUiProperty(bool& property, const char* undo_entry,
     return;
   }
 
-  // Handle ranged set/clear functionality. Like ranged selection, this operates
-  // in the surface filter's index space, and requires both ends of the range to
-  // have a place in it.
+  // Handle ranged set/clear functionality from the last touched track.
   if (AreModifiersOn(kModShift)) {
-    const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
-    Track* last_touched_track = TrackCache::Get().GetLastTouchedTrack();
-    const std::optional<int> anchor_index =
-        last_touched_track != nullptr
-            ? last_touched_track->GetGlobalIndex(filter)
-            : std::nullopt;
-    const std::optional<int> this_index = GetGlobalIndex(filter);
-
-    // An end without a place in that list leaves no range to act on. Holding
-    // shift asks for a range, so do nothing rather than silently toggling this
-    // track instead. An anchor with an index always exists, so its track ID is
-    // safe to read below.
-    if (!anchor_index.has_value() || !this_index.has_value()) {
-      return;
-    }
-
-    bool require_same_parent = !AreModifiersOn(kModCtrl);
-
-    // We iterate over the tracks on the surface, and only set the property
-    // value of tracks which are between the last touched track and this track
-    // in that list.
-    int first_index = *anchor_index;
-    int last_index = *this_index;
-    if (first_index > last_index) {
-      std::swap(first_index, last_index);
-    }
-
-    bool value = get_property(last_touched_track->track_id_);
-    bool any_changed = false;
-    for (Track* track : TrackCache::Get().GetTracks()) {
-      const std::optional<int> index = track->GetGlobalIndex(filter);
-      if (!index.has_value() || *index < first_index || *index > last_index) {
-        continue;
-      }
-      if (require_same_parent &&
-          track->GetParentTrack() != last_touched_track->GetParentTrack()) {
-        continue;
-      }
-      if (value != get_property(track->track_id_)) {
-        set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
-        any_changed = true;
-      }
-    }
-    if (any_changed) {
-      Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
-    }
+    SetPropertyRange(TrackCache::Get().GetLastTouchedTrack(),
+                     /*require_same_parent=*/!AreModifiersOn(kModCtrl),
+                     undo_entry, get_property, set_property);
     return;
   }
 
@@ -587,6 +588,31 @@ void Track::DoUiProperty(bool& property, const char* undo_entry,
   TrackCache::Get().SetLastTouchedTrack(this);
   NotifyListeners();
   Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
+}
+
+void Track::SetPropertyRange(const Track* anchor_track,
+                             bool require_same_parent, const char* undo_entry,
+                             GetPropertyFn get_property,
+                             SetPropertyFn set_property) {
+  const std::optional<SurfaceRange> range =
+      GetSurfaceRange(anchor_track, this, require_same_parent);
+  if (!range.has_value()) {
+    return;
+  }
+
+  // The anchor track has a place on the surface, so it exists and its track ID
+  // is safe to read.
+  const bool value = get_property(anchor_track->track_id_);
+  bool any_changed = false;
+  for (Track* track : TrackCache::Get().GetTracks()) {
+    if (range->Contains(track) && value != get_property(track->track_id_)) {
+      set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
+      any_changed = true;
+    }
+  }
+  if (any_changed) {
+    Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
+  }
 }
 
 //------------------------------------------------------------------------------

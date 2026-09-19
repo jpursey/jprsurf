@@ -128,8 +128,10 @@ track that was left, sharing code with `kParentTrackParent`.
 - Anchor properties: for each track strip and action, a
   `CallbackToggleProperty` (`anchor_<action>_<n>`, like the existing
   `pick_send_receive_track_<n>`). True calls `SetAnchor()` on the strip's view
-  with a hold of that action's `TrackCache` anchor on the view's track. False
-  calls `ReleaseAnchor()` with that anchor slot.
+  with a hold of that action's `TrackCache` anchor on the view's track, unless
+  the strip is empty (the stub track has no place in a range, so an anchor on
+  it would make the other track's press do nothing). False calls
+  `ReleaseAnchor()` with that anchor slot.
 - Select, per track strip:
   - Remove the long press to `kParentTrackParent`.
   - Long press: `kUiSelected` (normal select behavior) and
@@ -212,7 +214,7 @@ Depends on: CL4.
 **Verify**
 - Standard checks.
 
-### CL6 [ ] common: Track Ui* actions use the anchor
+### CL6 [x] common: Track Ui* actions use the anchor
 
 Depends on: CL5.
 
