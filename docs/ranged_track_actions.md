@@ -75,19 +75,19 @@ A generic RAII anchor, not specific to tracks:
 - `Anchor<T>` is a slot holding at most one `T*`. `Hold(T*)` returns a
   move-only `AnchorHold` if the slot is empty (and an empty hold otherwise, so
   the first holder keeps the anchor). Destroying or resetting the hold clears
-  the slot, only if the slot is still the one it set (a generation counter, so a
-  hold whose slot was cleared and re-held never clears the new anchor).
+  the slot.
 - `AnchorHold` is not a template, so owners like `View` can store holds without
-  knowing what is anchored. The untyped state and logic (held pointer,
-  generation, modifier bit, release, clear) live in a non-template
-  `AnchorBase`, which the hold points to. `Anchor<T>` is a thin typed wrapper
-  over it that only adds `Hold(T*)` and `T* Get()`.
-- `Clear()` empties the slot, making any outstanding hold inert. This is how an
+  knowing what is anchored. The untyped state and logic (held pointer, modifier
+  bit, release, clear) live in a non-template `AnchorBase`, which the hold
+  points to. `Anchor<T>` is a thin typed wrapper over it that only adds
+  `Hold(T*)` and `T* Get()`.
+- A slot has at most one live hold, and they point at each other. `Clear()`
+  (or destroying the slot) empties the hold, so a hold never refers to a slot it
+  no longer holds, and they may be destroyed in any order. Clearing is how an
   anchor on a deleted track is dropped.
 - A slot may optionally be given a modifier bit that is on exactly while the
   slot is held. This keeps the modifier in sync with the anchor in every case
   (release, clear, destruction) without any caller having to remember it.
-- Slots must outlive their holds.
 
 `TrackCache` owns one `Anchor<Track>` per `TrackAnchor` (`kSelect`, `kMute`,
 `kSolo`, `kRecArm`), and clears a track's anchors when it is removed, the same as
@@ -189,24 +189,32 @@ Depends on: none.
   short press logs nothing and still selects. Double press still works. Remove
   before commit.
 
-### CL4 [ ] common: Anchor and TrackCache anchors
+### CL4 [x] common: Anchor
 
 Depends on: none.
 
 - `AnchorBase`, `Anchor<T>`, and `AnchorHold` (new `common/anchor.h` and
   `anchor.cc`), with the optional modifier bit.
+
+**Verify**
+- Standard checks.
+- `jpr_common_test` passes: hold, first holder wins, release, clear and
+  destroying the anchor emptying the hold, an old hold not releasing a new one,
+  move, and the modifier bit.
+
+### CL5 [~] common: TrackCache anchors
+
+Depends on: CL4.
+
 - `TrackAnchor` enum and per-action `Anchor<Track>` in `TrackCache`, cleared
   when a track is removed.
 
 **Verify**
 - Standard checks.
-- If Anchor has no REAPER dependency, add a unit test for hold, first holder
-  wins, release, clear making the hold inert, stale hold after re-hold, move,
-  and the modifier bit. Otherwise temporary logging.
 
-### CL5 [ ] common: Track Ui* actions use the anchor
+### CL6 [ ] common: Track Ui* actions use the anchor
 
-Depends on: CL4.
+Depends on: CL5.
 
 - `UiSelected()` and `DoUiProperty()` do the ranged behavior when an anchor is
   held by a different track, ignoring modifiers.
@@ -216,9 +224,9 @@ Depends on: CL4.
 **Verify**
 - Standard checks, including Shift ranges (with and without Ctrl) for select,
   mute, solo, rec arm, which are unchanged.
-- Covered by CL7.
+- Covered by CL8.
 
-### CL6 [ ] scene: View anchor and CallbackToggleProperty
+### CL7 [ ] scene: View anchor and CallbackToggleProperty
 
 Depends on: CL4.
 
@@ -229,11 +237,11 @@ Depends on: CL4.
 
 **Verify**
 - Standard checks.
-- Covered by CL7.
+- Covered by CL8.
 
-### CL7 [ ] plugin: Hold to act on a range of tracks
+### CL8 [ ] plugin: Hold to act on a range of tracks
 
-Depends on: CL2, CL3, CL5, CL6.
+Depends on: CL2, CL3, CL6, CL7.
 
 - `anchor_<action>_<n>` properties and mappings for select, mute, solo, rec
   arm, and the `mod_select_anchor` modifier for the select anchor slot.

@@ -4,6 +4,7 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 set(jpr_common_SOURCE
+  anchor.cc anchor.h
   color.cc color.h
   guid.cc guid.h
   midi_message.h
@@ -24,6 +25,10 @@ set(jpr_common_DEPS
   absl::time
   gb_config
   reaper_sdk
+)
+
+set(jpr_common_TEST_SOURCE
+  anchor_test.cc
 )
 
 gb_add_library(jpr_common)
