@@ -24,3 +24,4 @@ We'll see how long this lasts, but I'll periodically update progress and changes
 - *2026-03-24:* Support for full track navigation, modifier keys, and track colors. [Demo Video](https://youtu.be/7CKpyNhSO9o)
 - *2026-03-30:* Support for transport controls, metering lights, and timecode display. [DemoVideo](https://youtu.be/lK22xKMxtWY)
 - *2026-09-16:* Support for MCP visibility and a send/receive routing mode separate from "track" mode. [DemoVideo](https://youtu.be/gqKYDM84J3M)
+- *2026-09-19:* Quality of life improvements for editing tracks and accessing commonly used features like save, undo/redo, and more. [DemoVideo](https://youtu.be/W9pjZvGowoI)
