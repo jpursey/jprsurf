@@ -2,7 +2,7 @@
 
 This is a C++ control surface extension for the REAPER DAW. It handles bi-directional control between physical hardware and a running instance of REAPER. REAPER is a realtime, low latency, application processing audio, so performance and reliability of the extension are critical.
 
-This extension depends only on the Reaper SDK (location defined by the REAPER_EXTENSION_SDK environment variable) and the Game Bits shared C++ library (location defined by the GB_DIR extension variable) which must be present in the environment and on the machine. It currently only works on Windows, and is built with Visual Studio 2022 Community and CMake.
+This extension depends only on the Reaper SDK (location defined by the REAPER_EXTENSION_SDK environment variable) and the Game Bits shared C++ library (location defined by the GB_DIR environment variable) which must be present in the environment and on the machine. It currently only works on Windows, and is built with Visual Studio 2022 Community and CMake.
 
 ## Directory Structure
 
@@ -11,16 +11,17 @@ This is a CMake project, starting at the root. The directory structure is as fol
   src/             -- All source code in this project
     jpr/           -- All source code for the extension itself, separated into different libraries (see below)
     reaper_sdk.cc  -- Implementation of the header-only REAPER SDK library
-  bin/          -- Compiled binary files used by compilation or execution
-  out/          -- Generated output from building locally. This is transient
-                   and can get deleted at any time.
+  docs/            -- User guide, feature plans (worklog/), and the backlog
+  bin/             -- Compiled binary files used by compilation or execution
+  out/             -- Generated output from building locally. This is transient
+                      and can get deleted at any time.
 ```
 
-The current library structure is as follows:
-- `common`: This library contains common types, and classes that provide general utilties for working within the REAPER SDK, and managing generic REAPER state (MIDI ports, project tracks, etc). It does not depend on any other JPSurf library and is not specific to the JPSurf extension itself (it could be generically useful for any REAPER extension).
-- `device`: This library provides an interface and concrete implementations for hardware devices supported by JPSurf. This handles all communication to and from the device and tracks the current device state. It does not contain information about how those devices are related to any REAPER behavior. The primary classes here are `Device` (the generic interface for a hardware device), and `Control` (a logical representation of a control on that device that may be read and/or written to). The only JPSurf library it depends on is `common`. 
-- `scene`: This library defines how devices controls may be mapped to REAPER actions and properties. It knows and can define specific REAPER properties and abstractions, but it does not hard code these mappings and must be configured. The primary classes here are `Scene` which defines the top level mapping between one or more devices and REAPER state, and `View` which is a hierarchical set of specific mappings that may be enabled or disabled independently based on configuration or explicit application control. The only JPSurf libraries it depends on are `common` and `device`.
-- `plugin`: This is the top level library which is the entry point for the REAPER extension and configures the actual Control Surface Integration (CSI), using the connected devices for REAPER. The primary class here is `ControlSurface` which implements the `IReaperControlSurface`, and defines the actual mappings and business logic for the extension. It depends on everything.
+Libraries depend strictly in the order `common` → `device` → `scene` → `plugin` (each may use only those before it):
+- `common`: Common types and general utilities for working within the REAPER SDK and managing generic REAPER state (MIDI ports, project tracks, etc). Not specific to JPSurf; it could be useful for any REAPER extension.
+- `device`: An interface and concrete implementations for the hardware devices JPSurf supports. Handles all communication with the device and tracks its current state, with no knowledge of REAPER behavior. Primary classes: `Device` (the generic interface for a hardware device) and `Control` (a logical control on that device that may be read and/or written to).
+- `scene`: Defines how device controls may be mapped to REAPER actions and properties. It knows REAPER properties and abstractions, but does not hard code mappings; they must be configured. Primary classes: `Scene` (the top level mapping between one or more devices and REAPER state) and `View` (a hierarchical set of mappings that may be enabled or disabled independently by configuration or explicit application control).
+- `plugin`: The entry point for the REAPER extension, which configures the Control Surface Integration (CSI) for the connected devices. Primary class: `ControlSurface`, which implements `IReaperControlSurface` and defines the actual mappings and business logic.
 
 ## Commands
 
@@ -31,15 +32,9 @@ Everything is driven directly by CMake using the Ninja generator, which is exact
 CMake and Ninja need an x64 MSVC developer environment; nothing below works without it.
 
 ```
-# PowerShell
 Import-Module "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
 Enter-VsDevShell -VsInstallPath "C:\Program Files\Microsoft Visual Studio\2022\Community" -DevCmdArguments "-arch=x64 -host_arch=x64" -SkipAutomaticLocation
-
-# cmd
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 ```
-
-There are no test binaries, as nearly all code requires REAPER to be running to test.
 
 ### Configure
 
@@ -60,17 +55,15 @@ cmake --build out/build/x64-Release
 
 Release (`RelWithDebInfo`) is the default build. REAPER is very latency sensitive, so the extension should always be run and tested optimized. Only build `out/build/x64-Debug` when you specifically need to step through the code in a debugger.
 
-Do not build through a generated Visual Studio solution (`-G "Visual Studio 17 2022"`) instead.
-
 The build also will copy the binary to the REAPER plugin directory so it can be run immediately. This is controlled by the `JPR_DEPLOY_TO_REAPER` CMake option, which defaults to ON in the main checkout and OFF in a git worktree (see Parallel sessions below).
 
 A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Ask the user to close REAPER before building, and treat a copy or permission failure at the end of a build as "REAPER is open" rather than debugging the build.
 
 ### Testing and Logging
 
-Testing must be performed manually by the user in REAPER. 
+Code that depends on the REAPER SDK, directly or indirectly, can't be unit tested and must be tested manually by the user in REAPER. Code that doesn't can have unit tests (see Build system), such as the existing `jpr_common_test`, run with ctest.
 
-Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to get debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events, may be retained as is helpful for persistent understanding of code flow (continuous controler and UI events generally do *not* fall into this category).
+Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events may be retained as is helpful for persistent understanding of code flow (continuous controller and UI events generally do *not* fall into this category).
 
 Every change is checked as follows:
 - It builds cleanly in Release (`out/build/x64-Release`).
@@ -89,6 +82,8 @@ REAPER is realtime and the extension runs on its UI thread, so performance is ch
 
 Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
 
+REAPER track setters (mute, solo, rec arm, select) each pay a UI refresh of ~2–17ms per call. Any action that changes a UI-visible property on more than one track must batch the changes in a single `PreventUIRefresh` scope (see `ScopedPreventUiRefresh` in `src/jpr/common/track.cc`), so the refresh is paid once.
+
 ### Format
 
 ```
@@ -102,7 +97,7 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 
 - Each library is defined by a `CMakeLists.txt` in its own directory using the `gb_add_library` / `gb_add_shared_library` commands from Game Bits.
 - New source and test files must be added to their module's `CMakeLists.txt` (`<target>_SOURCE`) or they will not be compiled.
-- Defining `<target>_TEST_SOURCE` automatically creates a `<target>_test` executable that links GoogleTest/GoogleMock and registers a ctest test of the same name. However, most no libraries can be tested if they depend on the REAPER SDK directly or indirectly.
+- Defining `<target>_TEST_SOURCE` automatically creates a `<target>_test` executable that links GoogleTest/GoogleMock and registers a ctest test of the same name.
 - `<target>_DEPS` is for other CMake targets in the build (including `absl::*`); `<target>_LIBS` is for prebuilt external libraries.
 
 ## Conventions
@@ -117,24 +112,24 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - Sections within a class or between groups of related functions are separated by //---- blocks (otherwise the same as above).
 - All comments are // style (not /// or /*...*/)
 - Always use a brace block for the body of `if`, `else`, `for`, `while`, `do`, and similar statements, even when the body is a single statement. This forces clang-format to put the body on its own line, which keeps crash callstacks accurate to the line and lets breakpoints be set on the body separately from the condition.
-- Prefer Abseil (and other Google open source libraries already vendored in third_party/) over hand-rolled utilities.
+- Prefer existing libraries over hand-rolled utilities: Game Bits itself (`$GB_DIR/src/gb/`, such as `gb/base` and `gb/container`), and Abseil and the other Google open source libraries vendored in `$GB_DIR/third_party/`.
 - C++20, built with both MSVC and clang-cl.
-- Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way.
+- Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way. In Git Bash, `sed -i` rewrites files as LF-only, so prefer the Edit tool; if sed is used, restore CRLF afterwards (watch for files without a trailing newline) and check `git diff --stat`.
 
 ## Feature workflow
 
 New features are designed first, then built and reviewed as a series of small changes (CLs):
 - Break the feature into CLs that are each limited to one library where possible, built in dependency order: `common`, then `device`, then `scene`, then `plugin`.
 - Track the plan in `docs/worklog/<feature>.md`: a design summary, then each CL with its dependencies, a status (`[ ]` not started, `[~]` in progress, `[x]` submitted), and **Verify** steps. The steps are the checks every change gets (see Testing and Logging), plus feature-specific tests and any performance measurements.
+- The first edit for a CL flips its status to `[~]`, and it becomes `[x]` in the CL's own commit.
 - After writing each CL, self-review it before handing it to the user. Check that it is correct, clean, simple, and not wasteful, and look for brittle design: ask "what does a caller have to remember to get this right?" (paired Add/Remove or Register/Unregister calls, state that must be manually kept in sync, ordering assumptions). Prefer designs that enforce it, such as RAII handles, private internals, and types that make misuse impossible, and call out any remaining brittleness.
 - Build, then the user tests in REAPER. Once the user approves, mark the CL complete in the plan and commit it.
-- When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, and reusable building blocks), so the doc stays a useful reference. Anything still undone goes to the backlog instead of into the summary.
+- When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, and reusable building blocks), so the doc stays a useful reference. Move anything left undone (ideas set aside, known limitations worth fixing, follow-ups the user asked for) into the backlog as part of the same change, rather than into the summary.
 
 ### Backlog
 
 `docs/backlog.md` is the one home for work that isn't being done yet, so ideas don't scatter across the worklogs. It is a flat list in rough stack rank order, each item a heading with **Layers**, **Size**, **Depends on**, and **Background** fields, then a short description. Worklog docs have no "Future ideas" section of their own.
-- When summarizing a finished feature, move anything left undone into the backlog: ideas raised and set aside, known limitations worth fixing, and follow-ups the user asked for. Do this as part of writing the summary, so the ideas aren't lost with the plan.
-- Anything noticed at any other time that is worth doing but out of scope belongs there too, rather than in a comment or a worklog.
+- Anything noticed that is worth doing but out of scope belongs there, rather than in a comment or a worklog.
 - When an item is picked up, it moves into its own `docs/worklog/<feature>.md` plan and comes out of the backlog.
 
 ## Parallel sessions
@@ -145,10 +140,10 @@ Side sessions run in their own git worktree, for work that can be verified witho
 - A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.
 - Build and run any unit tests in the worktree, then get the user's review and commit on the worktree's branch as usual. Never merge or push to `main`.
 - Once the user approves and the change is committed, send a message to the main session with the commit hash, the branch, and a short summary of the change and how it was verified. The main session cherry-picks it onto `main`, builds, and hands anything that needs a REAPER check to the user.
-- The side task's prompt names the main session to message back, by its name and reference as ListAgents shows it (such as `XTouch utility buttons [0eff92]`). Message exactly that session. If the prompt names none, or that session isn't reachable, tell the user instead of picking another session.
+- Message exactly the main session named in the side task's prompt (such as `XTouch utility buttons [0eff92]`). If the prompt names none, or that session isn't reachable, tell the user instead of picking another session.
 - If a change turns out to need testing in REAPER, say so and hand it back to the main session rather than deploying it.
 
-When the main session starts a side task, whether by spawning it directly or by suggesting one the user can start later, **call ListAgents first**, before writing the prompt. Its first line gives this session's own name and reference ("This session is `<name> [<hash>]`"), which cannot be worked out any other way and is different in every session. The prompt must be self-contained, and must include these instructions along with that name and reference, so the side session knows who to report back to. A prompt written without it strands the side session, which then has to ask the user who to message.
+When the main session starts a side task, whether by spawning it directly or by suggesting one the user can start later, **call ListAgents first**, before writing the prompt. Its first line ("This session is `<name> [<hash>]`") is the only way to learn this session's name and reference, which differ in every session. The prompt must be self-contained and include these Parallel sessions rules along with that name and reference; without it, the side session is stranded and has to ask the user who to message.
 
 ## Resources
 
@@ -157,13 +152,15 @@ REAPER is notoriously underdocumented. The best resources are as follows:
 - ReaScript API (mirrors the C++ API).
   - Official documentation here: https://www.reaper.fm/sdk/reascript/reascripthelp.html
   - Navigable site for REAPER functions in multiple languages: https://www.extremraym.com/cloud/reascript-doc/
-- Working plugins that does largely the same sort of thing. JPSurf is my personal replacement for these:
+- Working plugins that do largely the same sort of thing. JPSurf is my personal replacement for these:
   - Klinke MCU: https://github.com/jpursey/csurf_klinke_mcu_jp This was very reliable, and in C++, but missing features I wanted. This is my personal fork of the project. It is downloaded and available locally at `../csurf_klinke_mcu`.
   - DrivenByMOSS: https://github.com/git-moss/DrivenByMoss4Reaper This was feature rich, but quite flaky in practice, and also was written in Java.
 
 ## Don't
 - Don't add new dependencies without asking.
 - Don't add or modify code outside src/jpr/ without asking.
-- Don't generate or build Visual Studio solutions; build with Ninja as described above.
+- Don't generate or build Visual Studio solutions (`-G "Visual Studio 17 2022"`); build with Ninja as described above.
 - Don't reformat files you aren't otherwise changing.
-- Don't commit a change to a branch without a human review from the user first
+- Don't commit a change to a branch without a human review from the user first.
+- Don't `git push`, or suggest pushing. The user pushes after each feature.
+- Don't add entries to the README's "Development log", or plan steps for it. The user writes those.
