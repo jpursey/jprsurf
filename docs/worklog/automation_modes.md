@@ -48,11 +48,12 @@ override"), one of the track modes, or Bypass, which ignores all automation.
 
 Group works like a mode button for the automation section:
 
-| Override | Group | Mode lights                   | Mode button press                         |
-| -------- | ----- | ----------------------------- | ----------------------------------------- |
-| None     | Off   | Selected tracks' modes        | Set the selected tracks' mode             |
-| Bypass   | Solid | All off                       | Set the override to that mode             |
-| A mode   | Solid | That mode solid, the rest off | Same mode: set Bypass. Other: set that mode |
+| Override      | Group | Mode lights                   | Mode button press                         |
+| ------------- | ----- | ----------------------------- | ----------------------------------------- |
+| None          | Off   | Selected tracks' modes        | Set the selected tracks' mode             |
+| Bypass        | Solid | All off                       | Set the override to that mode             |
+| A mode        | Solid | That mode solid, the rest off | Same mode: set Bypass. Other: set that mode |
+| Latch Preview | Solid | Latch blinking, the rest off  | Set the override to that mode             |
 
 - Pressing Group with no override turns on the last override (the last one set
   from the surface or seen in REAPER), or Bypass if there hasn't been one since
@@ -64,7 +65,17 @@ Group works like a mode button for the automation section:
   the lights.
 - The override is per project, so the lights follow it when switching project
   tabs.
-- A Latch Preview override (set from REAPER) lights Group only, like Bypass.
+- Latch Preview has no button of its own, so a Latch Preview override (set from
+  REAPER) blinks Latch. Blinking has no other meaning during an override, as
+  exactly one override is on at a time. Latch Preview is not Latch, so pressing
+  Latch sets the override to Latch (solid), and pressing it again goes to
+  Bypass, the same as any mode that isn't lit solid. The surface can't set a
+  Latch Preview override itself.
+- Without an override, tracks in Latch Preview light nothing (blinking already
+  means "some selected tracks", so it can't also mean Latch Preview there). They
+  still count toward a mixed selection, so a mix of Latch and Latch Preview
+  tracks blinks Latch. A selection entirely in Latch Preview looks the same as
+  no selection, which is accepted as rare.
 
 ## Design
 
@@ -150,7 +161,8 @@ selection change. If that ever matters, the fix is to also invalidate when
 5), which the SDK comments don't mention and which has no button. `AutoMode`
 includes it as `kLatchPreview`, and it is a bit in the mask like the others, so
 a selection of Read and Latch Preview tracks blinks Read, as not every selected
-track is in Read. No light shows Latch Preview itself.
+track is in Read. Without an override, no light shows Latch Preview itself (see
+Behavior).
 
 ### Global override
 
@@ -177,24 +189,33 @@ needs its own write behavior.)
   are tracked the same way, with no caller having to record it.
 
 **scene: `AutoOverrideProperty`:** a polled toggle `SceneStateProperty` that
-reads the override each run and notifies when its value changes. It has a
-target, which gives the six properties that the surface needs, created on
-demand by `Scene::GetProperty()` like the timeline properties:
+reads the override each run and notifies when its value changes. Each one is
+defined by the set of overrides it is on for, and the override it sets when
+written on and off. That gives the properties that the surface needs, created
+on demand by `Scene::GetProperty()` like the timeline properties:
 
-| Property                 | On while            | Write on           | Write off          |
-| ------------------------ | ------------------- | ------------------ | ------------------ |
-| `kAutoOverrideActive`    | Any override is on  | The last override  | No override        |
-| `kAutoOverride<Mode>` x5 | The override is it  | Set it             | Bypass             |
+| Property                    | On while the override is | Write on          | Write off   |
+| --------------------------- | ------------------------ | ----------------- | ----------- |
+| `kAutoOverrideActive`       | Anything but none        | The last override | No override |
+| `kAutoOverride<Mode>` x5    | That mode                | Set it            | Bypass      |
+| `kAutoOverrideLatchPreview` | Latch Preview            | Set it            | Bypass      |
+| `kAutoOverrideAnyLatch`     | Latch or Latch Preview   | Latch             | Bypass      |
 
 A read mapping on a toggle writes the opposite of its current value, so these
 give exactly the button behavior in the table above, and write mappings from
-the same properties give the lights.
+them give the lights.
 
 **plugin: mappings.** Group has a read and write mapping to
-`kAutoOverrideActive`. Each mode button has two pairs of mappings, switched by
-a `ViewMapping::Condition` on `kAutoOverrideActive`:
+`kAutoOverrideActive`. Each mode button has two sets of mappings, switched by a
+`ViewMapping::Condition` on `kAutoOverrideActive`:
 - Off: the per-track read mapping (`kCmdAutoMode*`) and light (CL4).
-- On: a read and write mapping to its `kAutoOverride<Mode>`.
+- On: a read and write mapping to its `kAutoOverride<Mode>`. Latch is the
+  exception, as its light and press differ in Latch Preview:
+  - Its read mapping is to `kAutoOverrideLatch`, so from Latch Preview (off) a
+    press sets Latch.
+  - Its light is a write mapping from `kAutoOverrideAnyLatch`, with a
+    `mode_overrides` entry on `kAutoOverrideLatchPreview` to blink, the same
+    mechanism as the per-track lights.
 
 Conditions re-register read mappings when they switch, which loses a pending
 long or double press. The automation buttons have neither, so that is safe
@@ -333,8 +354,9 @@ Depends on: CL2.
 
 Depends on: CL5.
 
-- `AutoOverrideProperty`, and `kAutoOverrideActive` and the five
-  `kAutoOverride<Mode>` properties, created on demand by `Scene::GetProperty()`.
+- `AutoOverrideProperty`, and `kAutoOverrideActive`, the five
+  `kAutoOverride<Mode>` properties, `kAutoOverrideLatchPreview`, and
+  `kAutoOverrideAnyLatch`, created on demand by `Scene::GetProperty()`.
 - Unused, so no visible change.
 
 **Verify**
@@ -348,7 +370,8 @@ Depends on: CL4, CL6.
 - Group: read and write mappings to `kAutoOverrideActive`.
 - Mode buttons: the CL1 read mappings and CL4 lights get a condition on
   `kAutoOverrideActive` being off, and new read and write mappings to
-  `kAutoOverride<Mode>` with a condition on it being on.
+  `kAutoOverride<Mode>` with a condition on it being on (Latch's light from
+  `kAutoOverrideAnyLatch`, blinking on `kAutoOverrideLatchPreview`).
 - User guide: Group and the override.
 
 **Verify**
@@ -364,6 +387,10 @@ Depends on: CL4, CL6.
 - Group again turns on the last override (e.g. Read, not Bypass).
 - Setting the override from REAPER's transport, with the surface in either
   state, updates Group and the mode lights. Group afterwards remembers that one.
+- Latch Preview override (set from the transport): Latch blinks, the rest are
+  off. Pressing Latch sets Latch (solid), and pressing it again goes to Bypass.
+- Without an override, select only tracks in Latch Preview: all lights off.
+  Add a track in Latch: Latch blinks.
 - While an override is on, mode button presses don't change any track's mode.
 - Switching project tabs: the lights match the transport in each project.
 - **Performance:** the `Run()` average doesn't move from before the change.
