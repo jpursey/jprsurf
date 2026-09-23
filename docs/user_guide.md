@@ -238,7 +238,26 @@ The automation buttons set the automation mode of every selected track:
 | **Latch** | Latch                       |
 
 Each press is a single undo step. With no tracks selected, a press does
-nothing. **Group** is not used yet.
+nothing. **Group** is not used yet. The master track counts as a selected track
+like any other.
+
+Each button shows how many of the selected tracks are in its mode:
+
+| Light    | Selected tracks in the mode |
+| -------- | --------------------------- |
+| Off      | None                        |
+| Solid    | All of them                 |
+| Blinking | Some of them                |
+
+So with a single track selected, exactly one button is solid. When the selected
+tracks are in different modes, each of their modes blinks, and pressing any of
+the buttons puts them all in that mode. With no tracks selected, all are off.
+
+REAPER also has a Latch Preview mode, which has no button. Tracks in Latch
+Preview light nothing, but still count as selected tracks, so a mix of Latch
+and Latch Preview tracks blinks Latch.
+
+The lights follow the current project when you switch project tabs.
 
 ---
 

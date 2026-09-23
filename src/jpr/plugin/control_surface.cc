@@ -327,6 +327,10 @@ void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
 
   // Mode availability depends on which track is selected.
   mode_buttons_changed_ = true;
+
+  // The automation mode lights depend on which tracks are selected. REAPER also
+  // calls this for every track after any automation mode change, undo, or redo.
+  TrackCache::Get().InvalidateSelectedAutoModes();
 }
 
 void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
@@ -361,6 +365,10 @@ bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
 
 void ControlSurface::SetAutoMode(int mode) {
   VLOG_REAPER() << "SetAutoMode(mode=" << mode << ")";
+
+  // REAPER calls this when any track's automation mode changes, with that one
+  // mode, so the selected tracks' modes must be re-read.
+  TrackCache::Get().InvalidateSelectedAutoModes();
 }
 
 void ControlSurface::ResetCachedVolPanStates() {
@@ -865,17 +873,28 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
                           enter, {.read = {.required_modifiers = kModCtrl}});
 
-    // Automation buttons
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeTrim,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAutoTrim));
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeRead,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAutoRead));
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeTouch,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAutoTouch));
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeWrite,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAutoWrite));
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeLatch,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAutoLatch));
+    // Automation buttons. Each is lit while any selected track is in its mode,
+    // solid if they all are, and blinking if only some are.
+    struct AutoModeButton {
+      std::string_view button;
+      std::string_view command;
+      std::string_view selected_state;
+    };
+    static constexpr AutoModeButton kAutoModeButtons[] = {
+        {DeviceXTouch::kAutoTrim, kCmdAutoModeTrim, kStateSelectedAutoTrimRead},
+        {DeviceXTouch::kAutoRead, kCmdAutoModeRead, kStateSelectedAutoRead},
+        {DeviceXTouch::kAutoTouch, kCmdAutoModeTouch, kStateSelectedAutoTouch},
+        {DeviceXTouch::kAutoWrite, kCmdAutoModeWrite, kStateSelectedAutoWrite},
+        {DeviceXTouch::kAutoLatch, kCmdAutoModeLatch, kStateSelectedAutoLatch},
+    };
+    for (const AutoModeButton& info : kAutoModeButtons) {
+      const std::string control = absl::StrCat("XTouch/", info.button);
+      root_view->AddMapping(ViewMapping::kReadControl, info.command, control);
+      root_view->AddMapping(
+          ViewMapping::kWriteControl, info.selected_state, control,
+          {.write = {.mode_overrides = {{std::string(kStateSelectedAutoMixed),
+                                         {{true, 1}}}}}});
+    }
 
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
