@@ -9,6 +9,8 @@
 #include <iterator>
 #include <utility>
 
+#include "jpr/common/automation.h"
+#include "jpr/common/track_cache.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -58,6 +60,22 @@ constexpr PolledToggle kPolledToggles[] = {
     {kStateProjectDirty, [] { return IsProjectDirty(nullptr) != 0; }},
     {kStateAnyItemSelected,
      [] { return CountSelectedMediaItems(nullptr) > 0; }},
+    {kStateSelectedAutoTrimRead,
+     [] { return TrackCache::Get().HasSelectedAutoMode(AutoMode::kTrimRead); }},
+    {kStateSelectedAutoRead,
+     [] { return TrackCache::Get().HasSelectedAutoMode(AutoMode::kRead); }},
+    {kStateSelectedAutoTouch,
+     [] { return TrackCache::Get().HasSelectedAutoMode(AutoMode::kTouch); }},
+    {kStateSelectedAutoWrite,
+     [] { return TrackCache::Get().HasSelectedAutoMode(AutoMode::kWrite); }},
+    {kStateSelectedAutoLatch,
+     [] { return TrackCache::Get().HasSelectedAutoMode(AutoMode::kLatch); }},
+    {kStateSelectedAutoLatchPreview,
+     [] {
+       return TrackCache::Get().HasSelectedAutoMode(AutoMode::kLatchPreview);
+     }},
+    {kStateSelectedAutoMixed,
+     [] { return TrackCache::Get().HasMixedSelectedAutoModes(); }},
 };
 
 // Returns true if every row in kPolledToggles is named kStateName<index> for

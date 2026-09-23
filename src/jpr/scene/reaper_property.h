@@ -143,6 +143,22 @@ inline constexpr std::string_view kStateProjectDirty = kStateName<2>;
 // True while any media items are selected in the current project.
 inline constexpr std::string_view kStateAnyItemSelected = kStateName<3>;
 
+// True while any selected track, including the master track, is in the
+// automation mode. These are only as current as the calls to
+// TrackCache::InvalidateSelectedAutoModes().
+inline constexpr std::string_view kStateSelectedAutoTrimRead = kStateName<4>;
+inline constexpr std::string_view kStateSelectedAutoRead = kStateName<5>;
+inline constexpr std::string_view kStateSelectedAutoTouch = kStateName<6>;
+inline constexpr std::string_view kStateSelectedAutoWrite = kStateName<7>;
+inline constexpr std::string_view kStateSelectedAutoLatch = kStateName<8>;
+inline constexpr std::string_view kStateSelectedAutoLatchPreview =
+    kStateName<9>;
+
+// True while the selected tracks, including the master track, are in more than
+// one automation mode. As each track is in exactly one mode, this is also true
+// exactly when every lit kStateSelectedAuto* covers only some of the selection.
+inline constexpr std::string_view kStateSelectedAutoMixed = kStateName<10>;
+
 // This read-only property represents REAPER state that is read with a function,
 // and polled each run. It can be mapped to control outputs that represent a
 // binary value.

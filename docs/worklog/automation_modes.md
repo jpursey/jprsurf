@@ -137,9 +137,11 @@ read from a stale track list. A state property is only registered while an
 active mapping uses it, so when nothing shows the lights (such as during a
 global override, CL7), the mask is never recomputed at all.
 
-Six polled toggles in `kPolledToggles` (scene) read the cached mask: one per
-mode, and one for "mixed". So once the mask is cached, a run costs six bit
-tests.
+Seven polled toggles in `kPolledToggles` (scene) read the cached mask: one per
+mode, including Latch Preview, and one for "mixed". `scene` exposes every mode
+REAPER has, whether or not a device has a button for it. A toggle is only
+polled while a mapping uses it, so once the mask is cached, a run costs a bit
+test for each one mapped.
 
 Each track is in exactly one mode, so a mode covers the whole selection exactly
 when it is the only mode present. So "mixed" alone decides solid or blinking
@@ -295,15 +297,16 @@ Depends on: CL1 (findings).
 - Covered by CL4, whose lights show exactly what these return. Nothing calls
   them until then, so there is nothing to check in REAPER.
 
-### CL3 [ ] scene: polled toggles for the selected automation modes
+### CL3 [x] scene: polled toggles for the selected automation modes
 
 Depends on: CL2.
 
 - `kStateSelectedAutoTrimRead`, `kStateSelectedAutoRead`,
   `kStateSelectedAutoTouch`, `kStateSelectedAutoWrite`, and
-  `kStateSelectedAutoLatch` (`kStateName<4>` to `<8>`), with rows in
-  `kPolledToggles` reading `TrackCache::HasSelectedAutoMode()`.
-- `kStateSelectedAutoMixed` (`kStateName<9>`), reading
+  `kStateSelectedAutoLatch`, and `kStateSelectedAutoLatchPreview`
+  (`kStateName<4>` to `<9>`), with rows in `kPolledToggles` reading
+  `TrackCache::HasSelectedAutoMode()`.
+- `kStateSelectedAutoMixed` (`kStateName<10>`), reading
   `TrackCache::HasMixedSelectedAutoModes()`.
 - Unused, so no visible change.
 
