@@ -99,9 +99,10 @@ for i in CountSelectedTracks2(nullptr, true):
   modes |= 1 << GetMediaTrackInfo_Value(GetSelectedTrack2(nullptr, i, true), "I_AUTOMODE")
 ```
 
-with an early exit once every mode's bit is set. That is cheap for a few
-selected tracks, but grows with the selection (and `GetSelectedTrack2` may
-itself walk the track list), so it shouldn't run every frame.
+That is cheap for a few selected tracks, but grows with the selection (and
+`GetSelectedTrack2` may itself walk the track list), so it shouldn't run every
+frame. (An early exit once every mode is found was considered, but a selection
+with every mode in it is too rare for the check to pay for itself.)
 
 Instead it runs only when its answer can change:
 - **`IReaperControlSurface::SetAutoMode()`**: REAPER calls this when an
@@ -279,7 +280,7 @@ Depends on: none.
 - The actions change the master track's mode when it is selected, like any
   other track.
 
-### CL2 [ ] common: selected track automation modes in TrackCache
+### CL2 [x] common: selected track automation modes in TrackCache
 
 Depends on: CL1 (findings).
 
@@ -291,8 +292,8 @@ Depends on: CL1 (findings).
 
 **Verify**
 - Standard checks.
-- Covered by CL4. Temporary: log the mask when it is recomputed, and check it
-  matches the TCP for a few selections, then remove.
+- Covered by CL4, whose lights show exactly what these return. Nothing calls
+  them until then, so there is nothing to check in REAPER.
 
 ### CL3 [ ] scene: polled toggles for the selected automation modes
 

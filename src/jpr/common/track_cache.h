@@ -5,12 +5,14 @@
 
 #pragma once
 
+#include <bit>
 #include <memory>
 
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/anchor.h"
+#include "jpr/common/automation.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/track.h"
 
@@ -101,6 +103,27 @@ class TrackCache final {
   // only refreshed for tracks mapped on the surface.
   Track* GetOnlySelectedTrack() const;
 
+  // Returns true if any selected track, including the master track, is in the
+  // automation mode.
+  bool HasSelectedAutoMode(AutoMode mode) {
+    return GetSelectedAutoModes().IsSet(mode);
+  }
+
+  // Returns true if the selected tracks, including the master track, are in
+  // more than one automation mode.
+  bool HasMixedSelectedAutoModes() {
+    return std::popcount(GetSelectedAutoModes().GetMask()) > 1;
+  }
+
+  // Marks the automation modes of the selected tracks as stale, so they are
+  // re-read from REAPER when next needed. This must be called whenever the
+  // track selection or any track's automation mode may have changed. Refresh()
+  // calls it itself.
+  //
+  // This is cheap, so it may be called for every REAPER notification. The
+  // modes are re-read at most once, when next needed.
+  void InvalidateSelectedAutoModes() { selected_auto_modes_valid_ = false; }
+
  private:
   friend class absl::NoDestructor<TrackCache>;
 
@@ -122,6 +145,10 @@ class TrackCache final {
   // Assigns the index within the given filter for each child of the track, and
   // returns how many of those children the filter includes.
   static int AssignChildIndices(Track* track, int filter_index);
+
+  // Returns the automation modes of the selected tracks, re-reading them from
+  // REAPER first if they are stale.
+  AutoModes GetSelectedAutoModes();
 
   // Maps for all Tracks that have ever existed in this REAPER session. This is
   // never cleared, with deleted tracks remaining in a "non-existing" state,
@@ -151,6 +178,11 @@ class TrackCache final {
   // The single master track, which is not included in the track list. This
   // is the root of all tracks.
   Track* master_track_ = nullptr;
+
+  // The automation modes of the selected tracks, which are only valid while
+  // selected_auto_modes_valid_ is true.
+  AutoModes selected_auto_modes_;
+  bool selected_auto_modes_valid_ = false;
 
   // Single stub track used to represent no track at all. It will never exist,
   // but can be used as a placeholder for track mapping.

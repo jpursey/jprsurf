@@ -149,6 +149,9 @@ void TrackCache::Refresh() {
   }
   RebuildTrackIndices();
 
+  // Any track may have changed, including by switching projects.
+  InvalidateSelectedAutoModes();
+
   // Notify tracks whose child hierarchy changed. This is done after the full
   // rebuild so that listeners see the final state.
   for (const auto& [guid, track] : track_map_) {
@@ -274,6 +277,25 @@ Track* TrackCache::GetOnlySelectedTrack() const {
     return nullptr;
   }
   return GetTrack(GetSelectedTrack(nullptr, 0));
+}
+
+AutoModes TrackCache::GetSelectedAutoModes() {
+  if (selected_auto_modes_valid_) {
+    return selected_auto_modes_;
+  }
+  selected_auto_modes_valid_ = true;
+  selected_auto_modes_.Clear();
+
+  const int count = CountSelectedTracks2(nullptr, /*wantmaster=*/true);
+  for (int i = 0; i < count; ++i) {
+    MediaTrack* track_id = GetSelectedTrack2(nullptr, i, /*wantmaster=*/true);
+    const int mode =
+        static_cast<int>(GetMediaTrackInfo_Value(track_id, "I_AUTOMODE"));
+    if (mode >= 0 && mode < kAutoModeCount) {
+      selected_auto_modes_ += static_cast<AutoMode>(mode);
+    }
+  }
+  return selected_auto_modes_;
 }
 
 }  // namespace jpr
