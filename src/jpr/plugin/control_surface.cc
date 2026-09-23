@@ -865,6 +865,18 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
                           enter, {.read = {.required_modifiers = kModCtrl}});
 
+    // Automation buttons
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeTrim,
+                          absl::StrCat("XTouch/", DeviceXTouch::kAutoTrim));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeRead,
+                          absl::StrCat("XTouch/", DeviceXTouch::kAutoRead));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeTouch,
+                          absl::StrCat("XTouch/", DeviceXTouch::kAutoTouch));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeWrite,
+                          absl::StrCat("XTouch/", DeviceXTouch::kAutoWrite));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdAutoModeLatch,
+                          absl::StrCat("XTouch/", DeviceXTouch::kAutoLatch));
+
     // Misc buttons (above transport)
     root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
                           absl::StrCat("XTouch/", DeviceXTouch::kMarker));

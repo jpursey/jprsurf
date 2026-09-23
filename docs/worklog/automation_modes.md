@@ -9,7 +9,7 @@ instead.
 REAPER's global automation override (the automation control on the transport)
 makes every track behave as if it were in one mode, without changing the
 tracks' own modes, which come back when it is turned off. It is either off ("no
-override"), one of the five modes, or Bypass, which ignores all automation.
+override"), one of the track modes, or Bypass, which ignores all automation.
 
 ## Behavior
 
@@ -40,8 +40,8 @@ override"), one of the five modes, or Bypass, which ignores all automation.
   Pressing one of the buttons sets them all, leaving that one solid.
 - All off when no tracks are selected.
 - Trim/Read is REAPER's default mode, so Trim is lit for most selections.
-- The master track counts when it is selected, if the actions act on it (see
-  CL1). The lights should describe exactly the tracks a press would change.
+- The master track counts when it is selected, as the actions change its mode
+  too. The lights describe exactly the tracks a press would change.
 - They follow the current project when switching project tabs.
 
 ### Global override (Group)
@@ -62,9 +62,9 @@ Group works like a mode button for the automation section:
   selected tracks' lights.
 - Changing the override in REAPER (the transport control or its actions) updates
   the lights.
-- The lights follow whatever `GetGlobalAutomationOverride()` reports, so they
-  are right whether REAPER keeps the override per project or REAPER-wide (CL1
-  checks which, for the user guide).
+- The override is per project, so the lights follow it when switching project
+  tabs.
+- A Latch Preview override (set from REAPER) lights Group only, like Bypass.
 
 ## Design
 
@@ -84,13 +84,13 @@ column is empty for them), so `Scene::GetProperty()` makes them
 REAPER has no single query for this. It is:
 
 ```
-for i in CountSelectedTracks2(nullptr, want_master):
-  modes |= 1 << GetMediaTrackInfo_Value(GetSelectedTrack2(nullptr, i, want_master), "I_AUTOMODE")
+for i in CountSelectedTracks2(nullptr, true):
+  modes |= 1 << GetMediaTrackInfo_Value(GetSelectedTrack2(nullptr, i, true), "I_AUTOMODE")
 ```
 
-with an early exit once all five bits are set. That is cheap for a few selected
-tracks, but grows with the selection (and `GetSelectedTrack2` may itself walk
-the track list), so it shouldn't run every frame.
+with an early exit once every mode's bit is set. That is cheap for a few
+selected tracks, but grows with the selection (and `GetSelectedTrack2` may
+itself walk the track list), so it shouldn't run every frame.
 
 Instead it runs only when its answer can change:
 - **`IReaperControlSurface::SetAutoMode()`**: REAPER calls this when an
@@ -102,8 +102,9 @@ Instead it runs only when its answer can change:
 
 The result is cached as a bitmask in `TrackCache` (common), which already holds
 "generic REAPER track state", alongside `GetOnlySelectedTrack()`:
-- `enum class AutoMode { kTrimRead, kRead, kTouch, kWrite, kLatch }` in a new
-  `common/automation.h`, with values matching REAPER's `I_AUTOMODE` (0–4).
+- `enum class AutoMode { kTrimRead, kRead, kTouch, kWrite, kLatch,
+  kLatchPreview }` in a new `common/automation.h`, with values matching
+  REAPER's `I_AUTOMODE` (0–5).
 - `TrackCache::HasSelectedAutoMode(AutoMode)` returns whether any selected track
   is in the mode, recomputing the mask first if it is stale.
 - `TrackCache::HasMixedSelectedAutoModes()` returns whether the selected tracks
@@ -138,19 +139,26 @@ for all five lights, and no per-mode "all" state is needed:
   changes.
 
 **Brittleness:** the cache is only as fresh as the invalidation calls, and
-`ControlSurface` has to make them from the right REAPER callbacks. The risk is a
-change REAPER doesn't report through `SetAutoMode()` (for example a ReaScript
-setting `I_AUTOMODE`, or undoing a mode change), leaving a light stale until the
-next selection change. CL1 checks this with temporary logging. If there are
-gaps, the fallback is to also invalidate when `GetProjectStateChangeCount()`
-moves, which is one cheap call per run and catches anything that makes an undo
-point (a mode change does).
+`ControlSurface` has to make them from the right REAPER callbacks. CL1's
+findings show every change tested is followed by one of `SetAutoMode()`,
+`SetSurfaceSelected()`, or `SetTrackListChange()`. The known gap is a ReaScript
+setting `I_AUTOMODE` directly, which leaves a light stale until the next
+selection change. If that ever matters, the fix is to also invalidate when
+`GetProjectStateChangeCount()` moves.
+
+**Latch Preview:** REAPER has a sixth track mode, Latch Preview (`I_AUTOMODE`
+5), which the SDK comments don't mention and which has no button. `AutoMode`
+includes it as `kLatchPreview`, and it is a bit in the mask like the others, so
+a selection of Read and Latch Preview tracks blinks Read, as not every selected
+track is in Read. No light shows Latch Preview itself.
 
 ### Global override
 
 REAPER reads and sets the override with `GetGlobalAutomationOverride()` and
-`SetGlobalAutomationOverride()`: -1 for none, 0–4 for the modes (the same values
-as `I_AUTOMODE`), and 5 for Bypass. There is no known notification for it, so
+`SetGlobalAutomationOverride()`: -1 for none, and otherwise a track mode (the
+same values as `I_AUTOMODE`, including 5 for Latch Preview), or 6 for Bypass
+(not the 5 the SDK says, see CL1's findings). It is per project, and isn't in
+the undo history. There is no known notification for it, so
 it is polled, by the properties' own `UpdateState()` from `Scene::OnRun()`, the
 same as the polled toggles and command toggle states. `ControlSurface` has no
 part in it. That should be cheap, as it only reads a setting, and CL7 measures
@@ -160,8 +168,8 @@ The properties don't use those actions, as "same mode again goes to Bypass"
 needs its own write behavior.)
 
 **common (automation.h/.cc):** alongside `AutoMode`:
-- `AutoOverride` (`kNone = -1`, the five modes, and `kBypass = 5`), with values
-  matching REAPER.
+- `AutoOverride` (`kNone = -1`, the six track modes, and `kBypass = 6`), with
+  values matching REAPER.
 - `GetAutoOverride()` and `SetAutoOverride()` wrap the REAPER calls, and both
   remember the last override that wasn't `kNone`, which
   `GetLastAutoOverride()` returns (`kBypass` until there is one). Remembering
@@ -194,7 +202,7 @@ here.
 
 ## CLs
 
-### CL1 [ ] plugin: automation buttons set the selected tracks' mode
+### CL1 [x] plugin: automation buttons set the selected tracks' mode
 
 Depends on: none.
 
@@ -222,6 +230,33 @@ Depends on: none.
     whether it changes when switching project tabs, and whether changing it
     adds an undo point.
   - Record the findings here, and adjust the later CLs before starting them.
+
+**Findings**
+- The buttons work as planned, including with several tracks selected, as one
+  undo point each.
+- REAPER calls `SetAutoMode()` for a surface press, the actions run from REAPER,
+  and a track's own automation mode button (selected or not). The argument is a
+  single mode, so it only says that something changed. Each call is followed by
+  `SetSurfaceSelected()` for every track.
+- It does not call `SetAutoMode()` for undo/redo or selection changes. Undo and
+  redo call `SetTrackListChange()` and `SetSurfaceSelected()` for every track
+  instead, and selection changes call `SetSurfaceSelected()`, so the planned
+  invalidation covers every path tested. The `GetProjectStateChangeCount()`
+  fallback isn't needed.
+- A ReaScript setting `I_AUTOMODE` directly couldn't be tested. If REAPER
+  doesn't report it, the lights catch up at the next selection change.
+- The global override:
+  - never calls `SetAutoMode()`, but each change is followed by
+    `SetSurfaceSelected()` for every track;
+  - adds no undo point;
+  - is per project: switching project tabs changes it (and the per-track modes),
+    again with no `SetAutoMode()` call;
+  - reports 6 for Bypass, not the 5 the SDK says. 5 is Latch Preview, a sixth
+    track mode the SDK comments don't mention (actions 42023 and 42024). The
+    values logged while stepping down the transport's menu were 6 (Bypass),
+    0, 1, 0, 2, 4 (Latch), 5 (Latch Preview), 3 (Write), 0, -1.
+- The actions change the master track's mode when it is selected, like any
+  other track.
 
 ### CL2 [ ] common: selected track automation modes in TrackCache
 
@@ -276,7 +311,7 @@ Depends on: CL3.
   modes: the lights switch between blinking and solid.
 - Changing a mode from REAPER (TCP button, action list, undo) updates the
   lights, including a selected track that isn't the first one selected.
-- No tracks selected: all off. Master track selected (per CL1's finding).
+- No tracks selected: all off. Only the master track selected: its mode is lit.
 - Switching project tabs updates the lights.
 - **Performance:** in a large project (100+ tracks), the `Run()` average doesn't
   move from before the change. Select all tracks, then change all their modes

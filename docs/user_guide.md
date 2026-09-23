@@ -225,6 +225,21 @@ clears. Shift + Cancel doesn't affect it.
 
 All of these lights follow the current project when you switch project tabs.
 
+### Automation buttons
+
+The automation buttons set the automation mode of every selected track:
+
+| Button    | Sets the selected tracks to |
+| --------- | --------------------------- |
+| **Trim**  | Trim/Read                   |
+| **Read**  | Read                        |
+| **Touch** | Touch                       |
+| **Write** | Write                       |
+| **Latch** | Latch                       |
+
+Each press is a single undo step. With no tracks selected, a press does
+nothing. **Group** is not used yet.
+
 ---
 
 ## Track mode
@@ -427,6 +442,11 @@ other, it does nothing.
 | Save        | Save                    | Save new version      |                     |                               |
 | Cancel      | Unselect all items      | Remove time selection |                     |                               |
 | Enter       | Insert MIDI item        | Insert empty item     | Insert click source |                               |
+| Trim        | Selected tracks: trim/read |                    |                     |                               |
+| Read        | Selected tracks: read   |                       |                     |                               |
+| Touch       | Selected tracks: touch  |                       |                     |                               |
+| Write       | Selected tracks: write  |                       |                     |                               |
+| Latch       | Selected tracks: latch  |                       |                     |                               |
 | Rewind      | Previous measure        |                       |                     |                               |
 | Forward     | Next measure            |                       |                     |                               |
 | Nudge       | Toggle moving by beat   |                       |                     |                               |
