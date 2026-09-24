@@ -221,7 +221,9 @@ root                      global mappings: modifiers (including mod_send_hold),
   property in its view's scope has a given bool value. Use conditions for
   write mappings. Read mappings should use `required_modifiers` instead:
   switching a read mapping with a condition re-registers its input, which
-  resets any pending press timing.
+  resets any pending press timing. A read mapping may still use a condition
+  for state `required_modifiers` can't express, such as REAPER state, if it
+  has no long or double press (the automation buttons do this).
 
 ## Testing
 

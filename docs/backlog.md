@@ -111,21 +111,6 @@ write mapping to a button. Each one costs a poll every run, so weigh it against
 *Cheaper polling for the polled toggles* below. A row can also have a write
 function, so the button can change the state too.
 
-## Document when read mappings may use conditions
-
-- **Layers:** scene
-- **Size:** small
-- **Depends on:** nothing
-- **Background:** [automation_modes.md](worklog/automation_modes.md)
-
-`ViewMapping::Condition` in `view_mapping.h` (and the matching note in
-`surface_modes.md`) says read mappings that switch with a modifier should use
-`ReadConfig::required_modifiers` instead, as a condition re-registers them and
-loses a pending long or double press. The automation buttons switch their read
-mappings on REAPER state (the global override), which `required_modifiers`
-can't express, and have no long or double press. Add a sentence saying that is
-a fine use, so it doesn't read as breaking the rule.
-
 ## Move the empty strip check into common
 
 - **Layers:** common, plugin
