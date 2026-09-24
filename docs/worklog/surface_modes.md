@@ -1,6 +1,6 @@
 # Surface Modes
 
-JPSurf has two surface modes, selected with the X-Touch assign buttons: Track
+JPRSurf has two surface modes, selected with the X-Touch assign buttons: Track
 mode (`kAssignTrack`) and Send/Receive mode (`kAssignSend`). This describes how
 they behave and how they are built, as a reference for adding more modes.
 

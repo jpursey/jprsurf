@@ -11,7 +11,7 @@ turns up.
 
 Each item carries:
 
-- **Layers**: the JPSurf libraries it touches (`common`, `device`, `scene`,
+- **Layers**: the JPRSurf libraries it touches (`common`, `device`, `scene`,
   `plugin`), in dependency order. More than one usually means more than one CL.
 - **Size**: a guess. *Small* is a single CL. *Medium* is a few. *Large* wants a
   design and a `docs/worklog/` plan before any code.
@@ -20,19 +20,6 @@ Each item carries:
 
 When an item is picked up it moves into its own `docs/worklog/<feature>.md`
 plan (see Feature workflow in CLAUDE.md) and comes out of this list.
-
-## Use the JPRSurf name consistently
-
-- **Layers:** none (docs and project settings)
-- **Size:** small
-- **Depends on:** nothing
-- **Background:** none
-
-The project is JPRSurf, which the code, CMake, and README use, but CLAUDE.md,
-the user guide, the backlog, and a worklog also call it JPSurf. Standardize on
-JPRSurf. This includes the log file permission in `.claude/settings.json`,
-which names `jpsurf.log` rather than the actual `jprsurf.log`, so it doesn't
-match.
 
 ## Surface config model
 

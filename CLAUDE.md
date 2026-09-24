@@ -1,4 +1,4 @@
-# JPSurf
+# JPRSurf
 
 This is a C++ control surface extension for the REAPER DAW. It handles bi-directional control between physical hardware and a running instance of REAPER. REAPER is a realtime, low latency, application processing audio, so performance and reliability of the extension are critical.
 
@@ -18,8 +18,8 @@ This is a CMake project, starting at the root. The directory structure is as fol
 ```
 
 Libraries depend strictly in the order `common` → `device` → `scene` → `plugin` (each may use only those before it):
-- `common`: Common types and general utilities for working within the REAPER SDK and managing generic REAPER state (MIDI ports, project tracks, etc). Not specific to JPSurf; it could be useful for any REAPER extension.
-- `device`: An interface and concrete implementations for the hardware devices JPSurf supports. Handles all communication with the device and tracks its current state, with no knowledge of REAPER behavior. Primary classes: `Device` (the generic interface for a hardware device) and `Control` (a logical control on that device that may be read and/or written to).
+- `common`: Common types and general utilities for working within the REAPER SDK and managing generic REAPER state (MIDI ports, project tracks, etc). Not specific to JPRSurf; it could be useful for any REAPER extension.
+- `device`: An interface and concrete implementations for the hardware devices JPRSurf supports. Handles all communication with the device and tracks its current state, with no knowledge of REAPER behavior. Primary classes: `Device` (the generic interface for a hardware device) and `Control` (a logical control on that device that may be read and/or written to).
 - `scene`: Defines how device controls may be mapped to REAPER actions and properties. It knows REAPER properties and abstractions, but does not hard code mappings; they must be configured. Primary classes: `Scene` (the top level mapping between one or more devices and REAPER state) and `View` (a hierarchical set of mappings that may be enabled or disabled independently by configuration or explicit application control).
 - `plugin`: The entry point for the REAPER extension, which configures the Control Surface Integration (CSI) for the connected devices. Primary class: `ControlSurface`, which implements `IReaperControlSurface` and defines the actual mappings and business logic.
 
@@ -107,7 +107,7 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - All extension code is in the "jpr" namespace, except for required C extension points of the REAPER SDK.
 - Every file starts with the four line MIT copyright comment used everywhere in the tree, with the year the file was created.
 - Headers use `#pragma once` include guards (not `#ifndef` include guards).
-- Include order: the file's own header first, then C/C++ standard headers in angle brackets, then third-party, Game Bits, and JPSurf headers in quotes (`"absl/..."`, `"gb/..."`, `"jpr/..."`), with blank lines between groups.
+- Include order: the file's own header first, then C/C++ standard headers in angle brackets, then third-party, Game Bits, and JPRSurf headers in quotes (`"absl/..."`, `"gb/..."`, `"jpr/..."`), with blank lines between groups.
 - Sections in a file are separated by //===== blocks (extending to column 80) surrounding descriptive text: One line section description, and if necessary further description in additional paragraphs.
 - Sections within a class or between groups of related functions are separated by //---- blocks (otherwise the same as above).
 - All comments are // style (not /// or /*...*/)
@@ -152,7 +152,7 @@ REAPER is notoriously underdocumented. The best resources are as follows:
 - ReaScript API (mirrors the C++ API).
   - Official documentation here: https://www.reaper.fm/sdk/reascript/reascripthelp.html
   - Navigable site for REAPER functions in multiple languages: https://www.extremraym.com/cloud/reascript-doc/
-- Working plugins that do largely the same sort of thing. JPSurf is my personal replacement for these:
+- Working plugins that do largely the same sort of thing. JPRSurf is my personal replacement for these:
   - Klinke MCU: https://github.com/jpursey/csurf_klinke_mcu_jp This was very reliable, and in C++, but missing features I wanted. This is my personal fork of the project. It is downloaded and available locally at `../csurf_klinke_mcu`.
   - DrivenByMOSS: https://github.com/git-moss/DrivenByMoss4Reaper This was feature rich, but quite flaky in practice, and also was written in Java.
 

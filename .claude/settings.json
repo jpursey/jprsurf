@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "allow": ["Read(C:\\Users\\johnp\\AppData\\Roaming\\jpsurf.log)"],
+    "allow": ["Read(C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log)"],
     "additionalDirectories": [
       "../game-bits",
       "../reaper-sdk",

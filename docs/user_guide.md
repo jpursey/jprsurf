@@ -1,6 +1,6 @@
-# JPSurf User Guide
+# JPRSurf User Guide
 
-JPSurf is a REAPER control surface extension for the Behringer X-Touch, with
+JPRSurf is a REAPER control surface extension for the Behringer X-Touch, with
 optional support for an X-Touch Extender. It replaces REAPER's stock Mackie
 Control support.
 
@@ -21,11 +21,11 @@ Control support.
 
 ### Hardware
 
-JPSurf supports one X-Touch, and optionally one X-Touch Extender. An extender
+JPRSurf supports one X-Touch, and optionally one X-Touch Extender. An extender
 is not required.
 
 **If you use an extender, it must be physically to the left of the X-Touch.**
-JPSurf lays out the channel strips in that order: the extender's 8 strips are
+JPRSurf lays out the channel strips in that order: the extender's 8 strips are
 channels 1-8, and the X-Touch's 8 strips are channels 9-16. There is currently
 no way to put the extender on the right, or to use more than one.
 
@@ -39,12 +39,12 @@ Both units must be in Mackie Control (MC) mode, not HUI or standard MIDI mode.
    (typically `C:\Users\<you>\AppData\Roaming\REAPER\UserPlugins`).
 3. Start REAPER.
 
-JPSurf is Windows only.
+JPRSurf is Windows only.
 
 ### Turning off REAPER's own MIDI handling
 
-**This step matters.** JPSurf opens the X-Touch's MIDI ports directly. If
-REAPER also has those ports enabled, REAPER and JPSurf will both talk to the
+**This step matters.** JPRSurf opens the X-Touch's MIDI ports directly. If
+REAPER also has those ports enabled, REAPER and JPRSurf will both talk to the
 surface and fight over it - faders jump back, lights flicker, and buttons do
 things twice.
 
@@ -64,10 +64,10 @@ Control Surface** from the control surface mode list:
 
 ![Adding the Jovian Path Control Surface in REAPER's control surface preferences](images/add-control-surface.png)
 
-There is nothing to configure - JPSurf has no settings in this dialog. It finds
+There is nothing to configure - JPRSurf has no settings in this dialog. It finds
 the hardware itself, and the surface should light up as soon as you click OK.
 
-JPSurf locates the units by their MIDI port names, which must be exactly:
+JPRSurf locates the units by their MIDI port names, which must be exactly:
 
 | Device           | Port name     |
 | ---------------- | ------------- |
@@ -75,12 +75,12 @@ JPSurf locates the units by their MIDI port names, which must be exactly:
 | X-Touch Extender | `X-Touch-Ext` |
 
 These are the names the units report by default. If you have renamed them in
-Windows, or you have more than one interface presenting a similar name, JPSurf
+Windows, or you have more than one interface presenting a similar name, JPRSurf
 will not find them.
 
 ### If something doesn't work
 
-JPSurf writes a log to `%APPDATA%\jprsurf.log`, which is cleared each time
+JPRSurf writes a log to `%APPDATA%\jprsurf.log`, which is cleared each time
 REAPER starts. It lists every MIDI port it found and which ones it opened,
 which is the fastest way to tell whether a naming or port problem is the cause.
 
