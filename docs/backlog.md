@@ -13,18 +13,24 @@ Each item carries:
 
 - **Layers**: the JPRSurf libraries it touches (`common`, `device`, `scene`,
   `plugin`), in dependency order. More than one usually means more than one CL.
-- **Size**: a guess. *Small* is a single CL. *Medium* is a few. *Large* wants a
-  design and a `docs/worklog/` plan before any code.
+- **Size**: a guess. *Small* is a single CL. *Medium* is a few. *Large* is
+  many, usually after a design.
+- **Feature workflow**: whether the item follows the Feature workflow in
+  CLAUDE.md, with a design and a `docs/worklog/` plan of CLs. Anything that
+  comes down to one or two simple CLs doesn't, and is done as an ordinary
+  change.
 - **Depends on**: other items that should come first, or "nothing".
 - **Background**: the worklog holding the context, where there is one.
 
-When an item is picked up it moves into its own `docs/worklog/<feature>.md`
-plan (see Feature workflow in CLAUDE.md) and comes out of this list.
+When an item that follows the feature workflow is picked up, it moves into its
+own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
+comes out of this list in the commit that does it.
 
 ## Extension host in common
 
 - **Layers:** common, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** nothing
 - **Background:** none
 
@@ -48,6 +54,7 @@ JPRSurf instance*).
 
 - **Layers:** common, scene, plugin
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** nothing
 - **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
 
@@ -75,6 +82,7 @@ the spec doesn't name track actions that are about to change.
 
 - **Layers:** scene, plugin
 - **Size:** medium
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Properties, Names)
 
@@ -101,6 +109,7 @@ mechanical, and the smoke test verifies it.
 
 - **Layers:** scene, plugin
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Enabled, Mappings)
 
@@ -118,6 +127,7 @@ mechanical, and the smoke test verifies it.
 
 - **Layers:** scene, plugin
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** *Property namespaces and names*
 - **Background:** [config_model.md](config_model.md) (References, Subjects,
   Lists), [surface_modes.md](worklog/surface_modes.md)
@@ -150,6 +160,7 @@ wants a worklog plan.
 
 - **Layers:** scene, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** *Property namespaces and names*
 - **Background:** [config_model.md](config_model.md) (Declared properties,
   Track anchor), [ranged_track_actions.md](worklog/ranged_track_actions.md)
@@ -172,6 +183,7 @@ themselves into `scene`. Whichever of the two comes second builds on the other.
 
 - **Layers:** device, scene, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** *View conditions and fixed write values*, *View subjects,
   lists, and references*, and *Properties declared on views, and track anchors*
 - **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
@@ -203,6 +215,7 @@ scene from a SurfaceSpec* turns into data.
 
 - **Layers:** scene
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (The escape hatch)
 
@@ -218,6 +231,7 @@ run any script or extension action.
 
 - **Layers:** device
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Widgets)
 
@@ -243,6 +257,7 @@ publishes one.
 
 - **Layers:** device, scene, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** *Widgets*
 - **Background:** [config_model.md](config_model.md) (Devices)
 
@@ -273,6 +288,7 @@ it.
 
 - **Layers:** a new spec library, scene, plugin
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** *Device types and catalogs*, *Modes from exclusive groups and
   picks*, and *Named command IDs*; ideally *Move surface interaction policy out
   of common*
@@ -307,6 +323,7 @@ plugin can register it as a named component the spec refers to, as a stopgap.
 
 - **Layers:** spec library, plugin
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** *Build the scene from a SurfaceSpec*
 - **Background:** none
 
@@ -325,6 +342,7 @@ parsed, equals the in-code spec, so the translation is verified without REAPER.
 
 - **Layers:** none (docs)
 - **Size:** medium
+- **Feature workflow:** no
 - **Depends on:** *Config file language and loader*
 - **Background:** [config_model.md](config_model.md)
 
@@ -337,6 +355,7 @@ writing a real config in it.
 
 - **Layers:** plugin
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [surface_modes.md](worklog/surface_modes.md)
 
@@ -350,6 +369,7 @@ strip.
 
 - **Layers:** plugin
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [surface_modes.md](worklog/surface_modes.md)
 
@@ -362,6 +382,7 @@ select behavior is not obviously the right answer.
 
 - **Layers:** common, scene, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** *Move surface interaction policy out of common*; selecting
   routes also depends on *Local surface-only selection within routes*
 - **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
@@ -375,6 +396,7 @@ no route equivalent. Once that policy moves to `scene`, ranged route mute is a
 
 - **Layers:** scene, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** nothing
 - **Background:** [surface_modes.md](worklog/surface_modes.md)
 
@@ -387,6 +409,7 @@ needs its own lights and clearing rules.
 
 - **Layers:** scene, plugin
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [utility_buttons.md](worklog/utility_buttons.md)
 
@@ -399,6 +422,7 @@ function, so the button can change the state too.
 
 - **Layers:** scene, plugin
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** ideally *Modes from exclusive groups and picks*, so new modes
   don't add plugin state
 - **Background:** [config_model.md](config_model.md) (Modes),
@@ -414,6 +438,7 @@ is the design work.
 
 - **Layers:** plugin
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** *Config file language and loader*
 - **Background:** none
 
@@ -425,6 +450,7 @@ if nothing in the plugin outlives the scene.
 
 - **Layers:** plugin
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** none
 
@@ -438,6 +464,7 @@ design.
 
 - **Layers:** common, scene, plugin
 - **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** *Extension host in common*, *Refuse a second JPRSurf instance*
 - **Background:** none
 
@@ -456,6 +483,7 @@ frame), or per instance. Worth deciding on purpose rather than by accident.
 
 - **Layers:** device, spec library
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** *Config file language and loader*
 - **Background:** none
 
@@ -469,6 +497,7 @@ device controls, not widgets (see [config_model.md](config_model.md)).
 
 - **Layers:** spec library, plugin
 - **Size:** large
+- **Feature workflow:** yes
 - **Depends on:** *Config file language and loader*
 - **Background:** [config_model.md](config_model.md) (Devices)
 
@@ -485,6 +514,7 @@ devices are all present), and a way to say which config was chosen.
 
 - **Layers:** device, scene
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Modifier sets)
 
@@ -506,6 +536,7 @@ can be done at any time, such as when a second case turns up.
 
 - **Layers:** scene
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
 
@@ -519,6 +550,7 @@ difference.
 
 - **Layers:** scene
 - **Size:** small
+- **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [utility_buttons.md](worklog/utility_buttons.md)
 

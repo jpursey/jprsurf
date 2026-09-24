@@ -131,9 +131,10 @@ New features are designed first, then built and reviewed as a series of small ch
 
 ### Backlog
 
-`docs/backlog.md` is the one home for work that isn't being done yet, so ideas don't scatter across the worklogs. It is a flat list in rough stack rank order, each item a heading with **Layers**, **Size**, **Depends on**, and **Background** fields, then a short description. Worklog docs have no "Future ideas" section of their own.
+`docs/backlog.md` is the one home for work that isn't being done yet, so ideas don't scatter across the worklogs. It is a flat list in rough stack rank order, each item a heading with **Layers**, **Size**, **Feature workflow**, **Depends on**, and **Background** fields, then a short description. Worklog docs have no "Future ideas" section of their own.
 - Anything noticed that is worth doing but out of scope belongs there, rather than in a comment or a worklog.
-- When an item is picked up, it moves into its own `docs/worklog/<feature>.md` plan and comes out of the backlog.
+- **Feature workflow** says whether the item follows the workflow above. Anything that comes down to one or two simple CLs doesn't: it is done as an ordinary change, reviewed and committed without a worklog plan.
+- When an item that follows the feature workflow is picked up, it moves into its own `docs/worklog/<feature>.md` plan and comes out of the backlog. Any other item comes out of the backlog in the commit that does it.
 
 ## Parallel sessions
 
