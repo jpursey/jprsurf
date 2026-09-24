@@ -20,7 +20,9 @@ class SceneStateProperty : public ViewProperty {
   ~SceneStateProperty() override = default;
 
   // Derived classes must override this to update the state of the property, and
-  // if it changed call NotifyChanged().
+  // if it changed call NotifyChanged(). This is called every run while the
+  // property is registered, and when it is first registered. It should be
+  // cheap.
   virtual void UpdateState() = 0;
 
  protected:

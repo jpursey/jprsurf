@@ -135,7 +135,7 @@ their mappings, which rewrite the lights in the same run (`SyncMappings()`).
 `Run()` refreshes `TrackCache` before running the scene, so the mask is never
 read from a stale track list. A state property is only registered while an
 active mapping uses it, so when nothing shows the lights (such as during a
-global override, CL7), the mask is never recomputed at all.
+global override, CL8), the mask is never recomputed at all.
 
 Seven polled toggles in `kPolledToggles` (scene) read the cached mask: one per
 mode, including Latch Preview, and one for "mixed". `scene` exposes every mode
@@ -176,7 +176,7 @@ same values as `I_AUTOMODE`, including 5 for Latch Preview), or 6 for Bypass
 the undo history. There is no known notification for it, so
 it is polled, by the properties' own `UpdateState()` from `Scene::OnRun()`, the
 same as the polled toggles and command toggle states. `ControlSurface` has no
-part in it. That should be cheap, as it only reads a setting, and CL7 measures
+part in it. That should be cheap, as it only reads a setting, and CL8 measures
 it. (REAPER's "Global automation override" actions do report a toggle state,
 such as 40876 "No override", which confirms REAPER tracks it as ordinary state.
 The properties don't use those actions, as "same mode again goes to Bypass"
@@ -365,7 +365,7 @@ Depends on: CL2.
 
 **Verify**
 - Standard checks.
-- Covered by CL7.
+- Covered by CL8.
 
 ### CL6 [x] scene: global automation override properties
 
@@ -379,11 +379,31 @@ Depends on: CL5.
 
 **Verify**
 - Standard checks.
-- Covered by CL7.
+- Covered by CL8.
 
-### CL7 [ ] plugin: Group button and override mode
+### CL7 [x] scene: state properties are current when first used
 
-Depends on: CL4, CL6.
+Depends on: none.
+
+A `SceneStateProperty` only updates its state while a mapping uses it, and a
+mapping writes its control as soon as it becomes active. So a mapping switched
+on by a condition (CL8's override lights) or a view (modes) writes whatever
+state the property cached when it was last used, until the next run corrects
+it: a wrong light for one frame. `SceneStateProperty::OnRegistered()` now calls
+`UpdateState()`, so a property is current the moment anything starts using it.
+- Every `UpdateState()` is a cheap REAPER read (command toggle state, the
+  polled toggles, the ruler modes, and the timeline position).
+- Found by `/code-review` on CL8. The flash wasn't visible in testing, but the
+  fix is general and removes it for every conditioned or view-switched light.
+
+**Verify**
+- Standard checks, including the smoke test (the timecode display, ruler mode
+  lights, transport lights, and mode buttons all use state properties).
+- No new `Run()` spikes when switching modes.
+
+### CL8 [~] plugin: Group button and override mode
+
+Depends on: CL4, CL6, CL7.
 
 - Group: read and write mappings to `kStateAutoOverrideActive`.
 - Mode buttons: the CL1 read mappings and CL4 lights get a condition on
@@ -414,9 +434,9 @@ Depends on: CL4, CL6.
 - Switching project tabs: the lights match the transport in each project.
 - **Performance:** the `Run()` average doesn't move from before the change.
 
-### CL8 [ ] scene, common: the last override lives with the Group toggle
+### CL9 [ ] scene, common: the last override lives with the Group toggle
 
-Depends on: CL7.
+Depends on: CL8.
 
 Which override Group restores is surface policy, not reusable REAPER logic, so
 it moves out of `common` and next to the row that uses it.
@@ -431,12 +451,12 @@ it moves out of `common` and next to the row that uses it.
 
 **Verify**
 - Standard checks.
-- CL7's Group checks: after a fresh start Group turns on Bypass, then it
+- CL8's Group checks: after a fresh start Group turns on Bypass, then it
   restores the last override set from the surface or from REAPER's transport.
 
-### CL9 [ ] common, plugin: TrackCache is told about REAPER events
+### CL10 [ ] common, plugin: TrackCache is told about REAPER events
 
-Depends on: CL7.
+Depends on: CL8.
 
 `ControlSurface` calls `TrackCache::InvalidateSelectedAutoModes()`, which names
 the cache rather than what happened, so the knowledge of which REAPER callbacks
