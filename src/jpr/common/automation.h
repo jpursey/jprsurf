@@ -28,4 +28,36 @@ inline constexpr int kAutoModeCount = 6;
 // A set of automation modes.
 using AutoModes = gb::Flags<AutoMode>;
 
+// REAPER's global automation override for the current project, which makes
+// every track behave as if it were in one mode, without changing the tracks'
+// own modes. The values match REAPER's, and the modes match AutoMode.
+enum class AutoOverride {
+  kNone = -1,
+  kTrimRead = 0,
+  kRead,
+  kTouch,
+  kWrite,
+  kLatch,
+  kLatchPreview,
+
+  // Ignores all automation. The SDK documents this as 5, but REAPER uses 6.
+  kBypass,
+};
+
+// Returns the global automation override for the current project.
+AutoOverride GetAutoOverride();
+
+// Sets the global automation override for the current project. This does not
+// add an undo point.
+void SetAutoOverride(AutoOverride auto_override);
+
+// Returns the last override other than kNone that was returned by
+// GetAutoOverride() or set by SetAutoOverride(), or kBypass if there hasn't
+// been one since REAPER started. This is the override to restore when turning
+// the override back on.
+//
+// Overrides set in REAPER are only seen when GetAutoOverride() is called, so
+// this is only as current as its last call.
+AutoOverride GetLastAutoOverride();
+
 }  // namespace jpr

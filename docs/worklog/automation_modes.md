@@ -346,7 +346,7 @@ Depends on: CL3.
 - Changing the automation mode of 100 tracks at once gives a one-off 2–3ms
   frame, which was accepted (a frame is ~33ms).
 
-### CL5 [ ] common: global automation override
+### CL5 [x] common: global automation override
 
 Depends on: CL2.
 

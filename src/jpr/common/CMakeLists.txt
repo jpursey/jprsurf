@@ -5,7 +5,7 @@
 
 set(jpr_common_SOURCE
   anchor.cc anchor.h
-  automation.h
+  automation.cc automation.h
   color.cc color.h
   guid.cc guid.h
   midi_message.h
