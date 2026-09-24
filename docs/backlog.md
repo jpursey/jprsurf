@@ -21,23 +21,6 @@ Each item carries:
 When an item is picked up it moves into its own `docs/worklog/<feature>.md`
 plan (see Feature workflow in CLAUDE.md) and comes out of this list.
 
-## Nudge and Marker can both be on at once
-
-- **Layers:** plugin
-- **Size:** small
-- **Depends on:** nothing
-- **Background:** none; found while writing the user guide
-
-Nudge and Marker are latching modifier properties, and nothing stops both from
-being on. Rewind and Forward have three read mappings each in
-`ControlSurface::InitViews()` (unmodified, `required_modifiers = mod_nudge`,
-and `required_modifiers = mod_marker`), so with both modifiers on no mapping
-matches and the two buttons do nothing at all.
-
-Make them mutually exclusive, so turning one on clears the other. This is
-currently described as behavior in `docs/user_guide.md` under Transport; drop
-that sentence once it is fixed.
-
 ## Holding Send while a select anchor is held
 
 - **Layers:** plugin

@@ -179,8 +179,8 @@ Stopping or pausing also turns recording off.
 
 **Nudge** and **Marker** change what Rewind and Forward do. They are not held
 down - press one to turn it on, and press it again to turn it off. Each is lit
-while it is on. Turn on both at once and Rewind and Forward stop working
-entirely, so if they seem dead, check that only one of the two is lit.
+while it is on. Only one can be on at a time, so turning one on turns the
+other off.
 
 **Solo** here is the standalone button above the transport, not a channel strip
 solo. A long press unsolos every track in the project.

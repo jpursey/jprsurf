@@ -140,6 +140,25 @@ void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
       {.read = {.press_behavior = press_behavior, .press_release = true}});
 }
 
+// Adds a property (toggle_<property>) that toggles the property, and turns
+// other off whenever it turns the property on. The control triggers it, and is
+// lit while the property is on. Only changes made through this property keep
+// the two exclusive, so nothing else should turn the property on.
+void AddExclusiveToggleMapping(Scene* scene, View* view, ViewProperty* property,
+                               ViewProperty* other, std::string_view control) {
+  const std::string name = absl::StrCat("toggle_", property->GetName());
+  scene->AddProperty(
+      std::make_unique<CallbackActionProperty>(name, [property, other] {
+        const bool on = !property->GetBool();
+        if (on) {
+          other->SetBool(false);
+        }
+        property->SetBool(on);
+      }));
+  view->AddMapping(ViewMapping::kReadControl, name, control);
+  view->AddMapping(ViewMapping::kWriteControl, property->GetName(), control);
+}
+
 }  // namespace
 
 #define LOG_REAPER() LOG(INFO) << "REAPER: "
@@ -942,11 +961,15 @@ void ControlSurface::InitViews() {
            .condition = in_override});
     }
 
-    // Misc buttons (above transport)
-    root_view->AddMapping(ViewMapping::kReadWriteControl, kModMarker,
-                          absl::StrCat("XTouch/", DeviceXTouch::kMarker));
-    root_view->AddMapping(ViewMapping::kReadWriteControl, kModNudge,
-                          absl::StrCat("XTouch/", DeviceXTouch::kNudge));
+    // Misc buttons (above transport). Marker and Nudge each pick what Rewind
+    // and Forward move by, so turning one on turns the other off. With both on,
+    // no Rewind or Forward mapping would match.
+    ViewProperty* marker = scene_->GetProperty(kModMarker);
+    ViewProperty* nudge = scene_->GetProperty(kModNudge);
+    AddExclusiveToggleMapping(scene_.get(), root_view, marker, nudge,
+                              absl::StrCat("XTouch/", DeviceXTouch::kMarker));
+    AddExclusiveToggleMapping(scene_.get(), root_view, nudge, marker,
+                              absl::StrCat("XTouch/", DeviceXTouch::kNudge));
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
                           absl::StrCat("XTouch/", DeviceXTouch::kCycle));
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome,
