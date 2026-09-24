@@ -21,34 +21,184 @@ Each item carries:
 When an item is picked up it moves into its own `docs/worklog/<feature>.md`
 plan (see Feature workflow in CLAUDE.md) and comes out of this list.
 
-## Data driven surface configuration
+## Use the JPRSurf name consistently
 
-- **Layers:** scene, plugin
+- **Layers:** none (docs and project settings)
+- **Size:** small
+- **Depends on:** nothing
+- **Background:** none
+
+The project is JPRSurf, which the code, CMake, and README use, but CLAUDE.md,
+the user guide, the backlog, and a worklog also call it JPSurf. Standardize on
+JPRSurf. This includes the log file permission in `.claude/settings.json`,
+which names `jpsurf.log` rather than the actual `jprsurf.log`, so it doesn't
+match.
+
+## Surface config model
+
+- **Layers:** none (design doc)
+- **Size:** medium
+- **Depends on:** nothing
+- **Background:** none; the first step toward a data driven surface
+
+The long term goal is a surface that is entirely driven by a config file, with
+the plugin as a thin host that loads it. The items below build toward it, and
+this one defines what they build: the config model, as concepts and named
+building blocks rather than syntax.
+
+- **Devices:** a device type (X-Touch, X-Touch Extender) and its MIDI ports.
+- **Layout:** named, ordered arrays of logical controls (`strip[0..15].fader`)
+  assembled from parts of physical devices, so a set of devices is one surface
+  and mappings never name a device. Adding a second extender becomes a layout
+  change.
+- **Views, mappings, and templates:** mappings repeated over a layout array with
+  the index substituted, replacing the strip loops and helpers.
+- **Behaviors:** the named, parameterized building blocks a config composes
+  (modes, anchors, exclusive toggles, polled state). The only logic a config
+  expresses is a bool condition on a property. Anything more is a new C++
+  building block, and REAPER command IDs (including script commands) are the
+  user's escape hatch.
+
+It also names the building blocks the plugin needs today (see *Scene building
+blocks for surface behavior*), and audits property names, since a public spec
+freezes them (generated names like `anchor_select_3` are the risk).
+
+The result is a durable doc (not a worklog) that ties the items below together
+and later seeds the public spec. It also adds a rule to CLAUDE.md so feature
+work stops moving away from the goal: a feature is a named building block below
+`plugin` plus its use in the surface's spec, and `plugin` gains no new state or
+callbacks.
+
+## Extension host in common
+
+- **Layers:** common, plugin
+- **Size:** medium
+- **Depends on:** nothing
+- **Background:** none
+
+Using `common` correctly takes a checklist that every extension must follow:
+forward `SetTrackListChange()` and defer `TrackCache::Refresh()` to the next
+run, poll `RefreshVisibility()` every second, forward selection and automation
+mode changes, set the last touched track, and call `ContinuousUndo::Update()`
+every run. The `Extended()` parameter decoding is generic too, but lives in
+`ControlSurface`.
+
+A base class in `common` could implement `IReaperControlSurface`, do all of that
+plumbing, and expose a small set of targeted overrides (run, track list changed,
+visibility changed, selection changed, and so on) that do nothing by default.
+An extension that isn't a control surface could still get REAPER's
+notifications by registering a hidden instance of it. The design needs to
+settle when the plumbing runs relative to the surface's own run, and how it
+stays done once per frame if more than one instance exists (see *More than one
+JPRSurf instance*).
+
+## Move surface interaction policy out of common
+
+- **Layers:** common, scene, plugin
 - **Size:** large
 - **Depends on:** nothing
-- **Background:** none; raised while making Nudge and Marker exclusive
+- **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
 
-Everything above the `scene` layer is hard coded in C++ today: which devices
-connect and on which MIDI ports (`ConnectDevices()`), and every view, mapping,
-modifier, and condition (`InitViews()`, `InitModeButtons()`, and the strip
-helpers in `control_surface.cc`). Changing what a button does means a rebuild
-and a REAPER restart. The goal is for that configuration to come from an
-external config file instead, leaving the plugin as a thin host that loads it.
+`common` is meant to be a REAPER data model that any extension could use, but
+surface interaction policy has leaked into it:
+- `Track::Ui*()` decides what each modifier means (Ctrl ignores grouping, Shift
+  selects a range, and so on) by reading the global modifier state.
+- `TrackCache` holds the surface filter, the `TrackAnchor` set of anchors, and
+  the last touched track as the root for ranges.
+- `Track`'s ranged setters read those implicitly from the singleton.
 
-Most mappings are already plain data (a property name, a control name, and a
-`ViewMapping::Config`), so they would move over directly. The hard part is the
-behavior the plugin writes as C++ callbacks: surface modes and the mode buttons,
-track anchors, picking the Send/Receive track, and exclusive toggles like Nudge
-and Marker. Each needs to become a named, reusable building block in `scene`
-(or a new layer between `scene` and `plugin`) that the config can refer to,
-which is also a question of where the line between those layers should sit.
+`common` should keep the primitives, with explicit inputs: set a property on a
+range of tracks in one `PreventUIRefresh` scope, with or without grouping, and
+select a range. The policy should move to `scene`, where a range is computed
+with the view's filter and passed down. `TrackCache` already computes indices
+for every filter, so `common` would no longer need a surface filter at all. The
+modifier behavior could become mappings, or stay one named "standard" track
+action per property.
 
-The design should settle the file format and where it lives (REAPER already
-passes a config string to `ControlSurface`, and `gb::ReadConfigFromText()`
-parses it, but nothing uses the result), how errors are reported, and whether
-it reloads without restarting REAPER. It would absorb *Generalizing strip
-construction for more than one extender*, and make *Modes for the other assign
-buttons* mostly a config change.
+This absorbs moving the empty strip check (the plugin checks for an empty strip
+before anchoring), and makes *Ranges in Send/Receive mode* a `scene` change
+rather than a `common` one. It is best done before *Build the scene from a
+SurfaceSpec*, so the spec doesn't name track actions that are about to change.
+
+## Scene building blocks for surface behavior
+
+- **Layers:** device, scene, plugin
+- **Size:** large
+- **Depends on:** *Surface config model*
+- **Background:** [surface_modes.md](worklog/surface_modes.md),
+  [ranged_track_actions.md](worklog/ranged_track_actions.md)
+
+Each piece of behavior the plugin writes as C++ callbacks or state becomes a
+named, parameterized building block, moved one CL at a time with no change in
+behavior:
+- **Deferred scene actions:** a queue in `Scene` for work that can't happen
+  while the scene runs (enabling and disabling views), replacing
+  `requested_mode_` and `ApplyRequestedMode()`.
+- **Mode groups:** exclusive views with availability and active properties, and
+  an optional context on entry (picking the Send/Receive track is entering a
+  mode with a view's track). Replaces `SurfaceMode` and `ModeButton`.
+- **Tap on release:** a press behavior alongside long and double press,
+  replacing the Send/Receive button's press timing state.
+- **Property types** for track anchors, exclusive toggles, and named polled
+  state, replacing `AddTrackAnchorMapping()`, `AddExclusiveToggleMapping()`,
+  and the Latch lambda.
+- **Views own their track list refresh:** a view reacts to track list and
+  visibility changes itself, and can scroll to show a track, replacing
+  `RefreshTrackViews()` and `EnsureTrackIsVisible()`.
+
+This makes *Modes for the other assign buttons* mostly a matter of using mode
+groups.
+
+## Build the scene from a SurfaceSpec
+
+- **Layers:** scene (or a new spec library above it), plugin
+- **Size:** large
+- **Depends on:** *Surface config model*; ideally *Scene building blocks for
+  surface behavior* and *Move surface interaction policy out of common*
+- **Background:** none
+
+The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
+instead of imperative calls: device types from a registry by name, the layout,
+views, templated mappings, and behaviors. JPRSurf's own surface becomes a spec
+defined in code. Behavior doesn't change, so the smoke test verifies it, and
+later reading a config file is just filling in the same struct.
+
+Validating a spec and building a scene from it should be separate, so that
+validation has no REAPER dependency and can be unit tested. Any behavior not yet
+moved into `scene` can be a named behavior the plugin registers, which the spec
+refers to by name. This absorbs *Generalizing strip construction for more than
+one extender*. No state in the plugin should outlive the scene, which is what
+makes *Reload the config without restarting REAPER* cheap.
+
+## Config file language and loader
+
+- **Layers:** spec library, plugin
+- **Size:** large
+- **Depends on:** *Build the scene from a SurfaceSpec*
+- **Background:** none
+
+A bespoke language, parsed with `gb/parse` into a `SurfaceSpec`. It is a DSL
+rather than `gb::ReadConfigFromText()` for three reasons: maps in `gb::Config`
+are unordered, it keeps no source locations for errors, and mappings are too
+dense to be one object each.
+
+The config is its own file (or set of files). REAPER's config string only
+refers to it, and `ShowConfig()` grows a file selector. The design settles how
+errors are reported (log, REAPER console, partial or total failure), and
+includes a schema version. A parity test checks that JPRSurf's own config,
+parsed, equals the in-code spec, so the translation is verified without REAPER.
+
+## Public config spec and user guide split
+
+- **Layers:** none (docs)
+- **Size:** medium
+- **Depends on:** *Config file language and loader*
+- **Background:** none
+
+The config model doc becomes a public specification of the config language. The
+user guide becomes the guide to JPRSurf's own config, and the reference for how
+it uses the spec. This comes after the loader, so the spec has been proven by
+writing a real config in it.
 
 ## Rec and Solo on route strips
 
@@ -79,13 +229,14 @@ select behavior is not obviously the right answer.
 
 - **Layers:** common, scene, plugin
 - **Size:** medium
-- **Depends on:** nothing for route mute; selecting routes depends on *Local
-  surface-only selection within routes*
+- **Depends on:** *Move surface interaction policy out of common*; selecting
+  routes also depends on *Local surface-only selection within routes*
 - **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
 
 Anchors are Track mode only today. `Anchor<T>`, `AnchorHold`, and the view's
 anchor are all generic, but the ranged behavior itself lives in `Track` and has
-no route equivalent, so ranged route mute needs the same treatment in `common`.
+no route equivalent. Once that policy moves to `scene`, ranged route mute is a
+`scene` change built on `common` range primitives.
 
 ## Local surface-only selection within routes
 
@@ -111,22 +262,12 @@ write mapping to a button. Each one costs a poll every run, so weigh it against
 *Cheaper polling for the polled toggles* below. A row can also have a write
 function, so the button can change the state too.
 
-## Move the empty strip check into common
-
-- **Layers:** common, plugin
-- **Size:** small
-- **Depends on:** nothing
-- **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
-
-The plugin checks for an empty strip before anchoring. Moving the check into
-`common` would give it to every holder of a track anchor, and would let `Track`
-fall back to a normal press when the range turns out to be empty.
-
 ## Modes for the other assign buttons
 
 - **Layers:** scene, plugin
 - **Size:** large
-- **Depends on:** nothing
+- **Depends on:** ideally *Scene building blocks for surface behavior*, so new
+  modes don't add plugin state
 - **Background:** [surface_modes.md](worklog/surface_modes.md)
 
 Track and Send/Receive use two of the X-Touch assign buttons. The mode
@@ -135,17 +276,59 @@ availability is recomputed only when it can change, and a mode is a view that
 is enabled or disabled between runs. What is missing is what the other modes
 should do, which is the design work.
 
-## Generalizing strip construction for more than one extender
+## Reload the config without restarting REAPER
 
 - **Layers:** plugin
-- **Size:** medium
-- **Depends on:** nothing
-- **Background:** [surface_modes.md](worklog/surface_modes.md)
+- **Size:** small
+- **Depends on:** *Config file language and loader*
+- **Background:** none
 
-Strips are built for a fixed surface: one extender ahead of the X-Touch, with
-`Track1..16`, `Route1..15`, and the Info strip as the last X-Touch strip. Making
-the strip count and the Info strip position follow the connected devices would
-allow a second extender.
+Tear down the scene and build a new one from the config file, perhaps from a
+REAPER action. This makes iterating on a config much faster. It should be cheap
+if nothing in the plugin outlives the scene.
+
+## Refuse a second JPRSurf instance
+
+- **Layers:** plugin
+- **Size:** small
+- **Depends on:** nothing
+- **Background:** none
+
+REAPER lets the user add JPRSurf more than once, and nothing defines what
+happens then. Until *More than one JPRSurf instance* makes it well defined, a
+second instance should fail to initialize, with an error saying why, and leave
+the first instance untouched. This is the trivially valid version of that
+design.
+
+## More than one JPRSurf instance
+
+- **Layers:** common, scene, plugin
+- **Size:** medium
+- **Depends on:** *Extension host in common*, *Refuse a second JPRSurf instance*
+- **Background:** none
+
+Allow more than one JPRSurf instance, perhaps with different configs. Whatever
+the design, the behavior must be well defined when instances conflict: two
+configs fighting over the same device controls (or MIDI ports), or the same
+REAPER state or actions. Either such a set of configs is invalid and fails to
+initialize with a clear error, or the design says exactly how they share, which
+is more complex.
+
+`TrackCache`, `ContinuousUndo`, and the global modifier state are singletons,
+so each is a decision: shared across instances (with the plumbing done once per
+frame), or per instance. Worth deciding on purpose rather than by accident.
+
+## Generic MIDI devices defined in config
+
+- **Layers:** device, spec library
+- **Size:** large
+- **Depends on:** *Config file language and loader*
+- **Background:** none
+
+Devices are C++ today, which suits the X-Touch (scribble strip sysex, meters,
+timecode). A generic device whose controls are defined in the config (MIDI
+message to control, with input and output types) would support simple
+controllers without any code, much like the widgets in CSI's surface files.
 
 ## Read-only toggle mappings register for changes they ignore
 
