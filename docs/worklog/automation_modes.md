@@ -121,8 +121,11 @@ The result is cached as a bitmask in `TrackCache` (common), which already holds
   is in the mode, recomputing the mask first if it is stale.
 - `TrackCache::HasMixedSelectedAutoModes()` returns whether the selected tracks
   are in more than one mode (more than one bit set), recomputing the same way.
-- `TrackCache::InvalidateSelectedAutoModes()` marks it stale. `Refresh()` calls
-  it itself.
+- `TrackCache::OnSelectionChanged()` and `OnAutoModeChanged()` mark it stale.
+  They are named for the REAPER events `ControlSurface` forwards
+  (`SetSurfaceSelected()` and `SetAutoMode()`), so `TrackCache` decides what
+  each event makes stale, and records in its comments which REAPER changes
+  arrive as which event. `Refresh()` marks it stale itself.
 
 It is lazy, so a burst of notifications (selecting 100 tracks sends 100
 `SetSurfaceSelected()` calls) costs one recompute, on the next read.
@@ -152,8 +155,8 @@ for all five lights, and no per-mode "all" state is needed:
   mapping machinery, and the mapping rewrites the light when either property
   changes.
 
-**Brittleness:** the cache is only as fresh as the invalidation calls, and
-`ControlSurface` has to make them from the right REAPER callbacks. CL1's
+**Brittleness:** the cache is only as fresh as the REAPER events forwarded to
+`TrackCache`, and `ControlSurface` has to forward them. CL1's
 findings show every change tested is followed by one of `SetAutoMode()`,
 `SetSurfaceSelected()`, or `SetTrackListChange()`. The known gap is a ReaScript
 setting `I_AUTOMODE` directly, which leaves a light stale until the next
@@ -456,7 +459,7 @@ that row.
 - CL8's Group checks: after a fresh start Group turns on Bypass, then it
   restores the last override set from the surface or from REAPER's transport.
 
-### CL10 [ ] common, plugin: TrackCache is told about REAPER events
+### CL10 [x] common, plugin: TrackCache is told about REAPER events
 
 Depends on: CL8.
 

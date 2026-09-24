@@ -115,14 +115,21 @@ class TrackCache final {
     return std::popcount(GetSelectedAutoModes().GetMask()) > 1;
   }
 
-  // Marks the automation modes of the selected tracks as stale, so they are
-  // re-read from REAPER when next needed. This must be called whenever the
-  // track selection or any track's automation mode may have changed. Refresh()
-  // calls it itself.
+  // Called when the track selection may have changed, from
+  // SetSurfaceSelected(). REAPER also calls that for every track after any
+  // track's automation mode changes, and after undo and redo.
   //
-  // This is cheap, so it may be called for every REAPER notification. The
-  // modes are re-read at most once, when next needed.
-  void InvalidateSelectedAutoModes() { selected_auto_modes_valid_ = false; }
+  // This and OnAutoModeChanged() are how the control surface forwards REAPER's
+  // notifications, as Refresh() is for track list changes. They are cheap, so
+  // they may be called for every notification: anything they make stale is
+  // re-read from REAPER at most once, when next needed.
+  void OnSelectionChanged() { selected_auto_modes_valid_ = false; }
+
+  // Called when any track's automation mode may have changed, from
+  // SetAutoMode(). REAPER calls that with a single mode when a mode is changed
+  // by a track's own automation button, an action, or the surface, but not for
+  // undo or redo (see OnSelectionChanged()).
+  void OnAutoModeChanged() { selected_auto_modes_valid_ = false; }
 
  private:
   friend class absl::NoDestructor<TrackCache>;

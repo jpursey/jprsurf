@@ -150,7 +150,7 @@ void TrackCache::Refresh() {
   RebuildTrackIndices();
 
   // Any track may have changed, including by switching projects.
-  InvalidateSelectedAutoModes();
+  selected_auto_modes_valid_ = false;
 
   // Notify tracks whose child hierarchy changed. This is done after the full
   // rebuild so that listeners see the final state.

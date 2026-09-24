@@ -333,9 +333,7 @@ void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
   // Mode availability depends on which track is selected.
   mode_buttons_changed_ = true;
 
-  // The automation mode lights depend on which tracks are selected. REAPER also
-  // calls this for every track after any automation mode change, undo, or redo.
-  TrackCache::Get().InvalidateSelectedAutoModes();
+  TrackCache::Get().OnSelectionChanged();
 }
 
 void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
@@ -370,10 +368,7 @@ bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
 
 void ControlSurface::SetAutoMode(int mode) {
   VLOG_REAPER() << "SetAutoMode(mode=" << mode << ")";
-
-  // REAPER calls this when any track's automation mode changes, with that one
-  // mode, so the selected tracks' modes must be re-read.
-  TrackCache::Get().InvalidateSelectedAutoModes();
+  TrackCache::Get().OnAutoModeChanged();
 }
 
 void ControlSurface::ResetCachedVolPanStates() {

@@ -144,8 +144,8 @@ inline constexpr std::string_view kStateProjectDirty = kStateName<2>;
 inline constexpr std::string_view kStateAnyItemSelected = kStateName<3>;
 
 // True while any selected track, including the master track, is in the
-// automation mode. These are only as current as the calls to
-// TrackCache::InvalidateSelectedAutoModes().
+// automation mode. These are only as current as the REAPER events forwarded to
+// TrackCache (see TrackCache::OnSelectionChanged()).
 inline constexpr std::string_view kStateSelectedAutoTrimRead = kStateName<4>;
 inline constexpr std::string_view kStateSelectedAutoRead = kStateName<5>;
 inline constexpr std::string_view kStateSelectedAutoTouch = kStateName<6>;
