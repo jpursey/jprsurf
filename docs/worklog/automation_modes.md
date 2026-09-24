@@ -191,34 +191,43 @@ needs its own write behavior.)
   it inside the getter and setter means the surface and REAPER's own control
   are tracked the same way, with no caller having to record it.
 
-**scene: `AutoOverrideProperty`:** a polled toggle `SceneStateProperty` that
-reads the override each run and notifies when its value changes. Each one is
-defined by the set of overrides it is on for, and the override it sets when
-written on and off. That gives the properties that the surface needs, created
-on demand by `Scene::GetProperty()` like the timeline properties:
+**scene: writable polled toggles.** The override properties are polled
+toggles, the same as the selected track states: rows in `kPolledToggles`
+named `kStateName<Index>`, which read the override each run. The one addition
+is that a row may also have a write function, which `PolledToggleProperty`
+calls when the toggle is written (read-only rows have none, and ignore writes).
+This keeps one table-driven mechanism instead of a separate property type with
+its own names and table.
 
-| Property                    | On while the override is | Write on          | Write off   |
-| --------------------------- | ------------------------ | ----------------- | ----------- |
-| `kAutoOverrideActive`       | Anything but none        | The last override | No override |
-| `kAutoOverride<Mode>` x5    | That mode                | Set it            | Bypass      |
-| `kAutoOverrideLatchPreview` | Latch Preview            | Set it            | Bypass      |
-| `kAutoOverrideAnyLatch`     | Latch or Latch Preview   | Latch             | Bypass      |
+| Property                         | On while the override is | Write on          | Write off   |
+| -------------------------------- | ------------------------ | ----------------- | ----------- |
+| `kStateAutoOverrideActive`       | Anything but none        | The last override | No override |
+| `kStateAutoOverride<Mode>` x5    | That mode                | Set it            | Bypass      |
+| `kStateAutoOverrideLatchPreview` | Latch Preview            | Set it            | Bypass      |
+| `kStateAutoOverrideBypass`       | Bypass                   | Set it            | No override |
+
+`kStateAutoOverrideBypass` isn't used by the X-Touch, but like Latch Preview,
+`scene` exposes every override REAPER has.
 
 A read mapping on a toggle writes the opposite of its current value, so these
 give exactly the button behavior in the table above, and write mappings from
 them give the lights.
 
 **plugin: mappings.** Group has a read and write mapping to
-`kAutoOverrideActive`. Each mode button has two sets of mappings, switched by a
-`ViewMapping::Condition` on `kAutoOverrideActive`:
+`kStateAutoOverrideActive`. Each mode button has two sets of mappings, switched
+by a `ViewMapping::Condition` on `kStateAutoOverrideActive`:
 - Off: the per-track read mapping (`kCmdAutoMode*`) and light (CL4).
-- On: a read and write mapping to its `kAutoOverride<Mode>`. Latch is the
+- On: a read and write mapping to its `kStateAutoOverride<Mode>`. Latch is the
   exception, as its light and press differ in Latch Preview:
-  - Its read mapping is to `kAutoOverrideLatch`, so from Latch Preview (off) a
-    press sets Latch.
-  - Its light is a write mapping from `kAutoOverrideAnyLatch`, with a
-    `mode_overrides` entry on `kAutoOverrideLatchPreview` to blink, the same
-    mechanism as the per-track lights.
+  - Its read mapping is to `kStateAutoOverrideLatch`, so from Latch Preview
+    (off) a press sets Latch.
+  - Its light is a write mapping from an "any Latch" toggle, on while the
+    override is Latch or Latch Preview, with a `mode_overrides` entry on
+    `kStateAutoOverrideLatchPreview` to blink, the same mechanism as the
+    per-track lights.
+  - "Any Latch" only exists because the X-Touch has no Latch Preview button,
+    so it is a plugin property, not a scene one: a read-only
+    `PolledToggleProperty` the plugin adds to the scene itself.
 
 Conditions re-register read mappings when they switch, which loses a pending
 long or double press. The automation buttons have neither, so that is safe
@@ -358,13 +367,14 @@ Depends on: CL2.
 - Standard checks.
 - Covered by CL7.
 
-### CL6 [ ] scene: global automation override properties
+### CL6 [x] scene: global automation override properties
 
 Depends on: CL5.
 
-- `AutoOverrideProperty`, and `kAutoOverrideActive`, the five
-  `kAutoOverride<Mode>` properties, `kAutoOverrideLatchPreview`, and
-  `kAutoOverrideAnyLatch`, created on demand by `Scene::GetProperty()`.
+- An optional write function for `PolledToggleProperty` rows.
+- `kStateAutoOverrideActive`, the five `kStateAutoOverride<Mode>` properties,
+  `kStateAutoOverrideLatchPreview`, and `kStateAutoOverrideBypass`
+  (`kStateName<11>` to `<18>`), as writable rows in `kPolledToggles`.
 - Unused, so no visible change.
 
 **Verify**
@@ -375,11 +385,12 @@ Depends on: CL5.
 
 Depends on: CL4, CL6.
 
-- Group: read and write mappings to `kAutoOverrideActive`.
+- Group: read and write mappings to `kStateAutoOverrideActive`.
 - Mode buttons: the CL1 read mappings and CL4 lights get a condition on
-  `kAutoOverrideActive` being off, and new read and write mappings to
-  `kAutoOverride<Mode>` with a condition on it being on (Latch's light from
-  `kAutoOverrideAnyLatch`, blinking on `kAutoOverrideLatchPreview`).
+  `kStateAutoOverrideActive` being off, and new read and write mappings to
+  `kStateAutoOverride<Mode>` with a condition on it being on (Latch's light
+  from a plugin "any Latch" `PolledToggleProperty`, blinking on
+  `kStateAutoOverrideLatchPreview`).
 - User guide: Group and the override.
 
 **Verify**
@@ -402,3 +413,43 @@ Depends on: CL4, CL6.
 - While an override is on, mode button presses don't change any track's mode.
 - Switching project tabs: the lights match the transport in each project.
 - **Performance:** the `Run()` average doesn't move from before the change.
+
+### CL8 [ ] scene, common: the last override lives with the Group toggle
+
+Depends on: CL7.
+
+Which override Group restores is surface policy, not reusable REAPER logic, so
+it moves out of `common` and next to the row that uses it.
+- `kStateAutoOverrideActive`'s read function records the last override other
+  than none that it sees, in a file-local variable in `reaper_property.cc`, and
+  its write function restores it. It is polled every run while Group is
+  mapped, so it sees overrides set from REAPER as well as from the surface.
+- `common`'s `GetAutoOverride()` and `SetAutoOverride()` become plain wrappers,
+  and `GetLastAutoOverride()` is removed.
+- One CL across `common` and `scene`, as removing the `common` function first
+  would break `scene`.
+
+**Verify**
+- Standard checks.
+- CL7's Group checks: after a fresh start Group turns on Bypass, then it
+  restores the last override set from the surface or from REAPER's transport.
+
+### CL9 [ ] common, plugin: TrackCache is told about REAPER events
+
+Depends on: CL7.
+
+`ControlSurface` calls `TrackCache::InvalidateSelectedAutoModes()`, which names
+the cache rather than what happened, so the knowledge of which REAPER callbacks
+matter is split between `plugin` and `common`. Each new selection-derived value
+cached in `TrackCache` would need another call from each callback.
+- Replace it with `TrackCache::OnSelectionChanged()` and `OnAutoModeChanged()`,
+  called from `SetSurfaceSelected()` and `SetAutoMode()`. `TrackCache` decides
+  what each one invalidates, and its comments record which REAPER events call
+  them (CL1's findings).
+- Update the comment on the `kStateSelectedAuto*` toggles to match.
+- No change in behavior.
+
+**Verify**
+- Standard checks.
+- CL4's light checks: selection changes, mode changes from the surface and from
+  REAPER, and undo/redo still update the lights.

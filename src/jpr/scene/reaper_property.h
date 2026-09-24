@@ -159,20 +159,50 @@ inline constexpr std::string_view kStateSelectedAutoLatchPreview =
 // exactly when every lit kStateSelectedAuto* covers only some of the selection.
 inline constexpr std::string_view kStateSelectedAutoMixed = kStateName<10>;
 
-// This read-only property represents REAPER state that is read with a function,
-// and polled each run. It can be mapped to control outputs that represent a
-// binary value.
+// The global automation override for the current project (see AutoOverride).
+// Writing these sets the override.
+//
+// True while any override is on. Turning it on restores the last override (see
+// GetLastAutoOverride()), and turning it off removes the override.
+inline constexpr std::string_view kStateAutoOverrideActive = kStateName<11>;
+
+// True while the override is the mode. Turning one on sets the override to its
+// mode, and turning it off sets the override to Bypass.
+inline constexpr std::string_view kStateAutoOverrideTrimRead = kStateName<12>;
+inline constexpr std::string_view kStateAutoOverrideRead = kStateName<13>;
+inline constexpr std::string_view kStateAutoOverrideTouch = kStateName<14>;
+inline constexpr std::string_view kStateAutoOverrideWrite = kStateName<15>;
+inline constexpr std::string_view kStateAutoOverrideLatch = kStateName<16>;
+inline constexpr std::string_view kStateAutoOverrideLatchPreview =
+    kStateName<17>;
+
+// True while the override is Bypass. Turning it on sets Bypass, and turning it
+// off removes the override.
+inline constexpr std::string_view kStateAutoOverrideBypass = kStateName<18>;
+
+// This property represents REAPER state that is read with a function, and
+// polled each run. It can be mapped to control outputs that represent a binary
+// value. If it has a write function, it can also be mapped to control inputs,
+// and writing it changes the state.
 class PolledToggleProperty final : public SceneStateProperty {
  public:
   using ReadFunction = bool (*)();
+  using WriteFunction = void (*)(bool value);
 
   // Returns the read function for the polled toggle at the index in its
   // "state:<index>" name, or null if the index is out of range.
   static ReadFunction GetReadFunction(int index);
 
-  PolledToggleProperty(Scene* scene, std::string_view name, ReadFunction read)
+  // Returns the write function for the polled toggle at the index in its
+  // "state:<index>" name, or null if it is read-only or the index is out of
+  // range.
+  static WriteFunction GetWriteFunction(int index);
+
+  PolledToggleProperty(Scene* scene, std::string_view name, ReadFunction read,
+                       WriteFunction write = nullptr)
       : SceneStateProperty(scene, name, Type::kToggle),
         read_(read),
+        write_(write),
         value_(read()) {}
   ~PolledToggleProperty() override = default;
 
@@ -182,9 +212,11 @@ class PolledToggleProperty final : public SceneStateProperty {
  protected:
   // Overrides from ViewProperty.
   bool ReadBool() const override;
+  void WriteBool(bool value) override;
 
  private:
   ReadFunction read_;
+  WriteFunction write_;
   bool value_;
 };
 

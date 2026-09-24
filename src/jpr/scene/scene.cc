@@ -84,7 +84,8 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
     if (read == nullptr) {
       return nullptr;
     }
-    auto property = std::make_unique<PolledToggleProperty>(this, name, read);
+    auto property = std::make_unique<PolledToggleProperty>(
+        this, name, read, PolledToggleProperty::GetWriteFunction(index));
     auto property_ptr = property.get();
     properties_[name] = std::move(property);
     return property_ptr;
