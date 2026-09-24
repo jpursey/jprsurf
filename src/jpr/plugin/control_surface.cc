@@ -14,6 +14,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/time/clock.h"
 #include "gb/config/text_config.h"
+#include "jpr/common/automation.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
@@ -54,6 +55,10 @@ constexpr std::string_view kSendHold = "mod_send_hold";
 // The modifier property that is on while a select button is held as the anchor
 // for a range of tracks.
 constexpr std::string_view kSelectAnchor = "mod_select_anchor";
+
+// The polled toggle that is on while the global automation override is Latch or
+// Latch Preview (see the automation buttons in InitViews()).
+constexpr std::string_view kAutoOverrideAnyLatch = "auto_override_any_latch";
 
 // The Send/Receive mode button only acts when released if it was pressed for
 // less than this. Holding it longer only shows which tracks have routes. This
@@ -873,27 +878,73 @@ void ControlSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
                           enter, {.read = {.required_modifiers = kModCtrl}});
 
-    // Automation buttons. Each is lit while any selected track is in its mode,
-    // solid if they all are, and blinking if only some are.
+    // Automation buttons. Group turns the global automation override on and
+    // off, and is lit while it is on.
+    //
+    // Without an override, each mode button sets the selected tracks' mode,
+    // and is lit while any selected track is in its mode: solid if they all
+    // are, and blinking if only some are.
+    //
+    // With an override, each mode button sets the override to its mode (or to
+    // Bypass if it already is), and is lit while the override is its mode.
+    // There is no Latch Preview button, so Latch blinks for Latch Preview, and
+    // pressing it sets Latch.
+    root_view->AddMapping(ViewMapping::kReadWriteControl,
+                          kStateAutoOverrideActive,
+                          absl::StrCat("XTouch/", DeviceXTouch::kAutoGroup));
+    scene_->AddProperty(std::make_unique<PolledToggleProperty>(
+        scene_.get(), kAutoOverrideAnyLatch, [] {
+          const AutoOverride auto_override = GetAutoOverride();
+          return auto_override == AutoOverride::kLatch ||
+                 auto_override == AutoOverride::kLatchPreview;
+        }));
+    const ViewMapping::Condition no_override = {
+        .property = std::string(kStateAutoOverrideActive), .value = false};
+    const ViewMapping::Condition in_override = {
+        .property = std::string(kStateAutoOverrideActive), .value = true};
     struct AutoModeButton {
       std::string_view button;
       std::string_view command;
       std::string_view selected_state;
+      std::string_view override_state;
+
+      // The light during an override, if it isn't override_state.
+      std::string_view override_light = {};
     };
     static constexpr AutoModeButton kAutoModeButtons[] = {
-        {DeviceXTouch::kAutoTrim, kCmdAutoModeTrim, kStateSelectedAutoTrimRead},
-        {DeviceXTouch::kAutoRead, kCmdAutoModeRead, kStateSelectedAutoRead},
-        {DeviceXTouch::kAutoTouch, kCmdAutoModeTouch, kStateSelectedAutoTouch},
-        {DeviceXTouch::kAutoWrite, kCmdAutoModeWrite, kStateSelectedAutoWrite},
-        {DeviceXTouch::kAutoLatch, kCmdAutoModeLatch, kStateSelectedAutoLatch},
+        {DeviceXTouch::kAutoTrim, kCmdAutoModeTrim, kStateSelectedAutoTrimRead,
+         kStateAutoOverrideTrimRead},
+        {DeviceXTouch::kAutoRead, kCmdAutoModeRead, kStateSelectedAutoRead,
+         kStateAutoOverrideRead},
+        {DeviceXTouch::kAutoTouch, kCmdAutoModeTouch, kStateSelectedAutoTouch,
+         kStateAutoOverrideTouch},
+        {DeviceXTouch::kAutoWrite, kCmdAutoModeWrite, kStateSelectedAutoWrite,
+         kStateAutoOverrideWrite},
+        {DeviceXTouch::kAutoLatch, kCmdAutoModeLatch, kStateSelectedAutoLatch,
+         kStateAutoOverrideLatch, kAutoOverrideAnyLatch},
     };
     for (const AutoModeButton& info : kAutoModeButtons) {
       const std::string control = absl::StrCat("XTouch/", info.button);
-      root_view->AddMapping(ViewMapping::kReadControl, info.command, control);
+      root_view->AddMapping(ViewMapping::kReadControl, info.command, control,
+                            {.condition = no_override});
       root_view->AddMapping(
           ViewMapping::kWriteControl, info.selected_state, control,
           {.write = {.mode_overrides = {{std::string(kStateSelectedAutoMixed),
-                                         {{true, 1}}}}}});
+                                         {{true, 1}}}}},
+           .condition = no_override});
+      root_view->AddMapping(ViewMapping::kReadControl, info.override_state,
+                            control, {.condition = in_override});
+      // The other override lights are never on during Latch Preview, so the
+      // blink only affects Latch.
+      root_view->AddMapping(
+          ViewMapping::kWriteControl,
+          info.override_light.empty() ? info.override_state
+                                      : info.override_light,
+          control,
+          {.write = {.mode_overrides = {{std::string(
+                                             kStateAutoOverrideLatchPreview),
+                                         {{true, 1}}}}},
+           .condition = in_override});
     }
 
     // Misc buttons (above transport)

@@ -401,7 +401,7 @@ it: a wrong light for one frame. `SceneStateProperty::OnRegistered()` now calls
   lights, transport lights, and mode buttons all use state properties).
 - No new `Run()` spikes when switching modes.
 
-### CL8 [~] plugin: Group button and override mode
+### CL8 [x] plugin: Group button and override mode
 
 Depends on: CL4, CL6, CL7.
 

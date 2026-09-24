@@ -227,7 +227,8 @@ All of these lights follow the current project when you switch project tabs.
 
 ### Automation buttons
 
-The automation buttons set the automation mode of every selected track:
+The automation buttons set the automation mode of every selected track, or
+REAPER's global automation override while **Group** is on (see below):
 
 | Button    | Sets the selected tracks to |
 | --------- | --------------------------- |
@@ -238,8 +239,7 @@ The automation buttons set the automation mode of every selected track:
 | **Latch** | Latch                       |
 
 Each press is a single undo step. With no tracks selected, a press does
-nothing. **Group** is not used yet. The master track counts as a selected track
-like any other.
+nothing. The master track counts as a selected track like any other.
 
 Each button shows how many of the selected tracks are in its mode:
 
@@ -258,6 +258,22 @@ Preview light nothing, but still count as selected tracks, so a mix of Latch
 and Latch Preview tracks blinks Latch.
 
 The lights follow the current project when you switch project tabs.
+
+#### Global automation override
+
+REAPER's global automation override (the automation control on its transport)
+makes every track behave as if it were in one mode, without changing the
+tracks' own modes. It can also be **Bypass**, which ignores all automation. It
+is saved with each project, and isn't an undo step.
+
+**Group** turns the override on and off, and is lit while it is on. Turning it
+on restores the last override, set from either the surface or REAPER, or
+Bypass if there hasn't been one since REAPER started.
+
+While the override is on, each mode button is lit while the override is its
+mode. Pressing it sets the override to its mode, or back to Bypass if it
+already was. REAPER's Latch Preview override, which has no button, blinks
+Latch, and pressing Latch then sets Latch.
 
 ---
 
@@ -466,6 +482,7 @@ other, it does nothing.
 | Touch       | Selected tracks: touch  |                       |                     |                               |
 | Write       | Selected tracks: write  |                       |                     |                               |
 | Latch       | Selected tracks: latch  |                       |                     |                               |
+| Group       | Toggle automation override |                    |                     |                               |
 | Rewind      | Previous measure        |                       |                     |                               |
 | Forward     | Next measure            |                       |                     |                               |
 | Nudge       | Toggle moving by beat   |                       |                     |                               |
