@@ -11,7 +11,8 @@ This is a CMake project, starting at the root. The directory structure is as fol
   src/             -- All source code in this project
     jpr/           -- All source code for the extension itself, separated into different libraries (see below)
     reaper_sdk.cc  -- Implementation of the header-only REAPER SDK library
-  docs/            -- User guide, feature plans (worklog/), and the backlog
+  docs/            -- User guide, surface config model, feature plans (worklog/),
+                      and the backlog
   bin/             -- Compiled binary files used by compilation or execution
   out/             -- Generated output from building locally. This is transient
                       and can get deleted at any time.
@@ -117,6 +118,8 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way. In Git Bash, `sed -i` rewrites files as LF-only, so prefer the Edit tool; if sed is used, restore CRLF afterwards (watch for files without a trailing newline) and check `git diff --stat`.
 
 ## Feature workflow
+
+JPRSurf is moving toward a surface that is entirely driven by a config file, described in `docs/config_model.md`. So that features move toward that goal rather than away from it, a feature is a named, parameterized component below `plugin`, plus its use in JPRSurf's own surface (today the mappings in `ControlSurface`, later its config). `plugin` gains no new state or callbacks: if a feature seems to need one, the missing piece is a component.
 
 New features are designed first, then built and reviewed as a series of small changes (CLs):
 - Break the feature into CLs that are each limited to one library where possible, built in dependency order: `common`, then `device`, then `scene`, then `plugin`.

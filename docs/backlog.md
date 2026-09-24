@@ -21,41 +21,6 @@ Each item carries:
 When an item is picked up it moves into its own `docs/worklog/<feature>.md`
 plan (see Feature workflow in CLAUDE.md) and comes out of this list.
 
-## Surface config model
-
-- **Layers:** none (design doc)
-- **Size:** medium
-- **Depends on:** nothing
-- **Background:** none; the first step toward a data driven surface
-
-The long term goal is a surface that is entirely driven by a config file, with
-the plugin as a thin host that loads it. The items below build toward it, and
-this one defines what they build: the config model, as concepts and named
-building blocks rather than syntax.
-
-- **Devices:** a device type (X-Touch, X-Touch Extender) and its MIDI ports.
-- **Layout:** named, ordered arrays of logical controls (`strip[0..15].fader`)
-  assembled from parts of physical devices, so a set of devices is one surface
-  and mappings never name a device. Adding a second extender becomes a layout
-  change.
-- **Views, mappings, and templates:** mappings repeated over a layout array with
-  the index substituted, replacing the strip loops and helpers.
-- **Behaviors:** the named, parameterized building blocks a config composes
-  (modes, anchors, exclusive toggles, polled state). The only logic a config
-  expresses is a bool condition on a property. Anything more is a new C++
-  building block, and REAPER command IDs (including script commands) are the
-  user's escape hatch.
-
-It also names the building blocks the plugin needs today (see *Scene building
-blocks for surface behavior*), and audits property names, since a public spec
-freezes them (generated names like `anchor_select_3` are the risk).
-
-The result is a durable doc (not a worklog) that ties the items below together
-and later seeds the public spec. It also adds a rule to CLAUDE.md so feature
-work stops moving away from the goal: a feature is a named building block below
-`plugin` plus its use in the surface's spec, and `plugin` gains no new state or
-callbacks.
-
 ## Extension host in common
 
 - **Layers:** common, plugin
@@ -102,60 +67,241 @@ for every filter, so `common` would no longer need a surface filter at all. The
 modifier behavior could become mappings, or stay one named "standard" track
 action per property.
 
-This absorbs moving the empty strip check (the plugin checks for an empty strip
-before anchoring), and makes *Ranges in Send/Receive mode* a `scene` change
-rather than a `common` one. It is best done before *Build the scene from a
-SurfaceSpec*, so the spec doesn't name track actions that are about to change.
+This makes *Ranges in Send/Receive mode* a `scene` change rather than a
+`common` one. It is best done before *Build the scene from a SurfaceSpec*, so
+the spec doesn't name track actions that are about to change.
 
-## Scene building blocks for surface behavior
+## Property namespaces and names
+
+- **Layers:** scene, plugin
+- **Size:** medium
+- **Depends on:** nothing
+- **Background:** [config_model.md](config_model.md) (Properties, Names)
+
+Give every property its final name before the components below add more, so
+none of them has to be renamed later:
+- **Namespaces:** every property is `namespace:name` (`cmd:`, `state:`, `mod:`,
+  `track:`, `route:`, `view:`, or `user:`), and the namespace alone decides
+  where a name is looked up. This replaces looking in the view first and then
+  the scene, and the check in `Scene::AddProperty()` for names that clash with
+  built in ones. Properties the plugin adds itself go in `user:` until the
+  components below replace them.
+- **Named state rows:** `state:0` to `state:18` become names
+  (`state:can_redo`, and so on), looked up by name when a mapping is added. The
+  timeline and ruler properties move under `state:` too.
+- **The rest of the Names audit:** `track:rec_arm`, `state:secondary_ruler_*`,
+  and `mod:marker` and the other declared modifiers.
+
+`track_ui_*` only gets its namespace, as *Move surface interaction policy out
+of common* settles those names, and device control names wait for *Device
+types and catalogs*. The names are C++ constants today, so this is mostly
+mechanical, and the smoke test verifies it.
+
+## View conditions and fixed write values
+
+- **Layers:** scene, plugin
+- **Size:** small
+- **Depends on:** nothing
+- **Background:** [config_model.md](config_model.md) (Enabled, Mappings)
+
+- **View conditions:** a view is enabled always, or while a condition on a
+  property is met, like a mapping's condition. The scene applies the changes
+  between runs, as views can't be enabled or disabled while it is running
+  them. This is the deferral that `requested_mode_` and `ApplyRequestedMode()`
+  do by hand today, and the two mode views move onto conditions on the
+  existing `mode_<name>_active` toggles.
+- **Fixed write values:** a write mapping can write a constant instead of a
+  property, such as a light that is always on in a view. The mode button
+  lights use it once modes are exclusive groups.
+
+## View subjects, lists, and references
+
+- **Layers:** scene, plugin
+- **Size:** large
+- **Depends on:** *Property namespaces and names*
+- **Background:** [config_model.md](config_model.md) (References, Subjects,
+  Lists), [surface_modes.md](worklog/surface_modes.md)
+
+Replace the view's track and child context with the model's subjects and
+lists:
+- **Subjects:** a view's subject has a kind (none, a track, or a route), and
+  comes from its parent, a reference it is bound to, or an item of its
+  parent's list. A route's other track becomes the `route:other_track`
+  reference, rather than the route view's track.
+- **Lists:** children or routes, with a scroll position and a bank size, shown
+  by the view's children. A routes list's direction is its own state, with a
+  rule for picking it when the view's track changes, replacing `kSends`,
+  `kReceives`, and `SetSendReceiveTrack()`. A list can reveal a reference,
+  replacing `EnsureTrackIsVisible()`.
+- **References:** properties whose value is a subject, with fields
+  (`state:selected_track.has_routes`). Built in ones for the master, selected,
+  and last touched tracks, and a declared one that is writable, with a fallback
+  and a reference to follow, which navigation writes.
+- **Keeping current:** references and lists react to track list and
+  visibility changes themselves, replacing `RefreshTrackViews()`.
+
+The Send/Receive track becomes `user:current_track`, which follows the last
+touched track in every mode, and which the track list reveals (see JPRSurf's
+surface in the config model). That should look the same as today, but needs
+checking in REAPER. This is the largest and riskiest change to `View`, so it
+wants a worklog plan.
+
+## Properties declared on views, and track anchors
+
+- **Layers:** scene, plugin
+- **Size:** medium
+- **Depends on:** *Property namespaces and names*
+- **Background:** [config_model.md](config_model.md) (Declared properties,
+  Track anchor), [ranged_track_actions.md](worklog/ranged_track_actions.md)
+
+- **Declared properties:** a component declared on a view gives each view its
+  own instance under one `user:` name, visible in the view and its
+  descendants, and one declared at the top level is global. Declaring a name
+  that is already visible is an error.
+- **Track anchor:** the first component declared on a view, replacing
+  `AddTrackAnchorMapping()` and its `anchor_<action>_<n>` properties with
+  `user:anchor_select` and so on, the same on every strip. The plugin's empty
+  strip check moves into it.
+- **`state:auto_override_any_latch`:** a polled state row, rather than a
+  property the plugin adds itself.
+
+*Move surface interaction policy out of common* may also move the anchors
+themselves into `scene`. Whichever of the two comes second builds on the other.
+
+## Modes from exclusive groups and picks
 
 - **Layers:** device, scene, plugin
-- **Size:** large
-- **Depends on:** *Surface config model*
-- **Background:** [surface_modes.md](worklog/surface_modes.md),
-  [ranged_track_actions.md](worklog/ranged_track_actions.md)
+- **Size:** medium
+- **Depends on:** *View conditions and fixed write values*, *View subjects,
+  lists, and references*, and *Properties declared on views, and track anchors*
+- **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
+  Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md)
 
-Each piece of behavior the plugin writes as C++ callbacks or state becomes a
-named, parameterized building block, moved one CL at a time with no change in
-behavior:
-- **Deferred scene actions:** a queue in `Scene` for work that can't happen
-  while the scene runs (enabling and disabling views), replacing
-  `requested_mode_` and `ApplyRequestedMode()`.
-- **Mode groups:** exclusive views with availability and active properties, and
-  an optional context on entry (picking the Send/Receive track is entering a
-  mode with a view's track). Replaces `SurfaceMode` and `ModeButton`.
-- **Tap on release:** a press behavior alongside long and double press,
-  replacing the Send/Receive button's press timing state.
-- **Property types** for track anchors, exclusive toggles, and named polled
-  state, replacing `AddTrackAnchorMapping()`, `AddExclusiveToggleMapping()`,
-  and the Latch lambda.
-- **Views own their track list refresh:** a view reacts to track list and
-  visibility changes itself, and can scroll to show a track, replacing
-  `RefreshTrackViews()` and `EnsureTrackIsVisible()`.
+The last of the plugin's surface state and callbacks:
+- **Exclusive groups:** at most one member is on, however it is turned on, and
+  optionally a default (so exactly one is on) and a condition each member
+  requires. Marker and Nudge move onto one, replacing
+  `AddExclusiveToggleMapping()`, and the surface modes onto another
+  (`user:surface_mode`), replacing `SurfaceMode`, `kModeInfo`, `ModeButton`,
+  and the mode functions.
+- **Pick:** sets a reference and turns a toggle on, if a field of the source
+  is true. It enters Send/Receive mode from the Send button and from a strip's
+  select button, replacing `requested_send_receive_track_`,
+  `TryEnterSendReceiveMode()`, and the `pick_send_receive_track_<n>`
+  properties.
+- **Tap:** a press behavior in `device`, alongside long and double press. It
+  fires on release if the press was short and the control's held modifier
+  wasn't used, replacing `send_press_mode_`, `send_press_time_`, and
+  `ApplySendRelease()`.
+- **Mode lights:** mappings, using fixed values and conditions.
 
-This makes *Modes for the other assign buttons* mostly a matter of using mode
-groups.
+After this, `ControlSurface` has no surface state or callbacks left: only host
+plumbing (see *Extension host in common*) and its mappings, which *Build the
+scene from a SurfaceSpec* turns into data.
+
+## Named command IDs
+
+- **Layers:** scene
+- **Size:** small
+- **Depends on:** nothing
+- **Background:** [config_model.md](config_model.md) (The escape hatch)
+
+`cmd:` properties take a named command ID, such as `_SWS_ABOUT` or a script's
+`_RS...` ID, as well as a number, resolved with `NamedCommandLookup()` when the
+property is created. It returns 0 for a name nothing has registered, which is
+an error. This also confirms that other extensions' commands are registered
+before REAPER creates control surfaces, and whether `kbd_getTextFromCmd()` can
+tell that a numeric ID doesn't exist. It is useful straight away: a mapping can
+run any script or extension action.
+
+## Widgets
+
+- **Layers:** device
+- **Size:** medium
+- **Depends on:** nothing
+- **Background:** [config_model.md](config_model.md) (Widgets)
+
+The names mappings use for hardware, independent of which device a control is
+on. A widget is a control, a struct of named widgets, or an array of widgets
+of the same shape:
+- **Shapes:** a control's shape is its inputs, outputs, and output mode names,
+  and struct and array shapes follow from their fields and elements. Device
+  catalogs (*Device types and catalogs*) are struct shapes too.
+- **Definitions:** a path to a device control or struct, a new struct (with
+  includes and exclusions), and joined arrays. Checking catches unknown paths,
+  fields defined twice, and array elements whose shapes don't match.
+- **Resolving:** paths such as `strip[3].fader` resolve to the `Control`s of
+  the devices that are present. A joined array drops the elements of an absent
+  device.
+
+Zipped arrays are part of the design, but nothing needs them yet, so they wait
+for a device that does. It is pure `device` code with no REAPER dependency, so
+all of it is unit tested against hand-built shapes, before any real device
+publishes one.
+
+## Device types and catalogs
+
+- **Layers:** device, scene, plugin
+- **Size:** medium
+- **Depends on:** *Widgets*
+- **Background:** [config_model.md](config_model.md) (Devices)
+
+A registry of device types by name, each with:
+- A **catalog**: its controls as a struct widget, with arrays of structs for
+  the controls that repeat (the X-Touch's `strip` array), and named output
+  modes (solid and blink for lights, the ring styles and off for encoders). It
+  is plain data, without ports or REAPER, so it is unit tested.
+- A **factory** that creates the `Device` from its ports and **control
+  overrides**: inputs or outputs of particular controls that a unit doesn't use.
+  `Device` drops them before creating each `Control`, so the extender's fader
+  without touch sensing stops being hard coded.
+
+`DeviceXTouch` takes its control names from its catalog, and `Device` checks
+once, when it is created, that the controls it built match the catalog,
+logging an error if they don't.
+
+The last CL moves the plugin onto device types and widgets. It creates its
+devices through the registry, with the X-Touch required and the extender
+optional (so the extender alone no longer loads, deliberately). It defines
+JPRSurf's widgets in C++, and the scene maps through widget paths and output
+mode names rather than `"XTouch/..."` control names and mode numbers. That
+removes the device prefixes and the device checks in the strip loops. Apart
+from the extender alone, behavior doesn't change, so the smoke test verifies
+it.
 
 ## Build the scene from a SurfaceSpec
 
-- **Layers:** scene (or a new spec library above it), plugin
+- **Layers:** a new spec library, scene, plugin
 - **Size:** large
-- **Depends on:** *Surface config model*; ideally *Scene building blocks for
-  surface behavior* and *Move surface interaction policy out of common*
-- **Background:** none
+- **Depends on:** *Device types and catalogs*, *Modes from exclusive groups and
+  picks*, and *Named command IDs*; ideally *Move surface interaction policy out
+  of common*
+- **Background:** [config_model.md](config_model.md)
 
 The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
-instead of imperative calls: device types from a registry by name, the layout,
-views, templated mappings, and behaviors. JPRSurf's own surface becomes a spec
-defined in code. Behavior doesn't change, so the smoke test verifies it, and
-later reading a config file is just filling in the same struct.
+instead of imperative calls: devices (by type, required or optional), widgets,
+views, templates, mappings, declared components, and settings (the track
+filter). JPRSurf's own surface becomes a spec defined in code. Behavior doesn't
+change, so the smoke test verifies it, and later reading a config file is just
+filling in the same struct.
 
-Validating a spec and building a scene from it should be separate, so that
-validation has no REAPER dependency and can be unit tested. Any behavior not yet
-moved into `scene` can be a named behavior the plugin registers, which the spec
-refers to by name. This absorbs *Generalizing strip construction for more than
-one extender*. No state in the plugin should outlive the scene, which is what
-makes *Reload the config without restarting REAPER* cheap.
+Checking a spec and building a scene from it are separate:
+- **Checking** has no REAPER dependency, so it is unit tested. It checks
+  widgets against the device catalogs, and everything that names a property
+  against a **property catalog**: plain data giving each built in property's
+  namespace, name, type, and whether it reads, writes, or triggers. `scene`
+  checks once, when the scene is built, that each catalog entry resolves to a
+  property of the same type, logging an error if not. `cmd:` properties are
+  only checked for syntax, as only REAPER knows which commands exist.
+- **Building** needs REAPER. It creates the devices, stops if a required device
+  is absent or a command isn't installed, expands templates and repeated views,
+  and creates the scene.
+
+This settles where the spec library sits: checking depends on `device` (for
+the catalogs) but not on `scene`, and building depends on `scene`. No state in
+the plugin outlives the scene, which is what makes *Reload the config without
+restarting REAPER* cheap. If anything still isn't a component by then, the
+plugin can register it as a named component the spec refers to, as a stopgap.
 
 ## Config file language and loader
 
@@ -180,7 +326,7 @@ parsed, equals the in-code spec, so the translation is verified without REAPER.
 - **Layers:** none (docs)
 - **Size:** medium
 - **Depends on:** *Config file language and loader*
-- **Background:** none
+- **Background:** [config_model.md](config_model.md)
 
 The config model doc becomes a public specification of the config language. The
 user guide becomes the guide to JPRSurf's own config, and the reference for how
@@ -253,15 +399,16 @@ function, so the button can change the state too.
 
 - **Layers:** scene, plugin
 - **Size:** large
-- **Depends on:** ideally *Scene building blocks for surface behavior*, so new
-  modes don't add plugin state
-- **Background:** [surface_modes.md](worklog/surface_modes.md)
+- **Depends on:** ideally *Modes from exclusive groups and picks*, so new modes
+  don't add plugin state
+- **Background:** [config_model.md](config_model.md) (Modes),
+  [surface_modes.md](worklog/surface_modes.md)
 
-Track and Send/Receive use two of the X-Touch assign buttons. The mode
-machinery is already generic: `kModeInfo` gives a mode its name and button,
-availability is recomputed only when it can change, and a mode is a view that
-is enabled or disabled between runs. What is missing is what the other modes
-should do, which is the design work.
+Track and Send/Receive use two of the X-Touch assign buttons. Once modes are
+exclusive groups, another mode is another toggle in `user:surface_mode`, a view
+enabled by it, and perhaps a pick and a new kind of subject (a track's FX, for
+the Plugin button). What is missing is what the other modes should do, which
+is the design work.
 
 ## Reload the config without restarting REAPER
 
@@ -315,7 +462,45 @@ frame), or per instance. Worth deciding on purpose rather than by accident.
 Devices are C++ today, which suits the X-Touch (scribble strip sysex, meters,
 timecode). A generic device whose controls are defined in the config (MIDI
 message to control, with input and output types) would support simple
-controllers without any code, much like the widgets in CSI's surface files.
+controllers without any code, much like CSI's surface files. These define
+device controls, not widgets (see [config_model.md](config_model.md)).
+
+## Choose a config by the devices present
+
+- **Layers:** spec library, plugin
+- **Size:** large
+- **Depends on:** *Config file language and loader*
+- **Background:** [config_model.md](config_model.md) (Devices)
+
+A direction rather than a plan. Each device in a config is required or
+optional, so one config covers a set of hardware with some units missing. A
+config set would go further: several configs, with the one that best fits the
+devices actually connected chosen at startup. With only the X-Touch, for
+instance, a different config could drop the Info strip so all 8 strips show
+routes, rather than just losing the extender's strips. It needs a definition of
+"best fits" (such as the config with the most devices present whose required
+devices are all present), and a way to say which config was chosen.
+
+## Modifiers a mapping ignores
+
+- **Layers:** device, scene
+- **Size:** small
+- **Depends on:** nothing
+- **Background:** [config_model.md](config_model.md) (Modifier sets)
+
+A read mapping fires only when exactly its required modifiers are on, among all
+the modifiers the read mappings on its control mention. That keeps Undo and
+Redo, or Rewind by measure, beat, and marker, unambiguous without priorities.
+But a mapping meant to fire with a modifier held "whatever else is held" needs
+a copy for every combination of the other modifiers on the control. Today that
+is the Send/Receive pick on a strip's select button, which needs a second
+mapping for Send held along with a select anchor (`InitViews()` in
+`control_surface.cc`).
+
+A mapping could also list modifiers it ignores, so the pick is one mapping that
+requires `mod:send_hold` and ignores `mod:select_anchor`. It is purely
+additive: existing mappings and configs mean the same thing either way, so it
+can be done at any time, such as when a second case turns up.
 
 ## Read-only toggle mappings register for changes they ignore
 
