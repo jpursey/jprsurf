@@ -50,18 +50,6 @@ it reloads without restarting REAPER. It would absorb *Generalizing strip
 construction for more than one extender*, and make *Modes for the other assign
 buttons* mostly a config change.
 
-## Holding Send while a select anchor is held
-
-- **Layers:** plugin
-- **Size:** small
-- **Depends on:** nothing
-- **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
-
-The same shape of problem as Nudge and Marker. Holding Send and a select anchor
-at once leaves the select buttons with no matching press group, so select does
-nothing. Unlikely to happen in practice, which is why it is here rather than
-fixed.
-
 ## Rec and Solo on route strips
 
 - **Layers:** plugin

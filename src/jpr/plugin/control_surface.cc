@@ -1072,6 +1072,12 @@ void ControlSurface::InitViews() {
       track_view->AddMapping(
           ViewMapping::kReadControl, pick_name, select,
           {.read = {.required_modifiers = send_hold_modifier_}});
+      // Required modifiers must match exactly, so picking also needs a mapping
+      // for Send held along with a select anchor. Picking wins over the range.
+      track_view->AddMapping(
+          ViewMapping::kReadControl, pick_name, select,
+          {.read = {.required_modifiers =
+                        send_hold_modifier_ | select_anchor_modifier}});
 
       // The select light shows whether the track is selected, or while Send is
       // held, whether it has routes to show in Send/Receive mode.
