@@ -185,11 +185,12 @@ needs its own write behavior.)
 **common (automation.h/.cc):** alongside `AutoMode`:
 - `AutoOverride` (`kNone = -1`, the six track modes, and `kBypass = 6`), with
   values matching REAPER.
-- `GetAutoOverride()` and `SetAutoOverride()` wrap the REAPER calls, and both
-  remember the last override that wasn't `kNone`, which
-  `GetLastAutoOverride()` returns (`kBypass` until there is one). Remembering
-  it inside the getter and setter means the surface and REAPER's own control
-  are tracked the same way, with no caller having to record it.
+- `GetAutoOverride()` and `SetAutoOverride()` wrap the REAPER calls.
+- Which override to restore isn't reusable REAPER logic but part of what
+  turning `kStateAutoOverrideActive` on means, so `scene` tracks it beside that
+  toggle: its read function remembers the last override other than none
+  (`kBypass` until there is one), and polling means REAPER-set overrides count
+  too.
 
 **scene: writable polled toggles.** The override properties are polled
 toggles, the same as the selected track states: rows in `kPolledToggles`
@@ -434,12 +435,13 @@ Depends on: CL4, CL6, CL7.
 - Switching project tabs: the lights match the transport in each project.
 - **Performance:** the `Run()` average doesn't move from before the change.
 
-### CL9 [ ] scene, common: the last override lives with the Group toggle
+### CL9 [x] scene, common: the last override lives with the Group toggle
 
 Depends on: CL8.
 
-Which override Group restores is surface policy, not reusable REAPER logic, so
-it moves out of `common` and next to the row that uses it.
+Which override to restore isn't reusable REAPER logic but part of what turning
+`kStateAutoOverrideActive` on means, so it moves out of `common` and next to
+that row.
 - `kStateAutoOverrideActive`'s read function records the last override other
   than none that it sees, in a file-local variable in `reaper_property.cc`, and
   its write function restores it. It is polled every run while Group is

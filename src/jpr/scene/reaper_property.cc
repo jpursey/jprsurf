@@ -64,6 +64,24 @@ void WriteAutoOverride(bool value) {
   SetAutoOverride(value ? kOn : kOff);
 }
 
+// The override that turning kStateAutoOverrideActive on restores. Its read
+// function is polled every run while mapped, so this includes overrides set
+// from REAPER as well as the surface.
+AutoOverride last_auto_override = AutoOverride::kBypass;
+
+bool IsAutoOverrideActive() {
+  const AutoOverride auto_override = GetAutoOverride();
+  if (auto_override == AutoOverride::kNone) {
+    return false;
+  }
+  last_auto_override = auto_override;
+  return true;
+}
+
+void WriteAutoOverrideActive(bool value) {
+  SetAutoOverride(value ? last_auto_override : AutoOverride::kNone);
+}
+
 struct PolledToggle {
   std::string_view name;
   PolledToggleProperty::ReadFunction read;
@@ -86,11 +104,7 @@ constexpr PolledToggle kPolledToggles[] = {
      HasSelectedAutoMode<AutoMode::kLatchPreview>},
     {kStateSelectedAutoMixed,
      [] { return TrackCache::Get().HasMixedSelectedAutoModes(); }},
-    {kStateAutoOverrideActive,
-     [] { return GetAutoOverride() != AutoOverride::kNone; },
-     [](bool value) {
-       SetAutoOverride(value ? GetLastAutoOverride() : AutoOverride::kNone);
-     }},
+    {kStateAutoOverrideActive, IsAutoOverrideActive, WriteAutoOverrideActive},
     {kStateAutoOverrideTrimRead, IsAutoOverride<AutoOverride::kTrimRead>,
      WriteAutoOverride<AutoOverride::kTrimRead, AutoOverride::kBypass>},
     {kStateAutoOverrideRead, IsAutoOverride<AutoOverride::kRead>,

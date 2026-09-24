@@ -162,8 +162,9 @@ inline constexpr std::string_view kStateSelectedAutoMixed = kStateName<10>;
 // The global automation override for the current project (see AutoOverride).
 // Writing these sets the override.
 //
-// True while any override is on. Turning it on restores the last override (see
-// GetLastAutoOverride()), and turning it off removes the override.
+// True while any override is on. Turning it on restores the last override it
+// saw on, or Bypass if there hasn't been one since REAPER started. Turning it
+// off removes the override.
 inline constexpr std::string_view kStateAutoOverrideActive = kStateName<11>;
 
 // True while the override is the mode. Turning one on sets the override to its

@@ -51,13 +51,4 @@ AutoOverride GetAutoOverride();
 // add an undo point.
 void SetAutoOverride(AutoOverride auto_override);
 
-// Returns the last override other than kNone that was returned by
-// GetAutoOverride() or set by SetAutoOverride(), or kBypass if there hasn't
-// been one since REAPER started. This is the override to restore when turning
-// the override back on.
-//
-// Overrides set in REAPER are only seen when GetAutoOverride() is called, so
-// this is only as current as its last call.
-AutoOverride GetLastAutoOverride();
-
 }  // namespace jpr

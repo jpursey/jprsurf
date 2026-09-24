@@ -9,30 +9,12 @@
 
 namespace jpr {
 
-namespace {
-
-AutoOverride last_auto_override = AutoOverride::kBypass;
-
-void RememberAutoOverride(AutoOverride auto_override) {
-  if (auto_override != AutoOverride::kNone) {
-    last_auto_override = auto_override;
-  }
-}
-
-}  // namespace
-
 AutoOverride GetAutoOverride() {
-  const auto auto_override =
-      static_cast<AutoOverride>(GetGlobalAutomationOverride());
-  RememberAutoOverride(auto_override);
-  return auto_override;
+  return static_cast<AutoOverride>(GetGlobalAutomationOverride());
 }
 
 void SetAutoOverride(AutoOverride auto_override) {
   SetGlobalAutomationOverride(static_cast<int>(auto_override));
-  RememberAutoOverride(auto_override);
 }
-
-AutoOverride GetLastAutoOverride() { return last_auto_override; }
 
 }  // namespace jpr
