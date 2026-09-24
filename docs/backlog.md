@@ -21,6 +21,35 @@ Each item carries:
 When an item is picked up it moves into its own `docs/worklog/<feature>.md`
 plan (see Feature workflow in CLAUDE.md) and comes out of this list.
 
+## Data driven surface configuration
+
+- **Layers:** scene, plugin
+- **Size:** large
+- **Depends on:** nothing
+- **Background:** none; raised while making Nudge and Marker exclusive
+
+Everything above the `scene` layer is hard coded in C++ today: which devices
+connect and on which MIDI ports (`ConnectDevices()`), and every view, mapping,
+modifier, and condition (`InitViews()`, `InitModeButtons()`, and the strip
+helpers in `control_surface.cc`). Changing what a button does means a rebuild
+and a REAPER restart. The goal is for that configuration to come from an
+external config file instead, leaving the plugin as a thin host that loads it.
+
+Most mappings are already plain data (a property name, a control name, and a
+`ViewMapping::Config`), so they would move over directly. The hard part is the
+behavior the plugin writes as C++ callbacks: surface modes and the mode buttons,
+track anchors, picking the Send/Receive track, and exclusive toggles like Nudge
+and Marker. Each needs to become a named, reusable building block in `scene`
+(or a new layer between `scene` and `plugin`) that the config can refer to,
+which is also a question of where the line between those layers should sit.
+
+The design should settle the file format and where it lives (REAPER already
+passes a config string to `ControlSurface`, and `gb::ReadConfigFromText()`
+parses it, but nothing uses the result), how errors are reported, and whether
+it reloads without restarting REAPER. It would absorb *Generalizing strip
+construction for more than one extender*, and make *Modes for the other assign
+buttons* mostly a config change.
+
 ## Holding Send while a select anchor is held
 
 - **Layers:** plugin
