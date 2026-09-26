@@ -551,7 +551,7 @@ behavior.
   views can be bound to, and which navigation and picks write.
 - **Today:** the tracks of `track_list_view_` and `send_receive_mode_view_`,
   `RefreshTrackViews()`, `SetSendReceiveTrack()`, and the view handling in
-  `OnSetLastTouchedTrack()`. JPRSurf declares `user:folder` (falling back to
+  `OnLastTouchedTrackChanged()`. JPRSurf declares `user:folder` (falling back to
   `state:master_track`) for the track list, and `user:current_track`
   (following `state:last_touched_track`) for Send/Receive mode, which the
   track list also reveals.

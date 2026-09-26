@@ -5,12 +5,14 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
-#include "absl/types/span.h"
-#include "gb/base/flags.h"
+#include "absl/time/time.h"
 #include "gb/config/config.h"
+#include "jpr/common/control_surface.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/track.h"
@@ -32,81 +34,29 @@ enum class SurfaceMode {
 };
 inline constexpr int kSurfaceModeCount = 2;
 
-class PluginSurface final : private IReaperControlSurface {
+class PluginSurface final : private ControlSurfaceListener {
  public:
-  // Returns the control surface registration struct used to register this
-  // control surface with REAPER.
-  static reaper_csurf_reg_t* GetControlSurfaceReg();
+  // Registers JPRSurf as a control surface type with REAPER. Returns false (and
+  // logs an error) if registration fails.
+  static bool Register(reaper_plugin_info_t& plugin_info);
 
   PluginSurface(const PluginSurface&) = delete;
   PluginSurface& operator=(const PluginSurface&) = delete;
   ~PluginSurface() override;
 
  private:
-  // Registration functions
-  static IReaperControlSurface* Create(const char* type_string,
-                                       const char* config_string,
-                                       int* err_stats);
-  static HWND ShowConfig(const char* type_string, HWND parent,
-                         const char* init_config_string);
+  // Creates the listener for a new JPRSurf control surface.
+  static std::unique_ptr<ControlSurfaceListener> Create(
+      std::string_view config);
 
-  // Construction
-  PluginSurface(std::string type_string, std::string config_string);
+  explicit PluginSurface(std::string_view config);
 
-  // IReaperControlSurface overrides
-  const char* GetTypeString() override;
-  const char* GetDescString() override;
-  const char* GetConfigString() override;
-  void Run() override;
-  void SetTrackListChange() override;
-  void SetSurfaceVolume(MediaTrack* track_id, double volume) override;
-  void SetSurfacePan(MediaTrack* track_id, double pan) override;
-  void SetSurfaceMute(MediaTrack* track_id, bool mute) override;
-  void SetSurfaceSelected(MediaTrack* track_id, bool selected) override;
-  void SetSurfaceSolo(MediaTrack* track_id, bool solo) override;
-  void SetSurfaceRecArm(MediaTrack* track_id, bool rec_arm) override;
-  void SetPlayState(bool play, bool pause, bool rec) override;
-  void SetRepeatState(bool rep) override;
-  void SetTrackTitle(MediaTrack* track_id, const char* title) override;
-  bool GetTouchState(MediaTrack* track_id, int is_pan) override;
-  void SetAutoMode(int mode) override;
-  void ResetCachedVolPanStates() override;
-  void OnTrackSelection(MediaTrack* track_id) override;
-  bool IsKeyDown(int key) override;
-  int Extended(int call, void* param1, void* param2, void* param3) override;
-
-  // Extended calls
-  void OnReset();
-  void OnSetInputMonitor(MediaTrack* track_id, int rec_monitor);
-  void OnSetMetronome(bool enabled);
-  void OnSetAutoRecArm(bool auto_rec_arm);
-  void OnSetRecMode(int rec_mode);
-  void OnSetSendVolume(MediaTrack* track_id, int send_idx, double volume);
-  void OnSetSendPan(MediaTrack* track_id, int send_idx, double pan);
-  void OnSetFxEnabled(MediaTrack* track_id, int fx_idx, bool enabled);
-  void OnSetFxParam(MediaTrack* track_id, int fx_idx, int param_idx,
-                    double normalized_value);
-  void OnSetFxParamRecFx(MediaTrack* track_id, int fx_idx, int param_idx,
-                         double normalized_value);
-  void OnSetBpmAndPlayRate(std::optional<double> bpm,
-                           std::optional<double> play_rate);
-  void OnClearLastTouchedFx();
-  void OnSetLastTouchedFx(MediaTrack* track_id,
-                          std::optional<int> media_item_idx, int fx_idx);
-  void OnClearFocusedFx();
-  void OnSetFocusedFx(MediaTrack* track_id, std::optional<int> media_item_idx,
-                      int fx_idx);
-  void OnSetLastTouchedTrack(MediaTrack* track_id);
-  void OnSetMixerScroll(MediaTrack* track_id);
-  void OnSetPanEx(MediaTrack* track_id, absl::Span<const double> pan, int mode);
-  void OnSetRecvVolume(MediaTrack* track_id, int rec_idx, double volume);
-  void OnSetRecvPan(MediaTrack* track_id, int rec_idx, double pan);
-  void OnSetFxOpen(MediaTrack* track_id, int fx_idx, bool open);
-  void OnSetFxChange(MediaTrack* track_id, int flags);
-  void OnSetProjectMarkerChange();
-  void OnTrackFxPresetChanged(MediaTrack* track_id, int fx_idx);
-  bool OnSupportsExtendedTouch();
-  void OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx);
+  // ControlSurfaceListener overrides
+  void OnRun(absl::Time now) override;
+  void OnTracksChanged() override;
+  void OnSelectionChanged() override;
+  void OnLastTouchedTrackChanged(Track* track) override;
+  std::string GetConfig() const override;
 
   // Implementation
   void ConnectDevices();
@@ -152,9 +102,7 @@ class PluginSurface final : private IReaperControlSurface {
   void FinishModeChange(SurfaceMode old_mode, absl::Time start);
 
   // State
-  std::string type_string_;
   gb::Config config_;
-  std::string config_string_;
   Runner device_runner_;    // Resets device state, sends pending messages.
   Runner midi_in_runner_;   // Reads MIDI messages from the ports.
   Runner scene_runner_;     // Updates the scene.
@@ -170,7 +118,6 @@ class PluginSurface final : private IReaperControlSurface {
   View* send_receive_mode_view_ = nullptr;
   View* master_track_view_ = nullptr;
   View* track_list_view_ = nullptr;
-  bool track_list_changed_ = false;
 
   // Surface mode state.
   struct ModeButton {
@@ -198,16 +145,6 @@ class PluginSurface final : private IReaperControlSurface {
   // routing, which only change when REAPER notifies the surface, so there is no
   // need to check them every run.
   bool mode_buttons_changed_ = true;
-
-  // When track visibility was last polled. This defaults to the epoch so that
-  // the first run always polls.
-  absl::Time last_visibility_time_;
-
-  // Performance monitoring
-  absl::Time last_log_time_;
-  absl::Duration elapsed_run_time_;
-  absl::Duration max_run_time_;
-  int run_count_ = 0;
 };
 
 }  // namespace jpr

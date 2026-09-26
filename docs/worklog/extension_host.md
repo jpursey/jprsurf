@@ -189,19 +189,22 @@ Depends on: CL0.
 - Standard checks. No smoke test needed, as nothing uses it yet.
 - Covered by CL2.
 
-### CL2 [ ] plugin: PluginSurface is a ControlSurfaceListener
+### CL2 [x] plugin: PluginSurface is a ControlSurfaceListener
 
 Depends on: CL1.
 
-- `PluginSurface` implements `ControlSurfaceListener`: `OnRun()`,
-  `OnTracksChanged()`, `OnSelectionChanged()`, `OnLastTouchedTrackChanged()`,
-  and `GetConfig()`. Its constructor takes the config string.
-- `Plugin::Load()` registers JPRSurf with `ControlSurface::Register()`.
-- Removed from `PluginSurface`: `GetControlSurfaceReg()`, `Create()`,
-  `ShowConfig()`, all the `IReaperControlSurface` overrides and `Extended()`
-  stubs, `track_list_changed_`, `last_visibility_time_`, the performance log
-  members, and the direct calls into `TrackCache` and `ContinuousUndo` for
-  plumbing.
+- `PluginSurface` implements `ControlSurfaceListener` (privately, as it did
+  `IReaperControlSurface`): `OnRun()`, `OnTracksChanged()`,
+  `OnSelectionChanged()`, `OnLastTouchedTrackChanged()`, and `GetConfig()`.
+  Its constructor takes the config string.
+- `PluginSurface::Register()` registers JPRSurf's type (its type string,
+  description, and `Create()`) with `ControlSurface::Register()`, and
+  `Plugin::Load()` calls it.
+- Removed from `PluginSurface`: `GetControlSurfaceReg()`, `ShowConfig()`, all
+  the `IReaperControlSurface` overrides and `Extended()` stubs,
+  `type_string_`, `config_string_`, `track_list_changed_`,
+  `last_visibility_time_`, the performance log members, and the direct calls
+  into `TrackCache` and `ContinuousUndo` for plumbing.
 
 **Verify**
 - Standard checks, including the full smoke test.

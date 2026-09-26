@@ -32,9 +32,7 @@ bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& plugin_info) {
     return false;
   }
 
-  if (plugin_info.Register("csurf", PluginSurface::GetControlSurfaceReg()) ==
-      0) {
-    LOG(ERROR) << "Failed to register control surface.";
+  if (!PluginSurface::Register(plugin_info)) {
     return false;
   }
 

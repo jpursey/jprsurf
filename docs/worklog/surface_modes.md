@@ -16,7 +16,7 @@ they behave and how they are built, as a reference for adding more modes.
   leaving) live in `PluginSurface`. The scene only provides generic building
   blocks.
 - Mode buttons are handled while the scene runs, so presses only record a
-  request (`requested_mode_`, or the Send press state). `PluginSurface::Run()`
+  request (`requested_mode_`, or the Send press state). `PluginSurface::OnRun()`
   applies it after `scene_runner_.Run()`, so views are never enabled or
   disabled while the scene is iterating them.
 - Each mode switch is logged with its duration (~50us).
@@ -174,8 +174,8 @@ root                      global mappings: modifiers (including mod_send_hold),
 - `ContinuousUndo` creates an undo point with `Undo_OnStateChangeEx` once a
   series of changes with the same description has stopped for 500ms, or
   earlier when a change with a different description comes in. Route volume
-  and pan use "JPR: Adjust send/receive volume/pan". `PluginSurface::Run()`
-  calls `Update()` every run.
+  and pan use "JPR: Adjust send/receive volume/pan". `ControlSurface` (in
+  `common`) calls `Update()` after every run.
 - Route mute flushes pending changes first, so they aren't folded into its own
   undo point.
 - Known limitation: other changes made within the 500ms that don't create
