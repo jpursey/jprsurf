@@ -102,6 +102,11 @@ class TrackCache final {
   // only refreshed for tracks mapped on the surface.
   Track* GetOnlySelectedTrack() const;
 
+  // Returns the selected tracks, in order, not including the master track. Like
+  // GetOnlySelectedTrack(), this applies no filter. A selected track not yet in
+  // the cache is left out.
+  std::vector<Track*> GetSelectedTracks() const;
+
   // Returns true if any selected track, including the master track, is in the
   // automation mode.
   bool HasSelectedAutoMode(AutoMode mode) {

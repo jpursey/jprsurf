@@ -61,6 +61,25 @@ enum class TrackAnchor {
 // at zero.
 inline constexpr int kTrackAnchorCount = 4;
 
+// The on/off properties of a track, for code that works with any of them.
+enum class TrackBoolProperty {
+  kSelected,
+  kMute,
+  kSolo,
+  kRecArm,
+};
+
+// Every TrackBoolProperty, in order.
+inline constexpr TrackBoolProperty kTrackBoolProperties[] = {
+    TrackBoolProperty::kSelected, TrackBoolProperty::kMute,
+    TrackBoolProperty::kSolo, TrackBoolProperty::kRecArm};
+
+// Whether a change to a track also changes the tracks REAPER groups with it.
+enum class TrackGrouping {
+  kNone,     // Changes only the track, ignoring track groups and ganging.
+  kGrouped,  // Also changes grouped and ganged tracks, as REAPER's UI does.
+};
+
 //==============================================================================
 // Track listener
 //==============================================================================
@@ -183,17 +202,34 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool GetMute() const { return mute_; }
   bool GetSolo() const { return solo_; }
   bool GetRecArm() const { return rec_arm_; }
+  bool Get(TrackBoolProperty property) const;
 
-  // Sets the track's properties directly with no additional side effects. These
-  // will be applied to the underlying track in REAPER, and will also update the
-  // internal cached state for this track.
+  // Sets the track's properties directly.
+  //
+  // Selected, mute, solo, and record arm each add their own undo point (except
+  // selection), even while a TrackBatch is alive. Selecting the track also sets
+  // the last touched track. REAPER does not group selection.
   void SetName(std::string_view name);
-  void SetVolume(double volume);
-  void SetPan(double pan);
-  void SetSelected(bool selected);
-  void SetMute(bool mute);
-  void SetSolo(bool solo);
-  void SetRecArm(bool record);
+  void SetVolume(double volume, TrackGrouping grouping = TrackGrouping::kNone);
+  void SetPan(double pan, TrackGrouping grouping = TrackGrouping::kNone);
+  void Set(TrackBoolProperty property, bool value,
+           TrackGrouping grouping = TrackGrouping::kNone);
+  void SetSelected(bool selected) {
+    Set(TrackBoolProperty::kSelected, selected);
+  }
+  void SetMute(bool mute, TrackGrouping grouping = TrackGrouping::kNone) {
+    Set(TrackBoolProperty::kMute, mute, grouping);
+  }
+  void SetSolo(bool solo, TrackGrouping grouping = TrackGrouping::kNone) {
+    Set(TrackBoolProperty::kSolo, solo, grouping);
+  }
+  void SetRecArm(bool rec_arm, TrackGrouping grouping = TrackGrouping::kNone) {
+    Set(TrackBoolProperty::kRecArm, rec_arm, grouping);
+  }
+
+  // Selects this track, and unselects every other track, including the master
+  // track.
+  void SelectOnly();
 
   // Actions which run the corresponding UI behavior for each property (the
   // equivalent of clicking or changing the property in REAPER's UI, whenever
@@ -348,6 +384,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   void Unsubscribe(TrackListener* listener);
 
  private:
+  friend class TrackBatch;
   friend class TrackCache;
 
   // Private construction parameters for a track. This is used to construct
@@ -361,9 +398,6 @@ class Track final : public std::enable_shared_from_this<Track> {
   Track(Private, const Guid& guid, MediaTrack* track_id);
 
  private:
-  using SetPropertyFn = int (*)(MediaTrack* track, int value, int ingroupflags);
-  using GetPropertyFn = bool (*)(MediaTrack* track);
-
   // Everything about this track under one TrackFilter, held as one entry per
   // filter in filter_state_.
   //
@@ -437,25 +471,11 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Notifies all listeners subscribed to this track that its routes changed.
   void NotifyRoutesChanged();
 
-  // Toggles the internal selected state, potentially sets the last touched
-  // track, and notifies listeners.
-  void DoToggleSelected();
-
-  // Generic form for a UI property, where anchor is the property's anchor type.
-  void DoUiProperty(bool& property, TrackAnchor anchor, const char* undo_entry,
-                    GetPropertyFn get_property, SetPropertyFn set_property);
-
-  // Selects exactly the tracks in the range between anchor_track and this
-  // track, and unselects all others. See GetSurfaceRange() for which tracks
-  // are in the range.
-  void SelectRange(const Track* anchor_track, bool require_same_parent);
-
-  // Sets the property of the tracks in the range between anchor_track and this
-  // track to the anchor track's value, ignoring grouping and ganging. See
-  // GetSurfaceRange() for which tracks are in the range.
-  void SetPropertyRange(const Track* anchor_track, bool require_same_parent,
-                        const char* undo_entry, GetPropertyFn get_property,
-                        SetPropertyFn set_property);
+  // Everything about one TrackBoolProperty: how REAPER reports and sets it,
+  // where it is cached, and its undo point. Defined in track.cc.
+  struct BoolPropertyInfo;
+  static const BoolPropertyInfo& GetBoolPropertyInfo(
+      TrackBoolProperty property);
 
   // Track identification. The Guid may be empty and the track_id may be null.
   Guid guid_;
@@ -488,6 +508,82 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // Listeners subscribed to this track for changes.
   absl::flat_hash_set<TrackListener*> listeners_;
+};
+
+//==============================================================================
+// Changes to more than one track
+//==============================================================================
+
+// Changes to any number of tracks, made as one change: REAPER refreshes its UI
+// once, and adds one undo point if anything changed (none for selection alone),
+// when the batch ends. Any change to more than one track should use one.
+//
+// A track that already has the value is left alone, so with
+// TrackGrouping::kGrouped its grouped tracks are not brought into line.
+class TrackBatch final {
+ public:
+  TrackBatch();
+  TrackBatch(const TrackBatch&) = delete;
+  TrackBatch& operator=(const TrackBatch&) = delete;
+  ~TrackBatch();
+
+  // Sets the property of the track, if it exists. REAPER does not group
+  // selection.
+  void Set(Track* track, TrackBoolProperty property, bool value,
+           TrackGrouping grouping = TrackGrouping::kNone);
+  void SetSelected(Track* track, bool selected) {
+    Set(track, TrackBoolProperty::kSelected, selected);
+  }
+  void SetMute(Track* track, bool mute,
+               TrackGrouping grouping = TrackGrouping::kNone) {
+    Set(track, TrackBoolProperty::kMute, mute, grouping);
+  }
+  void SetSolo(Track* track, bool solo,
+               TrackGrouping grouping = TrackGrouping::kNone) {
+    Set(track, TrackBoolProperty::kSolo, solo, grouping);
+  }
+  void SetRecArm(Track* track, bool rec_arm,
+                 TrackGrouping grouping = TrackGrouping::kNone) {
+    Set(track, TrackBoolProperty::kRecArm, rec_arm, grouping);
+  }
+
+ private:
+  // The name of the undo point to add when the batch ends, or null if nothing
+  // that adds one has changed.
+  const char* undo_name_ = nullptr;
+};
+
+// A range of tracks between two tracks, in a filter's global index space (see
+// Track::GetGlobalIndex()).
+class TrackRange final {
+ public:
+  // Returns the range between the two tracks, inclusive, in either order. This
+  // returns nullopt if either track is null or has no place in the filter.
+  //
+  // If same_parent is true, the range only includes tracks with the same
+  // parent as `from`. Otherwise, it includes all tracks between them,
+  // including the children of any folders.
+  static std::optional<TrackRange> Between(const Track* from, const Track* to,
+                                           TrackFilter filter,
+                                           bool same_parent);
+
+  // Returns true if the track is in the range.
+  bool Contains(const Track* track) const;
+
+ private:
+  TrackRange(TrackFilter filter, int first_index, int last_index,
+             const Track* parent_track)
+      : filter_(filter),
+        first_index_(first_index),
+        last_index_(last_index),
+        parent_track_(parent_track) {}
+
+  TrackFilter filter_;
+  int first_index_;
+  int last_index_;
+
+  // The parent every track in the range must have, or null for any parent.
+  const Track* parent_track_;
 };
 
 }  // namespace jpr

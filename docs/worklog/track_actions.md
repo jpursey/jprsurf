@@ -22,16 +22,18 @@ into separate mappings once *Modifiers a mapping ignores* exists.
   small named operations (toggle, toggle ungrouped, exclusive, clear all,
   range). Splitting them into mappings now would need about 8 mappings per
   button, and would change what unlisted modifier combinations do.
-- **`common` stays explicit.** `Track` keeps one getter and setter per
-  property, and the batch has the same explicit setters. The only shared code
-  across properties is the policy, so the enum that names them lives in
-  `scene`, with it.
+- **One enum for the on/off properties, in `common`.** `TrackBoolProperty`
+  lets code that works with any of select, mute, solo, and rec arm (the
+  policy's shared toggle and range code, and the anchors) say which, with
+  `Track::Get()` and `TrackBatch::Set()`. `Track` keeps its explicit getters
+  and setters, and the batch has explicit forwarders, for code that works with
+  one property.
 - **The last touched track stays in `TrackCache`**, as plain data: REAPER's
   notifications set it, and it is cleared when its track is deleted. `Track`
   stops setting it as a side effect. The scene's track actions set it whenever
   the surface touches a track, and read it as the root for Shift ranges.
 - **The anchors move to `scene`.** They are surface state, so the scene owns
-  one per track action. *Properties declared on views, and track anchors* then
+  one per `TrackBoolProperty`. *Properties declared on views, and track anchors* then
   builds its component on these.
 - **The track filter moves to `scene`**, as the setting described in
   [config_model.md](../config_model.md) (Settings). It is fixed when the scene
@@ -39,15 +41,16 @@ into separate mappings once *Modifiers a mapping ignores* exists.
 
 ### Names
 
+- `TrackBoolProperty` (common): `kSelected`, `kMute`, `kSolo`, and `kRecArm`,
+  the on/off properties of a track. `Flag` and `Toggle` were rejected: a flag
+  suggests one of a set of bits, and these are properties. It replaces
+  `TrackAnchor`, as the anchors are one per property.
 - `TrackGrouping` (common): `kNone` changes only the track, and `kGrouped` also
   changes its grouped and ganged tracks, as REAPER's UI does.
 - `TrackBatch` (common): changes to any number of tracks, made as one change.
 - `TrackRange` (common): the tracks between two tracks under a filter. This
   is the renamed `SurfaceRange` from `track.cc`, since `common` no longer knows
   about a surface.
-- `TrackAction` (scene): `kSelect`, `kMute`, `kSolo`, and `kRecArm`. It names
-  an action, not a property, which is what `TrackAnchor` already was, and
-  replaces it.
 - `TrackActions` (scene): the standard behavior behind the `track_ui_*`
   properties. The ranged track actions doc already calls select, mute, solo,
   and rec arm "track actions". It shouldn't be confused with REAPER actions
@@ -56,11 +59,17 @@ into separate mappings once *Modifiers a mapping ignores* exists.
 ### common: Setters and TrackBatch
 
 ```
+enum class TrackBoolProperty { kSelected, kMute, kSolo, kRecArm };
 enum class TrackGrouping { kNone, kGrouped };
 
 class Track {
+  bool Get(TrackBoolProperty property) const;  // Beside GetMute(), and so on.
+
   // Each is one change, with its own undo point (except selection) and UI
   // refresh. These are not part of any TrackBatch that is alive at the time.
+  // The explicit setters forward to Set().
+  void Set(TrackBoolProperty property, bool value,
+           TrackGrouping grouping = TrackGrouping::kNone);
   void SetSelected(bool selected);
   void SetMute(bool mute, TrackGrouping grouping = TrackGrouping::kNone);
   void SetSolo(bool solo, TrackGrouping grouping = TrackGrouping::kNone);
@@ -81,7 +90,9 @@ class TrackBatch final {
   ~TrackBatch();
 
   // Each sets the track's value if it exists and its value in REAPER is
-  // different.
+  // different. The explicit setters forward to Set().
+  void Set(Track* track, TrackBoolProperty property, bool value,
+           TrackGrouping grouping = TrackGrouping::kNone);
   void SetSelected(Track* track, bool selected);
   void SetMute(Track* track, bool mute,
                TrackGrouping grouping = TrackGrouping::kNone);
@@ -108,7 +119,7 @@ struct TrackRange {
   none, and the one case left that can still add one (Shift+Alt) is checked
   under To confirm.
 - **UI refresh:** the batch holds a `PreventUIRefresh` scope for its lifetime.
-  `ScopedPreventUiRefresh` stays private to `track.cc`.
+  It replaces the private `ScopedPreventUiRefresh`.
 - **Listeners:** notification stays per track and immediate. Each change
   updates that track's cached value and notifies its listeners, as a single
   setter does now. Tracks that REAPER changes through grouping aren't in the
@@ -119,8 +130,8 @@ struct TrackRange {
 - **Live values:** the batch compares against REAPER's value rather than the
   cache to decide whether anything changed, as the range code does today. The
   cache is only refreshed for tracks a view shows, so it can be stale. It reads
-  all four flags with one `GetTrackState()` call per track, through a private
-  helper that `Refresh()` shares, so the flag bits live only in `track.cc`. If
+  all four flags with one `GetTrackState()` call per track, through the same
+  table `Refresh()` uses, so the state bits live only in `track.cc`. If
   the live value differs from the cache, the batch updates the cache and
   notifies, even when it then has nothing to set, so any change it notices is
   notified. The single toggle setters get this too, which is slightly more
@@ -168,20 +179,18 @@ class Scene {
 ### scene: TrackActions
 
 ```
-enum class TrackAction { kSelect, kMute, kSolo, kRecArm };
-
 class TrackActions final {
  public:
   explicit TrackActions(TrackFilter filter);
 
-  // The anchor for each action. While an action's anchor is held on one track,
-  // that action on another track acts on the range between them.
-  Anchor<Track>& GetAnchor(TrackAction action);
+  // The anchor for each property. While a property's anchor is held on one
+  // track, its action on another track acts on the range between them.
+  Anchor<Track>& GetAnchor(TrackBoolProperty property);
 
   // The standard behavior for each property, with the modifiers exactly as
   // documented on Track::Ui*() today.
   void Select(Track* track);
-  void Toggle(Track* track, TrackAction action);  // Mute, solo, rec arm.
+  void Toggle(Track* track, TrackBoolProperty property);  // Mute, solo, rec arm.
   void SetVolume(Track* track, double volume);
   void SetPan(Track* track, double pan);
 };
@@ -189,11 +198,9 @@ class TrackActions final {
 
 - Owned by the `Scene`, so the anchors are released with the scene, and every
   surface has its own.
-- `Select()` and `Toggle()` check the action's anchor first, then the modifiers
+- `Select()` and `Toggle()` check the property's anchor first, then the modifiers
   in today's order. Each behavior is a private function (`ToggleOne()`,
   `SetRange()`, `SelectRange()`, `ClearAll()`, and so on), each one batch.
-- A small table gives each of mute, solo, and rec arm its `Track` getter and
-  its `TrackBatch` setter.
 - It reads values only through `Track`'s getters, never REAPER's track state.
   A track a view shows was refreshed this run, so its cache is current. Before
   reading a track that may not be shown, it calls `Refresh()` on it:
@@ -264,30 +271,34 @@ These change, all in rare cases:
 
 ### To confirm
 
-- Whether REAPER skips an undo point when nothing actually changed. Shift+Alt
-  can still add one: when only this track and its grouped tracks have the
-  property on, it clears them and sets them back. CL1 checks this in REAPER's
-  undo history. If REAPER records it, the batch can remember each track's
-  value before its first change and skip the undo point if none differ at the
-  end. If REAPER drops it, nothing more is needed.
-- `GetTrackState()` reflects a change made earlier in the same
-  `PreventUIRefresh` scope, which Shift+Alt relies on. CL1 checks this with
-  Shift+Alt on a muted, grouped track: the group ends up muted.
+- **Confirmed (CL1):** REAPER drops an undo point when nothing actually
+  changed. Shift+Alt, when only this track and its grouped tracks have the
+  property on, clears them and sets them back, and REAPER adds no undo point,
+  so the batch needs nothing more.
+- **Confirmed (CL1):** `GetTrackState()` reflects a change made earlier in the
+  same `PreventUIRefresh` scope. Shift+Alt on a muted, grouped track leaves the
+  group muted.
+- **Confirmed (CL1):** the batch notifying listeners of the other tracks it
+  changes shows ranges correctly on the surface, with no flicker.
+- **Found (CL1):** a track fader move followed by a mute is one undo point.
+  REAPER creates the undo point for surface volume and pan changes itself, and
+  folds the pending one into the next undo point it is given. This is not new
+  (the old code added the mute's undo point the same way), and
+  `ContinuousUndo::Flush()` doesn't help, as it only covers send and receive
+  changes.
 - The strip's view releases an anchor on a deleted track in the same run as
   the track list refresh. CL4 checks this, with the anchor's modifier.
-- The batch notifying listeners of the other tracks it changes is new (today
-  they wait for REAPER's surface notifications). CL1 checks that a range shows
-  correctly on the surface with no extra refreshes or flicker.
 
 ## CLs
 
-### CL1 [ ] common: Grouping, TrackBatch, and TrackRange
+### CL1 [x] common: Grouping, TrackBatch, and TrackRange
 
 Depends on: nothing.
 
-- `track.h`: `TrackGrouping`, `TrackBatch`, `TrackRange`, `Track::SelectOnly()`,
-  and the grouping parameter on `SetMute()`, `SetSolo()`, `SetRecArm()`,
-  `SetVolume()`, and `SetPan()`.
+- `track.h`: `TrackBoolProperty`, `TrackGrouping`, `TrackBatch`, `TrackRange`,
+  `Track::Get()` and `SelectOnly()`, and the grouping parameter on `SetMute()`,
+  `SetSolo()`, `SetRecArm()`, `SetVolume()`, and `SetPan()`.
+- `TrackCache::GetSelectedTracks()`, for Opt.
 - The single toggle setters become batches of one. `SetSelected()` keeps its
   last touched side effect until CL5, as the plain `track_selected` property
   still relies on it.
@@ -324,7 +335,7 @@ Depends on: nothing.
 
 Depends on: CL1.
 
-- `TrackAction`, and `Scene::GetTrackFilter()` and `GetTrackActions()`. For
+- `Scene::GetTrackFilter()` and `GetTrackActions()`. For
   now the filter still comes from `TrackCache::GetSurfaceFilter()`, and
   `TrackActions::GetAnchor()` returns the matching `TrackCache` anchor, as the
   plugin holds those until CL3.
@@ -344,7 +355,7 @@ Depends on: CL1.
 
 Depends on: CL2.
 
-- `AddTrackAnchorMapping()` takes a `TrackAction`, and gets its anchor from
+- `AddTrackAnchorMapping()` takes a `TrackBoolProperty`, and gets its anchor from
   `scene->GetTrackActions().GetAnchor()`.
 - `CanShowRoutes()`, `OnLastTouchedTrackChanged()`, and
   `EnsureTrackIsVisible()` use `scene->GetTrackFilter()`.

@@ -279,6 +279,19 @@ Track* TrackCache::GetOnlySelectedTrack() const {
   return GetTrack(GetSelectedTrack(nullptr, 0));
 }
 
+std::vector<Track*> TrackCache::GetSelectedTracks() const {
+  std::vector<Track*> tracks;
+  const int count = CountSelectedTracks(nullptr);
+  tracks.reserve(count);
+  for (int i = 0; i < count; ++i) {
+    if (Track* track = GetTrack(GetSelectedTrack(nullptr, i));
+        track != nullptr) {
+      tracks.push_back(track);
+    }
+  }
+  return tracks;
+}
+
 AutoModes TrackCache::GetSelectedAutoModes() {
   if (selected_auto_modes_valid_) {
     return selected_auto_modes_;

@@ -83,7 +83,7 @@ REAPER is realtime and the extension runs on its UI thread, so performance is ch
 
 Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
 
-REAPER track setters (mute, solo, rec arm, select) each pay a UI refresh of ~2–17ms per call. Any action that changes a UI-visible property on more than one track must batch the changes in a single `PreventUIRefresh` scope (see `ScopedPreventUiRefresh` in `src/jpr/common/track.cc`), so the refresh is paid once.
+REAPER track setters (mute, solo, rec arm, select) each pay a UI refresh of ~2–17ms per call. Any action that changes a UI-visible property on more than one track must batch the changes in a single `PreventUIRefresh` scope (see `TrackBatch` in `src/jpr/common/track.h`), so the refresh is paid once.
 
 ### Format
 

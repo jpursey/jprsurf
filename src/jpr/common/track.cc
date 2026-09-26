@@ -28,70 +28,223 @@ constexpr int kReceiveCategory = -1;
 constexpr int kSendCategory = 0;
 constexpr int kHardwareOutputCategory = 1;
 
-// Defers REAPER's UI refresh until the end of the scope.
-//
-// REAPER refreshes its UI after every track setter call, which costs ~2ms or
-// more each (9-17ms for record arm). Changing several tracks within one scope
-// pays that cost once, when the scope ends, rather than once per track.
-class ScopedPreventUiRefresh final {
- public:
-  ScopedPreventUiRefresh() { PreventUIRefresh(1); }
-  ScopedPreventUiRefresh(const ScopedPreventUiRefresh&) = delete;
-  ScopedPreventUiRefresh& operator=(const ScopedPreventUiRefresh&) = delete;
-  ~ScopedPreventUiRefresh() { PreventUIRefresh(-1); }
-};
+// Undo point name for a TrackBatch that changed more than one kind of property.
+constexpr char kChangeTracksUndoName[] = "JPR:Change Tracks";
 
-// A range of tracks on the control surface, for ranged UI actions.
-struct SurfaceRange {
-  // Returns true if the track is in the range.
-  bool Contains(const Track* track) const {
-    const std::optional<int> index = track->GetGlobalIndex(filter);
-    if (!index.has_value() || *index < first_index || *index > last_index) {
-      return false;
+//------------------------------------------------------------------------------
+// UI actions
+//
+// These implement Track::Ui*() using only Track's public interface, the same
+// as any other caller would.
+//------------------------------------------------------------------------------
+
+// Returns the track holding the anchor, or null if it isn't held on another
+// track that exists. A deleted track is treated as not held, so the press
+// behaves as usual.
+Track* GetOtherAnchorTrack(TrackAnchor anchor, const Track* track) {
+  Track* anchor_track = TrackCache::Get().GetAnchor(anchor).Get();
+  if (anchor_track == nullptr || anchor_track == track ||
+      !anchor_track->Exists()) {
+    return nullptr;
+  }
+  return anchor_track;
+}
+
+// Returns the range of tracks on the surface between the root track (an anchor
+// or the last touched track) and this track.
+//
+// Both ends must have a place in the surface filter. A root without one (it may
+// be null, touched from the arrange view, deleted, or cleared by REAPER, which
+// reports the stub track) leaves no range, and this returns nullopt. A range
+// was asked for, so callers should then do nothing rather than silently
+// performing some other behavior.
+std::optional<TrackRange> GetSurfaceRange(const Track* root, const Track* track,
+                                          bool same_parent) {
+  return TrackRange::Between(root, track, TrackCache::Get().GetSurfaceFilter(),
+                             same_parent);
+}
+
+// Selects exactly the tracks in the range between the root and this track, and
+// unselects all others.
+void SelectRange(Track* track, Track* root, bool same_parent) {
+  const std::optional<TrackRange> range =
+      GetSurfaceRange(root, track, same_parent);
+  if (!range.has_value()) {
+    return;
+  }
+
+  // This covers *all* tracks in the project, so that tracks which are not on
+  // the surface still get unselected. Leaving a track selected that the user
+  // cannot see is worse than unselecting one they did not aim at.
+  TrackBatch batch;
+  for (Track* other : TrackCache::Get().GetTracks()) {
+    batch.SetSelected(other, range->Contains(other));
+  }
+}
+
+// Sets the property of the tracks in the range between the root and this
+// track to the root's value, ignoring grouping and ganging.
+void SetRange(Track* track, Track* root, bool same_parent,
+              TrackBoolProperty property) {
+  const std::optional<TrackRange> range =
+      GetSurfaceRange(root, track, same_parent);
+  if (!range.has_value()) {
+    return;
+  }
+
+  // The root has a place on the surface, but may be scrolled off it (the last
+  // touched track), so its cached value may be stale.
+  root->Refresh();
+  const bool value = root->Get(property);
+  TrackBatch batch;
+  for (Track* other : TrackCache::Get().GetTracks()) {
+    if (range->Contains(other)) {
+      batch.Set(other, property, value);
     }
-    return !require_same_parent || track->GetParentTrack() == parent_track;
+  }
+}
+
+// Returns the grouping for a UI action: Ctrl ignores grouping and ganging.
+TrackGrouping GetUiGrouping() {
+  return AreModifiersOn(kModCtrl) ? TrackGrouping::kNone
+                                  : TrackGrouping::kGrouped;
+}
+
+// Toggles the property of the track within the batch.
+void Toggle(TrackBatch& batch, Track* track, TrackBoolProperty property,
+            TrackGrouping grouping) {
+  batch.Set(track, property, !track->Get(property), grouping);
+}
+
+// The UI action for mute, solo, and record arm (see Track::Ui*()), where anchor
+// is the property's anchor.
+void UiToggle(Track* track, TrackBoolProperty property, TrackAnchor anchor) {
+  TrackCache& cache = TrackCache::Get();
+
+  // An anchor held on another track sets the range from it, ignoring all
+  // modifiers.
+  if (Track* anchor_track = GetOtherAnchorTrack(anchor, track);
+      anchor_track != nullptr) {
+    SetRange(track, anchor_track, /*same_parent=*/true, property);
+    return;
   }
 
-  TrackFilter filter;
-  int first_index;
-  int last_index;
-  bool require_same_parent;
-  const Track* parent_track;
-};
+  // Handle clear/set-only functionality. "Clear all" means all tracks in the
+  // project, not just the ones on the surface: a mute the user can neither see
+  // nor clear is a bad state to be able to create.
+  if (AreModifiersOn(kModAlt)) {
+    // Ctrl leaves only this track on, and Shift turns this track and its
+    // grouped tracks back on.
+    const bool only_this_track = AreModifiersOn(kModCtrl);
+    const bool set_this_track = only_this_track || AreModifiersOn(kModShift);
+    TrackBatch batch;
 
-// Returns the range of tracks between the anchor track and this track.
-//
-// The range is relative to what is actually on the surface, so it operates in
-// the surface filter's index space, and both ends must have a place in it. An
-// end without one (the anchor may be null, touched from the arrange view,
-// deleted, or cleared by REAPER, which reports the stub track) leaves no range,
-// and this returns nullopt. A range was asked for, so callers should then do
-// nothing rather than silently performing some other behavior.
-//
-// If require_same_parent is true, the range only includes tracks with the same
-// parent as the anchor track. Otherwise, it includes all tracks between them,
-// including the children of any folders.
-std::optional<SurfaceRange> GetSurfaceRange(const Track* anchor_track,
-                                            const Track* this_track,
-                                            bool require_same_parent) {
-  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
-  const std::optional<int> anchor_index =
-      anchor_track != nullptr ? anchor_track->GetGlobalIndex(filter)
-                              : std::nullopt;
-  const std::optional<int> this_index = this_track->GetGlobalIndex(filter);
-  if (!anchor_index.has_value() || !this_index.has_value()) {
-    return std::nullopt;
+    // With Ctrl, this track goes straight to its final value rather than being
+    // turned off and back on.
+    for (Track* other : cache.GetTracks()) {
+      batch.Set(other, property, only_this_track && other == track);
+    }
+    if (set_this_track) {
+      // With Shift, this track was cleared above, so setting it with grouping
+      // turns its grouped tracks back on too.
+      batch.Set(
+          track, property, true,
+          only_this_track ? TrackGrouping::kNone : TrackGrouping::kGrouped);
+      cache.SetLastTouchedTrack(track);
+    }
+    return;
   }
-  return SurfaceRange{
-      .filter = filter,
-      .first_index = std::min(*anchor_index, *this_index),
-      .last_index = std::max(*anchor_index, *this_index),
-      .require_same_parent = require_same_parent,
-      .parent_track = anchor_track->GetParentTrack(),
-  };
+
+  // Handle ranged set/clear functionality from the last touched track.
+  if (AreModifiersOn(kModShift)) {
+    SetRange(track, cache.GetLastTouchedTrack(),
+             /*same_parent=*/!AreModifiersOn(kModCtrl), property);
+    return;
+  }
+
+  // Opt toggles each selected track individually, ignoring grouping.
+  if (AreModifiersOn(kModOpt)) {
+    TrackBatch batch;
+    Toggle(batch, track, property, TrackGrouping::kNone);
+    if (track->GetSelected()) {
+      cache.SetLastTouchedTrack(track);
+      for (Track* selected : cache.GetSelectedTracks()) {
+        if (selected == track) {
+          continue;
+        }
+
+        // Selected tracks may not be on the surface, so their cached values
+        // may be stale.
+        selected->Refresh();
+        Toggle(batch, selected, property, TrackGrouping::kNone);
+      }
+    }
+    return;
+  }
+
+  TrackBatch batch;
+  Toggle(batch, track, property, GetUiGrouping());
+  cache.SetLastTouchedTrack(track);
 }
 
 }  // namespace
+
+struct Track::BoolPropertyInfo {
+  // The property's bit in the flags returned by GetTrackState().
+  int state_bit;
+
+  // The cached value in Track.
+  bool Track::*cached;
+
+  // Sets the property in REAPER. Selection ignores ingroupflags.
+  void (*set)(MediaTrack* track_id, bool value, int ingroupflags);
+
+  // The undo point name, or null for selection, which adds no undo point.
+  const char* undo_name;
+};
+
+const Track::BoolPropertyInfo& Track::GetBoolPropertyInfo(
+    TrackBoolProperty property) {
+  // Indexed by TrackBoolProperty.
+  static constexpr BoolPropertyInfo kBoolPropertyInfo[] = {
+      {2, &Track::selected_,
+       [](MediaTrack* track_id, bool value, int ingroupflags) {
+         SetTrackSelected(track_id, value);
+       },
+       nullptr},
+      {8, &Track::mute_,
+       [](MediaTrack* track_id, bool value, int ingroupflags) {
+         SetTrackUIMute(track_id, value ? 1 : 0, ingroupflags);
+       },
+       "JPR:Toggle Mute"},
+      {16, &Track::solo_,
+       [](MediaTrack* track_id, bool value, int ingroupflags) {
+         SetTrackUISolo(track_id, value ? 1 : 0, ingroupflags);
+       },
+       "JPR:Toggle Solo"},
+      {64, &Track::rec_arm_,
+       [](MediaTrack* track_id, bool value, int ingroupflags) {
+         SetTrackUIRecArm(track_id, value ? 1 : 0, ingroupflags);
+       },
+       "JPR:Toggle Record Arm"},
+  };
+  return kBoolPropertyInfo[static_cast<int>(property)];
+}
+
+bool Track::Get(TrackBoolProperty property) const {
+  return this->*GetBoolPropertyInfo(property).cached;
+}
+
+void Track::Set(TrackBoolProperty property, bool value,
+                TrackGrouping grouping) {
+  if (track_id_ == nullptr) {
+    return;
+  }
+  TrackBatch().Set(this, property, value, grouping);
+  if (property == TrackBoolProperty::kSelected && value) {
+    TrackCache::Get().SetLastTouchedTrack(this);
+  }
+}
 
 Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
@@ -139,16 +292,13 @@ void Track::DoRefresh(MediaTrack* track_id) {
     changed = changed || (name_ != name);
     name_ = name;
   }
-  bool selected = (flags & 2) != 0;
-  bool mute = (flags & 8) != 0;
-  bool solo = (flags & 16) != 0;
-  bool rec_arm = (flags & 64) != 0;
-  changed = changed || (selected_ != selected) || (mute_ != mute) ||
-            (solo_ != solo) || (rec_arm_ != rec_arm);
-  selected_ = selected;
-  mute_ = mute;
-  solo_ = solo;
-  rec_arm_ = rec_arm;
+  for (TrackBoolProperty property : kTrackBoolProperties) {
+    const BoolPropertyInfo& info = GetBoolPropertyInfo(property);
+    const bool value = (flags & info.state_bit) != 0;
+    bool& cached = this->*info.cached;
+    changed = changed || (cached != value);
+    cached = value;
+  }
 
   double volume = 0.0;
   double pan = 0.0;
@@ -287,22 +437,14 @@ void Track::SetName(std::string_view name) {
 // Volume
 //------------------------------------------------------------------------------
 
-void Track::UiVolume(double volume) {
-  if (track_id_ == nullptr || volume_ == volume) {
-    return;
-  }
-  CSurf_OnVolumeChangeEx(track_id_, volume, /*relative=*/false,
-                         /*allowgang=*/!AreModifiersOn(kModCtrl));
-  volume_ = volume;
-  NotifyListeners();
-}
+void Track::UiVolume(double volume) { SetVolume(volume, GetUiGrouping()); }
 
-void Track::SetVolume(double volume) {
+void Track::SetVolume(double volume, TrackGrouping grouping) {
   if (track_id_ == nullptr || volume_ == volume) {
     return;
   }
   CSurf_OnVolumeChangeEx(track_id_, volume, /*relative=*/false,
-                         /*allowgang=*/false);
+                         /*allowgang=*/grouping == TrackGrouping::kGrouped);
   volume_ = volume;
   NotifyListeners();
 }
@@ -311,21 +453,14 @@ void Track::SetVolume(double volume) {
 // Pan
 //------------------------------------------------------------------------------
 
-void Track::UiPan(double pan) {
-  if (track_id_ == nullptr) {
-    return;
-  }
-  CSurf_OnPanChangeEx(track_id_, pan, /*relative=*/false,
-                      /*allowgang=*/!AreModifiersOn(kModCtrl));
-  pan_ = pan;
-  NotifyListeners();
-}
+void Track::UiPan(double pan) { SetPan(pan, GetUiGrouping()); }
 
-void Track::SetPan(double pan) {
+void Track::SetPan(double pan, TrackGrouping grouping) {
   if (track_id_ == nullptr || pan_ == pan) {
     return;
   }
-  CSurf_OnPanChangeEx(track_id_, pan, /*relative=*/false, /*allowgang=*/false);
+  CSurf_OnPanChangeEx(track_id_, pan, /*relative=*/false,
+                      /*allowgang=*/grouping == TrackGrouping::kGrouped);
   pan_ = pan;
   NotifyListeners();
 }
@@ -338,13 +473,13 @@ void Track::UiSelected() {
   if (track_id_ == nullptr) {
     return;
   }
+  TrackCache& cache = TrackCache::Get();
 
   // An anchor held on another track selects the range from it, ignoring all
   // modifiers.
-  const Track* anchor_track =
-      TrackCache::Get().GetAnchor(TrackAnchor::kSelect).Get();
-  if (anchor_track != nullptr && anchor_track != this) {
-    SelectRange(anchor_track, /*require_same_parent=*/true);
+  if (Track* anchor_track = GetOtherAnchorTrack(TrackAnchor::kSelect, this);
+      anchor_track != nullptr) {
+    SelectRange(this, anchor_track, /*same_parent=*/true);
     return;
   }
 
@@ -355,290 +490,69 @@ void Track::UiSelected() {
     // tracks with the same parent as the starting track. This is more desirable
     // on a control surface. To get the standard "all tracks" the control
     // modifier must also be pressed.
-    SelectRange(TrackCache::Get().GetLastTouchedTrack(),
-                /*require_same_parent=*/!AreModifiersOn(kModCtrl));
+    SelectRange(this, cache.GetLastTouchedTrack(),
+                /*same_parent=*/!AreModifiersOn(kModCtrl));
     return;
   }
 
   // Ctrl is used to toggle selection of individual tracks.
   if (AreModifiersOn(kModCtrl)) {
-    SetTrackSelected(track_id_, !selected_);
-    DoToggleSelected();
-    return;
-  }
-
-  // To emulate default REAPER behavior "unselected" a selected track will
-  // just unselect every other track and leave the selected track selected.
-  if (selected_ && CountSelectedTracks(nullptr) > 1) {
-    TrackCache::Get().SetLastTouchedTrack(this);
-    SetOnlyTrackSelected(track_id_);
-    return;
-  }
-  if (!selected_) {
-    SetOnlyTrackSelected(track_id_);
-  } else {
-    //  Even though this is not default REAPER behavior, this allows unselecting
-    //  the last track.
-    SetTrackSelected(track_id_, false);
-  }
-  DoToggleSelected();
-}
-
-void Track::SelectRange(const Track* anchor_track, bool require_same_parent) {
-  const std::optional<SurfaceRange> range =
-      GetSurfaceRange(anchor_track, this, require_same_parent);
-  if (!range.has_value()) {
-    return;
-  }
-
-  // We iterate over *all* tracks in the project so that tracks which are not
-  // on the surface still get unselected. Leaving a track selected that the user
-  // cannot see is worse than unselecting one they did not aim at.
-  ScopedPreventUiRefresh prevent_ui_refresh;
-  for (Track* track : TrackCache::Get().GetTracks()) {
-    const bool selected = range->Contains(track);
-    if (selected != IsTrackSelected(track->track_id_)) {
-      SetTrackSelected(track->track_id_, selected);
+    const bool selected = !GetSelected();
+    TrackBatch().SetSelected(this, selected);
+    if (selected) {
+      cache.SetLastTouchedTrack(this);
     }
-  }
-}
-
-void Track::SetSelected(bool selected) {
-  if (track_id_ == nullptr || selected_ == selected) {
     return;
   }
-  SetTrackSelected(track_id_, selected);
-  DoToggleSelected();
+
+  // Even though this is not default REAPER behavior, this allows unselecting
+  // the last selected track.
+  if (GetSelected() && CountSelectedTracks(nullptr) <= 1) {
+    TrackBatch().SetSelected(this, false);
+    return;
+  }
+
+  // Otherwise this selects the track and unselects every other track. To
+  // emulate default REAPER behavior, this includes a track that is already
+  // selected along with others.
+  SelectOnly();
+  cache.SetLastTouchedTrack(this);
 }
 
-void Track::DoToggleSelected() {
-  selected_ = !selected_;
-  if (selected_) {
-    TrackCache::Get().SetLastTouchedTrack(this);
+void Track::SelectOnly() {
+  if (track_id_ == nullptr) {
+    return;
   }
-  NotifyListeners();
+  SetOnlyTrackSelected(track_id_);
+  if (!selected_) {
+    selected_ = true;
+    NotifyListeners();
+  }
 }
 
 //------------------------------------------------------------------------------
-// Mute
+// Mute, Solo, and Record Arm
 //------------------------------------------------------------------------------
 
 void Track::UiMute() {
   if (track_id_ == nullptr) {
     return;
   }
-  DoUiProperty(
-      mute_, TrackAnchor::kMute, "JPR:Toggle Mute",
-      +[](MediaTrack* track_id) {
-        int flags = 0;
-        GetTrackState(track_id, &flags);
-        return (flags & 8) != 0;
-      },
-      SetTrackUIMute);
+  UiToggle(this, TrackBoolProperty::kMute, TrackAnchor::kMute);
 }
-
-void Track::SetMute(bool mute) {
-  if (track_id_ == nullptr || mute_ == mute) {
-    return;
-  }
-  SetTrackUIMute(track_id_, mute ? 1 : 0, kNoGrouping | kNoGanging);
-  Undo_OnStateChangeEx("JPR:Toggle Mute", UNDO_STATE_TRACKCFG, -1);
-  mute_ = mute;
-  NotifyListeners();
-}
-
-//------------------------------------------------------------------------------
-// Solo
-//------------------------------------------------------------------------------
 
 void Track::UiSolo() {
   if (track_id_ == nullptr) {
     return;
   }
-  DoUiProperty(
-      solo_, TrackAnchor::kSolo, "JPR:Toggle Solo",
-      +[](MediaTrack* track_id) {
-        int flags = 0;
-        GetTrackState(track_id, &flags);
-        return (flags & 16) != 0;
-      },
-      SetTrackUISolo);
+  UiToggle(this, TrackBoolProperty::kSolo, TrackAnchor::kSolo);
 }
-
-void Track::SetSolo(bool solo) {
-  if (track_id_ == nullptr || solo_ == solo) {
-    return;
-  }
-  SetTrackUISolo(track_id_, solo ? 1 : 0, kNoGrouping | kNoGanging);
-  Undo_OnStateChangeEx("JPR:Toggle Solo", UNDO_STATE_TRACKCFG, -1);
-  solo_ = solo;
-  NotifyListeners();
-}
-
-//------------------------------------------------------------------------------
-// Record Arm
-//------------------------------------------------------------------------------
 
 void Track::UiRecArm() {
   if (track_id_ == nullptr) {
     return;
   }
-  DoUiProperty(
-      rec_arm_, TrackAnchor::kRecArm, "JPR:Toggle Record Arm",
-      +[](MediaTrack* track_id) {
-        int flags = 0;
-        GetTrackState(track_id, &flags);
-        return (flags & 64) != 0;
-      },
-      SetTrackUIRecArm);
-}
-
-void Track::SetRecArm(bool rec_arm) {
-  if (track_id_ == nullptr || rec_arm_ == rec_arm) {
-    return;
-  }
-  SetTrackUIRecArm(track_id_, rec_arm ? 1 : 0, kNoGrouping | kNoGanging);
-  Undo_OnStateChangeEx("JPR:Toggle Record Arm", UNDO_STATE_TRACKCFG, -1);
-  rec_arm_ = rec_arm;
-  NotifyListeners();
-}
-
-//------------------------------------------------------------------------------
-// Generalized boolean property handling for mute, solo, and record arm, which
-// all have similar behavior with ganging, grouping, and modifiers.
-//------------------------------------------------------------------------------
-
-void Track::DoUiProperty(bool& property, TrackAnchor anchor,
-                         const char* undo_entry, GetPropertyFn get_property,
-                         SetPropertyFn set_property) {
-  // An anchor held on another track sets the range from it, ignoring all
-  // modifiers.
-  const Track* anchor_track = TrackCache::Get().GetAnchor(anchor).Get();
-  if (anchor_track != nullptr && anchor_track != this) {
-    SetPropertyRange(anchor_track, /*require_same_parent=*/true, undo_entry,
-                     get_property, set_property);
-    return;
-  }
-
-  // Handle clear/set-only functionality. "Clear all" means all tracks in the
-  // project, not just the ones on the surface: a mute the user can neither see
-  // nor clear is a bad state to be able to create.
-  if (AreModifiersOn(kModAlt)) {
-    bool this_track_changed = false;
-    bool other_tracks_changed = false;
-    {
-      ScopedPreventUiRefresh prevent_ui_refresh;
-
-      // First, we clear the property for all tracks.
-      for (Track* track : TrackCache::Get().GetTracks()) {
-        if (get_property(track->track_id_)) {
-          if (track->track_id_ == track_id_) {
-            this_track_changed = true;
-          } else {
-            other_tracks_changed = true;
-          }
-          set_property(track->track_id_, false, kNoGrouping | kNoGanging);
-        }
-      }
-      if (AreModifiersOn(kModCtrl)) {
-        set_property(track_id_, true, kNoGrouping | kNoGanging);
-        TrackCache::Get().SetLastTouchedTrack(this);
-        if (!property) {
-          this_track_changed = !this_track_changed;
-          property = true;
-          NotifyListeners();
-        }
-      } else if (AreModifiersOn(kModShift)) {
-        set_property(track_id_, true, /*ingroupflags=*/0);
-        TrackCache::Get().SetLastTouchedTrack(this);
-        if (!property) {
-          this_track_changed = this_track_changed;
-          property = true;
-          NotifyListeners();
-        }
-      } else {
-        if (property) {
-          property = false;
-          NotifyListeners();
-        }
-      }
-    }
-    if (this_track_changed || other_tracks_changed) {
-      Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
-    }
-    return;
-  }
-
-  // Handle ranged set/clear functionality from the last touched track.
-  if (AreModifiersOn(kModShift)) {
-    SetPropertyRange(TrackCache::Get().GetLastTouchedTrack(),
-                     /*require_same_parent=*/!AreModifiersOn(kModCtrl),
-                     undo_entry, get_property, set_property);
-    return;
-  }
-
-  if (AreModifiersOn(kModOpt)) {
-    {
-      ScopedPreventUiRefresh prevent_ui_refresh;
-      set_property(track_id_, !property ? 1 : 0, kNoGrouping | kNoGanging);
-      if (IsTrackSelected(track_id_)) {
-        TrackCache::Get().SetLastTouchedTrack(this);
-        int selected_count = CountSelectedTracks(nullptr);
-        for (int i = 0; i < selected_count; ++i) {
-          Track* track =
-              TrackCache::Get().GetTrack(GetSelectedTrack(nullptr, i));
-          if (track->GetTrackId() == track_id_) {
-            continue;
-          }
-          set_property(track->track_id_,
-                       !get_property(track->track_id_) ? 1 : 0,
-                       kNoGrouping | kNoGanging);
-        }
-      }
-      property = !property;
-      NotifyListeners();
-    }
-    Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
-    return;
-  }
-
-  if (AreModifiersOn(kModCtrl)) {
-    set_property(track_id_, !property ? 1 : 0, kNoGrouping | kNoGanging);
-  } else {
-    set_property(track_id_, !property ? 1 : 0, /*ingroupflags=*/0);
-  }
-  property = !property;
-  TrackCache::Get().SetLastTouchedTrack(this);
-  NotifyListeners();
-  Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
-}
-
-void Track::SetPropertyRange(const Track* anchor_track,
-                             bool require_same_parent, const char* undo_entry,
-                             GetPropertyFn get_property,
-                             SetPropertyFn set_property) {
-  const std::optional<SurfaceRange> range =
-      GetSurfaceRange(anchor_track, this, require_same_parent);
-  if (!range.has_value()) {
-    return;
-  }
-
-  // The anchor track has a place on the surface, so it exists and its track ID
-  // is safe to read.
-  const bool value = get_property(anchor_track->track_id_);
-  bool any_changed = false;
-  {
-    ScopedPreventUiRefresh prevent_ui_refresh;
-    for (Track* track : TrackCache::Get().GetTracks()) {
-      if (range->Contains(track) && value != get_property(track->track_id_)) {
-        set_property(track->track_id_, value ? 1 : 0, kNoGrouping | kNoGanging);
-        any_changed = true;
-      }
-    }
-  }
-  if (any_changed) {
-    Undo_OnStateChangeEx(undo_entry, UNDO_STATE_TRACKCFG, -1);
-  }
+  UiToggle(this, TrackBoolProperty::kRecArm, TrackAnchor::kRecArm);
 }
 
 //------------------------------------------------------------------------------
@@ -796,5 +710,84 @@ void Track::SetRouteMute(TrackRouteType type, int index, bool mute) {
 void Track::Subscribe(TrackListener* listener) { listeners_.insert(listener); }
 
 void Track::Unsubscribe(TrackListener* listener) { listeners_.erase(listener); }
+
+//==============================================================================
+// TrackBatch
+//==============================================================================
+
+TrackBatch::TrackBatch() { PreventUIRefresh(1); }
+
+TrackBatch::~TrackBatch() {
+  PreventUIRefresh(-1);
+  if (undo_name_ != nullptr) {
+    Undo_OnStateChangeEx(undo_name_, UNDO_STATE_TRACKCFG, -1);
+  }
+}
+
+void TrackBatch::Set(Track* track, TrackBoolProperty property, bool value,
+                     TrackGrouping grouping) {
+  MediaTrack* const track_id = track->track_id_;
+  if (track_id == nullptr) {
+    return;
+  }
+  const Track::BoolPropertyInfo& info = Track::GetBoolPropertyInfo(property);
+
+  // The cached value is only kept up to date for tracks the surface shows, so
+  // compare against REAPER's.
+  int state = 0;
+  GetTrackState(track_id, &state);
+  if (((state & info.state_bit) != 0) != value) {
+    if (info.undo_name != nullptr) {
+      if (undo_name_ == nullptr) {
+        // This batch creates its own undo point, which shouldn't include
+        // pending volume or pan changes.
+        ContinuousUndo::Get().Flush();
+        undo_name_ = info.undo_name;
+      } else if (undo_name_ != info.undo_name) {
+        // More than one kind of property changed.
+        undo_name_ = kChangeTracksUndoName;
+      }
+    }
+    info.set(
+        track_id, value,
+        grouping == TrackGrouping::kGrouped ? 0 : kNoGrouping | kNoGanging);
+  }
+
+  // REAPER now has the value either way, so bring the cache into line with it.
+  bool& cached = track->*info.cached;
+  if (cached != value) {
+    cached = value;
+    track->NotifyListeners();
+  }
+}
+
+//==============================================================================
+// TrackRange
+//==============================================================================
+
+std::optional<TrackRange> TrackRange::Between(const Track* from,
+                                              const Track* to,
+                                              TrackFilter filter,
+                                              bool same_parent) {
+  if (from == nullptr || to == nullptr) {
+    return std::nullopt;
+  }
+  const std::optional<int> from_index = from->GetGlobalIndex(filter);
+  const std::optional<int> to_index = to->GetGlobalIndex(filter);
+  if (!from_index.has_value() || !to_index.has_value()) {
+    return std::nullopt;
+  }
+  return TrackRange(filter, std::min(*from_index, *to_index),
+                    std::max(*from_index, *to_index),
+                    same_parent ? from->GetParentTrack() : nullptr);
+}
+
+bool TrackRange::Contains(const Track* track) const {
+  const std::optional<int> index = track->GetGlobalIndex(filter_);
+  if (!index.has_value() || *index < first_index_ || *index > last_index_) {
+    return false;
+  }
+  return parent_track_ == nullptr || track->GetParentTrack() == parent_track_;
+}
 
 }  // namespace jpr
