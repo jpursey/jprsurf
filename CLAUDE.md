@@ -112,6 +112,7 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 - Sections in a file are separated by //===== blocks (extending to column 80) surrounding descriptive text: One line section description, and if necessary further description in additional paragraphs.
 - Sections within a class or between groups of related functions are separated by //---- blocks (otherwise the same as above).
 - All comments are // style (not /// or /*...*/)
+- A comment that follows code at the same indent level has a blank line above it. A comment that opens a block (right after a `{`) doesn't need one.
 - Always use a brace block for the body of `if`, `else`, `for`, `while`, `do`, and similar statements, even when the body is a single statement. This forces clang-format to put the body on its own line, which keeps crash callstacks accurate to the line and lets breakpoints be set on the body separately from the condition.
 - Prefer existing libraries over hand-rolled utilities: Game Bits itself (`$GB_DIR/src/gb/`, such as `gb/base` and `gb/container`), and Abseil and the other Google open source libraries vendored in `$GB_DIR/third_party/`.
 - C++20, built with both MSVC and clang-cl.
