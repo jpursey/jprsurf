@@ -5,8 +5,8 @@
 
 set(reaper_jprsurf_SOURCE
   control_surface.cc control_surface.h
+  dll_main.cc
   plugin.cc plugin.h
-  jprsurf.cc
 )
 
 set(reaper_jprsurf_DEPS
