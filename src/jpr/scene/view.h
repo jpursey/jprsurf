@@ -24,8 +24,6 @@ class Scene;
 // View
 //==============================================================================
 
-// Base class for all views.
-//
 // A view is a potentially hierarchical mapping of other views rooted in a
 // scene, and mappings between the REAPER state and one or more hardware
 // controls.

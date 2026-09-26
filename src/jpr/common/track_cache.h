@@ -38,9 +38,9 @@ class TrackCache final {
   // list changes.
   void Refresh();
 
-  // Re-reads the panel visibility of every track from REAPER, recomputing the
-  // per-filter indices and notifying affected tracks if anything changed.
-  // Returns true if any track's visibility changed.
+  // Updates every track's visibility (see Track::IsVisible()), and the filtered
+  // indices and child counts that depend on it, notifying the listeners of any
+  // track that changed. Returns true if any track's visibility changed.
   //
   // REAPER provides no control surface notification when a track is shown or
   // hidden in the mixer or track control panel, so this must be polled.
@@ -82,9 +82,6 @@ class TrackCache final {
   // Like the other track accessors, this does not apply any filter. Callers
   // that only want the tracks included by a filter must also check
   // Track::IsVisible().
-  //
-  // This queries REAPER directly rather than the cached Track state, as that is
-  // only refreshed for tracks mapped on the surface.
   Track* GetOnlySelectedTrack() const;
 
   // Returns the selected tracks, in order, not including the master track. Like
@@ -104,20 +101,10 @@ class TrackCache final {
     return std::popcount(GetSelectedAutoModes().GetMask()) > 1;
   }
 
-  // Called when the track selection may have changed, from
-  // SetSurfaceSelected(). REAPER also calls that for every track after any
-  // track's automation mode changes, and after undo and redo.
-  //
-  // This and OnAutoModeChanged() are how the control surface forwards REAPER's
-  // notifications, as Refresh() is for track list changes. They are cheap, so
-  // they may be called for every notification: anything they make stale is
-  // re-read from REAPER at most once, when next needed.
+  // Called when the track selection, or any track's automation mode, may have
+  // changed. These are cheap, so they may be called for every notification
+  // REAPER sends.
   void OnSelectionChanged() { selected_auto_modes_valid_ = false; }
-
-  // Called when any track's automation mode may have changed, from
-  // SetAutoMode(). REAPER calls that with a single mode when a mode is changed
-  // by a track's own automation button, an action, or the surface, but not for
-  // undo or redo (see OnSelectionChanged()).
   void OnAutoModeChanged() { selected_auto_modes_valid_ = false; }
 
  private:

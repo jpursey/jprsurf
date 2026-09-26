@@ -119,15 +119,13 @@ class ViewMapping final {
   // several mappings to share a control, with only one of them active
   // depending on some state (for instance, while a modifier is held).
   //
-  // Note: A read mapping registers its input when it becomes active and
-  // unregisters it when it becomes inactive. Registration changes rebuild the
-  // control's press timing state, so a pending press on that control (waiting
-  // for a long or double press) is lost when the condition changes. For reads
-  // that should switch with a modifier, prefer ReadConfig::required_modifiers,
-  // which keeps every registration in place. Conditions are best suited to
-  // write mappings, which have no timing state. A condition is still fine for a
-  // read mapping that switches on state required_modifiers can't express (such
-  // as REAPER state), as long as it has no long or double press to lose.
+  // Note: When the condition of a read mapping changes, a pending press on its
+  // control (waiting for a long or double press) is lost. For reads that should
+  // switch with a modifier, prefer ReadConfig::required_modifiers, which
+  // doesn't lose them. Conditions are best suited to write mappings, which have
+  // no pending presses. A condition is still fine for a read mapping that
+  // switches on state required_modifiers can't express (such as REAPER state),
+  // as long as it has no long or double press to lose.
   struct Condition {
     // The name of a property in the same view scope. The condition is met
     // while its value, as a bool (see ViewProperty::GetBool()), equals value.

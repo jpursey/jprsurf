@@ -88,8 +88,12 @@ struct PolledToggle {
   PolledToggleProperty::WriteFunction write = nullptr;
 };
 
-// Indexed by the index in each name.
+// Indexed by the index in each name. A new polled toggle needs a kStateName in
+// the header, and a row at its index here (the static_assert below checks that
+// the names match their indices).
 constexpr PolledToggle kPolledToggles[] = {
+    // This can't be a CommandToggleProperty for kCmdSoloDefeat, as REAPER
+    // reports no toggle state for that command.
     {kStateAnyTrackSolo, [] { return AnyTrackSolo(nullptr); }},
     {kStateCanRedo, [] { return Undo_CanRedo2(nullptr) != nullptr; }},
     {kStateProjectDirty, [] { return IsProjectDirty(nullptr) != 0; }},

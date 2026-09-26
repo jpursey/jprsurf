@@ -139,7 +139,6 @@ struct TrackRoute {
 // values and setting new values will have no effect.
 class Track final : public std::enable_shared_from_this<Track> {
  public:
-  // Called by the TrackCache when a track is added or updated in the cache.
   Track(const Track&) = delete;
   Track& operator=(const Track&) = delete;
   ~Track();
@@ -158,8 +157,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool Exists() const { return track_id_ != nullptr; }
 
   // Returns true if this track is included by the given filter. This is always
-  // true for kAll, and is always true for the master track, which has no
-  // per-panel visibility state of this form. This is updated whenever
+  // true for kAll, and for the master track. This is updated whenever
   // TrackCache::Refresh() or TrackCache::RefreshVisibility() is called.
   //
   // This does *not* imply Exists(): the stub track and tracks that have been
@@ -169,13 +167,11 @@ class Track final : public std::enable_shared_from_this<Track> {
     return filter_state_[GetTrackFilterIndex(filter)].visible;
   }
 
-  // Refreshes the track by querying REAPER for the current track ID for this
-  // track's GUID and updates its internal state.
+  // Refreshes the track's ID and cached state from REAPER.
   void Refresh();
 
-  // Refreshes the track's peak meter values by querying REAPER for the current
-  // peak levels for this track, and notifies listeners unconditionally of the
-  // new value.
+  // Refreshes the track's peak meter value from REAPER, and notifies listeners
+  // of it, even if it hasn't changed.
   void RefreshMeter();
 
   // Gets the current cached state for this track. These are updated whenever
@@ -192,9 +188,8 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // Sets the track's properties directly.
   //
-  // Selected, mute, solo, and record arm each add their own undo point (except
-  // selection), even while a TrackBatch is alive. REAPER does not group
-  // selection.
+  // Mute, solo, and record arm each add their own undo point, even while a
+  // TrackBatch is alive. Selection adds none, and REAPER does not group it.
   void SetName(std::string_view name);
   void SetVolume(double volume, TrackGrouping grouping = TrackGrouping::kNone);
   void SetPan(double pan, TrackGrouping grouping = TrackGrouping::kNone);

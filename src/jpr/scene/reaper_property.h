@@ -116,10 +116,8 @@ class CommandToggleProperty final : public SceneStateProperty {
 // PolledToggleProperty
 //==============================================================================
 
-// Polled toggle properties are named "state:<index>", where the index is into
-// a table of read functions in reaper_property.cc. A new one needs a name here
-// and a row at that index in the table (the build checks that the table's
-// names match their indices).
+// Polled toggle properties are named "state:<index>", where the index selects
+// one of the states below.
 inline constexpr std::string_view kStatePrefix = "state:";
 
 // The name of the polled toggle property at an index in the table.
@@ -128,9 +126,6 @@ inline constexpr std::string_view kStateName =
     kNumberedName<kStatePrefix, Index>;
 
 // True while any track is soloed.
-//
-// This can't be a CommandToggleProperty for kCmdSoloDefeat, as REAPER reports
-// no toggle state for that command.
 inline constexpr std::string_view kStateAnyTrackSolo = kStateName<0>;
 
 // True while the current project has anything to redo.
@@ -144,8 +139,7 @@ inline constexpr std::string_view kStateProjectDirty = kStateName<2>;
 inline constexpr std::string_view kStateAnyItemSelected = kStateName<3>;
 
 // True while any selected track, including the master track, is in the
-// automation mode. These are only as current as the REAPER events forwarded to
-// TrackCache (see TrackCache::OnSelectionChanged()).
+// automation mode.
 inline constexpr std::string_view kStateSelectedAutoTrimRead = kStateName<4>;
 inline constexpr std::string_view kStateSelectedAutoRead = kStateName<5>;
 inline constexpr std::string_view kStateSelectedAutoTouch = kStateName<6>;

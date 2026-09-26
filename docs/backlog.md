@@ -465,23 +465,6 @@ file path and the minimum log level. `dll_main.cc` would keep only `DllMain`,
 working out the path from `APPDATA`, and choosing the level. Shutdown should be
 hard to forget, such as an RAII handle that removes the sink.
 
-## Header comments describe the API, not the implementation
-
-- **Layers:** common, device, scene, plugin
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** none
-
-Some comments on public declarations explain how something works rather than
-what a caller needs to know: which REAPER calls it makes, what it caches, why
-it is fast enough. A header comment should say what the declaration does and
-anything a caller has to know to use it correctly. Anything else that isn't
-clear from the code belongs in a comment in the implementation, and the rest
-can go. Review the headers under `src/jpr/` one library at a time, and fix the
-comments in place, with no code changes. New code follows this already
-(`TrackBatch` in `common/track.h`).
-
 ## Modifiers a mapping ignores
 
 - **Layers:** device, scene

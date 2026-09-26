@@ -169,8 +169,8 @@ class MidiOut final {
   // otherwise be pending.
   //
   // If there is a registered SysexMessageType for this message's prefix, this
-  // will also update the queued sysex state and replay any pending sysex
-  // messages for that prefix, dropping any that no longer apply.
+  // will also update the sysex state for the prefix (see UpdateState()), and
+  // any pending state changes that this message makes redundant are dropped.
   void QueueMessage(const SysexMessage& message);
 
   // Returns true if the given MIDI message corresponds to a supported state
@@ -205,11 +205,10 @@ class MidiOut final {
   // This does nothing if the port is not currently open, or if there is no
   // registered SysexMessageType for the message's prefix.
   //
-  // The message is passed to the SysexMessageState for the prefix. If the
-  // state indicates the message changes something (Update() returns true), the
-  // message is appended to the pending list for that prefix. Pending sysex
-  // messages are sent at the next Run() invocation, after any messages queued
-  // via QueueMessage().
+  // If the message changes the state for its prefix (see
+  // SysexMessageState::Update()), it is queued for sending. Pending sysex
+  // messages are sent in order at the next Run() invocation, after any
+  // messages queued via QueueMessage().
   void UpdateState(const SysexMessage& message);
 
   // Resets the internal state for the specified MIDI note.
@@ -252,9 +251,10 @@ class MidiOut final {
 
   // Resets the internal sysex state for the specified prefix.
   //
-  // This destroys the cached SysexMessageState for the prefix, and dequeues
-  // any pending sysex messages for it. Any subsequent call to UpdateState()
-  // for a sysex message with this prefix will create fresh state.
+  // This sets the sysex state for the prefix to unknown, and dequeues any
+  // pending sysex messages for it. Any subsequent call to UpdateState() for a
+  // sysex message with this prefix will always result in it being queued for
+  // sending.
   void ResetSysexState(const SysexPrefix& prefix);
 
   // Resets the internal state for all MIDI notes, control changes, pitch

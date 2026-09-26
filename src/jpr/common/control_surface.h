@@ -69,23 +69,16 @@ class ControlSurfaceListener {
 //
 // The REAPER control surface, which the user adds in REAPER's preferences.
 //
-// It does everything the rest of the common library needs from REAPER's
-// notifications, and passes the events a surface needs on to its
-// ControlSurfaceListener:
-// - The track list is refreshed at the start of the next run after REAPER
-//   reports a change, and track visibility (which REAPER doesn't report) is
-//   polled every second.
-// - Selection and automation mode changes are forwarded to TrackCache, and so
-//   is the last touched track.
+// It keeps the rest of the common library up to date with REAPER, and passes
+// the events a surface needs on to its ControlSurfaceListener:
+// - TrackCache is refreshed at the start of the next run after the track list
+//   changes. Changes to track visibility are picked up within a second.
+// - TrackCache follows selection, automation mode, and last touched track
+//   changes.
 // - ContinuousUndo is updated after every run.
-// - A performance summary of Run() is logged every few seconds.
 //
-// Only one instance may exist at a time, as the rest of the common library
-// holds REAPER state for the whole extension, and two instances would drive it
-// (and the same hardware) twice. If the user adds the surface again, the new
-// one is refused with an error, and the first is left untouched. REAPER
-// destroys the old instance before creating its replacement when the user
-// edits the surface's settings, so that still works.
+// Only one instance may exist at a time. If the user adds the surface again,
+// the new one is refused with an error, and the first is left untouched.
 //==============================================================================
 
 class ControlSurface final : private IReaperControlSurface {

@@ -50,9 +50,8 @@ class RouteProperty : public ViewProperty {
 // single route (a send or receive) of a track in REAPER, identified by the
 // track, the route type, and the route's index.
 //
-// Like TrackProperties, these properties are created on demand. They read and
-// write the route through its Track, and are notified whenever the track's
-// routes change, or the track itself changes.
+// The properties change whenever the track's routes change (see
+// TrackListener::OnTrackRoutesChanged()), or the track itself changes.
 //
 // The track at the other end of the route is not represented here. A view can
 // show it (its name, color, etc.) with TrackProperties for that track.

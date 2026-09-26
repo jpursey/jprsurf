@@ -267,7 +267,9 @@ Track* TrackCache::GetTrack(MediaTrack* track_id) const {
 }
 
 Track* TrackCache::GetOnlySelectedTrack() const {
-  // CountSelectedTracks and GetSelectedTrack both exclude the master track.
+  // This queries REAPER rather than the cached Track state, as that is only
+  // refreshed for tracks mapped on the surface. CountSelectedTracks and
+  // GetSelectedTrack both exclude the master track.
   if (CountSelectedTracks(nullptr) != 1) {
     return nullptr;
   }

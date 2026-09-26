@@ -17,9 +17,8 @@ namespace jpr {
 // A view property represents a single property of the REAPER state that is
 // being mapped by one or more active views.
 //
-// It holds the state for the property and the set of all active mappings to
-// view controls. This is used by the Scene to find all mappings that need to be
-// updated when the property changes.
+// Anything that needs to know when the property changes, such as an active
+// mapping, registers a flag with it (see RegisterFlag()).
 class ViewProperty {
  public:
   // The type of the property, which defines what values it can hold.
@@ -146,7 +145,7 @@ class ViewProperty {
   //
   // These may be overridden by derived classes that have a more specific
   // translation from the specific type. For instance, an enumerated property
-  // ma indexy want to override SetText() to allow setting the value by name
+  // may want to override SetText() to allow setting the value by name
   // instead of by integer value.
   virtual void SetBool(bool value);
   virtual void SetInt(int value);        // Input clamped to [0,GetMaxValue()]

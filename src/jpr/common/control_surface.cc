@@ -77,6 +77,11 @@ IReaperControlSurface* ControlSurface::Create(const char* type_string,
                 << ", config_string=\"" << (config_string ? config_string : "")
                 << "\")";
 
+  // The rest of the common library holds REAPER state for the whole extension,
+  // so a second instance would drive it (and the same hardware) twice. When the
+  // user edits the surface's settings, REAPER destroys the old instance before
+  // creating its replacement, so that still works.
+  //
   // Refuse before creating the listener, which may claim resources (such as
   // MIDI ports) that the existing instance is using.
   if (s_instance_ != nullptr) {
@@ -188,6 +193,9 @@ void ControlSurface::SetSurfaceMute(MediaTrack* track_id, bool mute) {
 void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
   VLOG_REAPER() << "SetSurfaceSelected(track_id=" << track_id
                 << ", selected=" << selected << ")";
+
+  // REAPER also calls this for every track after any track's automation mode
+  // changes, and after undo and redo.
   TrackCache::Get().OnSelectionChanged();
   listener_->OnSelectionChanged();
 }
@@ -224,6 +232,10 @@ bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
 
 void ControlSurface::SetAutoMode(int mode) {
   VLOG_REAPER() << "SetAutoMode(mode=" << mode << ")";
+
+  // REAPER calls this with a single mode when a mode is changed by a track's
+  // own automation button, an action, or the surface, but not for undo or redo
+  // (see SetSurfaceSelected()).
   TrackCache::Get().OnAutoModeChanged();
 }
 

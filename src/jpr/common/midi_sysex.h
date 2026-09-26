@@ -61,17 +61,13 @@ class SysexPrefix final {
 // A sysex message, which consists of a header byte, a prefix that identifies
 // the type of message, variable data bytes, and a footer byte.
 //
-// The prefix is used to identify the type of message and is stored separately
-// for easy access, but is also embedded in the message bytes for easy sending.
 // The variable data bytes can be modified through a mutable span, while the
 // header, prefix, and footer bytes are fixed and required for the message to be
 // valid.
 class SysexMessage final {
  public:
-  // Constructs a SysexMessage with the given prefix and a capacity for the
-  // message bytes (not including the header, prefix, and footer). The prefix is
-  // stored separately for easy access and identification, but is also embedded
-  // in the message bytes.
+  // Constructs a SysexMessage with the given prefix and `size` data bytes (not
+  // including the header, prefix, and footer), which are all zero.
   SysexMessage(SysexPrefix prefix, int size);
   SysexMessage(const SysexMessage&) = default;
   SysexMessage& operator=(const SysexMessage&) = default;
@@ -105,9 +101,8 @@ class SysexMessage final {
                           bytes_.size() - prefix_size - 2);
   }
 
-  // Resizes the message to have the given size for the variable data portion of
-  // the message. This will resize the underlying message bytes to accommodate
-  // the new size, while keeping the header, prefix, and footer bytes intact.
+  // Resizes the variable data portion of the message, keeping the header,
+  // prefix, and footer bytes intact. Any added data bytes are zero.
   void Resize(int size) {
     const int prefix_size = static_cast<int>(prefix_.GetPrefix().size());
     bytes_.pop_back();  // Remove the footer byte before resizing.
@@ -137,8 +132,7 @@ class SysexMessageState {
   SysexMessageState& operator=(const SysexMessageState&) = delete;
   virtual ~SysexMessageState() = default;
 
-  // Returns a deep copy of this state object. This is used by MidiOut to
-  // maintain separate queued and pending state copies.
+  // Returns a deep copy of this state object.
   virtual std::unique_ptr<SysexMessageState> Clone() const = 0;
 
   // Updates the state with the given message, and returns whether the message
