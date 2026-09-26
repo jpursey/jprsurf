@@ -229,6 +229,28 @@ for a device that does. It is pure `device` code with no REAPER dependency, so
 all of it is unit tested against hand-built shapes, before any real device
 publishes one.
 
+## MIDI ports in common
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [extension_host.md](worklog/extension_host.md)
+
+`PluginSurface` handles its MIDI ports by hand: `ConnectDevices()` finds and
+opens them by name, it owns the input and output runners, and its destructor
+runs output one last time and sleeps 100ms so the ports finish sending before
+they are destroyed. None of that is specific to JPRSurf. A small class in
+`common` (such as `MidiPorts`) could own the runners and ports, open ports by
+name, and provide `RunInput()`, `RunOutput()`, and a final flush, with
+`PluginSurface` calling them in order from `OnRun()` and its destructor.
+
+It doesn't belong in `ControlSurface`: the device runner has to run before
+MIDI input (`Control::OnRun()` resets virtual inputs), so one listener hook
+can't sit between input and output. The ports are also destroyed with the
+listener, so `ControlSurface` can't flush them afterwards. This also prepares
+for *Device types and catalogs*, which creates devices from their ports.
+
 ## Device types and catalogs
 
 - **Layers:** device, scene, plugin
