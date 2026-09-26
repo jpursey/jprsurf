@@ -33,7 +33,7 @@ void ToggleInBatch(TrackBatch& batch, Track* track, TrackBoolProperty property,
 TrackActions::TrackActions(TrackFilter filter) : filter_(filter) {}
 
 Anchor<Track>& TrackActions::GetAnchor(TrackBoolProperty property) {
-  // TrackCache holds the anchors until the plugin gets them from here (CL3 of
+  // TrackCache holds the anchors until TrackActions holds its own (CL4 of
   // docs/worklog/track_actions.md).
   return TrackCache::Get().GetAnchor(property);
 }

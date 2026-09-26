@@ -365,7 +365,7 @@ Depends on: CL1.
 - The master fader (plain `track_volume`) still ignores grouping.
 - Performance: as CL1.
 
-### CL3 [ ] plugin: Anchors and filter from the scene
+### CL3 [x] plugin: Anchors and filter from the scene
 
 Depends on: CL2.
 

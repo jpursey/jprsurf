@@ -67,9 +67,8 @@ constexpr absl::Duration kSendHoldDuration = absl::Milliseconds(350);
 
 // Returns true if Send/Receive mode can show this track: it exists, is on the
 // surface, and has sends or receives.
-bool CanShowRoutes(const Track* track) {
-  return track != nullptr && track->Exists() &&
-         track->IsVisible(TrackCache::Get().GetSurfaceFilter()) &&
+bool CanShowRoutes(const Track* track, TrackFilter filter) {
+  return track != nullptr && track->Exists() && track->IsVisible(filter) &&
          (!track->GetSends().empty() || !track->GetReceives().empty());
 }
 
@@ -122,8 +121,8 @@ void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
                            Modifiers modifier = 0) {
   const std::string name = absl::StrCat("anchor_", action, "_", strip_index);
   scene->AddProperty(std::make_unique<CallbackToggleProperty>(
-      name, [view, property, modifier](bool pressed) {
-        Anchor<Track>& anchor = TrackCache::Get().GetAnchor(property);
+      name, [scene, view, property, modifier](bool pressed) {
+        Anchor<Track>& anchor = scene->GetTrackActions().GetAnchor(property);
         if (!pressed) {
           view->ReleaseAnchor(&anchor);
           return;
@@ -269,7 +268,7 @@ void PluginSurface::OnLastTouchedTrackChanged(Track* track) {
     // the master track, or isn't on the surface.
     if (track != nullptr && track != send_receive_mode_view_->GetTrack() &&
         track->Exists() && track != TrackCache::Get().GetMasterTrack() &&
-        track->IsVisible(TrackCache::Get().GetSurfaceFilter())) {
+        track->IsVisible(scene_->GetTrackFilter())) {
       SetSendReceiveTrack(track);
     }
   } else {
@@ -801,7 +800,8 @@ bool PluginSurface::IsModeAvailable(SurfaceMode mode) const {
     case SurfaceMode::kTrack:
       return true;
     case SurfaceMode::kSendReceive:
-      return CanShowRoutes(TrackCache::Get().GetOnlySelectedTrack());
+      return CanShowRoutes(TrackCache::Get().GetOnlySelectedTrack(),
+                           scene_->GetTrackFilter());
   }
   return false;
 }
@@ -847,7 +847,7 @@ void PluginSurface::ApplyRequestedMode() {
 void PluginSurface::TryEnterSendReceiveMode(Track* track) {
   // This is checked here rather than using the button light, as the selection
   // may have changed since the light was last updated.
-  if (CanShowRoutes(track)) {
+  if (CanShowRoutes(track, scene_->GetTrackFilter())) {
     EnterSendReceiveMode(track);
   }
 }
@@ -965,7 +965,7 @@ void PluginSurface::EnsureTrackIsVisible(Track* track) {
   // view, in which case it has no strip to scroll to, so leave the bank put.
   // This also covers the master and stub tracks, which have no parent track and
   // so can never be made visible this way.
-  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+  const TrackFilter filter = scene_->GetTrackFilter();
   const std::optional<int> track_index = track->GetIndex(filter);
   if (!track_index.has_value()) {
     return;
