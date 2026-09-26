@@ -44,7 +44,7 @@ into separate mappings once *Modifiers a mapping ignores* exists.
 - `TrackBoolProperty` (common): `kSelected`, `kMute`, `kSolo`, and `kRecArm`,
   the on/off properties of a track. `Flag` and `Toggle` were rejected: a flag
   suggests one of a set of bits, and these are properties. It replaces
-  `TrackAnchor`, as the anchors are one per property.
+  `TrackAnchor` (in CL2), as the anchors are one per property.
 - `TrackGrouping` (common): `kNone` changes only the track, and `kGrouped` also
   changes its grouped and ganged tracks, as REAPER's UI does.
 - `TrackBatch` (common): changes to any number of tracks, made as one change.
@@ -166,13 +166,16 @@ covers that.
 class Scene {
   explicit Scene(std::string_view name,
                  TrackFilter track_filter = TrackFilter::kMcp);
-  TrackFilter GetTrackFilter() const;
+  TrackFilter GetTrackFilter() const;  // From its TrackActions.
   TrackActions& GetTrackActions();
 };
 ```
 
-- `View` (child tracks, navigation) and `TrackProperties` (`track_is_folder`)
-  read the filter from their scene, rather than from `TrackCache`.
+- The scene's `TrackActions` holds the filter, and `Scene::GetTrackFilter()`
+  returns it, so there is one copy.
+- `View` (child tracks, navigation) reads the filter from its scene, and
+  `TrackProperties` (`track_is_folder`) from the `TrackActions` its view gives
+  it, rather than from `TrackCache`.
 - The filter is a constructor parameter, so it can't change under views that
   have already laid out their tracks.
 
@@ -182,6 +185,7 @@ class Scene {
 class TrackActions final {
  public:
   explicit TrackActions(TrackFilter filter);
+  TrackFilter GetTrackFilter() const;
 
   // The anchor for each property. While a property's anchor is held on one
   // track, its action on another track acts on the range between them.
@@ -189,18 +193,20 @@ class TrackActions final {
 
   // The standard behavior for each property, with the modifiers exactly as
   // documented on Track::Ui*() today.
-  void Select(Track* track);
-  void Toggle(Track* track, TrackBoolProperty property);  // Mute, solo, rec arm.
-  void SetVolume(Track* track, double volume);
-  void SetPan(Track* track, double pan);
+  void UiSelect(Track* track);
+  void UiToggle(Track* track, TrackBoolProperty property);  // Mute, solo, rec arm.
+  void UiSetVolume(Track* track, double volume);
+  void UiSetPan(Track* track, double pan);
 };
 ```
 
+- The `Ui` prefix marks the preset modifier behavior. Separate operations for
+  each behavior could be added beside these later, without changing them.
 - Owned by the `Scene`, so the anchors are released with the scene, and every
   surface has its own.
-- `Select()` and `Toggle()` check the property's anchor first, then the modifiers
-  in today's order. Each behavior is a private function (`ToggleOne()`,
-  `SetRange()`, `SelectRange()`, `ClearAll()`, and so on), each one batch.
+- `UiSelect()` and `UiToggle()` check the property's anchor first, then the
+  modifiers in today's order. Ranges are private functions (`SelectRange()`
+  and `SetRange()`), each one batch.
 - It reads values only through `Track`'s getters, never REAPER's track state.
   A track a view shows was refreshed this run, so its cache is current. Before
   reading a track that may not be shown, it calls `Refresh()` on it:
@@ -286,6 +292,11 @@ These change, all in rare cases:
   (the old code added the mute's undo point the same way), and
   `ContinuousUndo::Flush()` doesn't help, as it only covers send and receive
   changes.
+- **Found (CL2):** moving the master fader (on the surface or in REAPER) makes
+  REAPER report the master as the last touched track. The master has no place
+  in the track list, so Shift ranges do nothing until another track is
+  touched. This is kept deliberately: the last touched track stays whatever
+  REAPER says it is.
 - The strip's view releases an anchor on a deleted track in the same run as
   the track list refresh. CL4 checks this, with the anchor's modifier.
 
@@ -331,18 +342,21 @@ Depends on: nothing.
   mute and rec arm range take the same time as before (see
   [ranged_track_actions.md](ranged_track_actions.md), Performance).
 
-### CL2 [ ] scene: TrackActions
+### CL2 [x] scene: TrackActions
 
 Depends on: CL1.
 
-- `Scene::GetTrackFilter()` and `GetTrackActions()`. For
-  now the filter still comes from `TrackCache::GetSurfaceFilter()`, and
-  `TrackActions::GetAnchor()` returns the matching `TrackCache` anchor, as the
-  plugin holds those until CL3.
-- `TrackActions`, with the behavior moved from `Track::Ui*()`.
+- `TrackActions`, with the behavior moved from `Track::Ui*()`, and
+  `Scene::GetTrackFilter()` and `GetTrackActions()`. For now the scene builds
+  its `TrackActions` from `TrackCache::GetSurfaceFilter()`, and
+  `TrackActions::GetAnchor()` returns `TrackCache`'s anchor, as the plugin holds
+  those until CL3.
+- `TrackAnchor` is removed: `TrackCache::GetAnchor()` and the plugin's
+  `AddTrackAnchorMapping()` take a `TrackBoolProperty` (a rename in `common`
+  and `plugin`).
 - The `track_ui_*` properties call `TrackActions`, which `TrackProperties`
-  gets from its view's scene.
-- `View` and `TrackProperties` read the scene's filter.
+  gets from its view. The four toggle property classes become one.
+- `View` reads the scene's filter, and `TrackProperties` its `TrackActions`'.
 - `Track::Ui*()` is unused, and removed in CL5.
 
 **Verify**
@@ -355,7 +369,7 @@ Depends on: CL1.
 
 Depends on: CL2.
 
-- `AddTrackAnchorMapping()` takes a `TrackBoolProperty`, and gets its anchor from
+- `AddTrackAnchorMapping()` gets its anchor from
   `scene->GetTrackActions().GetAnchor()`.
 - `CanShowRoutes()`, `OnLastTouchedTrackChanged()`, and
   `EnsureTrackIsVisible()` use `scene->GetTrackFilter()`.
@@ -370,8 +384,8 @@ Depends on: CL2.
 
 Depends on: CL3.
 
-- `Scene`'s constructor takes the track filter, and `TrackActions` holds its own
-  anchors. `TrackCache`'s filter and anchors are now unused.
+- `Scene`'s constructor takes the track filter for its `TrackActions`, which
+  holds its own anchors. `TrackCache`'s filter and anchors are now unused.
 
 **Verify**
 - Standard checks.
@@ -386,8 +400,8 @@ Depends on: CL3.
 Depends on: CL4.
 
 - Remove `Track::Ui*()`, and `SetSelected()`'s last touched side effect.
-- Remove `TrackAnchor`, `TrackCache::GetSurfaceFilter()`, `SetSurfaceFilter()`,
-  and the anchors, and update comments that refer to them
+- Remove `TrackCache::GetSurfaceFilter()`, `SetSurfaceFilter()`, and the
+  anchors, and update comments that refer to them
   (`GetOnlySelectedTrack()`, `anchor.h`).
 - `common` no longer uses the modifier state outside `anchor` and `modifiers`
   itself.

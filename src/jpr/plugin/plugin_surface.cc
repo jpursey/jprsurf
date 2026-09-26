@@ -111,19 +111,19 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
 // Adds a property (anchor_<action>_<strip_index>) that anchors the view's track
 // for a ranged track action while the control is held, and maps it to the
 // control. Pressing the same control on another strip then acts on the range
-// from the anchor (see Track). The anchor is released when the control is
-// released, or when the view releases it (see View::SetAnchor()). The modifier,
-// if any, is on while the anchor is held.
+// from the anchor (see TrackActions). The anchor is released when the control
+// is released, or when the view releases it (see View::SetAnchor()). The
+// modifier, if any, is on while the anchor is held.
 void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
-                           TrackAnchor type, std::string_view action,
+                           TrackBoolProperty property, std::string_view action,
                            std::string_view control,
                            InputConfig::PressBehavior press_behavior =
                                InputConfig::PressBehavior::kNormal,
                            Modifiers modifier = 0) {
   const std::string name = absl::StrCat("anchor_", action, "_", strip_index);
   scene->AddProperty(std::make_unique<CallbackToggleProperty>(
-      name, [view, type, modifier](bool pressed) {
-        Anchor<Track>& anchor = TrackCache::Get().GetAnchor(type);
+      name, [view, property, modifier](bool pressed) {
+        Anchor<Track>& anchor = TrackCache::Get().GetAnchor(property);
         if (!pressed) {
           view->ReleaseAnchor(&anchor);
           return;
@@ -576,7 +576,7 @@ void PluginSurface::InitViews() {
           ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
           {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
       AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackAnchor::kSelect, "select", select,
+                            TrackBoolProperty::kSelected, "select", select,
                             InputConfig::PressBehavior::kLongPress,
                             select_anchor_modifier);
       track_view->AddMapping(
@@ -618,13 +618,13 @@ void PluginSurface::InitViews() {
       // same button on another track sets the range between them to the held
       // track's value.
       AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackAnchor::kMute, "mute",
+                            TrackBoolProperty::kMute, "mute",
                             absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
       AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackAnchor::kSolo, "solo",
+                            TrackBoolProperty::kSolo, "solo",
                             absl::StrCat(device_prefix, DeviceXTouch::Solo(i)));
       AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackAnchor::kRecArm, "rec_arm",
+                            TrackBoolProperty::kRecArm, "rec_arm",
                             absl::StrCat(device_prefix, DeviceXTouch::Rec(i)));
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiVolume,

@@ -35,135 +35,109 @@ class TrackColorProperty : public TrackProperty {
   Color ReadColor() const override { return GetTrack()->GetColor(); }
 };
 
-class TrackSelectedProperty : public TrackProperty {
+// A property for selected, mute, solo, or record arm. With track actions, a
+// write runs the action rather than setting the value.
+class TrackBoolViewProperty : public TrackProperty {
  public:
-  explicit TrackSelectedProperty(Track* track, bool ui)
-      : TrackProperty(TrackProperties::kSelected, Type::kToggle, track),
-        ui_(ui) {}
+  TrackBoolViewProperty(std::string_view name, TrackBoolProperty property,
+                        Track* track, TrackActions* actions)
+      : TrackProperty(name, Type::kToggle, track),
+        property_(property),
+        actions_(actions) {}
 
  protected:
-  bool ReadBool() const override { return GetTrack()->GetSelected(); }
+  bool ReadBool() const override { return GetTrack()->Get(property_); }
   void WriteBool(bool value) override {
-    if (ui_) {
-      GetTrack()->UiSelected();
+    if (actions_ == nullptr) {
+      GetTrack()->Set(property_, value);
+    } else if (property_ == TrackBoolProperty::kSelected) {
+      actions_->UiSelect(GetTrack());
     } else {
-      GetTrack()->SetSelected(value);
+      actions_->UiToggle(GetTrack(), property_);
     }
   }
 
  private:
-  bool ui_;
+  const TrackBoolProperty property_;
+  TrackActions* const actions_;
 };
 
-class TrackMuteProperty : public TrackProperty {
- public:
-  explicit TrackMuteProperty(Track* track, bool ui)
-      : TrackProperty(TrackProperties::kMute, Type::kToggle, track), ui_(ui) {}
-
- protected:
-  bool ReadBool() const override { return GetTrack()->GetMute(); }
-  void WriteBool(bool value) override {
-    if (ui_) {
-      GetTrack()->UiMute();
-    } else {
-      GetTrack()->SetMute(value);
-    }
-  }
-
- private:
-  bool ui_;
-};
-
-class TrackSoloProperty : public TrackProperty {
- public:
-  explicit TrackSoloProperty(Track* track, bool ui)
-      : TrackProperty(TrackProperties::kSolo, Type::kToggle, track), ui_(ui) {}
-
- protected:
-  bool ReadBool() const override { return GetTrack()->GetSolo(); }
-  void WriteBool(bool value) override {
-    if (ui_) {
-      GetTrack()->UiSolo();
-    } else {
-      GetTrack()->SetSolo(value);
-    }
-  }
-
- private:
-  bool ui_;
-};
-
-class TrackRecArmProperty : public TrackProperty {
- public:
-  explicit TrackRecArmProperty(Track* track, bool ui)
-      : TrackProperty(TrackProperties::kRecArm, Type::kToggle, track),
-        ui_(ui) {}
-
- protected:
-  bool ReadBool() const override { return GetTrack()->GetRecArm(); }
-  void WriteBool(bool value) override {
-    if (ui_) {
-      GetTrack()->UiRecArm();
-    } else {
-      GetTrack()->SetRecArm(value);
-    }
-  }
-
- private:
-  bool ui_;
-};
-
+// A property for pan. With track actions, a write runs the action rather than
+// setting the value.
 class TrackPanProperty : public TrackProperty {
  public:
-  explicit TrackPanProperty(Track* track, bool ui)
-      : TrackProperty(TrackProperties::kPan, Type::kPan, track), ui_(ui) {}
+  TrackPanProperty(std::string_view name, Track* track, TrackActions* actions)
+      : TrackProperty(name, Type::kPan, track), actions_(actions) {}
 
  protected:
   double ReadDouble() const override { return GetTrack()->GetPan(); }
   void WriteDouble(double value) override {
-    if (ui_) {
-      GetTrack()->UiPan(value);
+    if (actions_ != nullptr) {
+      actions_->UiSetPan(GetTrack(), value);
     } else {
       GetTrack()->SetPan(value);
     }
   }
 
  private:
-  bool ui_;
+  TrackActions* const actions_;
 };
 
+// A property for volume. With track actions, a write runs the action rather
+// than setting the value.
 class TrackVolumeProperty : public TrackProperty {
  public:
-  explicit TrackVolumeProperty(Track* track, bool ui)
-      : TrackProperty(TrackProperties::kVolume, Type::kVolume, track),
-        ui_(ui) {}
+  TrackVolumeProperty(std::string_view name, Track* track,
+                      TrackActions* actions)
+      : TrackProperty(name, Type::kVolume, track), actions_(actions) {}
 
  protected:
   double ReadDouble() const override { return GetTrack()->GetVolume(); }
   void WriteDouble(double value) override {
-    if (ui_) {
-      GetTrack()->UiVolume(value);
+    if (actions_ != nullptr) {
+      actions_->UiSetVolume(GetTrack(), value);
     } else {
       GetTrack()->SetVolume(value);
     }
   }
 
  private:
-  bool ui_;
+  TrackActions* const actions_;
+};
+
+// The names of the TrackBoolViewProperty properties, without and with track
+// actions.
+struct BoolViewPropertyNames {
+  std::string_view name;
+  std::string_view ui_name;
+  TrackBoolProperty property;
+};
+constexpr BoolViewPropertyNames kBoolViewPropertyNames[] = {
+    {TrackProperties::kSelected, TrackProperties::kUiSelected,
+     TrackBoolProperty::kSelected},
+    {TrackProperties::kMute, TrackProperties::kUiMute,
+     TrackBoolProperty::kMute},
+    {TrackProperties::kSolo, TrackProperties::kUiSolo,
+     TrackBoolProperty::kSolo},
+    {TrackProperties::kRecArm, TrackProperties::kUiRecArm,
+     TrackBoolProperty::kRecArm},
 };
 
 class TrackIsFolderProperty : public TrackProperty {
  public:
-  explicit TrackIsFolderProperty(Track* track)
-      : TrackProperty(TrackProperties::kTrackIsFolder, Type::kToggle, track) {}
+  TrackIsFolderProperty(Track* track, TrackFilter filter)
+      : TrackProperty(TrackProperties::kTrackIsFolder, Type::kToggle, track),
+        filter_(filter) {}
 
  protected:
   bool ReadBool() const override {
     // Only children that are on the surface count, since a folder whose
     // children are all hidden cannot be navigated into.
-    return GetTrack()->GetChildTrackCount(
-               TrackCache::Get().GetSurfaceFilter()) > 0;
+    return GetTrack()->GetChildTrackCount(filter_) > 0;
   }
+
+ private:
+  const TrackFilter filter_;
 };
 
 class TrackHasParentProperty : public TrackProperty {
@@ -200,7 +174,8 @@ class TrackHasRoutesProperty : public TrackProperty {
 
 }  // namespace
 
-TrackProperties::TrackProperties(Track* track) : track_(track->GetShared()) {
+TrackProperties::TrackProperties(TrackActions* actions, Track* track)
+    : actions_(actions), track_(track->GetShared()) {
   track_->Subscribe(this);
 }
 
@@ -266,69 +241,29 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
         std::make_unique<TrackColorProperty>(track_.get());
     return property.get();
   }
-  if (name == kSelected) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackSelectedProperty>(track_.get(), /*ui=*/false);
+  for (const BoolViewPropertyNames& names : kBoolViewPropertyNames) {
+    if (name == names.name || name == names.ui_name) {
+      auto& property = properties_[name] =
+          std::make_unique<TrackBoolViewProperty>(
+              name, names.property, track_.get(),
+              name == names.ui_name ? actions_ : nullptr);
+      return property.get();
+    }
+  }
+  if (name == kPan || name == kUiPan) {
+    auto& property = properties_[name] = std::make_unique<TrackPanProperty>(
+        name, track_.get(), name == kUiPan ? actions_ : nullptr);
     return property.get();
   }
-  if (name == kMute) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackMuteProperty>(track_.get(), /*ui=*/false);
-    return property.get();
-  }
-  if (name == kSolo) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackSoloProperty>(track_.get(), /*ui=*/false);
-    return property.get();
-  }
-  if (name == kRecArm) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackRecArmProperty>(track_.get(), /*ui=*/false);
-    return property.get();
-  }
-  if (name == kPan) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackPanProperty>(track_.get(), /*ui=*/false);
-    return property.get();
-  }
-  if (name == kVolume) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackVolumeProperty>(track_.get(), /*ui=*/false);
-    return property.get();
-  }
-  if (name == kUiSelected) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackSelectedProperty>(track_.get(), /*ui=*/true);
-    return property.get();
-  }
-  if (name == kUiMute) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackMuteProperty>(track_.get(), /*ui=*/true);
-    return property.get();
-  }
-  if (name == kUiSolo) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackSoloProperty>(track_.get(), /*ui=*/true);
-    return property.get();
-  }
-  if (name == kUiRecArm) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackRecArmProperty>(track_.get(), /*ui=*/true);
-    return property.get();
-  }
-  if (name == kUiPan) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackPanProperty>(track_.get(), /*ui=*/true);
-    return property.get();
-  }
-  if (name == kUiVolume) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackVolumeProperty>(track_.get(), /*ui=*/true);
+  if (name == kVolume || name == kUiVolume) {
+    auto& property = properties_[name] = std::make_unique<TrackVolumeProperty>(
+        name, track_.get(), name == kUiVolume ? actions_ : nullptr);
     return property.get();
   }
   if (name == kTrackIsFolder) {
     auto& property = properties_[name] =
-        std::make_unique<TrackIsFolderProperty>(track_.get());
+        std::make_unique<TrackIsFolderProperty>(track_.get(),
+                                                actions_->GetTrackFilter());
     return property.get();
   }
   if (name == kTrackHasParent) {

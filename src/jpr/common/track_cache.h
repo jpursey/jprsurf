@@ -6,6 +6,7 @@
 #pragma once
 
 #include <bit>
+#include <iterator>
 #include <memory>
 
 #include "absl/base/no_destructor.h"
@@ -84,10 +85,10 @@ class TrackCache final {
   Track* GetLastTouchedTrack() const { return last_touched_track_; }
   void SetLastTouchedTrack(Track* track) { last_touched_track_ = track; }
 
-  // The anchor for a track action. The anchor is cleared if its track is
-  // removed from REAPER.
-  Anchor<Track>& GetAnchor(TrackAnchor type) {
-    return anchors_[static_cast<int>(type)];
+  // The anchor for a property's track action. The anchor is cleared if its
+  // track is removed from REAPER.
+  Anchor<Track>& GetAnchor(TrackBoolProperty property) {
+    return anchors_[static_cast<int>(property)];
   }
 
   // Returns the selected track if exactly one track is selected, or nullptr if
@@ -177,8 +178,8 @@ class TrackCache final {
   // for shift-selection.
   Track* last_touched_track_ = nullptr;
 
-  // Anchors for each TrackAnchor action.
-  Anchor<Track> anchors_[kTrackAnchorCount];
+  // Anchors for each TrackBoolProperty's action.
+  Anchor<Track> anchors_[std::size(kTrackBoolProperties)];
 
   // All non-master tracks that currently exist in REAPER, in order.
   std::vector<Track*> all_tracks_;

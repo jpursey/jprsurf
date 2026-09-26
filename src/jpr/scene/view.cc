@@ -33,7 +33,7 @@ void SetTrackToParent(View* view) {
     // Already at the top level.
     return;
   }
-  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+  const TrackFilter filter = view->GetScene()->GetTrackFilter();
   int track_count = parent_track->GetChildTrackCount(filter);
   int view_count = view->GetChildViewCount();
   // If the track we are moving up from is not on the surface itself, there is
@@ -118,7 +118,7 @@ class View::ParentTrackChildProperty : public ViewProperty {
   void TriggerAction() override {
     Track* track = view_->GetTrack();
     if (view_->GetParentView() == nullptr ||
-        track->GetChildTrackCount(TrackCache::Get().GetSurfaceFilter()) == 0) {
+        track->GetChildTrackCount(view_->GetScene()->GetTrackFilter()) == 0) {
       return;
     }
     view_->GetParentView()->SetTrack(track, 0);
@@ -246,7 +246,10 @@ class View::ChildRouteTypeNameProperty : public ViewProperty {
 };
 
 View::View(Scene* scene, View* parent_view, std::string_view name)
-    : scene_(scene), parent_view_(parent_view), name_(name) {
+    : scene_(scene),
+      parent_view_(parent_view),
+      name_(name),
+      track_properties_(&scene->GetTrackActions()) {
   // Add properties for changing the child context index.
   properties_.emplace(kChildDec, std::make_unique<ChildIndexOffsetProperty>(
                                      this, kChildDec, -1));
@@ -374,9 +377,9 @@ int View::GetMaxChildContextIndex() const {
     case ChildContextType::kNone:
       return 0;
     case ChildContextType::kTrack:
-      return std::max<int>(0, GetTrack()->GetChildTrackCount(
-                                  TrackCache::Get().GetSurfaceFilter()) -
-                                  GetChildViewCount());
+      return std::max<int>(
+          0, GetTrack()->GetChildTrackCount(scene_->GetTrackFilter()) -
+                 GetChildViewCount());
     case ChildContextType::kSends:
     case ChildContextType::kReceives: {
       const int route_count = static_cast<int>(
@@ -457,7 +460,7 @@ void View::ReleaseAnchor(const AnchorBase* anchor) {
 void View::SetChildTracks() {
   CHECK(active_);
   CHECK(scene_ != nullptr);
-  const TrackFilter filter = TrackCache::Get().GetSurfaceFilter();
+  const TrackFilter filter = scene_->GetTrackFilter();
 
   // Walk the child tracks, skipping any that are not on the surface, and give
   // the child views the run of them that starts at the child context index.

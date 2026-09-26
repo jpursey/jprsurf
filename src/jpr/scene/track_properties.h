@@ -10,6 +10,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin.h"
 
@@ -94,11 +95,13 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kTrackExists = "track_exists";
   static constexpr std::string_view kTrackHasRoutes = "track_has_routes";
 
-  // The track that these properties are tied to.
+  // The track that these properties are tied to, and the track actions they
+  // use, which must not be null.
   //
   // TrackProperties are bound to the track GUID. So once created it will remain
   // bound to the same track, even if underlying the MediaTrack* changes.
-  explicit TrackProperties(Track* track = TrackCache::Get().GetStubTrack());
+  explicit TrackProperties(TrackActions* actions,
+                           Track* track = TrackCache::Get().GetStubTrack());
   TrackProperties(const TrackProperties&) = delete;
   TrackProperties& operator=(const TrackProperties&) = delete;
   ~TrackProperties() override;
@@ -124,6 +127,7 @@ class TrackProperties final : public TrackListener {
 
  private:
   // State
+  TrackActions* const actions_;
   std::shared_ptr<Track> track_;
   mutable absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>>
       properties_;

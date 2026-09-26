@@ -14,7 +14,9 @@
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/track.h"
 #include "jpr/device/device.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/view.h"
 
 namespace jpr {
@@ -39,6 +41,13 @@ class Scene final {
 
   // Views
   View* GetRootView() const { return root_view_.get(); }
+
+  // Tracks
+  //
+  // The filter decides which tracks the scene's views show, and which tracks
+  // its track actions include in ranges.
+  TrackFilter GetTrackFilter() const { return track_actions_.GetTrackFilter(); }
+  TrackActions& GetTrackActions() { return track_actions_; }
 
   // Controls and Properties
   Control* GetControl(std::string_view name) const;
@@ -91,6 +100,7 @@ class Scene final {
   absl::flat_hash_map<std::string, Control*> controls_;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
   absl::flat_hash_set<SceneStateProperty*> state_properties_;
+  TrackActions track_actions_;
   std::unique_ptr<View> root_view_;
   RunHandle run_handle_;
   Modifiers next_modifier_flag_ = kModUserStart;

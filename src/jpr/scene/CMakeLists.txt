@@ -10,6 +10,7 @@ set(jpr_scene_SOURCE
   scene.cc scene.h
   scene_state_property.cc scene_state_property.h
   timeline_property.cc timeline_property.h
+  track_actions.cc track_actions.h
   track_properties.cc track_properties.h
   value_property.h
   view.cc view.h

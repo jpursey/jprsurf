@@ -11,6 +11,7 @@
 #include "absl/memory/memory.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "jpr/common/track_cache.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/reaper_property.h"
 #include "jpr/scene/scene_state_property.h"
@@ -19,7 +20,8 @@
 
 namespace jpr {
 
-Scene::Scene(std::string_view name) : name_(name) {
+Scene::Scene(std::string_view name)
+    : name_(name), track_actions_(TrackCache::Get().GetSurfaceFilter()) {
   root_view_ = absl::WrapUnique(new View(this, nullptr, "root"));
   properties_.emplace(
       ModifierProperty::kShift,

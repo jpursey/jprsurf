@@ -47,20 +47,6 @@ inline constexpr int GetTrackFilterIndex(TrackFilter filter) {
   return static_cast<int>(filter);
 }
 
-// Track actions that each have their own anchor in the TrackCache. While an
-// action's anchor is held on a track, that action on another track acts on the
-// range of tracks between them.
-enum class TrackAnchor {
-  kSelect,
-  kMute,
-  kSolo,
-  kRecArm,
-};
-
-// The number of TrackAnchor values. TrackAnchor values are contiguous starting
-// at zero.
-inline constexpr int kTrackAnchorCount = 4;
-
 // The on/off properties of a track, for code that works with any of them.
 enum class TrackBoolProperty {
   kSelected,
@@ -241,11 +227,11 @@ class Track final : public std::enable_shared_from_this<Track> {
   // first set of modifiers that match will trigger the behavior.
   //
   // Selected, mute, solo, and record arm also each have an anchor in the
-  // TrackCache (see TrackAnchor). If the property's anchor is held on another
-  // track, this acts on the range between the anchor track and this track
-  // instead, the same as Shift without Ctrl but using the anchor track rather
-  // than the last touched track. This takes precedence over all modifiers,
-  // which are ignored.
+  // TrackCache (see TrackCache::GetAnchor()). If the property's anchor is held
+  // on another track, this acts on the range between the anchor track and this
+  // track instead, the same as Shift without Ctrl but using the anchor track
+  // rather than the last touched track. This takes precedence over all
+  // modifiers, which are ignored.
   //
   // Volume and Pan:
   // - Ctrl: Changes only this track, ignoring any grouping or ganging.

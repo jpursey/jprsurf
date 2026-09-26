@@ -41,8 +41,8 @@ constexpr char kChangeTracksUndoName[] = "JPR:Change Tracks";
 // Returns the track holding the anchor, or null if it isn't held on another
 // track that exists. A deleted track is treated as not held, so the press
 // behaves as usual.
-Track* GetOtherAnchorTrack(TrackAnchor anchor, const Track* track) {
-  Track* anchor_track = TrackCache::Get().GetAnchor(anchor).Get();
+Track* GetOtherAnchorTrack(TrackBoolProperty property, const Track* track) {
+  Track* anchor_track = TrackCache::Get().GetAnchor(property).Get();
   if (anchor_track == nullptr || anchor_track == track ||
       !anchor_track->Exists()) {
     return nullptr;
@@ -116,14 +116,13 @@ void Toggle(TrackBatch& batch, Track* track, TrackBoolProperty property,
   batch.Set(track, property, !track->Get(property), grouping);
 }
 
-// The UI action for mute, solo, and record arm (see Track::Ui*()), where anchor
-// is the property's anchor.
-void UiToggle(Track* track, TrackBoolProperty property, TrackAnchor anchor) {
+// The UI action for mute, solo, and record arm (see Track::Ui*()).
+void UiToggle(Track* track, TrackBoolProperty property) {
   TrackCache& cache = TrackCache::Get();
 
   // An anchor held on another track sets the range from it, ignoring all
   // modifiers.
-  if (Track* anchor_track = GetOtherAnchorTrack(anchor, track);
+  if (Track* anchor_track = GetOtherAnchorTrack(property, track);
       anchor_track != nullptr) {
     SetRange(track, anchor_track, /*same_parent=*/true, property);
     return;
@@ -477,7 +476,8 @@ void Track::UiSelected() {
 
   // An anchor held on another track selects the range from it, ignoring all
   // modifiers.
-  if (Track* anchor_track = GetOtherAnchorTrack(TrackAnchor::kSelect, this);
+  if (Track* anchor_track =
+          GetOtherAnchorTrack(TrackBoolProperty::kSelected, this);
       anchor_track != nullptr) {
     SelectRange(this, anchor_track, /*same_parent=*/true);
     return;
@@ -538,21 +538,21 @@ void Track::UiMute() {
   if (track_id_ == nullptr) {
     return;
   }
-  UiToggle(this, TrackBoolProperty::kMute, TrackAnchor::kMute);
+  UiToggle(this, TrackBoolProperty::kMute);
 }
 
 void Track::UiSolo() {
   if (track_id_ == nullptr) {
     return;
   }
-  UiToggle(this, TrackBoolProperty::kSolo, TrackAnchor::kSolo);
+  UiToggle(this, TrackBoolProperty::kSolo);
 }
 
 void Track::UiRecArm() {
   if (track_id_ == nullptr) {
     return;
   }
-  UiToggle(this, TrackBoolProperty::kRecArm, TrackAnchor::kRecArm);
+  UiToggle(this, TrackBoolProperty::kRecArm);
 }
 
 //------------------------------------------------------------------------------
