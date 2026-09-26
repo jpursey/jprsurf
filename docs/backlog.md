@@ -453,6 +453,22 @@ routes, rather than just losing the extender's strips. It needs a definition of
 "best fits" (such as the config with the most devices present whose required
 devices are all present), and a way to say which config was chosen.
 
+## Log file setup in common
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** none
+
+`plugin/dll_main.cc` holds the whole log file setup: the `FileSink` that
+formats each line with a local timestamp, `GetLocalTimeZone()`, and adding and
+removing the sink. None of it is specific to JPRSurf, so it could move to a
+utility in `common`, which `Initialize()` in `dll_main.cc` calls with the log
+file path and the minimum log level. `dll_main.cc` would keep only `DllMain`,
+working out the path from `APPDATA`, and choosing the level. Shutdown should be
+hard to forget, such as an RAII handle that removes the sink.
+
 ## Modifiers a mapping ignores
 
 - **Layers:** device, scene
