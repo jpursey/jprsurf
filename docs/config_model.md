@@ -471,7 +471,7 @@ read mappings on a control require, a mapping fires only when exactly its own
 set is on. Modifiers that no mapping on the control mentions are ignored. Undo
 runs Undo, and with Shift held, Redo. Select's mappings don't mention Shift, so
 it doesn't choose between them (the track action reads Shift itself, which
-[track_actions.md](worklog/track_actions.md) moves to `scene`).
+[track_actions.md](worklog/track_actions.md) moved to `scene`).
 
 A mapping meant to fire with a modifier held, whatever else is held, needs a
 copy for each combination of the other modifiers on its control. Letting a
@@ -717,8 +717,8 @@ output modes wait for *Device types and catalogs*.
 | `toggle_<property>`                                                        | Generated, and only exists to keep two toggles exclusive                                            | Removed: an exclusive group's toggles are mapped directly                                                      |
 | `mod_marker`, `mod_nudge`, `mod_send_hold`, `mod_select_anchor`            | Declared by the plugin                                                                              | Declared by the config: `mod:marker`, and so on                                                                |
 | `auto_override_any_latch`                                                  | Added by the plugin                                                                                 | A polled state row, `state:auto_override_any_latch`                                                            |
-| `track_recarm`                                                             | Everything else says rec arm (`TrackAnchor::kRecArm`, `anchor_rec_arm_<n>`)                         | `track:rec_arm`                                                                                                |
-| `track_ui_*` beside `track_*`                                              | Two names for most track properties. The UI ones carry surface interaction policy, which is moving. | Settled by *Property namespaces and names*, after [track_actions.md](worklog/track_actions.md) moves it        |
+| `track_recarm`                                                             | Everything else says rec arm (`TrackBoolProperty::kRecArm`, `anchor_rec_arm_<n>`)                   | `track:rec_arm`                                                                                                |
+| `track_ui_*` beside `track_*`                                              | Two names for most track properties. The UI ones run the scene's track actions.                     | Settled by *Property namespaces and names*                                                                     |
 | `track_parent`, `track_root`, and the other view properties                | Read like track properties, but move the view                                                       | In `view:`, with names settled when navigation is reviewed as a component                                      |
 | `ruler2_*`                                                                 | An abbreviation                                                                                     | `state:secondary_ruler_*`                                                                                      |
 | `Fader1`, `Scribble1Line2`, `AssignTrack`                                  | Mixed case, with 1-based numbers inside names                                                       | Catalog arrays with lower case fields (a strip's `fader`), and lower case single controls (`assign_track`)     |
@@ -834,8 +834,8 @@ come together:
   catalogs*, ending with the plugin creating devices by type and mapping
   through widgets.
 - **Independent pieces**: *Named command IDs*, *Track actions in scene*
-  ([track_actions.md](worklog/track_actions.md)), and *Extension host in
-  common*.
+  ([track_actions.md](worklog/track_actions.md), done), and *Extension host in
+  common* ([extension_host.md](worklog/extension_host.md), done).
 
 Then, in order:
 1. *Build the scene from a SurfaceSpec*: this model as a C++ struct, with

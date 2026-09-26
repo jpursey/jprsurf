@@ -49,7 +49,7 @@ none of them has to be renamed later:
   and `mod:marker` and the other declared modifiers.
 
 This also settles the `track_ui_*` names beside `track_*`, which
-[track_actions.md](worklog/track_actions.md) moves to `scene` without renaming.
+[track_actions.md](worklog/track_actions.md) moved to `scene` without renaming.
 Device control names wait for *Device types and catalogs*. The names are C++ constants today, so this is mostly
 mechanical, and the smoke test verifies it.
 
@@ -124,8 +124,9 @@ wants a worklog plan.
 - **`state:auto_override_any_latch`:** a polled state row, rather than a
   property the plugin adds itself.
 
-[track_actions.md](worklog/track_actions.md) moves the anchors themselves into
-`scene`'s `TrackActions`, and the component builds on those.
+The anchors themselves are in `scene`'s `TrackActions` (see
+[track_actions.md](worklog/track_actions.md)), and the component builds on
+those.
 
 ## Modes from exclusive groups and picks
 
@@ -260,8 +261,7 @@ it.
 - **Size:** large
 - **Feature workflow:** yes
 - **Depends on:** *Device types and catalogs*, *Modes from exclusive groups and
-  picks*, and *Named command IDs*; ideally
-  [track_actions.md](worklog/track_actions.md)
+  picks*, and *Named command IDs*
 - **Background:** [config_model.md](config_model.md)
 
 The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
@@ -353,14 +353,16 @@ select behavior is not obviously the right answer.
 - **Layers:** common, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** [track_actions.md](worklog/track_actions.md); selecting
-  routes also depends on *Local surface-only selection within routes*
-- **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
+- **Depends on:** nothing for route mute; selecting routes depends on *Local
+  surface-only selection within routes*
+- **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md),
+  [track_actions.md](worklog/track_actions.md)
 
 Anchors are Track mode only today. `Anchor<T>`, `AnchorHold`, and the view's
-anchor are all generic, but the ranged behavior itself lives in `Track` and has
-no route equivalent. Once that policy moves to `scene`, ranged route mute is a
-`scene` change built on `common` range primitives.
+anchor are all generic, but the ranged behavior lives in the scene's
+`TrackActions`, and has no route equivalent. Ranged route mute is a `scene`
+change, with route range primitives in `common` beside `TrackRange` and
+`TrackBatch`.
 
 ## Local surface-only selection within routes
 
