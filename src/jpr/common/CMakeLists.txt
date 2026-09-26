@@ -7,6 +7,7 @@ set(jpr_common_SOURCE
   anchor.cc anchor.h
   automation.cc automation.h
   color.cc color.h
+  control_surface.cc control_surface.h
   guid.cc guid.h
   midi_message.h
   midi_port.cc midi_port.h

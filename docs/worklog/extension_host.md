@@ -173,15 +173,16 @@ Depends on: nothing.
 - No references to the old class name remain, other than the new `common`
   class in this plan.
 
-### CL1 [ ] common: ControlSurface and ControlSurfaceListener
+### CL1 [x] common: ControlSurface and ControlSurfaceListener
 
 Depends on: CL0.
 
 - `common/control_surface.h/.cc`, as above (without the single instance check,
   which is CL3), added to `jpr_common_SOURCE`.
 - `kVisibilityInterval`, the `Run()` performance log, `CheckParamValue()`, and
-  `JPR_GET_PARAM_VALUE` move here from `plugin_surface.cc`, along with the
-  decoding and `VLOG`s of every REAPER call.
+  `JPR_GET_PARAM_VALUE` are copied here from `plugin_surface.cc`, along with
+  the decoding and `VLOG`s of every REAPER call. CL2 removes the originals.
+- `Register()` accepts one type, which `Create()` uses for every instance.
 - Unused, so no visible change.
 
 **Verify**
