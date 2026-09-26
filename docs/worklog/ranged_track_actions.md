@@ -54,29 +54,14 @@ surface at once.
 
 Each layer only knows what it needs to:
 
-- **common**: `Anchor`, `TrackCache`'s anchors, and the ranged behavior in
-  `Track`. Knows nothing about controls or views.
+- **common**: `Anchor`, and `TrackBatch` and `TrackRange` in `Track` (see
+  [track_actions.md](track_actions.md)). Knows nothing about controls or views.
 - **device**: `Control::IsPressed()` for long press registrations. Knows nothing
   about anchors.
-- **scene**: a view holds one anonymous anchor, and `CallbackToggleProperty`.
-  Knows nothing about select, mute, solo, or rec arm.
+- **scene**: the scene's `TrackActions` holds the anchors and acts on ranges. A
+  view holds one anonymous anchor, and `CallbackToggleProperty` maps a press to
+  code. Views know nothing about select, mute, solo, or rec arm.
 - **plugin**: the X-Touch mappings that tie these together.
-
-### common: Track actions
-
-- `TrackCache::GetAnchor(TrackAnchor)` returns the `Anchor<Track>` for
-  `kSelect`, `kMute`, `kSolo`, or `kRecArm`. `TrackCache::Refresh()` clears an
-  anchor held on a removed track, the same as the last touched track.
-- `Track::UiSelected()` and `DoUiProperty()` (behind `UiMute()`, `UiSolo()`,
-  and `UiRecArm()`) check their anchor first. If it is held on a different
-  track, they act on the range and ignore modifiers. Otherwise Shift does the
-  same using the last touched track (with Ctrl widening it past the parent).
-  Both paths share `SelectRange()` and `SetPropertyRange()`, which use
-  `GetSurfaceRange()` to find the tracks between the two ends in the surface
-  filter.
-- Multi-track changes (ranges, and the Alt and Option behaviors) are wrapped in
-  a `ScopedPreventUiRefresh`, so REAPER pays its UI refresh once rather than per
-  track. See Performance.
 
 ### device: long press IsPressed
 
@@ -84,6 +69,22 @@ Each layer only knows what it needs to:
   registration reports pressed from when the long press fires until the button
   is released, so `press_release` with `kLongPress` reads as "held past a long
   press".
+
+### scene: Track actions
+
+- `TrackActions::GetAnchor(TrackBoolProperty)` returns the `Anchor<Track>` for
+  `kSelected`, `kMute`, `kSolo`, or `kRecArm`. An anchor held on a track that
+  no longer exists is treated as not held, and the strip's view releases it
+  when the track list refresh shows another track there.
+- `UiSelect()` and `UiToggle()` (for mute, solo, and rec arm) check their
+  anchor first. If it is held on a different track, they act on the range and
+  ignore modifiers. Otherwise Shift does the same using the last touched track
+  (with Ctrl widening it past the parent). Both paths share `SelectRange()` and
+  `SetRange()`, which use `TrackRange::Between()` to find the tracks between
+  the two ends in the scene's track filter.
+- Multi-track changes (ranges, and the Alt and Opt behaviors) are each one
+  `TrackBatch`, so REAPER pays its UI refresh once rather than per track, and
+  the change is one undo point. See Performance.
 
 ### scene: View anchor and CallbackToggleProperty
 
@@ -108,8 +109,8 @@ Each layer only knows what it needs to:
 
 - `AddTrackAnchorMapping()` adds a per-strip `anchor_<action>_<n>`
   `CallbackToggleProperty` mapped with `press_release`. True holds the action's
-  `TrackCache` anchor on the view's track (unless the strip is empty) and gives
-  it to the view; false releases it from the view.
+  anchor from the scene's `TrackActions` on the view's track (unless the strip
+  is empty) and gives it to the view; false releases it from the view.
 - Select, per Track mode strip:
   - Press: `kUiSelected`. Double press: `kParentTrackChild`.
   - Long press: `kUiSelected` and `anchor_select_<n>`. The select anchor's hold
@@ -136,8 +137,8 @@ Each layer only knows what it needs to:
   - The slot and its hold point at each other. `Clear()` (or destroying the
     slot) empties the hold, so they may be destroyed in any order.
   - The optional modifier bits are on exactly while the hold holds the anchor.
-    They belong to the hold rather than the slot, because slots can be global
-    (`TrackCache`) while modifier bits are allocated by a surface's scene.
+    They belong to the hold rather than the slot, so a slot that outlives
+    whoever allocated the modifier never keeps it.
   - Unit tested in `jpr_common_test`.
 - **`CallbackToggleProperty` (scene/value_property.h)**: map a control's press
   and release to code.
@@ -145,8 +146,8 @@ Each layer only knows what it needs to:
   the view moves on.
 - **Long press `IsPressed`**: act for as long as a button is held past a long
   press.
-- **`ScopedPreventUiRefresh` (common/track.cc)**: batch REAPER UI changes to
-  more than one track.
+- **`TrackBatch` (common/track.h)**: change any number of tracks as one change,
+  with one UI refresh and one undo point.
 
 ## Performance
 

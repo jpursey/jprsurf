@@ -16,6 +16,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "gb/config/text_config.h"
+#include "jpr/common/anchor.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"

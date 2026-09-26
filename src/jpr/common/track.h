@@ -193,8 +193,8 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Sets the track's properties directly.
   //
   // Selected, mute, solo, and record arm each add their own undo point (except
-  // selection), even while a TrackBatch is alive. Selecting the track also sets
-  // the last touched track. REAPER does not group selection.
+  // selection), even while a TrackBatch is alive. REAPER does not group
+  // selection.
   void SetName(std::string_view name);
   void SetVolume(double volume, TrackGrouping grouping = TrackGrouping::kNone);
   void SetPan(double pan, TrackGrouping grouping = TrackGrouping::kNone);
@@ -216,78 +216,6 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Selects this track, and unselects every other track, including the master
   // track.
   void SelectOnly();
-
-  // Actions which run the corresponding UI behavior for each property (the
-  // equivalent of clicking or changing the property in REAPER's UI, whenever
-  // possible).
-  //
-  // Modifiers are also applied to these actions if mapped on the control
-  // surface, which provide similar behavior to REAPER, but the mappings are
-  // different. Mappings are checked in the declared order as listed below. The
-  // first set of modifiers that match will trigger the behavior.
-  //
-  // Selected, mute, solo, and record arm also each have an anchor in the
-  // TrackCache (see TrackCache::GetAnchor()). If the property's anchor is held
-  // on another track, this acts on the range between the anchor track and this
-  // track instead, the same as Shift without Ctrl but using the anchor track
-  // rather than the last touched track. This takes precedence over all
-  // modifiers, which are ignored.
-  //
-  // Volume and Pan:
-  // - Ctrl: Changes only this track, ignoring any grouping or ganging.
-  //   (in REAPER this is Shift)
-  // - Default: Changes this track and any grouped or ganged tracks
-  //   proportionally.
-  //
-  // Selected:
-  // - (Ctrl+)Shift: Selects all tracks between the last selected track and this
-  //   track. If Ctrl is not pressed, this only includes tracks that share the
-  //   same parent track (not available in REAPER). If Ctrl is pressed, this
-  //   includes all tracks regardless of parent track (in REAPER this is Shift).
-  //   This does nothing at all if the last selected track or this track is not
-  //   on the control surface, as there is no range to select. Holding shift
-  //   always means "select a range", never one of the behaviors below.
-  // - Ctrl: Toggles selection of this track without affecting any other tracks.
-  //   Sets the last touched track. (Same ias in REAPER)
-  // - Default: Selects this track and unselects all other tracks. Sets the last
-  //   touched track.
-  //
-  // Mute, Solo, and Rec Arm:
-  // - Ctrl+Alt: Clears the property for all tracks, but sets the property on
-  //   for this track alone, ignoring any ganged or grouped tracks. Sets the
-  //   last touched track. (Not available in REAPER)
-  // - Shift+Alt: Clears the property for all tracks, but sets the property on
-  //   for this track and any ganged or grouped tracks. Sets the last touched
-  //   track. (Not available in REAPER)
-  // - Alt: Clears the property for all tracks, including this track. (In REAPER
-  //   this is Ctrl).
-  // - (Ctrl+)Shift: Sets the property for all tracks between the last touched
-  //   track and this track to be the value of the last touched track's property
-  //   value. Track grouping is ignored. If Ctrl is not pressed, this only
-  //   includes tracks that share the same parent track. If Ctrl is pressed,
-  //   this includes all tracks regardless of parent track. This does nothing at
-  //   all if the last touched track or this track is not on the control
-  //   surface, as there is no range to act on. Holding shift without alt always
-  //   means "set a range", never one of the behaviors below. (Not available in
-  //   REAPER)
-  // - Shift: Sets the property for all tracks between the last touched track
-  //   and this track to be the value of the last touced track's property value
-  //   if they have the same parent track. Track grouping is ignored. (Not
-  //   available in REAPER)
-  // - Option: Toggles the property for this track and any ganged tracks (they
-  //   each get individually toggled). Track grouping is ignored. (Not available
-  //   in REAPER)
-  // - Ctrl: Toggles the property for this track, but ignores any grouping or
-  //   ganging. Sets the last touched track. (In REAPER this is Shift)
-  // - Default: Toogles the property for this track, and sets all ganged /
-  //   grouped tracks to the same value. Sets the last touched track. (Same as
-  //   in REAPER)
-  void UiVolume(double volume);
-  void UiPan(double pan);
-  void UiSelected();
-  void UiMute();
-  void UiSolo();
-  void UiRecArm();
 
   // Parent track of this track.
   //

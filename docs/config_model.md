@@ -49,7 +49,7 @@ otherwise illustrative. The **Today** notes use the current C++ names.
 | Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                           |
 | Templates  | Named, parameterized sets of mappings                                        | `AddTrackStripMappings()`                      |
 | Components | C++ behavior a config declares: exclusive groups, anchors, references, ...   | `PluginSurface` state and callbacks            |
-| Settings   | Surface-wide values                                                          | `TrackCache::SetSurfaceFilter()`               |
+| Settings   | Surface-wide values                                                          | `Scene`'s track filter                         |
 
 ## Devices
 
@@ -643,7 +643,8 @@ These are needed, but a config never names them:
 ## Settings
 
 - **Track filter**: which tracks the surface shows (the mixer's, the track
-  panel's, or all of them). Today it is the mixer's, set in `TrackCache`.
+  panel's, or all of them). Today it is the mixer's, the default for the
+  `Scene` constructor's track filter.
 
 Press timings (350ms for a long press, and the double press window) stay fixed
 in C++ until there's a reason to change them.

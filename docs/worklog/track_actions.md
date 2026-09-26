@@ -395,7 +395,7 @@ Depends on: CL3.
   acts normally rather than as a range, and a select anchor's
   `mod_select_anchor` turns off.
 
-### CL5 [ ] common: Remove the policy from common
+### CL5 [x] common: Remove the policy from common
 
 Depends on: CL4.
 

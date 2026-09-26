@@ -6,13 +6,11 @@
 #pragma once
 
 #include <bit>
-#include <iterator>
 #include <memory>
 
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "jpr/common/anchor.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/track.h"
@@ -48,14 +46,6 @@ class TrackCache final {
   // hidden in the mixer or track control panel, so this must be polled.
   bool RefreshVisibility();
 
-  // The filter used when enumerating tracks for display on the control surface,
-  // and for ranged track operations driven from it.
-  //
-  // This defaults to kMcp, as a physical control surface is the equivalent of
-  // REAPER's mixer control panel.
-  TrackFilter GetSurfaceFilter() const { return surface_filter_; }
-  void SetSurfaceFilter(TrackFilter filter) { surface_filter_ = filter; }
-
   // Returns the stub track, which is a special non-null track that represents
   // no track at all. The track GUID is empty and the track ID is null, and it
   // holds all default values.
@@ -79,25 +69,19 @@ class TrackCache final {
   int GetTrackCount() const { return static_cast<int>(all_tracks_.size()); }
   absl::Span<Track* const> GetTracks() const { return all_tracks_; }
 
-  // The last touched track, which is the track that is the root for
-  // shift-selection. This may be updated by Track when modified by
-  // ViewMappings, or when REAPER reports a new last touched track.
+  // The last touched track. This is set when REAPER reports a new last touched
+  // track, and may also be set by a caller acting on a track as though it were
+  // touched in REAPER's UI. It is null if the track is deleted.
   Track* GetLastTouchedTrack() const { return last_touched_track_; }
   void SetLastTouchedTrack(Track* track) { last_touched_track_ = track; }
-
-  // The anchor for a property's track action. The anchor is cleared if its
-  // track is removed from REAPER.
-  Anchor<Track>& GetAnchor(TrackBoolProperty property) {
-    return anchors_[static_cast<int>(property)];
-  }
 
   // Returns the selected track if exactly one track is selected, or nullptr if
   // no tracks or multiple tracks are selected. The master track is never
   // returned, and its selection state is ignored.
   //
   // Like the other track accessors, this does not apply any filter. Callers
-  // that only want tracks on the surface must also check
-  // Track::IsVisible(GetSurfaceFilter()).
+  // that only want the tracks included by a filter must also check
+  // Track::IsVisible().
   //
   // This queries REAPER directly rather than the cached Track state, as that is
   // only refreshed for tracks mapped on the surface.
@@ -174,18 +158,10 @@ class TrackCache final {
   // track deletions and additions.
   TrackIdMap track_id_map_;
 
-  // The last touched track, which may be set to indicate the starting point
-  // for shift-selection.
   Track* last_touched_track_ = nullptr;
-
-  // Anchors for each TrackBoolProperty's action.
-  Anchor<Track> anchors_[std::size(kTrackBoolProperties)];
 
   // All non-master tracks that currently exist in REAPER, in order.
   std::vector<Track*> all_tracks_;
-
-  // Filter used when enumerating tracks for the control surface.
-  TrackFilter surface_filter_ = TrackFilter::kMcp;
 
   // The single master track, which is not included in the track list. This
   // is the root of all tracks.
