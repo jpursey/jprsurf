@@ -26,34 +26,6 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Move surface interaction policy out of common
-
-- **Layers:** common, scene, plugin
-- **Size:** large
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
-
-`common` is meant to be a REAPER data model that any extension could use, but
-surface interaction policy has leaked into it:
-- `Track::Ui*()` decides what each modifier means (Ctrl ignores grouping, Shift
-  selects a range, and so on) by reading the global modifier state.
-- `TrackCache` holds the surface filter, the `TrackAnchor` set of anchors, and
-  the last touched track as the root for ranges.
-- `Track`'s ranged setters read those implicitly from the singleton.
-
-`common` should keep the primitives, with explicit inputs: set a property on a
-range of tracks in one `PreventUIRefresh` scope, with or without grouping, and
-select a range. The policy should move to `scene`, where a range is computed
-with the view's filter and passed down. `TrackCache` already computes indices
-for every filter, so `common` would no longer need a surface filter at all. The
-modifier behavior could become mappings, or stay one named "standard" track
-action per property.
-
-This makes *Ranges in Send/Receive mode* a `scene` change rather than a
-`common` one. It is best done before *Build the scene from a SurfaceSpec*, so
-the spec doesn't name track actions that are about to change.
-
 ## Property namespaces and names
 
 - **Layers:** scene, plugin
@@ -76,9 +48,9 @@ none of them has to be renamed later:
 - **The rest of the Names audit:** `track:rec_arm`, `state:secondary_ruler_*`,
   and `mod:marker` and the other declared modifiers.
 
-`track_ui_*` only gets its namespace, as *Move surface interaction policy out
-of common* settles those names, and device control names wait for *Device
-types and catalogs*. The names are C++ constants today, so this is mostly
+This also settles the `track_ui_*` names beside `track_*`, which
+[track_actions.md](worklog/track_actions.md) moves to `scene` without renaming.
+Device control names wait for *Device types and catalogs*. The names are C++ constants today, so this is mostly
 mechanical, and the smoke test verifies it.
 
 ## View conditions and fixed write values
@@ -152,8 +124,8 @@ wants a worklog plan.
 - **`state:auto_override_any_latch`:** a polled state row, rather than a
   property the plugin adds itself.
 
-*Move surface interaction policy out of common* may also move the anchors
-themselves into `scene`. Whichever of the two comes second builds on the other.
+[track_actions.md](worklog/track_actions.md) moves the anchors themselves into
+`scene`'s `TrackActions`, and the component builds on those.
 
 ## Modes from exclusive groups and picks
 
@@ -288,8 +260,8 @@ it.
 - **Size:** large
 - **Feature workflow:** yes
 - **Depends on:** *Device types and catalogs*, *Modes from exclusive groups and
-  picks*, and *Named command IDs*; ideally *Move surface interaction policy out
-  of common*
+  picks*, and *Named command IDs*; ideally
+  [track_actions.md](worklog/track_actions.md)
 - **Background:** [config_model.md](config_model.md)
 
 The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
@@ -381,7 +353,7 @@ select behavior is not obviously the right answer.
 - **Layers:** common, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *Move surface interaction policy out of common*; selecting
+- **Depends on:** [track_actions.md](worklog/track_actions.md); selecting
   routes also depends on *Local surface-only selection within routes*
 - **Background:** [ranged_track_actions.md](worklog/ranged_track_actions.md)
 
