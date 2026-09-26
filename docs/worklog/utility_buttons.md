@@ -95,9 +95,9 @@ would move up a level. It needs no polling: it notifies when a view's track
 changes and when the track is removed, and moving a track in REAPER never takes
 its parent away.
 
-### plugin: mappings (control_surface.cc)
+### plugin: mappings (plugin_surface.cc)
 
-All in `ControlSurface::InitViews()`, next to the other global X-Touch mappings:
+All in `PluginSurface::InitViews()`, next to the other global X-Touch mappings:
 - Each utility button has an unmodified read mapping, and a read mapping with
   `ReadConfig::required_modifiers = kModShift`. `Control` masks Shift off the
   unmodified registration, so each press runs exactly one of them.

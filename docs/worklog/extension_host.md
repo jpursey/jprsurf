@@ -34,8 +34,6 @@ Otherwise, there is no change in behavior.
   renamed first, in its own CL. Adding `jpr::ControlSurface` to `common` while
   `plugin` still defines one would violate the one definition rule, which the
   linker may not catch.
-- `plugin/jprsurf.cc` (`DllMain` and the log file setup) becomes
-  `plugin/dll_main.cc` in the same CL, as a more descriptive name.
 
 ### ControlSurfaceListener
 
@@ -158,16 +156,16 @@ and update them twice, and would both try to drive the same hardware. So
 
 ## CLs
 
-### CL0 [ ] plugin: rename ControlSurface to PluginSurface
+### CL0 [x] plugin: rename ControlSurface to PluginSurface
 
 Depends on: nothing.
 
 - `plugin/control_surface.h/.cc` become `plugin/plugin_surface.h/.cc`, and the
   class becomes `PluginSurface`. Nothing else changes.
-- `plugin/jprsurf.cc` becomes `plugin/dll_main.cc`.
-- References to the plugin's class elsewhere follow: comments in `common` and
-  `device`, `plugin.cc`, the worklogs, `config_model.md`, the backlog, and
-  `CLAUDE.md`.
+- References to the plugin's class elsewhere follow: `plugin.cc`, the
+  worklogs, `config_model.md`, the backlog, and `CLAUDE.md`. The comments in
+  `common` and `device` that named it no longer name any class in `plugin`, as
+  lower layers shouldn't refer to it.
 
 **Verify**
 - Standard checks (Release build, clang-format, extension loads, log has no new

@@ -22,7 +22,7 @@ Libraries depend strictly in the order `common` → `device` → `scene` → `pl
 - `common`: Common types and general utilities for working within the REAPER SDK and managing generic REAPER state (MIDI ports, project tracks, etc). Not specific to JPRSurf; it could be useful for any REAPER extension.
 - `device`: An interface and concrete implementations for the hardware devices JPRSurf supports. Handles all communication with the device and tracks its current state, with no knowledge of REAPER behavior. Primary classes: `Device` (the generic interface for a hardware device) and `Control` (a logical control on that device that may be read and/or written to).
 - `scene`: Defines how device controls may be mapped to REAPER actions and properties. It knows REAPER properties and abstractions, but does not hard code mappings; they must be configured. Primary classes: `Scene` (the top level mapping between one or more devices and REAPER state) and `View` (a hierarchical set of mappings that may be enabled or disabled independently by configuration or explicit application control).
-- `plugin`: The entry point for the REAPER extension, which configures the Control Surface Integration (CSI) for the connected devices. Primary class: `ControlSurface`, which implements `IReaperControlSurface` and defines the actual mappings and business logic.
+- `plugin`: The entry point for the REAPER extension, which configures the Control Surface Integration (CSI) for the connected devices. Primary class: `PluginSurface`, which implements `IReaperControlSurface` and defines the actual mappings and business logic.
 
 ## Commands
 
@@ -119,7 +119,7 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 
 ## Feature workflow
 
-JPRSurf is moving toward a surface that is entirely driven by a config file, described in `docs/config_model.md`. So that features move toward that goal rather than away from it, a feature is a named, parameterized component below `plugin`, plus its use in JPRSurf's own surface (today the mappings in `ControlSurface`, later its config). `plugin` gains no new state or callbacks: if a feature seems to need one, the missing piece is a component.
+JPRSurf is moving toward a surface that is entirely driven by a config file, described in `docs/config_model.md`. So that features move toward that goal rather than away from it, a feature is a named, parameterized component below `plugin`, plus its use in JPRSurf's own surface (today the mappings in `PluginSurface`, later its config). `plugin` gains no new state or callbacks: if a feature seems to need one, the missing piece is a component.
 
 New features are designed first, then built and reviewed as a series of small changes (CLs):
 - Break the feature into CLs that are each limited to one library where possible, built in dependency order: `common`, then `device`, then `scene`, then `plugin`.

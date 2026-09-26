@@ -23,10 +23,6 @@ namespace jpr {
 
 // A device represents a physical hardware device or external software emulating
 // a device that is represented as a bunch of named controls.
-//
-// Registered devices are detected and connected by the ControlSurface at start
-// up, and the controls of connected devices are exposed for mapping to Reaper
-// parameters and actions.
 class Device {
  public:
   Device(const Device&) = delete;

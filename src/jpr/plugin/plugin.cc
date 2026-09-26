@@ -6,7 +6,7 @@
 #include "jpr/plugin/plugin.h"
 
 #include "absl/log/log.h"
-#include "jpr/plugin/control_surface.h"
+#include "jpr/plugin/plugin_surface.h"
 #include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
@@ -32,7 +32,7 @@ bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& plugin_info) {
     return false;
   }
 
-  if (plugin_info.Register("csurf", ControlSurface::GetControlSurfaceReg()) ==
+  if (plugin_info.Register("csurf", PluginSurface::GetControlSurfaceReg()) ==
       0) {
     LOG(ERROR) << "Failed to register control surface.";
     return false;

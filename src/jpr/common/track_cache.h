@@ -80,8 +80,7 @@ class TrackCache final {
 
   // The last touched track, which is the track that is the root for
   // shift-selection. This may be updated by Track when modified by
-  // ViewMappings, or by the ControlSurface when it receives an update from
-  // REAPER.
+  // ViewMappings, or when REAPER reports a new last touched track.
   Track* GetLastTouchedTrack() const { return last_touched_track_; }
   void SetLastTouchedTrack(Track* track) { last_touched_track_ = track; }
 

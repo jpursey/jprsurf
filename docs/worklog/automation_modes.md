@@ -95,7 +95,7 @@ in, as an `AutoModes` mask:
   mode) read it, re-reading every selected track's `I_AUTOMODE` first if it is
   stale.
 - `OnSelectionChanged()` and `OnAutoModeChanged()` mark it stale. They are named
-  for the REAPER events `ControlSurface` forwards from `SetSurfaceSelected()`
+  for the REAPER events `PluginSurface` forwards from `SetSurfaceSelected()`
   and `SetAutoMode()`, so `TrackCache` decides what each event makes stale, and
   its comments record which REAPER changes arrive as which event. `Refresh()`
   marks it stale too.
@@ -124,9 +124,9 @@ All of this is rows in the `kPolledToggles` table:
   `common`. Active's read function records it, and is polled every run while
   Group is mapped, so overrides set from REAPER count too.
 
-### plugin: mappings (control_surface.cc)
+### plugin: mappings (plugin_surface.cc)
 
-All in `ControlSurface::InitViews()`, from a small `kAutoModeButtons` table:
+All in `PluginSurface::InitViews()`, from a small `kAutoModeButtons` table:
 - Group has a read and write mapping to `kStateAutoOverrideActive`.
 - Each mode button has two pairs of mappings, switched by a
   `ViewMapping::Condition` on `kStateAutoOverrideActive`:
@@ -164,7 +164,7 @@ All in `ControlSurface::InitViews()`, from a small `kAutoModeButtons` table:
   must therefore stay cheap.
 - **Forwarding REAPER events to `TrackCache`**: new state derived from the
   selection or automation modes goes behind `OnSelectionChanged()` /
-  `OnAutoModeChanged()`, so `ControlSurface` needs no change for it.
+  `OnAutoModeChanged()`, so `PluginSurface` needs no change for it.
 
 ## Performance
 

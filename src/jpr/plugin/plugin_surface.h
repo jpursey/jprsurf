@@ -32,15 +32,15 @@ enum class SurfaceMode {
 };
 inline constexpr int kSurfaceModeCount = 2;
 
-class ControlSurface final : private IReaperControlSurface {
+class PluginSurface final : private IReaperControlSurface {
  public:
   // Returns the control surface registration struct used to register this
   // control surface with REAPER.
   static reaper_csurf_reg_t* GetControlSurfaceReg();
 
-  ControlSurface(const ControlSurface&) = delete;
-  ControlSurface& operator=(const ControlSurface&) = delete;
-  ~ControlSurface() override;
+  PluginSurface(const PluginSurface&) = delete;
+  PluginSurface& operator=(const PluginSurface&) = delete;
+  ~PluginSurface() override;
 
  private:
   // Registration functions
@@ -51,7 +51,7 @@ class ControlSurface final : private IReaperControlSurface {
                          const char* init_config_string);
 
   // Construction
-  ControlSurface(std::string type_string, std::string config_string);
+  PluginSurface(std::string type_string, std::string config_string);
 
   // IReaperControlSurface overrides
   const char* GetTypeString() override;

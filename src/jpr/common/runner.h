@@ -85,8 +85,7 @@ class Runner final : public RunRegistry {
   Runner& operator=(const Runner&) = delete;
   ~Runner() = default;
 
-  // Runs all set runnables in added handles. Should be called from
-  // ControlSurface::Run().
+  // Runs all set runnables in added handles.
   void Run() { DoRun(); }
 
  private:

@@ -8,7 +8,7 @@ deliberately says nothing about syntax, which belongs to the config language
 
 It ties together the backlog items that build toward a data driven surface, and
 it seeds the public spec of the config language. Until those items land,
-JPRSurf's surface is still built in C++ by `ControlSurface`, and this doc
+JPRSurf's surface is still built in C++ by `PluginSurface`, and this doc
 describes what that code turns into.
 
 Property names in this doc use the proposed namespaces (`track:name`), and are
@@ -48,7 +48,7 @@ otherwise illustrative. The **Today** notes use the current C++ names.
 | Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                         |
 | Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                           |
 | Templates  | Named, parameterized sets of mappings                                        | `AddTrackStripMappings()`                      |
-| Components | C++ behavior a config declares: exclusive groups, anchors, references, ...   | `ControlSurface` state and callbacks           |
+| Components | C++ behavior a config declares: exclusive groups, anchors, references, ...   | `PluginSurface` state and callbacks            |
 | Settings   | Surface-wide values                                                          | `TrackCache::SetSurfaceFilter()`               |
 
 ## Devices
@@ -485,7 +485,7 @@ with a name and parameters (see [Declared properties](#declared-properties)). It
 owns its state, provides properties (including references, which views can be
 bound to), and enforces its own rules, so a config can't use it wrong.
 
-These are the components needed to express what `ControlSurface` does today.
+These are the components needed to express what `PluginSurface` does today.
 Apart from navigation, none exist yet as components. The backlog items in
 [Getting there](#getting-there) build them, one at a time and with no change in
 behavior.
@@ -802,7 +802,7 @@ when it is built.
 
 What becomes of the plugin's code:
 
-| `ControlSurface` today                                                                      | In the model                                                     |
+| `PluginSurface` today                                                                       | In the model                                                     |
 | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `ConnectDevices()`                                                                          | Devices                                                          |
 | `has_xtouch` checks, device prefixes, and the strip loops                                   | Widgets and repeated views                                       |

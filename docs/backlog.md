@@ -183,7 +183,7 @@ The last of the plugin's surface state and callbacks:
   `ApplySendRelease()`.
 - **Mode lights:** mappings, using fixed values and conditions.
 
-After this, `ControlSurface` has no surface state or callbacks left: only host
+After this, `PluginSurface` has no surface state or callbacks left: only host
 plumbing (see [extension_host.md](worklog/extension_host.md)) and its
 mappings, which *Build the scene from a SurfaceSpec* turns into data.
 
@@ -468,7 +468,7 @@ But a mapping meant to fire with a modifier held "whatever else is held" needs
 a copy for every combination of the other modifiers on the control. Today that
 is the Send/Receive pick on a strip's select button, which needs a second
 mapping for Send held along with a select anchor (`InitViews()` in
-`control_surface.cc`).
+`plugin_surface.cc`).
 
 A mapping could also list modifiers it ignores, so the pick is one mapping that
 requires `mod:send_hold` and ignores `mod:select_anchor`. It is purely
