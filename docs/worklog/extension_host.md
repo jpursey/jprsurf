@@ -1,252 +1,136 @@
 # Extension Host
 
-Using `common` correctly takes a checklist that every extension must follow
-today: forward `SetTrackListChange()` and defer `TrackCache::Refresh()` to the
-next run, poll `TrackCache::RefreshVisibility()` every second, forward selection
-and automation mode changes, set the last touched track, and call
-`ContinuousUndo::Update()` every run. The plugin's control surface does all of
-that by hand, alongside the generic `Extended()` parameter decoding.
+`ControlSurface`, in `common`, is the `IReaperControlSurface` REAPER creates for
+JPRSurf. It does all the plumbing that `common` needs from REAPER's
+notifications, decodes REAPER's calls, and passes a small set of events on to a
+`ControlSurfaceListener`. `PluginSurface`, in `plugin`, is that listener, and
+holds only what is specific to JPRSurf: its devices, scene, and modes.
 
-`ControlSurface`, in `common`, takes all of it over. It is the
-`IReaperControlSurface` REAPER creates, does the plumbing itself, and passes a
-small set of events on to a `ControlSurfaceListener`. The plugin's surface,
-renamed `PluginSurface`, is that listener, and keeps only what is specific to
-JPRSurf.
+Before this, the plugin's surface did the plumbing by hand, as a checklist any
+extension using `common` had to follow. Now nothing that uses `common` has to
+remember it.
 
-REAPER also lets the user add JPRSurf more than once, and nothing defines what
-happens then. `ControlSurface` now allows only one instance: a second one fails
-to initialize, with an error saying why, and leaves the first untouched.
+## Behavior
 
-Otherwise, there is no change in behavior.
+The surface behaves as it did, except:
+- JPRSurf can only be added once. Adding it again in Preferences >
+  Control/OSC/web shows a message in REAPER's console (and the log) saying it
+  is already running, and REAPER adds nothing. The first instance is left
+  untouched. Editing JPRSurf's settings still works.
+- The last touched track is recorded in `TrackCache` even with no X-Touch
+  connected (it used to be skipped).
+- `ContinuousUndo::Update()` runs after MIDI output is sent, rather than just
+  before.
 
-## Design
+## REAPER facts
 
-### Names
+Found from the `ControlSurface created` and `ControlSurface destroyed` log
+lines, as the SDK doesn't document them:
+- Editing a surface's entry in preferences and pressing OK in its dialog
+  destroys the old instance, then creates the new one, within the same
+  millisecond. The X-Touch goes blank and comes back as the old instance clears
+  it and the new one draws it.
+- Pressing OK in preferences with nothing changed doesn't recreate the instance
+  (Apply is disabled then).
+- Exiting REAPER destroys the instance before the extension unloads.
+- When the `create` callback returns null, REAPER doesn't add the entry to the
+  list, and shows no error of its own.
 
-- `ControlSurface` (`common/control_surface.h/.cc`) is REAPER's own term: it is
-  the `IReaperControlSurface`.
-- `ControlSurfaceListener` (same files) is the interface for the events a
-  surface's own logic needs.
-- `PluginSurface` (`plugin/plugin_surface.h/.cc`) is the class currently named
-  `ControlSurface` in `plugin`: JPRSurf's scene, devices, and modes. It
-  implements `ControlSurfaceListener`.
-- Both `ControlSurface` classes are in namespace `jpr`, so the plugin's class is
-  renamed first, in its own CL. Adding `jpr::ControlSurface` to `common` while
-  `plugin` still defines one would violate the one definition rule, which the
-  linker may not catch.
+## Structure
 
-### ControlSurfaceListener
+### common: ControlSurface and ControlSurfaceListener (control_surface.h/.cc)
 
-```
-class ControlSurfaceListener {
- public:
-  virtual ~ControlSurfaceListener() = default;
+`ControlSurfaceListener` has only the events a surface needs, each doing nothing
+by default. More are added when something needs them.
 
-  // Events, which do nothing by default.
-  virtual void OnRun(absl::Time now);
-  virtual void OnTracksChanged();
-  virtual void OnSelectionChanged();
-  virtual void OnLastTouchedTrackChanged(Track* track);
+| Event                         | When                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| `OnRun(now)`                  | Every run, after `TrackCache` is up to date                               |
+| `OnTracksChanged()`           | Before `OnRun()`, when the track list or any track's visibility changed   |
+| `OnSelectionChanged()`        | REAPER's `SetSurfaceSelected()`, which may come once per track            |
+| `OnLastTouchedTrackChanged()` | REAPER reports a new last touched track (null if not yet in `TrackCache`) |
+| `GetConfig()`                 | REAPER asks for the config string to save in its preferences              |
 
-  // The config string REAPER saves in its preferences for this surface.
-  virtual std::string GetConfig() const;
-};
-```
+`ControlSurface` is `final`, and implements `IReaperControlSurface` privately:
+- `Register(plugin_info, Type)` registers one surface type: its type string,
+  description, and a function that creates the listener from the saved config
+  string. The type and REAPER's registration struct are static members.
+- `Create()` makes the listener, and the surface owns it. The destructor
+  destroys the listener first, so it can't outlive the surface, and there is no
+  `SetListener()` to remember. A null listener is a programming error, and
+  `CHECK`s.
+- Every REAPER call and `Extended()` call is decoded and `VLOG`ged as before,
+  each in its own private member function, so any of them can grow real work
+  later. Only the calls with a listener event are passed on.
 
-- It has only the events `PluginSurface` needs today, named for what happened
-  rather than after REAPER's calls. More are added when something needs them.
-- `OnTracksChanged()` covers both the track list and track visibility (below).
-- `OnLastTouchedTrackChanged()` gets the `Track*` that `ControlSurface` looked up
-  to set as the last touched track (null if `TrackCache` doesn't know it yet, as
-  today).
+The plumbing, and when it runs relative to the listener:
 
-### ControlSurface
-
-```
-class ControlSurface final : private IReaperControlSurface {
- public:
-  struct Type {
-    const char* type_string;  // REAPER's ID for the surface type.
-    const char* description;  // Shown in REAPER's preferences.
-    std::unique_ptr<ControlSurfaceListener> (*create_listener)(
-        std::string_view config);
-  };
-
-  // Registers the control surface type with REAPER, so the user can add it in
-  // preferences.
-  static bool Register(reaper_plugin_info_t& plugin_info, const Type& type);
-};
-```
-
-- `Plugin::Load()` calls `Register()` with JPRSurf's type. When REAPER creates
-  the surface, it calls `create_listener` with the config string, and owns the
-  listener it returns.
-- The listener is destroyed first in `ControlSurface`'s destructor, so it can't
-  outlive the surface or be called while half built, and there is no
-  `SetListener()` for a caller to remember.
-- It implements all of `IReaperControlSurface`, privately. The type and
-  description come from `Type`, and the config string from the listener.
-- `Extended()` decodes every call as the plugin's surface does today, including
-  the `VLOG`s and the null parameter checks, and so do the other REAPER calls.
-  Only the calls the listener has an event for are passed on.
-- One listener per surface. More than one can be added later if something
-  needs it.
-
-### When the plumbing runs
-
-Each piece runs at the same point relative to the listener's work as it does
-today:
-
-| REAPER call              | Plumbing                                   | Then, on the listener           |
-| ------------------------ | ------------------------------------------ | ------------------------------- |
-| `SetTrackListChange()`   | Mark the track list changed                | Nothing yet (see `Run()`)       |
-| `SetSurfaceSelected()`   | `TrackCache::OnSelectionChanged()`         | `OnSelectionChanged()`          |
-| `SetAutoMode()`          | `TrackCache::OnAutoModeChanged()`          | None                            |
-| Last touched track       | `TrackCache::SetLastTouchedTrack()`        | `OnLastTouchedTrackChanged()`   |
-| Anything else            | None                                       | None                            |
-| `Run()`                  | See below                                  |                                 |
+| REAPER call            | Plumbing                            | Then, on the listener         |
+| ---------------------- | ----------------------------------- | ----------------------------- |
+| `SetTrackListChange()` | Mark the track list changed         | Nothing yet (see `Run()`)     |
+| `SetSurfaceSelected()` | `TrackCache::OnSelectionChanged()`  | `OnSelectionChanged()`        |
+| `SetAutoMode()`        | `TrackCache::OnAutoModeChanged()`   | None                          |
+| Last touched track     | `TrackCache::SetLastTouchedTrack()` | `OnLastTouchedTrackChanged()` |
 
 `Run()`, in order:
-1. If the track list changed, `TrackCache::Refresh()` (logging its duration, as
-   today), which also restarts the visibility poll. Otherwise, if a second has
-   passed, `TrackCache::RefreshVisibility()`.
-2. If either one changed anything, `OnTracksChanged()`.
+1. If the track list changed, `TrackCache::Refresh()`, which also restarts the
+   visibility poll. Otherwise, once a second, `TrackCache::RefreshVisibility()`
+   (REAPER reports no visibility changes).
+2. `OnTracksChanged()`, if either changed anything. After a refresh, the
+   "Refreshed TrackCache" log line gives the duration, including the listener's
+   response.
 3. `OnRun(now)`.
 4. `ContinuousUndo::Update(now)`.
-5. The `Run()` performance log line, covering the whole run, as it does today.
+5. The `Run()` performance log line every 5 seconds, covering the whole run.
 
-Events are passed on immediately rather than deferred, exactly as today. REAPER
-can call them in the middle of `OnRun()` (for example, when the surface selects
-a track), so a listener must still only record what they mean, and act on it
-from `OnRun()`, as the plugin's surface already does with
-`mode_buttons_changed_`. The last touched track is set before
-`OnLastTouchedTrackChanged()` rather than after, which is safe: nothing that
-`PluginSurface` does from it reads the last touched track.
+Events are passed on as REAPER sends them, not deferred. REAPER can send them in
+the middle of `OnRun()` (for example, when the surface selects a track), so a
+listener only records what they mean, and acts on it from `OnRun()`.
 
-**One event for the track list and visibility.** The plugin's surface does the
-same thing for both (`RefreshTrackViews()` and marking the mode buttons
-changed). Its extra check on a track list change, leaving Send/Receive mode if
-its track was deleted, does nothing on a visibility change, as the track still
-exists. So `OnTracksChanged()` covers both, and the plugin's surface keeps no
-flags of its own for them (`track_list_changed_` and `last_visibility_time_`
-go).
+**One instance.** `TrackCache`, `ContinuousUndo`, and the modifier state hold
+REAPER state for the whole extension, so two instances would drive them (and
+the same hardware) twice. The static `s_instance_` is set by the constructor
+and cleared by the destructor, which also `CHECK`s there is only one.
+`Create()` refuses while an instance exists, before creating the listener, as
+creating a `PluginSurface` opens the MIDI ports the first one is using. The
+message says to remove any extra entries, which can only come from a REAPER
+config saved before the check.
 
-### Only one instance
+**Brittleness:** while the listener is being destroyed, the surface's pointer
+to it is already null, so a REAPER notification sent from inside the
+listener's destructor would crash. `PluginSurface`'s destructor only
+deactivates the scene and sends MIDI, which never causes one.
 
-`TrackCache`, `ContinuousUndo`, and the modifier state are singletons, and the
-plumbing assumes it is the only thing driving them. Two instances would refresh
-and update them twice, and would both try to drive the same hardware. So
-`ControlSurface` allows one instance at a time:
-- It keeps a pointer to the live instance, set on construction and cleared on
-  destruction.
-- REAPER's `create` callback refuses while one exists: it logs an error saying
-  JPRSurf is already running and only one is supported, and returns null
-  without touching the first instance. It checks before creating the listener,
-  as creating a `PluginSurface` opens the MIDI ports the first one is using.
-- The error is also shown in REAPER's console (`ShowConsoleMsg()`), as the log
-  file isn't somewhere the user would look after adding a surface.
+### plugin: PluginSurface (plugin_surface.h/.cc)
 
-**Found in CL3** (from the `ControlSurface` created and destroyed log lines):
-- Editing JPRSurf's entry in preferences and pressing OK in its dialog
-  destroys the old instance, and then creates the new one, in the same
-  millisecond. The X-Touch goes blank and comes back as the old instance clears
-  it and the new one draws it. So refusing while an instance exists doesn't
-  break editing.
-- Pressing OK in preferences with nothing changed doesn't recreate the
-  instance (Apply is disabled then).
-- Exiting REAPER destroys the instance before the extension unloads.
-- When `create` returns null, REAPER doesn't add the entry to the list, and
-  shows no error of its own, so the console message is the only feedback. A
-  second entry can then only come from a REAPER config saved before this
-  check, so the message also says to remove any extras from the list.
+- `PluginSurface` implements `ControlSurfaceListener` privately. Its static
+  `Register()` passes JPRSurf's type to `ControlSurface::Register()`, and
+  `Plugin::Load()` calls it. Its static `Create()` converts the new surface to
+  its private base itself, as `unique_ptr`'s converting constructor can't.
+- `OnRun()` is the old `Run()` without the plumbing: mode buttons, the device,
+  MIDI input, scene, and MIDI output runners, and the deferred mode and Send
+  button handling.
+- `OnTracksChanged()` refreshes the track views, marks the mode buttons changed,
+  and leaves Send/Receive mode if its track was deleted. That check does
+  nothing on a visibility change, as the track still exists, which is why one
+  event covers both.
+- `OnSelectionChanged()` marks the mode buttons changed.
+- `OnLastTouchedTrackChanged()` scrolls the track list to the track in Track
+  mode, or follows it in Send/Receive mode.
 
-## CLs
+Along the way, `plugin/jprsurf.cc` became `plugin/dll_main.cc`, and comments in
+`common` and `device` that named the plugin's class became layer-neutral.
 
-### CL0 [x] plugin: rename ControlSurface to PluginSurface
+## Building blocks
 
-Depends on: nothing.
+- **`ControlSurface` (common/control_surface.h)**: the whole REAPER control
+  surface for any extension built on `common`. Register a `Type` from the
+  extension's entry point, and implement `ControlSurfaceListener` for the
+  surface's own logic. `common`'s state stays current without the extension
+  doing anything, and only one instance can exist.
 
-- `plugin/control_surface.h/.cc` become `plugin/plugin_surface.h/.cc`, and the
-  class becomes `PluginSurface`. Nothing else changes.
-- References to the plugin's class elsewhere follow: `plugin.cc`, the
-  worklogs, `config_model.md`, the backlog, and `CLAUDE.md`. The comments in
-  `common` and `device` that named it no longer name any class in `plugin`, as
-  lower layers shouldn't refer to it.
+## Performance
 
-**Verify**
-- Standard checks (Release build, clang-format, extension loads, log has no new
-  errors). No smoke test needed, as only names changed.
-- No references to the old class name remain, other than the new `common`
-  class in this plan.
-
-### CL1 [x] common: ControlSurface and ControlSurfaceListener
-
-Depends on: CL0.
-
-- `common/control_surface.h/.cc`, as above (without the single instance check,
-  which is CL3), added to `jpr_common_SOURCE`.
-- `kVisibilityInterval`, the `Run()` performance log, `CheckParamValue()`, and
-  `JPR_GET_PARAM_VALUE` are copied here from `plugin_surface.cc`, along with
-  the decoding and `VLOG`s of every REAPER call. CL2 removes the originals.
-- `Register()` accepts one type, which `Create()` uses for every instance.
-- Unused, so no visible change.
-
-**Verify**
-- Standard checks. No smoke test needed, as nothing uses it yet.
-- Covered by CL2.
-
-### CL2 [x] plugin: PluginSurface is a ControlSurfaceListener
-
-Depends on: CL1.
-
-- `PluginSurface` implements `ControlSurfaceListener` (privately, as it did
-  `IReaperControlSurface`): `OnRun()`, `OnTracksChanged()`,
-  `OnSelectionChanged()`, `OnLastTouchedTrackChanged()`, and `GetConfig()`.
-  Its constructor takes the config string.
-- `PluginSurface::Register()` registers JPRSurf's type (its type string,
-  description, and `Create()`) with `ControlSurface::Register()`, and
-  `Plugin::Load()` calls it.
-- Removed from `PluginSurface`: `GetControlSurfaceReg()`, `ShowConfig()`, all
-  the `IReaperControlSurface` overrides and `Extended()` stubs,
-  `type_string_`, `config_string_`, `track_list_changed_`,
-  `last_visibility_time_`, the performance log members, and the direct calls
-  into `TrackCache` and `ContinuousUndo` for plumbing.
-
-**Verify**
-- Standard checks, including the full smoke test.
-- The `Run()` log line's avg and max are unchanged from before the change.
-- Track list: add, delete, and reorder tracks, and switch project tabs. The
-  strips follow, "Refreshed TrackCache" is logged once per change, and deleting
-  the Send/Receive mode track goes back to Track mode.
-- Visibility: hide and show a track in the mixer. The strips follow within a
-  second.
-- Selection: the Send/Receive mode button lights and goes out as a track with
-  routes is selected and unselected.
-- Automation mode: the automation lights follow a track's mode set from its
-  TCP button.
-- Last touched track: touching a track in REAPER scrolls the bank to it in Track
-  mode, and switches the shown track in Send/Receive mode. Shift + select on the
-  surface still selects a range from it.
-- Continuous undo: moving a send fader on the surface still adds one undo point
-  after it stops.
-- Removing JPRSurf in preferences clears the X-Touch, and adding it again
-  brings it back. REAPER exits cleanly, clearing the X-Touch.
-
-### CL3 [x] common: refuse a second instance
-
-Depends on: CL2.
-
-- The single instance check in `ControlSurface`, as above.
-- User guide: JPRSurf can only be added once.
-
-**Verify**
-- Standard checks, including the full smoke test.
-- Before writing the check: edit JPRSurf's entry in preferences and press OK,
-  and press Apply with no changes. Record whether REAPER destroys the old
-  instance before creating the new one. (Done: see Found in CL3.)
-- Editing JPRSurf's entry and pressing OK still recreates it, with no error.
-- Add a second JPRSurf in preferences. It fails with the error in the console
-  and the log, the first keeps working, and REAPER doesn't crash. Record what
-  REAPER shows and whether the entry stays in the list. (Done: see Found in
-  CL3. The entry isn't added, so the restart checks that followed don't
-  apply.)
+On an 81-track project, the steady state `Run()` averages ~30us, with a max
+under ~110us. A track list refresh, including `PluginSurface`'s response, takes
+~140–155us. The listener adds one virtual call per run and per notification.
