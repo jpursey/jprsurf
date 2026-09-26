@@ -28,7 +28,10 @@ namespace jpr {
 // and is responsible for ensuring synchronization.
 class Scene final {
  public:
-  explicit Scene(std::string_view name);
+  // The track filter decides which tracks the scene's views show, and which
+  // tracks its track actions include in ranges.
+  explicit Scene(std::string_view name,
+                 TrackFilter track_filter = TrackFilter::kMcp);
   Scene(const Scene&) = delete;
   Scene& operator=(const Scene&) = delete;
   ~Scene();
@@ -43,9 +46,6 @@ class Scene final {
   View* GetRootView() const { return root_view_.get(); }
 
   // Tracks
-  //
-  // The filter decides which tracks the scene's views show, and which tracks
-  // its track actions include in ranges.
   TrackFilter GetTrackFilter() const { return track_actions_.GetTrackFilter(); }
   TrackActions& GetTrackActions() { return track_actions_; }
 

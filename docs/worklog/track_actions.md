@@ -380,7 +380,7 @@ Depends on: CL2.
   releasing the button, by banking, and by a mode change.
 - Send/Receive mode follows the last touched track, and Track mode reveals it.
 
-### CL4 [ ] scene: The scene owns its filter and anchors
+### CL4 [x] scene: The scene owns its filter and anchors
 
 Depends on: CL3.
 

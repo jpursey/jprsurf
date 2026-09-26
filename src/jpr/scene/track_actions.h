@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <iterator>
+
 #include "jpr/common/anchor.h"
 #include "jpr/common/track.h"
 
@@ -70,8 +72,11 @@ class TrackActions final {
 
   TrackFilter GetTrackFilter() const { return filter_; }
 
-  // The anchor for a property's action.
-  Anchor<Track>& GetAnchor(TrackBoolProperty property);
+  // The anchor for a property's action. An anchor held on a track that no
+  // longer exists is treated as not held.
+  Anchor<Track>& GetAnchor(TrackBoolProperty property) {
+    return anchors_[static_cast<int>(property)];
+  }
 
   // Runs the action for selecting, toggling, or changing the property of the
   // track, with the modifiers above. UiToggle() is for mute, solo, and record
@@ -91,6 +96,7 @@ class TrackActions final {
                 TrackBoolProperty property);
 
   TrackFilter filter_;
+  Anchor<Track> anchors_[std::size(kTrackBoolProperties)];
 };
 
 }  // namespace jpr
