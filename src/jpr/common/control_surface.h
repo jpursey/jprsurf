@@ -79,6 +79,13 @@ class ControlSurfaceListener {
 //   is the last touched track.
 // - ContinuousUndo is updated after every run.
 // - A performance summary of Run() is logged every few seconds.
+//
+// Only one instance may exist at a time, as the rest of the common library
+// holds REAPER state for the whole extension, and two instances would drive it
+// (and the same hardware) twice. If the user adds the surface again, the new
+// one is refused with an error, and the first is left untouched. REAPER
+// destroys the old instance before creating its replacement when the user
+// edits the surface's settings, so that still works.
 //==============================================================================
 
 class ControlSurface final : private IReaperControlSurface {
@@ -180,6 +187,9 @@ class ControlSurface final : private IReaperControlSurface {
   // REAPER.
   static Type s_type_;
   static reaper_csurf_reg_t s_reg_;
+
+  // The one instance that exists, if any.
+  static ControlSurface* s_instance_;
 
   std::unique_ptr<ControlSurfaceListener> listener_;
   std::string config_string_;  // Holds the result of GetConfigString().

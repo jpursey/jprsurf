@@ -141,18 +141,24 @@ and update them twice, and would both try to drive the same hardware. So
   destruction.
 - REAPER's `create` callback refuses while one exists: it logs an error saying
   JPRSurf is already running and only one is supported, and returns null
-  without touching the first instance.
+  without touching the first instance. It checks before creating the listener,
+  as creating a `PluginSurface` opens the MIDI ports the first one is using.
 - The error is also shown in REAPER's console (`ShowConsoleMsg()`), as the log
   file isn't somewhere the user would look after adding a surface.
 
-**To confirm in CL3:**
-- What REAPER does with null from `create`: whether it shows its own error,
-  keeps the entry in the list, and doesn't crash.
-- Whether REAPER creates a replacement before destroying the old instance when
-  the user edits JPRSurf's entry in preferences (or presses OK or Apply). If it
-  does, refusing would break that edit, and the check has to be different, for
-  example refusing only while the other instance still has a listener that has
-  run.
+**Found in CL3** (from the `ControlSurface` created and destroyed log lines):
+- Editing JPRSurf's entry in preferences and pressing OK in its dialog
+  destroys the old instance, and then creates the new one, in the same
+  millisecond. The X-Touch goes blank and comes back as the old instance clears
+  it and the new one draws it. So refusing while an instance exists doesn't
+  break editing.
+- Pressing OK in preferences with nothing changed doesn't recreate the
+  instance (Apply is disabled then).
+- Exiting REAPER destroys the instance before the extension unloads.
+- When `create` returns null, REAPER doesn't add the entry to the list, and
+  shows no error of its own, so the console message is the only feedback. A
+  second entry can then only come from a REAPER config saved before this
+  check, so the message also says to remove any extras from the list.
 
 ## CLs
 
@@ -226,24 +232,21 @@ Depends on: CL1.
 - Removing JPRSurf in preferences clears the X-Touch, and adding it again
   brings it back. REAPER exits cleanly, clearing the X-Touch.
 
-### CL3 [ ] common: refuse a second instance
+### CL3 [x] common: refuse a second instance
 
 Depends on: CL2.
 
-- The single instance check in `ControlSurface`, as above, adjusted for what
-  the first two checks below find.
+- The single instance check in `ControlSurface`, as above.
 - User guide: JPRSurf can only be added once.
 
 **Verify**
 - Standard checks, including the full smoke test.
-- Before writing the check, with temporary logging of `ControlSurface`
-  construction and destruction: edit JPRSurf's entry in preferences and press
-  OK, and press Apply with no changes. Record whether REAPER destroys the old
-  instance before creating the new one. Record the findings here.
+- Before writing the check: edit JPRSurf's entry in preferences and press OK,
+  and press Apply with no changes. Record whether REAPER destroys the old
+  instance before creating the new one. (Done: see Found in CL3.)
+- Editing JPRSurf's entry and pressing OK still recreates it, with no error.
 - Add a second JPRSurf in preferences. It fails with the error in the console
   and the log, the first keeps working, and REAPER doesn't crash. Record what
-  REAPER shows and whether the entry stays in the list.
-- Restart REAPER with both entries still listed: the first one works, and the
-  second fails the same way.
-- Remove the first entry, keeping the refused one, and restart REAPER: the
-  remaining one now works.
+  REAPER shows and whether the entry stays in the list. (Done: see Found in
+  CL3. The entry isn't added, so the restart checks that followed don't
+  apply.)

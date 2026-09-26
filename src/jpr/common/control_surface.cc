@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -20,6 +21,7 @@
 #include "absl/types/span.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
+#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 
@@ -39,6 +41,7 @@ constexpr absl::Duration kVisibilityInterval = absl::Seconds(1);
 
 ControlSurface::Type ControlSurface::s_type_ = {};
 reaper_csurf_reg_t ControlSurface::s_reg_ = {};
+ControlSurface* ControlSurface::s_instance_ = nullptr;
 
 #define VLOG_REAPER() VLOG(1) << "REAPER: "
 
@@ -73,6 +76,19 @@ IReaperControlSurface* ControlSurface::Create(const char* type_string,
                 << (type_string ? type_string : "(null)")
                 << ", config_string=\"" << (config_string ? config_string : "")
                 << "\")";
+
+  // Refuse before creating the listener, which may claim resources (such as
+  // MIDI ports) that the existing instance is using.
+  if (s_instance_ != nullptr) {
+    const std::string message = absl::StrCat(
+        s_type_.description,
+        " is already running, and only one can be added. If it is listed more "
+        "than once in Preferences > Control/OSC/web, remove the extras.");
+    LOG(ERROR) << message;
+    ShowConsoleMsg(absl::StrCat(message, "\n").c_str());
+    return nullptr;
+  }
+
   return new ControlSurface(
       s_type_.create_listener(absl::NullSafeStringView(config_string)));
 }
@@ -90,12 +106,16 @@ ControlSurface::ControlSurface(std::unique_ptr<ControlSurfaceListener> listener)
     : listener_(std::move(listener)) {
   CHECK(listener_ != nullptr)
       << "No listener created for control surface type " << s_type_.type_string;
+  CHECK(s_instance_ == nullptr) << "Only one ControlSurface may exist";
+  s_instance_ = this;
   LOG(INFO) << "ControlSurface created";
 }
 
 ControlSurface::~ControlSurface() {
-  // Destroy the listener explicitly, so it is gone before this is logged.
+  // Destroy the listener explicitly, so it is gone before this is logged, and
+  // before another instance can be created.
   listener_.reset();
+  s_instance_ = nullptr;
   LOG(INFO) << "ControlSurface destroyed";
 }
 

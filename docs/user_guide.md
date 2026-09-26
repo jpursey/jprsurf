@@ -67,6 +67,9 @@ Control Surface** from the control surface mode list:
 There is nothing to configure - JPRSurf has no settings in this dialog. It finds
 the hardware itself, and the surface should light up as soon as you click OK.
 
+It can only be added once. Adding it again shows a message in REAPER's console
+saying it is already running, and nothing is added.
+
 JPRSurf locates the units by their MIDI port names, which must be exactly:
 
 | Device           | Port name     |
