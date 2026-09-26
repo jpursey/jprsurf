@@ -26,30 +26,6 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Extension host in common
-
-- **Layers:** common, plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** none
-
-Using `common` correctly takes a checklist that every extension must follow:
-forward `SetTrackListChange()` and defer `TrackCache::Refresh()` to the next
-run, poll `RefreshVisibility()` every second, forward selection and automation
-mode changes, set the last touched track, and call `ContinuousUndo::Update()`
-every run. The `Extended()` parameter decoding is generic too, but lives in
-`ControlSurface`.
-
-A base class in `common` could implement `IReaperControlSurface`, do all of that
-plumbing, and expose a small set of targeted overrides (run, track list changed,
-visibility changed, selection changed, and so on) that do nothing by default.
-An extension that isn't a control surface could still get REAPER's
-notifications by registering a hidden instance of it. The design needs to
-settle when the plumbing runs relative to the surface's own run, and how it
-stays done once per frame if more than one instance exists (see *More than one
-JPRSurf instance*).
-
 ## Move surface interaction policy out of common
 
 - **Layers:** common, scene, plugin
@@ -208,8 +184,8 @@ The last of the plugin's surface state and callbacks:
 - **Mode lights:** mappings, using fixed values and conditions.
 
 After this, `ControlSurface` has no surface state or callbacks left: only host
-plumbing (see *Extension host in common*) and its mappings, which *Build the
-scene from a SurfaceSpec* turns into data.
+plumbing (see [extension_host.md](worklog/extension_host.md)) and its
+mappings, which *Build the scene from a SurfaceSpec* turns into data.
 
 ## Named command IDs
 
@@ -445,39 +421,6 @@ is the design work.
 Tear down the scene and build a new one from the config file, perhaps from a
 REAPER action. This makes iterating on a config much faster. It should be cheap
 if nothing in the plugin outlives the scene.
-
-## Refuse a second JPRSurf instance
-
-- **Layers:** plugin
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** none
-
-REAPER lets the user add JPRSurf more than once, and nothing defines what
-happens then. Until *More than one JPRSurf instance* makes it well defined, a
-second instance should fail to initialize, with an error saying why, and leave
-the first instance untouched. This is the trivially valid version of that
-design.
-
-## More than one JPRSurf instance
-
-- **Layers:** common, scene, plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** *Extension host in common*, *Refuse a second JPRSurf instance*
-- **Background:** none
-
-Allow more than one JPRSurf instance, perhaps with different configs. Whatever
-the design, the behavior must be well defined when instances conflict: two
-configs fighting over the same device controls (or MIDI ports), or the same
-REAPER state or actions. Either such a set of configs is invalid and fails to
-initialize with a clear error, or the design says exactly how they share, which
-is more complex.
-
-`TrackCache`, `ContinuousUndo`, and the global modifier state are singletons,
-so each is a decision: shared across instances (with the plumbing done once per
-frame), or per instance. Worth deciding on purpose rather than by accident.
 
 ## Generic MIDI devices defined in config
 

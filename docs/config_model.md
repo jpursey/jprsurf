@@ -614,7 +614,7 @@ These are needed, but a config never names them:
   views (`RefreshTrackViews()` and `EnsureTrackIsVisible()` today).
 - **Host plumbing**: forwarding REAPER's notifications to `TrackCache`, polling
   track visibility, `ContinuousUndo`, and the `Run()` performance log
-  (*Extension host in common*).
+  ([extension_host.md](worklog/extension_host.md)).
 
 ## The escape hatch: REAPER commands
 
