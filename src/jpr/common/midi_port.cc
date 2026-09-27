@@ -157,9 +157,7 @@ void MidiIn::Poll(const RunTime& time) {
 namespace {
 
 // Supported 7-bit CC numbers
-bool IsSupportedCc(uint8_t cc) {
-  return cc < 120;
-}
+bool IsSupportedCc(uint8_t cc) { return cc < 120; }
 
 // A note-on with velocity 0 is treated as a note-off per the MIDI spec.
 bool IsNoteOn(const MidiMessage& message) {
@@ -562,7 +560,8 @@ void MidiOut::Run(const RunTime& time) {
         state.queued = type->CreateState(state.pending_messages[0]);
         SendSysexMessage(state.pending_messages[0]);
         // Process remaining messages through the new state.
-        for (size_t i = 1; i < state.pending_messages.size(); ++i) {
+        const int count = static_cast<int>(state.pending_messages.size());
+        for (int i = 1; i < count; ++i) {
           if (state.queued->Update(state.pending_messages[i])) {
             SendSysexMessage(state.pending_messages[i]);
           }

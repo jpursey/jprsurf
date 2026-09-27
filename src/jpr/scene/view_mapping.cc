@@ -1275,7 +1275,7 @@ void ViewMapping::WriteControl() {
 }
 
 int ViewMapping::ResolveMode() const {
-  for (size_t i = 0; i < mode_properties_.size(); ++i) {
+  for (int i = 0; i < static_cast<int>(mode_properties_.size()); ++i) {
     ViewProperty::Value value = mode_properties_[i]->GetValue();
     for (const auto& [map_value, map_mode] :
          config_.write.mode_overrides[i].value_to_mode) {
