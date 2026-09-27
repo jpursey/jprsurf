@@ -26,17 +26,24 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Fixed write values
+## Constant properties
 
 - **Layers:** scene
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Mappings)
+- **Background:** [config_model.md](config_model.md) (Properties, Mappings)
 
-A write mapping can write a constant instead of a property, such as a light
-that is always on in a view. The mode button lights use it once modes are
-exclusive groups.
+A `const:` property has a value that never changes, and its type comes from
+the value. The scene creates it the first time its name is used, like `cmd:`
+and `state:` properties, so mapping a fixed value (a light that is always on in
+a view, or a fixed label on a display) is an ordinary mapping to a property,
+rather than a special kind of mapping. A config or `SurfaceSpec` can still
+write the value directly, which becomes a `const:` name when the scene is
+built. This needs a spelling for each type in the name (true and false,
+numbers, quoted text, colors), and the value types that make sense (toggle,
+normalized, text, and color, at least). The mode button lights use it once
+modes are exclusive groups.
 
 ## View subjects, lists, and references
 
@@ -98,7 +105,7 @@ those.
 - **Layers:** device, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *Fixed write values*, *View subjects, lists, and
+- **Depends on:** *Constant properties*, *View subjects, lists, and
   references*, and *Properties declared on views, and track anchors*
 - **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
   Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md)
@@ -119,7 +126,7 @@ The last of the plugin's surface state and callbacks:
   fires on release if the press was short and the control's held modifier
   wasn't used, replacing `send_press_mode_`, `send_press_time_`, and
   `ApplySendRelease()`.
-- **Mode lights:** mappings, using fixed values and conditions.
+- **Mode lights:** mappings, using `const:` properties and conditions.
 
 After this, `PluginSurface` has no surface state or callbacks left: only host
 plumbing (see [extension_host.md](worklog/extension_host.md)) and its

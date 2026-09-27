@@ -210,6 +210,7 @@ says what kind of property it is and what its scope is:
 | `cmd:`    | REAPER commands: a toggle if REAPER reports a toggle state, otherwise an action | Global         | `cmd:40029` (Undo)                                                  |
 | `state:`  | REAPER state: the polled state rows, the timeline, the rulers, and references   | Global         | `state:can_redo`, `state:timeline_position`, `state:selected_track` |
 | `mod:`    | Modifiers, built in and declared                                                | Global         | `mod:shift`, `mod:send_hold`                                        |
+| `const:`  | Values that never change, with their type from the value                        | Global         | `const:true`, `const:"Track"`                                       |
 | `track:`  | The view's subject, when it is a track                                          | View           | `track:name`, `track:has_routes`                                    |
 | `route:`  | The view's subject, when it is a send or receive                                | View           | `route:volume`, `route:other_track`                                 |
 | `view:`   | The view itself: its list, and navigation                                       | View           | `view:bank_inc`, `view:child_route_toggle`                          |
@@ -222,7 +223,7 @@ all REAPER's global state.
 
 **Lookup.** The namespace says where a name is looked up, so there is no
 guessing between a view and the scene:
-- `cmd:`, `state:`, and `mod:` are global.
+- `cmd:`, `state:`, `mod:`, and `const:` are global.
 - `track:`, `route:`, and `view:` resolve against the view the mapping,
   condition, or mode override is in.
 - `user:` resolves to its declaration: in that view, one of its ancestors, or
@@ -448,9 +449,10 @@ A mapping connects one property to one control widget, in one view.
   different for a folder.
 - **Condition**: the mapping is only active while a property, as a bool, is
   true (or false).
-- **Value**: a write mapping can write a fixed value instead of a property,
-  such as a light that is always on in a view (the Track mode button), or a
-  fixed label on a display.
+- **Value**: a write mapping can write a fixed value, such as a light that is
+  always on in a view (the Track mode button), or a fixed label on a display.
+  The value is a `const:` property, so this is an ordinary mapping. A config
+  can write the value directly, which becomes a `const:` name.
 
 A condition names exactly one property. Combining states is a component's
 job, or a polled state row's: `state:auto_override_any_latch` is a row that is
@@ -830,7 +832,7 @@ come together:
 - **Properties and views**, each with no change in behavior, used from C++:
   1. *Property namespaces and names* (done): the final names, before anything
      else adds more.
-  2. View conditions (done), then *Fixed write values*.
+  2. View conditions (done), then *Constant properties*.
   3. *View subjects, lists, and references*: the largest change to `View`.
   4. *Properties declared on views, and track anchors*.
   5. *Modes from exclusive groups and picks*: after this, the plugin has no
