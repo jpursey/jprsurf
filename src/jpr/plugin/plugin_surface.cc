@@ -425,9 +425,9 @@ void PluginSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadWriteControl,
                           kStateAutoOverrideActive,
                           absl::StrCat("XTouch/", DeviceXTouch::kAutoGroup));
-    const ViewMapping::Condition no_override = {
+    const ViewCondition::Config no_override = {
         .property = std::string(kStateAutoOverrideActive), .value = false};
-    const ViewMapping::Condition in_override = {
+    const ViewCondition::Config in_override = {
         .property = std::string(kStateAutoOverrideActive), .value = true};
     struct AutoModeButton {
       std::string_view button;
@@ -598,11 +598,11 @@ void PluginSurface::InitViews() {
       // held, whether it has routes to show in Send/Receive mode.
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiSelected, select,
-          {.condition = ViewMapping::Condition{
+          {.condition = ViewCondition::Config{
                .property = std::string(kSendHold), .value = false}});
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kTrackHasRoutes, select,
-          {.condition = ViewMapping::Condition{
+          {.condition = ViewCondition::Config{
                .property = std::string(kSendHold), .value = true}});
       AddTrackStripMappings(track_view, device_prefix, i);
 

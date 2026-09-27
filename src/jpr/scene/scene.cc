@@ -8,8 +8,11 @@
 #include <memory>
 #include <stack>
 
+#include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/scene_state_property.h"
@@ -107,8 +110,34 @@ void Scene::OnRun(const RunTime& time) {
   for (const auto& property : state_properties_) {
     property->UpdateState();
   }
+
+  // A view's condition can change at any time, but the view is only enabled or
+  // disabled here, before its mappings run.
+  ApplyViewConditions();
   if (root_view_->IsActive()) {
     root_view_->SyncMappings();
+  }
+}
+
+void Scene::AddConditionalView(View* view) {
+  conditional_views_.push_back(view);
+}
+
+void Scene::ApplyViewConditions() {
+  for (View* view : conditional_views_) {
+    // Refreshing a view also refreshes its child views, which clears their
+    // conditions' changes, so they aren't refreshed twice.
+    if (!view->condition_->HasChanged()) {
+      continue;
+    }
+    const absl::Time start = absl::Now();
+    const bool was_active = view->IsActive();
+    view->RefreshActive();
+    if (view->IsActive() != was_active) {
+      LOG(INFO) << "View '" << view->GetName() << "' "
+                << (was_active ? "deactivated" : "activated") << " in "
+                << absl::ToInt64Microseconds(absl::Now() - start) << "us";
+    }
   }
 }
 

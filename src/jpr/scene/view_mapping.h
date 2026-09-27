@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -15,6 +16,7 @@
 #include "jpr/device/control.h"
 #include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output_handle.h"
+#include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
@@ -115,30 +117,22 @@ class ViewMapping final {
     std::vector<ModeOverride> mode_overrides;
   };
 
-  // A condition that must be met for a mapping to be active. This allows
-  // several mappings to share a control, with only one of them active
-  // depending on some state (for instance, while a modifier is held).
-  //
-  // Note: When the condition of a read mapping changes, a pending press on its
-  // control (waiting for a long or double press) is lost. For reads that should
-  // switch with a modifier, prefer ReadConfig::required_modifiers, which
-  // doesn't lose them. Conditions are best suited to write mappings, which have
-  // no pending presses. A condition is still fine for a read mapping that
-  // switches on state required_modifiers can't express (such as REAPER state),
-  // as long as it has no long or double press to lose.
-  struct Condition {
-    // The name of a property in the same view scope. The condition is met
-    // while its value, as a bool (see ViewProperty::GetBool()), equals value.
-    std::string property;
-    bool value = true;
-  };
-
   struct Config {
     ReadConfig read;
     WriteConfig write;
 
-    // If set, the mapping is only active while this condition is met.
-    std::optional<Condition> condition;
+    // If set, the mapping is only active while this condition is met. This
+    // allows several mappings to share a control, with only one of them active
+    // depending on some state (for instance, while a modifier is held).
+    //
+    // Note: When the condition of a read mapping changes, a pending press on
+    // its control (waiting for a long or double press) is lost. For reads that
+    // should switch with a modifier, prefer ReadConfig::required_modifiers,
+    // which doesn't lose them. Conditions are best suited to write mappings,
+    // which have no pending presses. A condition is still fine for a read
+    // mapping that switches on state required_modifiers can't express (such as
+    // REAPER state), as long as it has no long or double press to lose.
+    std::optional<ViewCondition::Config> condition;
   };
 
   ViewMapping(const ViewMapping&) = delete;
@@ -183,9 +177,6 @@ class ViewMapping final {
   // whether its parent view is active, and whether its condition is met.
   void RefreshActive(bool parent_active);
 
-  // Returns true if the mapping has no condition, or its condition is met.
-  bool IsConditionMet() const;
-
   void InitReadControl();
   void InitReadActionSyncFunction();
   void InitReadToggleSyncFunction();
@@ -217,7 +208,7 @@ class ViewMapping final {
   Control* control_;
   Config config_;
   std::vector<ViewProperty*> mode_properties_;
-  ViewProperty* condition_property_;  // Null if there is no condition.
+  std::unique_ptr<ViewCondition> condition_;  // Null if there is none.
   absl::AnyInvocable<void(ViewProperty&, Control&, InputId)> read_control_;
   WriteSyncFunction* write_control_;
   InputConfig input_config_;
@@ -226,10 +217,8 @@ class ViewMapping final {
   bool enabled_ = true;
   bool active_ = false;
 
-  // Whether the parent view is active. The condition property is watched
-  // (condition_changed_ is registered) whenever it is.
+  // Whether the parent view is active. The condition is watched whenever it is.
   bool parent_active_ = false;
-  bool condition_changed_ = false;
   bool reads_property_ = false;
   bool control_changed_ = false;
   bool property_changed_ = false;

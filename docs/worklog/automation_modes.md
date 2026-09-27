@@ -130,7 +130,7 @@ All of this is rows in the `kStateProperties` table:
 All in `PluginSurface::InitViews()`, from a small `kAutoModeButtons` table:
 - Group has a read and write mapping to `kStateAutoOverrideActive`.
 - Each mode button has two pairs of mappings, switched by a
-  `ViewMapping::Condition` on `kStateAutoOverrideActive`:
+  `ViewCondition::Config` on `kStateAutoOverrideActive`:
   - No override: a read mapping to its `kCmdAutoMode*` action, and a light from
     its `kStateSelectedAuto*` toggle with a `mode_overrides` entry on
     `kStateSelectedAutoMixed` to blink (output mode 1).

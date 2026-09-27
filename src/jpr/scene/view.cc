@@ -245,7 +245,8 @@ class View::ChildRouteTypeNameProperty : public ViewProperty {
   View* const view_;
 };
 
-View::View(Scene* scene, View* parent_view, std::string_view name)
+View::View(Scene* scene, View* parent_view, std::string_view name,
+           const std::optional<ViewCondition::Config>& condition)
     : scene_(scene),
       parent_view_(parent_view),
       name_(name),
@@ -285,6 +286,24 @@ View::View(Scene* scene, View* parent_view, std::string_view name)
   child_route_type_name_property_ = child_route_type_name_property.get();
   properties_.emplace(kChildRouteTypeName,
                       std::move(child_route_type_name_property));
+
+  // The condition may refer to any of the properties above.
+  if (condition.has_value()) {
+    ViewProperty* condition_property = GetProperty(condition->property);
+    if (condition_property == nullptr) {
+      LOG(ERROR) << "Failed to add view '" << name << "': condition property '"
+                 << condition->property << "' not found";
+      return;
+    }
+    condition_ =
+        std::make_unique<ViewCondition>(condition_property, condition->value);
+  }
+}
+
+View::~View() {
+  // The condition may refer to the view's own properties, so it must be
+  // destroyed before them.
+  condition_.reset();
 }
 
 void View::Enable() {
@@ -310,7 +329,14 @@ void View::RefreshActive() {
   } else if (scene_ != nullptr) {
     parent_active = scene_->IsActive();
   }
-  bool should_be_active = enabled_ && parent_active;
+
+  // The condition decides whether the view is active, so it is watched whenever
+  // the parent is active, whether or not the view is.
+  if (condition_ != nullptr) {
+    condition_->Watch(parent_active);
+  }
+  bool should_be_active = enabled_ && parent_active &&
+                          (condition_ == nullptr || condition_->IsMet());
   if (active_ != should_be_active) {
     active_ = should_be_active;
     if (active_) {
@@ -330,14 +356,23 @@ void View::RefreshActive() {
   }
 }
 
-View* View::AddChildView(std::string_view name) {
+View* View::AddChildView(
+    std::string_view name,
+    const std::optional<ViewCondition::Config>& condition) {
   if (child_views_by_name_.contains(name)) {
     return nullptr;
   }
-  child_views_.push_back(absl::WrapUnique(new View(scene_, this, name)));
-  View* child_view = child_views_.back().get();
-  child_views_by_name_[name] = child_view;
-  return child_view;
+  auto child_view = absl::WrapUnique(new View(scene_, this, name, condition));
+  if (condition.has_value()) {
+    if (child_view->condition_ == nullptr) {
+      return nullptr;
+    }
+    scene_->AddConditionalView(child_view.get());
+  }
+  View* child_view_ptr = child_view.get();
+  child_views_.push_back(std::move(child_view));
+  child_views_by_name_[name] = child_view_ptr;
+  return child_view_ptr;
 }
 
 View* View::GetChildView(std::string_view name) const {

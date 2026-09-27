@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -88,6 +89,14 @@ class Scene final {
 
   void OnRun(const RunTime& time);
 
+  // Called when a view with a condition is added, so the scene applies changes
+  // to its condition (see ApplyViewConditions()).
+  void AddConditionalView(View* view);
+
+  // Refreshes the views whose condition changed. This must not be called while
+  // the views are running, as it enables and disables them.
+  void ApplyViewConditions();
+
   // Implements AddProperty() for any property type.
   ViewProperty* AddViewProperty(std::unique_ptr<ViewProperty> property);
 
@@ -104,6 +113,7 @@ class Scene final {
   absl::flat_hash_set<SceneStateProperty*> state_properties_;
   TrackActions track_actions_;
   std::unique_ptr<View> root_view_;
+  std::vector<View*> conditional_views_;
   RunHandle run_handle_;
   Modifiers next_modifier_flag_ = kModUserStart;
 };

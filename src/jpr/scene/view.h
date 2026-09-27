@@ -6,6 +6,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "jpr/common/anchor.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/track_properties.h"
+#include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 
@@ -118,7 +120,7 @@ class View final {
 
   View(const View&) = delete;
   View& operator=(const View&) = delete;
-  ~View() = default;
+  ~View();
 
   //----------------------------------------------------------------------------
   // Attributes
@@ -137,14 +139,19 @@ class View final {
 
   // Enable and disable this view. A view starts disabled by default and must
   // be enabled before it can become active.
+  //
+  // These take effect immediately, so they must not be called while the scene
+  // is running (for instance, from a property a mapping triggers). A view that
+  // changes while the scene runs needs a condition instead (see
+  // AddChildView()), which may change at any time.
   bool IsEnabled() const { return enabled_; }
   void Enable();
   void Disable();
 
   // Returns true if this view is actively updating the REAPER state and
   // hardware controls according to its mappings. A view is active if it is
-  // enabled and its parent view is active (or if it is a root view, the scene
-  // is active).
+  // enabled, its condition (if it has one) is met, and its parent view is
+  // active (or if it is a root view, the scene is active).
   bool IsActive() const { return active_; }
 
   // Refreshes the active state of this view and all its child views and
@@ -159,9 +166,15 @@ class View final {
   // view.
   View* GetParentView() const { return parent_view_; }
 
-  // Adds a child view to thhis view. This will return null if a view with the
-  // same name already exists.
-  View* AddChildView(std::string_view name);
+  // Adds a child view to this view. If there is a condition, the child view is
+  // only active while it is met. The scene applies changes to the condition
+  // between runs, so the condition's property may change at any time.
+  //
+  // This will return null if a view with the same name already exists, or the
+  // condition's property doesn't exist (as seen from the child view).
+  View* AddChildView(
+      std::string_view name,
+      const std::optional<ViewCondition::Config>& condition = {});
 
   int GetChildViewCount() const { return child_views_.size(); }
   View* GetChildViewAt(int index) const { return child_views_[index].get(); }
@@ -295,7 +308,10 @@ class View final {
   class ChildRouteToggleProperty;
   class ChildRouteTypeNameProperty;
 
-  View(Scene* scene, View* parent_view, std::string_view name);
+  // The condition's property is looked up from this view. If there is no such
+  // property, the view has no condition, and the caller must discard it.
+  View(Scene* scene, View* parent_view, std::string_view name,
+       const std::optional<ViewCondition::Config>& condition = {});
 
   // Returns the property with the given name, as seen from this view, or null
   // if no such property exists (see the property namespaces in
@@ -323,6 +339,7 @@ class View final {
   Scene* scene_;
   View* parent_view_;
   std::string name_;
+  std::unique_ptr<ViewCondition> condition_;  // Null if there is none.
 
   // Current state
   bool enabled_ = false;

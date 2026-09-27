@@ -16,6 +16,7 @@ set(jpr_scene_SOURCE
   track_properties.cc track_properties.h
   value_property.h
   view.cc view.h
+  view_condition.cc view_condition.h
   view_mapping.cc view_mapping.h
   view_property.cc view_property.h
 )

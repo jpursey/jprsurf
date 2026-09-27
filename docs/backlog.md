@@ -442,6 +442,24 @@ requires `mod:send_hold` and ignores `mod:select_anchor`. It is purely
 additive: existing mappings and configs mean the same thing either way, so it
 can be done at any time, such as when a second case turns up.
 
+## Conditions that compare values
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [config_model.md](config_model.md) (Mappings)
+
+A `ViewCondition` is met while its property, as a bool, equals true or false.
+It could instead compare the property's value with any `ViewProperty::Value`
+(equal, not equal, less, greater, and so on), so a condition could test an
+enumerated state or a level directly, rather than needing a toggle made for
+it. This needs rules for comparing across value types (numbers, text, colors)
+and for a value whose type doesn't match the property's. Mode overrides are a
+value to mode map today, and could become conditions with it. The config model
+keeps a condition to one property as a bool, with combining states left to
+components, so it needs updating too.
+
 ## Read-only toggle mappings register for changes they ignore
 
 - **Layers:** scene
