@@ -18,6 +18,10 @@ namespace jpr {
 // not the same. Where the list has more than one behavior, the first one whose
 // modifiers are all held applies.
 //
+// New behavior for a surface's track controls belongs here too. The track
+// properties that run it (the ui_ properties in TrackProperties) only map a
+// control to it.
+//
 // Select, mute, solo, and record arm each also have an anchor (see
 // GetAnchor()). If the property's anchor is held on another track, the action
 // acts on the range between the anchor track and this track instead, the same
