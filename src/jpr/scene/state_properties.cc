@@ -63,19 +63,19 @@ void WriteAutoOverride(bool value) {
 // The override that turning kStateAutoOverrideActive on restores. Its read
 // function is polled every run while mapped, so this includes overrides set
 // from REAPER as well as the surface.
-AutoOverride last_auto_override = AutoOverride::kBypass;
+AutoOverride g_last_auto_override = AutoOverride::kBypass;
 
 bool IsAutoOverrideActive() {
   const AutoOverride auto_override = GetAutoOverride();
   if (auto_override == AutoOverride::kNone) {
     return false;
   }
-  last_auto_override = auto_override;
+  g_last_auto_override = auto_override;
   return true;
 }
 
 void WriteAutoOverrideActive(bool value) {
-  SetAutoOverride(value ? last_auto_override : AutoOverride::kNone);
+  SetAutoOverride(value ? g_last_auto_override : AutoOverride::kNone);
 }
 
 //------------------------------------------------------------------------------
