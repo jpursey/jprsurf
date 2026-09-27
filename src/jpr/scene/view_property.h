@@ -10,6 +10,8 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/color.h"
+#include "jpr/common/numbered_name.h"
+#include "jpr/common/prefixed_name.h"
 #include "jpr/common/timeline.h"
 
 namespace jpr {
@@ -38,6 +40,29 @@ inline constexpr std::string_view kUserNamespace = "user:";
 inline constexpr std::string_view kTrackNamespace = "track:";
 inline constexpr std::string_view kRouteNamespace = "route:";
 inline constexpr std::string_view kViewNamespace = "view:";
+
+// The name of a property in each namespace, built at compile time, so the
+// namespace can't be mistyped. For example, kTrackName<"mute"> is "track:mute".
+// Commands are named by their command id, so kCmdName<40029> is "cmd:40029".
+template <int Id>
+inline constexpr std::string_view kCmdName = kNumberedName<kCmdNamespace, Id>;
+template <StringLiteral Name>
+inline constexpr std::string_view kStateName =
+    kPrefixedName<kStateNamespace, Name>;
+template <StringLiteral Name>
+inline constexpr std::string_view kModName = kPrefixedName<kModNamespace, Name>;
+template <StringLiteral Name>
+inline constexpr std::string_view kUserName =
+    kPrefixedName<kUserNamespace, Name>;
+template <StringLiteral Name>
+inline constexpr std::string_view kTrackName =
+    kPrefixedName<kTrackNamespace, Name>;
+template <StringLiteral Name>
+inline constexpr std::string_view kRouteName =
+    kPrefixedName<kRouteNamespace, Name>;
+template <StringLiteral Name>
+inline constexpr std::string_view kViewName =
+    kPrefixedName<kViewNamespace, Name>;
 
 //==============================================================================
 // ViewProperty

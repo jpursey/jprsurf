@@ -57,10 +57,10 @@ class RouteProperty : public ViewProperty {
 // show it (its name, color, etc.) with TrackProperties for that track.
 class RouteProperties final : public TrackListener {
  public:
-  static constexpr std::string_view kVolume = "route:volume";
-  static constexpr std::string_view kPan = "route:pan";
-  static constexpr std::string_view kMute = "route:mute";
-  static constexpr std::string_view kExists = "route:exists";
+  static constexpr std::string_view kVolume = kRouteName<"volume">;
+  static constexpr std::string_view kPan = kRouteName<"pan">;
+  static constexpr std::string_view kMute = kRouteName<"mute">;
+  static constexpr std::string_view kExists = kRouteName<"exists">;
 
   explicit RouteProperties(Track* track = TrackCache::Get().GetStubTrack(),
                            TrackRouteType type = TrackRouteType::kSend,

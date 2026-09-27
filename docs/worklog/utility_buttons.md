@@ -127,11 +127,14 @@ All in `PluginSurface::InitViews()`, next to the other global X-Touch mappings:
   - `kNumberedName` is `kPrefixedName` with the number's digits as its
     literal, so they share one storage.
   - Checked with `static_assert`s in `jpr_common_test`.
-- **`kCmdName<Id>` (scene/command_properties.h)**: command property names
-  built on `kCmdNamespace`, which `CreateCommandProperty()` parses. The
-  namespace can't be mistyped or drift from the parser:
+- **Property names (scene/view_property.h)**: each namespace has a name
+  template beside its namespace constant, so the namespace can't be mistyped
+  or drift from the lookup: `kCmdName<Id>` (with `kNumberedName`), and
+  `kStateName`, `kModName`, `kUserName`, `kTrackName`, `kRouteName`, and
+  `kViewName` (with `kPrefixedName`):
   ```cpp
   inline constexpr std::string_view kCmdUndo = kCmdName<40029>;
+  static constexpr std::string_view kMute = kTrackName<"mute">;
   ```
 - **State properties (scene/state_properties.h/.cc)**: every `state:` property
   (polled toggles, timeline positions, and rulers) is a row in the
@@ -139,9 +142,6 @@ All in `PluginSurface::InitViews()`, next to the other global X-Touch mappings:
   (`kStateName<"name">`) to `state_properties.h`, its read function, and a row
   with `Create<PolledToggleProperty, Read>` (or `Read, Write`), grouped with
   the others of its kind.
-  - `kStateName<"name">` builds `"state:name"` at compile time with
-    `kPrefixedName` (common/prefixed_name.h), so the namespace can't be
-    mistyped.
   - `CreateStateProperty()` searches the table, which only happens once for
     each name, when it is first mapped. It returns null for a name with no row.
     The table is grouped by kind rather than sorted by name, as a search this

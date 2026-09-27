@@ -15,6 +15,7 @@
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/track_properties.h"
 #include "jpr/scene/view_mapping.h"
+#include "jpr/scene/view_property.h"
 
 namespace jpr {
 
@@ -54,41 +55,42 @@ class View final {
   // Action properties that will move the child context index one less
   // (kChildDec) or one more (kChildInc). The resulting child_index will be
   // clamped to the number of child views that match the child context type.
-  static constexpr std::string_view kChildDec = "view:child_dec";
-  static constexpr std::string_view kChildInc = "view:child_inc";
+  static constexpr std::string_view kChildDec = kViewName<"child_dec">;
+  static constexpr std::string_view kChildInc = kViewName<"child_inc">;
 
   // Action properties that are the same as kChildDec and kChildInc except that
   // they move the child context index by a bank size settable via
   // SetBankSize(). The default bank size is 8.
-  static constexpr std::string_view kBankDec = "view:bank_dec";
-  static constexpr std::string_view kBankInc = "view:bank_inc";
+  static constexpr std::string_view kBankDec = kViewName<"bank_dec">;
+  static constexpr std::string_view kBankInc = kViewName<"bank_inc">;
 
   // This switches this view's track to be its parent track, if it has a parent
   // track. Otherwise, this does nothing. This is effectively navigating "up"
   // one level. The child context index is set so the track that was left is
   // centered in the child views, if possible.
-  static constexpr std::string_view kTrackParent = "view:track_parent";
+  static constexpr std::string_view kTrackParent = kViewName<"track_parent">;
 
   // This sets his view's track to be the master track.
-  static constexpr std::string_view kTrackRoot = "view:track_root";
+  static constexpr std::string_view kTrackRoot = kViewName<"track_root">;
 
   // Tells the parent view to be the same track view as this view. This
   // effectively results in navigating "in" to the current track. If there is no
   // parent view, or this view does not child tracks, this does nothing.
   static constexpr std::string_view kParentTrackChild =
-      "view:parent_track_child";
+      kViewName<"parent_track_child">;
 
   // Tells the parent view to switch to its parent track. This is effectively
   // results in navigating "up" to the parent track from a child track. If there
   // is no parent view, or the parent view's track does not have a parent track,
   // this does nothing. This is the same as kTrackParent on the parent view.
   static constexpr std::string_view kParentTrackParent =
-      "view:parent_track_parent";
+      kViewName<"parent_track_parent">;
 
   // Tells the parent view to switch to the master track. This is effectively
   // results in navigating "up" to the root track from a child track. If there
   // is no parent view, this does nothing.
-  static constexpr std::string_view kParentTrackRoot = "view:parent_track_root";
+  static constexpr std::string_view kParentTrackRoot =
+      kViewName<"parent_track_root">;
 
   // Tells the parent view to show the routes of the track at the other end of
   // this view's route, switching between sends and receives. This effectively
@@ -97,18 +99,18 @@ class View final {
   // scrolled so the route back to the original track is shown. If this view has
   // no route, or the parent view is not showing routes, this does nothing.
   static constexpr std::string_view kParentRouteOtherTrack =
-      "view:parent_route_other_track";
+      kViewName<"parent_route_other_track">;
 
   // Switches this view's child views between showing sends and receives. This
   // does nothing if this view is not showing routes, or its track has no routes
   // of the other type.
   static constexpr std::string_view kChildRouteToggle =
-      "view:child_route_toggle";
+      kViewName<"child_route_toggle">;
 
   // A text property with the name of the routes shown by this view's child
   // views: "Send" or "Recv", or empty if this view is not showing routes.
   static constexpr std::string_view kChildRouteTypeName =
-      "view:child_route_type_name";
+      kViewName<"child_route_type_name">;
 
   //----------------------------------------------------------------------------
   // Construction / Destruction

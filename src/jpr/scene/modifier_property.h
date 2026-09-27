@@ -15,10 +15,10 @@ namespace jpr {
 class ModifierProperty : public ViewProperty {
  public:
   // Default modifier properties for shift, ctrl, and alt keys.
-  static constexpr std::string_view kShift = "mod:shift";
-  static constexpr std::string_view kCtrl = "mod:ctrl";
-  static constexpr std::string_view kAlt = "mod:alt";
-  static constexpr std::string_view kOpt = "mod:opt";
+  static constexpr std::string_view kShift = kModName<"shift">;
+  static constexpr std::string_view kCtrl = kModName<"ctrl">;
+  static constexpr std::string_view kAlt = kModName<"alt">;
+  static constexpr std::string_view kOpt = kModName<"opt">;
 
   explicit ModifierProperty(std::string_view name, Modifiers modifier)
       : ViewProperty(name, Type::kToggle), modifier_(modifier) {}

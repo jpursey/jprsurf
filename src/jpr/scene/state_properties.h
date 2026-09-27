@@ -8,7 +8,6 @@
 #include <memory>
 #include <string_view>
 
-#include "jpr/common/prefixed_name.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/view_property.h"
 
@@ -17,11 +16,6 @@ namespace jpr {
 //==============================================================================
 // State property names
 //==============================================================================
-
-// The name of a property in the state: namespace.
-template <StringLiteral Name>
-inline constexpr std::string_view kStateName =
-    kPrefixedName<kStateNamespace, Name>;
 
 //------------------------------------------------------------------------------
 // Polled toggles (see PolledToggleProperty)

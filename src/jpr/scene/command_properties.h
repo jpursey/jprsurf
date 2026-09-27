@@ -8,7 +8,6 @@
 #include <memory>
 #include <string_view>
 
-#include "jpr/common/numbered_name.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/scene_state_property.h"
 #include "jpr/scene/view_property.h"
@@ -19,12 +18,9 @@ namespace jpr {
 // REAPER commands
 //==============================================================================
 
-// Command properties are named "cmd:<id>", where the id is a REAPER command id.
-// They are a CommandToggleProperty if REAPER reports a toggle state for the
-// command, and a CommandActionProperty otherwise.
-template <int Id>
-inline constexpr std::string_view kCmdName = kNumberedName<kCmdNamespace, Id>;
-
+// Command properties are named "cmd:<id>" (see kCmdName), where the id is a
+// REAPER command id. They are a CommandToggleProperty if REAPER reports a
+// toggle state for the command, and a CommandActionProperty otherwise.
 inline constexpr std::string_view kCmdSoloInFront = kCmdName<40745>;
 inline constexpr std::string_view kCmdMetronome = kCmdName<40364>;
 inline constexpr std::string_view kCmdTransportRepeat = kCmdName<1068>;

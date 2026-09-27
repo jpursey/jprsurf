@@ -50,11 +50,11 @@ constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
 constexpr int kInfoStrip = 7;
 
 // The modifier property that is on while the Send/Receive mode button is held.
-constexpr std::string_view kSendHold = "mod:send_hold";
+constexpr std::string_view kSendHold = kModName<"send_hold">;
 
 // The modifier property that is on while a select button is held as the anchor
 // for a range of tracks.
-constexpr std::string_view kSelectAnchor = "mod:select_anchor";
+constexpr std::string_view kSelectAnchor = kModName<"select_anchor">;
 
 // The Send/Receive mode button only acts when released if it was pressed for
 // less than this. Holding it longer only shows which tracks have routes. This
@@ -326,8 +326,8 @@ void PluginSurface::InitViews() {
   bool has_xtouch = (xtouch_in_ != nullptr && xtouch_out_ != nullptr);
   bool has_xtouch_ext =
       (xtouch_ext_in_ != nullptr && xtouch_ext_out_ != nullptr);
-  constexpr std::string_view kModMarker = "mod:marker";
-  constexpr std::string_view kModNudge = "mod:nudge";
+  constexpr std::string_view kModMarker = kModName<"marker">;
+  constexpr std::string_view kModNudge = kModName<"nudge">;
   Modifiers mod_marker = 0;
   Modifiers mod_nudge = 0;
   if (has_xtouch) {
@@ -479,11 +479,11 @@ void PluginSurface::InitViews() {
     // no Rewind or Forward mapping would match.
     ViewProperty* marker = scene_->GetProperty(kModMarker);
     ViewProperty* nudge = scene_->GetProperty(kModNudge);
-    AddExclusiveToggleMapping(scene_.get(), root_view, "user:toggle_marker",
-                              marker, nudge,
+    AddExclusiveToggleMapping(scene_.get(), root_view,
+                              kUserName<"toggle_marker">, marker, nudge,
                               absl::StrCat("XTouch/", DeviceXTouch::kMarker));
-    AddExclusiveToggleMapping(scene_.get(), root_view, "user:toggle_nudge",
-                              nudge, marker,
+    AddExclusiveToggleMapping(scene_.get(), root_view,
+                              kUserName<"toggle_nudge">, nudge, marker,
                               absl::StrCat("XTouch/", DeviceXTouch::kNudge));
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
                           absl::StrCat("XTouch/", DeviceXTouch::kCycle));
