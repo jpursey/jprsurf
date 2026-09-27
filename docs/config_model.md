@@ -617,7 +617,7 @@ The `view:` properties, which already exist:
 These are needed, but a config never names them:
 - **Deferred view changes**: the scene applies changes to views' conditions
   between runs, as views can't be enabled or disabled while the scene is
-  running them. It replaces `requested_mode_` and `ApplyRequestedMode()`.
+  running them.
 - **Keeping subjects and lists current**: references and lists react to track
   list and visibility changes themselves, rather than the plugin re-pointing
   views (`RefreshTrackViews()` and `EnsureTrackIsVisible()` today).
@@ -819,7 +819,6 @@ What becomes of the plugin's code:
 | `AddExclusiveToggleMapping()`                                                               | Exclusive group                                                  |
 | Surface modes and mode buttons                                                              | An exclusive group with a default, view conditions, and mappings |
 | Entering Send/Receive mode, and picking its track with select                               | Pick                                                             |
-| `requested_mode_` and `ApplyRequestedMode()`                                                | Deferred view changes                                            |
 | `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`                            | Tap or hold                                                      |
 | `RefreshTrackViews()`, `EnsureTrackIsVisible()`, `SetSendReceiveTrack()`, the views' tracks | References, subjects, and lists                                  |
 | Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log   | Host plumbing                                                    |
@@ -831,7 +830,7 @@ come together:
 - **Properties and views**, each with no change in behavior, used from C++:
   1. *Property namespaces and names* (done): the final names, before anything
      else adds more.
-  2. *View conditions and fixed write values*.
+  2. View conditions (done), then *Fixed write values*.
   3. *View subjects, lists, and references*: the largest change to `View`.
   4. *Properties declared on views, and track anchors*.
   5. *Modes from exclusive groups and picks*: after this, the plugin has no

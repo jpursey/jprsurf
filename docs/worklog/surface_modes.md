@@ -15,11 +15,13 @@ they behave and how they are built, as a reference for adding more modes.
 - Mode state and all mode logic (availability, button behavior, entering and
   leaving) live in `PluginSurface`. The scene only provides generic building
   blocks.
-- Mode buttons are handled while the scene runs, so presses only record a
-  request (`requested_mode_`, or the Send press state). `PluginSurface::OnRun()`
-  applies it after `scene_runner_.Run()`, so views are never enabled or
-  disabled while the scene is iterating them.
-- Each mode switch is logged with its duration (~50us).
+- Each mode's view has a condition on its `user:mode_<name>_active` toggle
+  (see `View::AddChildView()`). Entering a mode only sets the toggles, so it
+  can happen at any time, including from a mapping while the scene runs. The
+  scene applies the change before it next runs the views, so views are never
+  activated or deactivated while the scene is iterating them.
+- Each mode switch is logged, and the scene logs each mode view's activation
+  and deactivation with its duration.
 
 ### Mode buttons
 
@@ -47,17 +49,18 @@ they behave and how they are built, as a reference for adding more modes.
 root                      global mappings: modifiers (including mod:send_hold),
 │                         transport, timecode, misc buttons, mode buttons
 ├── MasterFader           master track volume
-├── TrackMode             enabled in Track mode
+├── TrackMode             active in Track mode
 │   └── TrackList         kTrack child context; Global, Bank and Channel nav
 │       └── Track1..16    one per strip (extender strips first)
-└── SendReceiveMode       enabled in Send/Receive mode; its track is the
+└── SendReceiveMode       active in Send/Receive mode; its track is the
     │                     Send/Receive track. kSends or kReceives child
     │                     context; Bank and Channel nav. Also holds the Info
     │                     strip mappings directly.
     └── Route1..15        one per strip, skipping the Info strip
 ```
 
-- Only one of `TrackMode` and `SendReceiveMode` is enabled at a time.
+- Only one of `TrackMode` and `SendReceiveMode` is active at a time, as only
+  one mode's active toggle is on.
 - The Info strip mappings are on `SendReceiveMode` itself rather than a child
   view: a view's own mappings use its own track and aren't affected by its
   child context or banking, and it has the `view:child_route_type_name`

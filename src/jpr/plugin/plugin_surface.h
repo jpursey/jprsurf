@@ -71,17 +71,16 @@ class PluginSurface final : private ControlSurfaceListener {
   // Surface modes
   //
   // Each mode has a button that is lit when the mode is available, and blinks
-  // when it is the current mode. Pressing a button only records the requested
-  // mode, as presses are handled while the scene is running. The request is
-  // applied by ApplyRequestedMode() once the scene has finished.
+  // when it is the current mode. Each mode's view has a condition on the mode's
+  // active toggle, so entering a mode only sets the toggles, and can happen at
+  // any time, including while the scene runs. The scene switches the views
+  // when it next runs, before any mappings sync.
   void InitModeButtons(bool has_xtouch);
   bool IsModeAvailable(SurfaceMode mode) const;
   void UpdateModeButtons();
-  void ApplyRequestedMode();
 
-  // Switches the surface to the given mode. These must not be called while the
-  // scene is running, as they enable and disable views. The Send/Receive mode
-  // track must not be null.
+  // Switches the surface to the given mode. The Send/Receive mode track must
+  // not be null.
   void EnterTrackMode();
   void EnterSendReceiveMode(Track* track);
 
@@ -90,16 +89,16 @@ class PluginSurface final : private ControlSurfaceListener {
   void TryEnterSendReceiveMode(Track* track);
 
   // Handles the Send/Receive mode button once it is released (see
-  // send_press_mode_), if it was pressed rather than held. This must not be
-  // called while the scene is running.
+  // send_press_mode_), if it was pressed rather than held. This is called after
+  // the scene runs, as that is when the release is recorded.
   void ApplySendRelease(absl::Time now);
 
   // Shows the routes of `track` in Send/Receive mode: its receives if it has
   // only receives, and otherwise its sends (even if it has no routes at all).
   void SetSendReceiveTrack(Track* track);
 
-  // Completes a mode change started at `start` from `old_mode`.
-  void FinishModeChange(SurfaceMode old_mode, absl::Time start);
+  // Completes a mode change from `old_mode`.
+  void FinishModeChange(SurfaceMode old_mode);
 
   // State
   gb::Config config_;
@@ -122,15 +121,12 @@ class PluginSurface final : private ControlSurfaceListener {
   // Surface mode state.
   struct ModeButton {
     ToggleValueProperty* available = nullptr;  // Lights the button.
-    ToggleValueProperty* active = nullptr;     // Makes the light blink.
+
+    // Makes the light blink, and is the condition for the mode's view.
+    ToggleValueProperty* active = nullptr;
   };
   SurfaceMode mode_ = SurfaceMode::kTrack;
-  std::optional<SurfaceMode> requested_mode_;
   ModeButton mode_buttons_[kSurfaceModeCount];
-
-  // A track picked for Send/Receive mode by pressing its select button while
-  // holding the Send/Receive mode button. Applied with requested_mode_.
-  Track* requested_send_receive_track_ = nullptr;
 
   // The Send/Receive mode button acts when it is released rather than pressed,
   // and only if it wasn't held, so it can be held to pick a track. This is the

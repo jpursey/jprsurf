@@ -26,23 +26,17 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## View conditions and fixed write values
+## Fixed write values
 
-- **Layers:** scene, plugin
+- **Layers:** scene
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Enabled, Mappings)
+- **Background:** [config_model.md](config_model.md) (Mappings)
 
-- **View conditions:** a view is enabled always, or while a condition on a
-  property is met, like a mapping's condition. The scene applies the changes
-  between runs, as views can't be enabled or disabled while it is running
-  them. This is the deferral that `requested_mode_` and `ApplyRequestedMode()`
-  do by hand today, and the two mode views move onto conditions on the
-  existing `user:mode_<name>_active` toggles.
-- **Fixed write values:** a write mapping can write a constant instead of a
-  property, such as a light that is always on in a view. The mode button
-  lights use it once modes are exclusive groups.
+A write mapping can write a constant instead of a property, such as a light
+that is always on in a view. The mode button lights use it once modes are
+exclusive groups.
 
 ## View subjects, lists, and references
 
@@ -104,8 +98,8 @@ those.
 - **Layers:** device, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *View conditions and fixed write values*, *View subjects,
-  lists, and references*, and *Properties declared on views, and track anchors*
+- **Depends on:** *Fixed write values*, *View subjects, lists, and
+  references*, and *Properties declared on views, and track anchors*
 - **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
   Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md)
 
