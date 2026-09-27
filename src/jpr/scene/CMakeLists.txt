@@ -4,11 +4,13 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 set(jpr_scene_SOURCE
+  command_properties.cc command_properties.h
   modifier_property.h
-  reaper_property.cc reaper_property.h
+  polled_toggle_property.cc polled_toggle_property.h
   route_properties.cc route_properties.h
   scene.cc scene.h
   scene_state_property.cc scene_state_property.h
+  state_properties.cc state_properties.h
   timeline_property.cc timeline_property.h
   track_actions.cc track_actions.h
   track_properties.cc track_properties.h

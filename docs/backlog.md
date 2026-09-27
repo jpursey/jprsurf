@@ -26,25 +26,6 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Property namespaces and names
-
-- **Layers:** scene, plugin
-- **Size:** medium
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Properties, Names)
-
-Give every property its final name before the components below add more, so
-none of them has to be renamed later. Every property is now in a namespace,
-which alone decides where its name is looked up. What is left:
-- **Named state rows:** `state:0` to `state:18` become names
-  (`state:can_redo`, and so on), looked up by name when a mapping is added.
-- **`state:auto_override_any_latch`:** a polled state row, rather than a
-  property the plugin adds itself.
-
-The names are C++ constants today, so this is mostly mechanical, and the smoke
-test verifies it.
-
 ## View conditions and fixed write values
 
 - **Layers:** scene, plugin
@@ -68,7 +49,7 @@ test verifies it.
 - **Layers:** scene, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Property namespaces and names*
+- **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (References, Subjects,
   Lists), [surface_modes.md](worklog/surface_modes.md)
 
@@ -101,7 +82,7 @@ wants a worklog plan.
 - **Layers:** scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *Property namespaces and names*
+- **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Declared properties,
   Track anchor), [ranged_track_actions.md](worklog/ranged_track_actions.md)
 
@@ -375,10 +356,10 @@ needs its own lights and clearing rules.
 - **Depends on:** nothing
 - **Background:** [utility_buttons.md](worklog/utility_buttons.md)
 
-Anything REAPER can answer cheaply is a row in the `kPolledToggles` table and a
-write mapping to a button. Each one costs a poll every run, so weigh it against
-*Cheaper polling for the polled toggles* below. A row can also have a write
-function, so the button can change the state too.
+Anything REAPER can answer cheaply is a polled toggle row in the
+`kStateProperties` table and a write mapping to a button. Each one costs a poll
+every run, so weigh it against *Cheaper polling for the polled toggles* below.
+A row can also have a write function, so the button can change the state too.
 
 ## Modes for the other assign buttons
 
@@ -487,7 +468,7 @@ Only worth doing if a polled read becomes a problem. `kStateAnyItemSelected`
 costs a steady ~10us of the `Run()` average today, which was accepted. In
 order:
 
-1. **Throttle.** Give each `kPolledToggles` row a poll interval in runs, and
+1. **Throttle.** Give each polled toggle a poll interval in runs, and
    have `PolledToggleProperty::UpdateState()` read only every Nth run. Polling
    `kStateAnyItemSelected` every 4th run would cut it to ~2-3us, with the light
    lagging by up to ~130ms.

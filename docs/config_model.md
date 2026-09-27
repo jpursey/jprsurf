@@ -595,8 +595,8 @@ behavior.
 
 - **Parameters:** none. Each row of the polled state table is a named `state:`
   property, with a read function and optionally a write function.
-- **Today:** the `kPolledToggles` table, plus `auto_override_any_latch`, which
-  the plugin adds itself and which becomes a row.
+- **Today:** the polled toggle rows of the `kStateProperties` table
+  (state_properties.cc).
 
 ### Navigation
 
@@ -701,9 +701,10 @@ views, so a destroyed scene holds none.
 The public spec freezes every name a config can use. Today's names grew one
 feature at a time, so they need changes before they are frozen. *Property
 namespaces and names* made the ones that didn't need a new component: every
-property is in a namespace, rec arm is `rec_arm` everywhere, and the secondary
-ruler is `state:secondary_ruler_*` rather than `ruler2_*`. The audit below is
-what is left. Properties the plugin adds itself are in `user:` until the
+property is in a namespace, the polled state rows have names rather than
+indices, rec arm is `rec_arm` everywhere, and the secondary ruler is
+`state:secondary_ruler_*` rather than `ruler2_*`. The audit below is what is
+left. Properties the plugin adds itself are in `user:` until the
 components that replace them, and device control names and output modes wait
 for *Device types and catalogs*.
 
@@ -722,12 +723,10 @@ for *Device types and catalogs*.
 
 | Today                                                                      | Problem                                                                                             | Change                                                                                                         |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `state:0` to `state:18`                                                    | An index into a C++ table: meaningless, and tied to the table's order                               | Named rows (`state:can_redo`, `state:auto_override_active`, ...), looked up by name when the scene is built    |
 | `user:anchor_<action>_<n>`, `user:pick_send_receive_track_<n>`             | Generated from a strip index                                                                        | Declared on the strip view, with one name on every strip (`user:anchor_select`)                                |
 | `user:mode_<name>_available`, `_active`, `_select`                         | Generated from a mode name                                                                          | The mode toggles of an exclusive group, named by the group and mode the config declares                        |
 | `user:toggle_<name>`                                                       | Generated, and only exists to keep two toggles exclusive                                            | Removed: an exclusive group's toggles are mapped directly                                                      |
 | `mod:marker`, `mod:nudge`, `mod:send_hold`, `mod:select_anchor`            | Declared by the plugin                                                                              | Declared by the config: `mod:marker`, and so on                                                                |
-| `user:auto_override_any_latch`                                             | Added by the plugin                                                                                 | A polled state row, `state:auto_override_any_latch`                                                            |
 | `view:track_parent`, `view:track_root`, and the other view properties      | Named before the model had references and lists                                                     | Settled when navigation is reviewed as a component                                                             |
 | `Fader1`, `Scribble1Line2`, `AssignTrack`                                  | Mixed case, with 1-based numbers inside names                                                       | Catalog arrays with lower case fields (a strip's `fader`), and lower case single controls (`assign_track`)     |
 | `XTouch/`, `XTouchExt/`                                                    | Mappings name devices                                                                               | Widgets                                                                                                        |
@@ -823,7 +822,6 @@ What becomes of the plugin's code:
 | `requested_mode_` and `ApplyRequestedMode()`                                                | Deferred view changes                                            |
 | `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`                            | Tap or hold                                                      |
 | `RefreshTrackViews()`, `EnsureTrackIsVisible()`, `SetSendReceiveTrack()`, the views' tracks | References, subjects, and lists                                  |
-| `user:auto_override_any_latch`                                             | Added by the plugin                                                                                 | A polled state row, `state:auto_override_any_latch`                                                            |
 | Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log   | Host plumbing                                                    |
 
 ## Getting there
@@ -831,8 +829,8 @@ What becomes of the plugin's code:
 The backlog items build this in three tracks, which can interleave, and then
 come together:
 - **Properties and views**, each with no change in behavior, used from C++:
-  1. *Property namespaces and names*: the final names, before anything else
-     adds more.
+  1. *Property namespaces and names* (done): the final names, before anything
+     else adds more.
   2. *View conditions and fixed write values*.
   3. *View subjects, lists, and references*: the largest change to `View`.
   4. *Properties declared on views, and track anchors*.

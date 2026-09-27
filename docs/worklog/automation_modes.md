@@ -103,17 +103,18 @@ in, as an `AutoModes` mask:
   `SetSurfaceSelected()` calls) costs one re-read, on the next use, and nothing
   while no light is mapped.
 
-### scene: polled toggles (reaper_property.h/.cc)
+### scene: polled toggles (state_properties.h/.cc)
 
-All of this is rows in the `kPolledToggles` table:
+All of this is rows in the `kStateProperties` table:
 
-| Property                      | Index | On while                                 | Write on          | Write off   |
-| ----------------------------- | ----- | ---------------------------------------- | ----------------- | ----------- |
-| `kStateSelectedAuto<Mode>` x6 | 4–9   | Any selected track is in the mode        |                   |             |
-| `kStateSelectedAutoMixed`     | 10    | The selected tracks are in several modes |                   |             |
-| `kStateAutoOverrideActive`    | 11    | Any override is on                       | The last override | No override |
-| `kStateAutoOverride<Mode>` x6 | 12–17 | The override is the mode                 | Set it            | Bypass      |
-| `kStateAutoOverrideBypass`    | 18    | The override is Bypass                   | Set it            | No override |
+| Property                      | On while                                 | Write on          | Write off   |
+| ----------------------------- | ---------------------------------------- | ----------------- | ----------- |
+| `kStateSelectedAuto<Mode>` x6 | Any selected track is in the mode        |                   |             |
+| `kStateSelectedAutoMixed`     | The selected tracks are in several modes |                   |             |
+| `kStateAutoOverrideActive`    | Any override is on                       | The last override | No override |
+| `kStateAutoOverride<Mode>` x6 | The override is the mode                 | Set it            | Bypass      |
+| `kStateAutoOverrideAnyLatch`  | The override is Latch or Latch Preview   |                   |             |
+| `kStateAutoOverrideBypass`    | The override is Bypass                   | Set it            | No override |
 
 - `scene` exposes every mode and override REAPER has, including Latch Preview
   and Bypass, whether or not the X-Touch has a button for it.
@@ -136,10 +137,8 @@ All in `PluginSurface::InitViews()`, from a small `kAutoModeButtons` table:
   - Override: a read mapping to its `kStateAutoOverride*` toggle, and a light
     from the same toggle with a `mode_overrides` entry on
     `kStateAutoOverrideLatchPreview` to blink.
-- Latch's override light is instead `user:auto_override_any_latch`, on for
-  Latch or Latch Preview. It exists only because the X-Touch has no Latch Preview
-  button, so the plugin adds it to the scene itself as a read-only
-  `PolledToggleProperty`, rather than it being a scene row.
+- Latch's override light is instead `kStateAutoOverrideAnyLatch`, on for
+  Latch or Latch Preview, as the X-Touch has no Latch Preview button.
 - Conditions re-register read mappings when they switch, which loses a pending
   long or double press. The automation buttons have neither, so conditions
   (rather than views, as surface modes use) are the simplest fit for a switch
@@ -147,15 +146,14 @@ All in `PluginSurface::InitViews()`, from a small `kAutoModeButtons` table:
 
 ## Building blocks
 
-- **Writable polled toggles (scene/reaper_property.h/.cc)**: a `kPolledToggles`
+- **Writable polled toggles (scene/state_properties.cc)**: a polled toggle
   row may have a write function (`void (*)(bool)`) as well as its read
   function. `PolledToggleProperty::WriteBool()` calls it and then
-  `UpdateState()`. Read-only rows have none and ignore writes. Plugins can also
-  add their own `PolledToggleProperty` to a scene, for state that is device
-  specific.
-- **Template row helpers (reaper_property.cc)**: `HasSelectedAutoMode<Mode>`,
-  `IsAutoOverride<Override>`, and `WriteAutoOverride<On, Off>` turn a row into
-  one line of plain function pointers.
+  `UpdateState()`. Read-only rows have none and ignore writes.
+- **Template row helpers (state_properties.cc)**: `HasSelectedAutoMode<Mode>`,
+  `IsAutoOverride<Overrides...>` (true for any of them), and
+  `WriteAutoOverride<Mode>` (and `CreateAutoOverride<Mode>`, which pairs the
+  two) turn a row into one line.
 - **State properties are current when first used (scene_state_property.cc)**:
   `SceneStateProperty::OnRegistered()` calls `UpdateState()`. A mapping writes
   its control as soon as it becomes active, and a property only updates while

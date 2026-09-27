@@ -5,9 +5,11 @@
 
 #pragma once
 
+#include <memory>
 #include <string_view>
 
 #include "jpr/common/numbered_name.h"
+#include "jpr/scene/scene.h"
 #include "jpr/scene/scene_state_property.h"
 #include "jpr/scene/view_property.h"
 
@@ -111,103 +113,12 @@ class CommandToggleProperty final : public SceneStateProperty {
 };
 
 //==============================================================================
-// PolledToggleProperty
+// CreateCommandProperty
 //==============================================================================
 
-// Polled toggle properties are named "state:<index>", where the index selects
-// one of the states below.
-template <int Index>
-inline constexpr std::string_view kStateName =
-    kNumberedName<kStateNamespace, Index>;
-
-// True while any track is soloed.
-inline constexpr std::string_view kStateAnyTrackSolo = kStateName<0>;
-
-// True while the current project has anything to redo.
-inline constexpr std::string_view kStateCanRedo = kStateName<1>;
-
-// True while the current project has unsaved changes. This is always false if
-// "undo/prompt to save" is disabled in REAPER's preferences.
-inline constexpr std::string_view kStateProjectDirty = kStateName<2>;
-
-// True while any media items are selected in the current project.
-inline constexpr std::string_view kStateAnyItemSelected = kStateName<3>;
-
-// True while any selected track, including the master track, is in the
-// automation mode.
-inline constexpr std::string_view kStateSelectedAutoTrimRead = kStateName<4>;
-inline constexpr std::string_view kStateSelectedAutoRead = kStateName<5>;
-inline constexpr std::string_view kStateSelectedAutoTouch = kStateName<6>;
-inline constexpr std::string_view kStateSelectedAutoWrite = kStateName<7>;
-inline constexpr std::string_view kStateSelectedAutoLatch = kStateName<8>;
-inline constexpr std::string_view kStateSelectedAutoLatchPreview =
-    kStateName<9>;
-
-// True while the selected tracks, including the master track, are in more than
-// one automation mode. As each track is in exactly one mode, this is also true
-// exactly when every lit kStateSelectedAuto* covers only some of the selection.
-inline constexpr std::string_view kStateSelectedAutoMixed = kStateName<10>;
-
-// The global automation override for the current project (see AutoOverride).
-// Writing these sets the override.
-//
-// True while any override is on. Turning it on restores the last override it
-// saw on, or Bypass if there hasn't been one since REAPER started. Turning it
-// off removes the override.
-inline constexpr std::string_view kStateAutoOverrideActive = kStateName<11>;
-
-// True while the override is the mode. Turning one on sets the override to its
-// mode, and turning it off sets the override to Bypass.
-inline constexpr std::string_view kStateAutoOverrideTrimRead = kStateName<12>;
-inline constexpr std::string_view kStateAutoOverrideRead = kStateName<13>;
-inline constexpr std::string_view kStateAutoOverrideTouch = kStateName<14>;
-inline constexpr std::string_view kStateAutoOverrideWrite = kStateName<15>;
-inline constexpr std::string_view kStateAutoOverrideLatch = kStateName<16>;
-inline constexpr std::string_view kStateAutoOverrideLatchPreview =
-    kStateName<17>;
-
-// True while the override is Bypass. Turning it on sets Bypass, and turning it
-// off removes the override.
-inline constexpr std::string_view kStateAutoOverrideBypass = kStateName<18>;
-
-// This property represents REAPER state that is read with a function, and
-// polled each run. It can be mapped to control outputs that represent a binary
-// value. If it has a write function, it can also be mapped to control inputs,
-// and writing it changes the state.
-class PolledToggleProperty final : public SceneStateProperty {
- public:
-  using ReadFunction = bool (*)();
-  using WriteFunction = void (*)(bool value);
-
-  // Returns the read function for the polled toggle at the index in its
-  // "state:<index>" name, or null if the index is out of range.
-  static ReadFunction GetReadFunction(int index);
-
-  // Returns the write function for the polled toggle at the index in its
-  // "state:<index>" name, or null if it is read-only or the index is out of
-  // range.
-  static WriteFunction GetWriteFunction(int index);
-
-  PolledToggleProperty(Scene* scene, std::string_view name, ReadFunction read,
-                       WriteFunction write = nullptr)
-      : SceneStateProperty(scene, name, Type::kToggle),
-        read_(read),
-        write_(write),
-        value_(read()) {}
-  ~PolledToggleProperty() override = default;
-
-  // Overrides from SceneStateProperty.
-  void UpdateState() override;
-
- protected:
-  // Overrides from ViewProperty.
-  bool ReadBool() const override;
-  void WriteBool(bool value) override;
-
- private:
-  ReadFunction read_;
-  WriteFunction write_;
-  bool value_;
-};
+// Creates the property for a "cmd:<id>" name (see kCmdName), or returns null if
+// the id is not a command id.
+std::unique_ptr<ViewProperty> CreateCommandProperty(Scene* scene,
+                                                    std::string_view name);
 
 }  // namespace jpr

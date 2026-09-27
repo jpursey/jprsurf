@@ -9,105 +9,13 @@
 #include <stack>
 
 #include "absl/memory/memory.h"
-#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
-#include "jpr/scene/reaper_property.h"
 #include "jpr/scene/scene_state_property.h"
-#include "jpr/scene/timeline_property.h"
-#include "sdk/reaper_plugin_functions.h"
+#include "jpr/scene/state_properties.h"
 
 namespace jpr {
-
-namespace {
-
-// Creates the property for a "cmd:<id>" name, or returns null if the id is not
-// a command id.
-std::unique_ptr<ViewProperty> CreateCommandProperty(Scene* scene,
-                                                    std::string_view name) {
-  int command_id = 0;
-  if (!absl::SimpleAtoi(name.substr(kCmdNamespace.size()), &command_id) ||
-      command_id == 0) {
-    return nullptr;
-  }
-  int state = GetToggleCommandState(command_id);
-  if (state < 0) {
-    return std::make_unique<CommandActionProperty>(name, command_id);
-  }
-  return std::make_unique<CommandToggleProperty>(scene, name, command_id,
-                                                 state > 0);
-}
-
-// Creates the property for a "state:" name, or returns null if there is none.
-std::unique_ptr<ViewProperty> CreateStateProperty(Scene* scene,
-                                                  std::string_view name) {
-  // Polled toggle properties.
-  if (int index = 0;
-      absl::SimpleAtoi(name.substr(kStateNamespace.size()), &index)) {
-    PolledToggleProperty::ReadFunction read =
-        PolledToggleProperty::GetReadFunction(index);
-    if (read == nullptr) {
-      return nullptr;
-    }
-    return std::make_unique<PolledToggleProperty>(
-        scene, name, read, PolledToggleProperty::GetWriteFunction(index));
-  }
-
-  // Timeline position properties.
-  if (name == kTimelinePosition) {
-    return std::make_unique<TimelinePositionProperty>(
-        scene, name, TimelinePositionProperty::Source::kCurrent);
-  }
-  if (name == kPlaybackPosition) {
-    return std::make_unique<TimelinePositionProperty>(
-        scene, name, TimelinePositionProperty::Source::kPlayback);
-  }
-  if (name == kEditPosition) {
-    return std::make_unique<TimelinePositionProperty>(
-        scene, name, TimelinePositionProperty::Source::kEdit);
-  }
-
-  // Primary ruler mode properties.
-  if (name == kRulerMode) {
-    return std::make_unique<RulerModeProperty>(scene, name);
-  }
-  if (name == kRulerBeats) {
-    return std::make_unique<IsRulerModeProperty>(scene, name,
-                                                 TimelineMode::kBeats);
-  }
-  if (name == kRulerTime) {
-    return std::make_unique<IsRulerModeProperty>(scene, name,
-                                                 TimelineMode::kTime);
-  }
-  if (name == kRulerFrames) {
-    return std::make_unique<IsRulerModeProperty>(scene, name,
-                                                 TimelineMode::kFrames);
-  }
-  if (name == kRulerSamples) {
-    return std::make_unique<IsRulerModeProperty>(scene, name,
-                                                 TimelineMode::kSamples);
-  }
-
-  // Secondary ruler mode properties.
-  if (name == kSecondaryRulerMode) {
-    return std::make_unique<SecondaryRulerModeProperty>(scene, name);
-  }
-  if (name == kSecondaryRulerTime) {
-    return std::make_unique<IsSecondaryRulerModeProperty>(scene, name,
-                                                          TimelineMode::kTime);
-  }
-  if (name == kSecondaryRulerFrames) {
-    return std::make_unique<IsSecondaryRulerModeProperty>(
-        scene, name, TimelineMode::kFrames);
-  }
-  if (name == kSecondaryRulerSamples) {
-    return std::make_unique<IsSecondaryRulerModeProperty>(
-        scene, name, TimelineMode::kSamples);
-  }
-  return nullptr;
-}
-
-}  // namespace
 
 Scene::Scene(std::string_view name, TrackFilter track_filter)
     : name_(name), track_actions_(track_filter) {

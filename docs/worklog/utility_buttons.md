@@ -45,7 +45,7 @@ state that has to be polled shares one read-only property type.
 
 ## Structure
 
-### scene: commands (reaper_property.h)
+### scene: commands (command_properties.h)
 
 Every REAPER command is a `kCmd*` constant, which `Scene::GetProperty()` creates
 on demand as a `CommandToggleProperty` if REAPER reports a toggle state for it,
@@ -64,7 +64,7 @@ and a `CommandActionProperty` otherwise. The commands added here:
 | `kCmdInsertClickSource`     | 40013 | Insert click source                                        |
 | `kCmdSoloDefeat`            | 40340 | Track: Unsolo all tracks                                   |
 
-### scene: polled state (reaper_property.h/.cc)
+### scene: polled state (polled_toggle_property.h/.cc, state_properties.h/.cc)
 
 REAPER state that has no control surface notification is polled each run by a
 `PolledToggleProperty`, a read-only toggle `SceneStateProperty` built from a
@@ -113,31 +113,41 @@ All in `PluginSurface::InitViews()`, next to the other global X-Touch mappings:
 
 ## Building blocks
 
-- **`kNumberedName<Prefix, Value>` (common/numbered_name.h)**: a compile time
-  `std::string_view` of a prefix followed by a non-negative integer, such as
-  `"cmd:40029"`.
+- **`kPrefixedName<Prefix, "name">` (common/prefixed_name.h)** and
+  **`kNumberedName<Prefix, Value>` (common/numbered_name.h)**: a compile time
+  `std::string_view` of a prefix followed by a string literal, such as
+  `"state:can_redo"`, or by a non-negative integer, such as `"cmd:40029"`.
   - A `std::string_view` can't be a template parameter, but a reference to a
-    `constexpr` one (with static storage duration) can.
+    `constexpr` one (with static storage duration) can. A string literal can
+    be one through `StringLiteral`, a structural type that holds its
+    characters.
   - The characters are in a `static constexpr std::array` in a helper class
     template, so the view always refers to valid static storage, with no
     runtime cost. It is not null terminated.
+  - `kNumberedName` is `kPrefixedName` with the number's digits as its
+    literal, so they share one storage.
   - Checked with `static_assert`s in `jpr_common_test`.
-- **`kCmdName<Id>` and `kStateName<Index>` (scene/reaper_property.h)**: property
-  names built on `kCmdPrefix` and `kStatePrefix`, which `Scene::GetProperty()`
-  parses. The prefix can't be mistyped or drift from the parser:
+- **`kCmdName<Id>` (scene/command_properties.h)**: command property names
+  built on `kCmdNamespace`, which `CreateCommandProperty()` parses. The
+  namespace can't be mistyped or drift from the parser:
   ```cpp
   inline constexpr std::string_view kCmdUndo = kCmdName<40029>;
-  inline constexpr std::string_view kStateAnyTrackSolo = kStateName<0>;
   ```
-- **Polled toggles (scene/reaper_property.cc)**: to add one, add a
-  `kStateName<N>` constant to `reaper_property.h`, and a row at index N in the
-  `kPolledToggles` table with its read function.
-  - Lookup is by index, like `cmd:<id>`, so it costs the same however many
-    there are. `PolledToggleProperty::GetReadFunction()` returns null for an
-    index out of range.
-  - Each row holds its name constant, and a `static_assert` checks every row is
-    named `kStateName<index>` for its own index, so a row out of order or a
-    mistyped index fails the build.
+- **State properties (scene/state_properties.h/.cc)**: every `state:` property
+  (polled toggles, timeline positions, and rulers) is a row in the
+  `kStateProperties` table. To add a polled toggle, add a name constant
+  (`kStateName<"name">`) to `state_properties.h`, its read function, and a row
+  with `Create<PolledToggleProperty, Read>` (or `Read, Write`), grouped with
+  the others of its kind.
+  - `kStateName<"name">` builds `"state:name"` at compile time with
+    `kPrefixedName` (common/prefixed_name.h), so the namespace can't be
+    mistyped.
+  - `CreateStateProperty()` searches the table, which only happens once for
+    each name, when it is first mapped. It returns null for a name with no row.
+    The table is grouped by kind rather than sorted by name, as a search this
+    rare doesn't need to be fast.
+  - Each row holds its name constant, and `static_assert`s check that the
+    names are unique, and in `state:`.
   - The one mistake it can't catch is a name constant with no row. That fails
     gracefully at runtime: the property isn't found.
   - The table keeps the SDK calls out of the header, and `scene.cc` needs no

@@ -17,14 +17,13 @@
 #include "absl/time/clock.h"
 #include "gb/config/text_config.h"
 #include "jpr/common/anchor.h"
-#include "jpr/common/automation.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
+#include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
-#include "jpr/scene/reaper_property.h"
-#include "jpr/scene/timeline_property.h"
+#include "jpr/scene/state_properties.h"
 #include "jpr/scene/value_property.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
@@ -56,11 +55,6 @@ constexpr std::string_view kSendHold = "mod:send_hold";
 // The modifier property that is on while a select button is held as the anchor
 // for a range of tracks.
 constexpr std::string_view kSelectAnchor = "mod:select_anchor";
-
-// The polled toggle that is on while the global automation override is Latch or
-// Latch Preview (see the automation buttons in InitViews()).
-constexpr std::string_view kAutoOverrideAnyLatch =
-    "user:auto_override_any_latch";
 
 // The Send/Receive mode button only acts when released if it was pressed for
 // less than this. Holding it longer only shows which tracks have routes. This
@@ -379,14 +373,14 @@ void PluginSurface::InitViews() {
                           {.read = {.press_release = true}});
 
     // Timecode display
-    root_view->AddMapping(ViewMapping::kWriteControl, kTimelinePosition,
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateTimelinePosition,
                           absl::StrCat("XTouch/", DeviceXTouch::kTimecode));
-    root_view->AddMapping(ViewMapping::kWriteControl, kRulerFrames,
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerFrames,
                           absl::StrCat("XTouch/", DeviceXTouch::kSmpteLed));
-    root_view->AddMapping(ViewMapping::kWriteControl, kRulerBeats,
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerBeats,
                           absl::StrCat("XTouch/", DeviceXTouch::kBeatsLed));
     root_view->AddMapping(
-        ViewMapping::kReadControl, kRulerMode,
+        ViewMapping::kReadControl, kStateRulerMode,
         absl::StrCat("XTouch/", DeviceXTouch::kShowTimeBeats));
     root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyTrackSolo,
                           absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
@@ -431,12 +425,6 @@ void PluginSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadWriteControl,
                           kStateAutoOverrideActive,
                           absl::StrCat("XTouch/", DeviceXTouch::kAutoGroup));
-    scene_->AddProperty(std::make_unique<PolledToggleProperty>(
-        scene_.get(), kAutoOverrideAnyLatch, [] {
-          const AutoOverride auto_override = GetAutoOverride();
-          return auto_override == AutoOverride::kLatch ||
-                 auto_override == AutoOverride::kLatchPreview;
-        }));
     const ViewMapping::Condition no_override = {
         .property = std::string(kStateAutoOverrideActive), .value = false};
     const ViewMapping::Condition in_override = {
@@ -460,7 +448,7 @@ void PluginSurface::InitViews() {
         {DeviceXTouch::kAutoWrite, kCmdAutoModeWrite, kStateSelectedAutoWrite,
          kStateAutoOverrideWrite},
         {DeviceXTouch::kAutoLatch, kCmdAutoModeLatch, kStateSelectedAutoLatch,
-         kStateAutoOverrideLatch, kAutoOverrideAnyLatch},
+         kStateAutoOverrideLatch, kStateAutoOverrideAnyLatch},
     };
     for (const AutoModeButton& info : kAutoModeButtons) {
       const std::string control = absl::StrCat("XTouch/", info.button);
