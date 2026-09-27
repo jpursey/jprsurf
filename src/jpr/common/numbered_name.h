@@ -5,40 +5,33 @@
 
 #pragma once
 
-#include <array>
-#include <cstddef>
 #include <string_view>
+
+#include "jpr/common/prefixed_name.h"
 
 namespace jpr {
 
 namespace internal {
 
-// Holds the characters for kNumberedName (see below) in static storage.
-template <const std::string_view& Prefix, int Value>
-struct NumberedNameStorage {
+// Returns the decimal digits of Value as a StringLiteral.
+template <int Value>
+constexpr auto DecimalLiteral() {
   static_assert(Value >= 0, "kNumberedName values must be non-negative");
-
-  static constexpr size_t kDigits = [] {
-    size_t digits = 1;
+  constexpr int kDigits = [] {
+    int digits = 1;
     for (int value = Value; value >= 10; value /= 10) {
       ++digits;
     }
     return digits;
   }();
-
-  static constexpr std::array<char, Prefix.size() + kDigits> kChars = [] {
-    std::array<char, Prefix.size() + kDigits> chars = {};
-    for (size_t i = 0; i < Prefix.size(); ++i) {
-      chars[i] = Prefix[i];
-    }
-    int value = Value;
-    for (size_t i = chars.size(); i > Prefix.size(); --i) {
-      chars[i - 1] = static_cast<char>('0' + value % 10);
-      value /= 10;
-    }
-    return chars;
-  }();
-};
+  StringLiteral<kDigits + 1> literal;
+  int value = Value;
+  for (int i = kDigits - 1; i >= 0; --i) {
+    literal.chars[i] = static_cast<char>('0' + value % 10);
+    value /= 10;
+  }
+  return literal;
+}
 
 }  // namespace internal
 
@@ -54,8 +47,7 @@ struct NumberedNameStorage {
 //
 // The view refers to static storage, and is not null terminated.
 template <const std::string_view& Prefix, int Value>
-inline constexpr std::string_view kNumberedName{
-    internal::NumberedNameStorage<Prefix, Value>::kChars.data(),
-    internal::NumberedNameStorage<Prefix, Value>::kChars.size()};
+inline constexpr std::string_view kNumberedName =
+    kPrefixedName<Prefix, internal::DecimalLiteral<Value>()>;
 
 }  // namespace jpr
