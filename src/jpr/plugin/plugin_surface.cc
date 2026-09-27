@@ -127,7 +127,7 @@ void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
                            Modifiers modifier = 0) {
   const std::string name =
       absl::StrCat(kUserNamespace, "anchor_", action, "_", strip_index);
-  scene->AddProperty(std::make_unique<CallbackToggleProperty>(
+  scene->AddUserProperty(std::make_unique<CallbackToggleProperty>(
       name, [scene, view, property, modifier](bool pressed) {
         Anchor<Track>& anchor = scene->GetTrackActions().GetAnchor(property);
         if (!pressed) {
@@ -153,7 +153,7 @@ void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
 void AddExclusiveToggleMapping(Scene* scene, View* view, std::string_view name,
                                ViewProperty* property, ViewProperty* other,
                                std::string_view control) {
-  scene->AddProperty(
+  scene->AddUserProperty(
       std::make_unique<CallbackActionProperty>(name, [property, other] {
         const bool on = !property->GetBool();
         if (on) {
@@ -584,7 +584,7 @@ void PluginSurface::InitViews() {
           {.read = {.required_modifiers = select_anchor_modifier}});
       const std::string pick_name = absl::StrCat(
           kUserNamespace, "pick_send_receive_track_", child_view_index);
-      scene_->AddProperty(std::make_unique<CallbackActionProperty>(
+      scene_->AddUserProperty(std::make_unique<CallbackActionProperty>(
           pick_name, [this, track_view] {
             // Send was held to pick a track, so releasing it does nothing, even
             // if the picked track has no routes.
@@ -768,12 +768,12 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
     // The active toggle starts on for the current mode, so its view is active
     // as soon as the scene is.
     ModeButton& button = mode_buttons_[i];
-    button.available = scene_->AddProperty(
+    button.available = scene_->AddUserProperty(
         std::make_unique<ToggleValueProperty>(available_name));
-    button.active = scene_->AddProperty(
+    button.active = scene_->AddUserProperty(
         std::make_unique<ToggleValueProperty>(active_name, mode == mode_));
     CHECK(button.available != nullptr && button.active != nullptr);
-    scene_->AddProperty(
+    scene_->AddUserProperty(
         std::make_unique<CallbackActionProperty>(select_name, [this, mode] {
           switch (mode) {
             case SurfaceMode::kTrack:

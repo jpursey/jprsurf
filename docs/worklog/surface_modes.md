@@ -220,7 +220,7 @@ root                      global mappings: modifiers (including mod:send_hold),
 
 ### Plugin properties and conditions (scene)
 
-- `Scene::AddProperty()` registers plugin-defined properties, failing on a
+- `Scene::AddUserProperty()` registers plugin-defined properties, failing on a
   name collision. `ToggleValueProperty` is set by code; `CallbackActionProperty`
   calls a function when triggered.
 - `ViewMapping::Config::condition` makes a mapping active only while a

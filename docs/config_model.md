@@ -41,16 +41,16 @@ them are frozen.
 
 ## The model at a glance
 
-| Part       | What it is                                                                   | Today                                          |
-| ---------- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
-| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `ConnectDevices()`, `Scene::AddDevice()`       |
-| Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `"XTouchExt/"` prefixes and the strip loops    |
-| Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, `Scene::AddProperty()` |
-| Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                         |
-| Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                           |
-| Templates  | Named, parameterized sets of mappings                                        | `AddTrackStripMappings()`                      |
-| Components | C++ behavior a config declares: exclusive groups, anchors, references, ...   | `PluginSurface` state and callbacks            |
-| Settings   | Surface-wide values                                                          | `Scene`'s track filter                         |
+| Part       | What it is                                                                   | Today                                              |
+| ---------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
+| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `ConnectDevices()`, `Scene::AddDevice()`           |
+| Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `"XTouchExt/"` prefixes and the strip loops        |
+| Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, `Scene::AddUserProperty()` |
+| Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                             |
+| Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                               |
+| Templates  | Named, parameterized sets of mappings                                        | `AddTrackStripMappings()`                          |
+| Components | C++ behavior a config declares: exclusive groups, anchors, references, ...   | `PluginSurface` state and callbacks                |
+| Settings   | Surface-wide values                                                          | `Scene`'s track filter                             |
 
 ## Devices
 
@@ -210,7 +210,7 @@ says what kind of property it is and what its scope is:
 | `cmd:`    | REAPER commands: a toggle if REAPER reports a toggle state, otherwise an action | Global         | `cmd:40029` (Undo)                                                  |
 | `state:`  | REAPER state: the polled state rows, the timeline, the rulers, and references   | Global         | `state:can_redo`, `state:timeline_position`, `state:selected_track` |
 | `mod:`    | Modifiers, built in and declared                                                | Global         | `mod:shift`, `mod:send_hold`                                        |
-| `const:`  | Values that never change, with their type from the value                        | Global         | `const:true`, `const:"Track"`                                       |
+| `const:`  | Fixed values that mappings write, with an explicit type, named by a number      | Global         | `const:1`                                                           |
 | `track:`  | The view's subject, when it is a track                                          | View           | `track:name`, `track:has_routes`                                    |
 | `route:`  | The view's subject, when it is a send or receive                                | View           | `route:volume`, `route:other_track`                                 |
 | `view:`   | The view itself: its list, and navigation                                       | View           | `view:bank_inc`, `view:child_route_toggle`                          |
@@ -228,6 +228,12 @@ guessing between a view and the scene:
   condition, or mode override is in.
 - `user:` resolves to its declaration: in that view, one of its ancestors, or
   the top level.
+
+**Constants.** A `const:` property is added with an explicit type and value
+(`Scene::AddConstProperty()`): a toggle, normalized, text, or color value so
+far. Its name is just a unique number, which a config never spells: code that
+maps a constant gets the name from the property it added. Writes to a constant
+do nothing.
 
 As built in properties and declared ones are in different namespaces, a
 config's names can never clash with a built in name, including one added in a
@@ -451,8 +457,8 @@ A mapping connects one property to one control widget, in one view.
   true (or false).
 - **Value**: a write mapping can write a fixed value, such as a light that is
   always on in a view (the Track mode button), or a fixed label on a display.
-  The value is a `const:` property, so this is an ordinary mapping. A config
-  can write the value directly, which becomes a `const:` name.
+  A config writes the value directly, and the scene adds a `const:` property
+  for it, so this is an ordinary mapping.
 
 A condition names exactly one property. Combining states is a component's
 job, or a polled state row's: `state:auto_override_any_latch` is a row that is
@@ -832,7 +838,7 @@ come together:
 - **Properties and views**, each with no change in behavior, used from C++:
   1. *Property namespaces and names* (done): the final names, before anything
      else adds more.
-  2. View conditions (done), then *Constant properties*.
+  2. View conditions and constant properties (done).
   3. *View subjects, lists, and references*: the largest change to `View`.
   4. *Properties declared on views, and track anchors*.
   5. *Modes from exclusive groups and picks*: after this, the plugin has no

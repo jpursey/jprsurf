@@ -14,6 +14,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "jpr/scene/command_properties.h"
+#include "jpr/scene/const_property.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/scene_state_property.h"
 #include "jpr/scene/state_properties.h"
@@ -74,9 +75,21 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   return property_ptr;
 }
 
-ViewProperty* Scene::AddViewProperty(std::unique_ptr<ViewProperty> property) {
+ViewProperty* Scene::DoAddUserProperty(std::unique_ptr<ViewProperty> property) {
   if (property == nullptr || !property->GetName().starts_with(kUserNamespace) ||
       properties_.contains(property->GetName())) {
+    return nullptr;
+  }
+  ViewProperty* added_property = property.get();
+  properties_.emplace(added_property->GetName(), std::move(property));
+  return added_property;
+}
+
+ViewProperty* Scene::AddConstProperty(ViewProperty::Type type,
+                                      ViewProperty::Value value) {
+  std::unique_ptr<ViewProperty> property =
+      CreateConstProperty(type, std::move(value));
+  if (property == nullptr) {
     return nullptr;
   }
   ViewProperty* added_property = property.get();

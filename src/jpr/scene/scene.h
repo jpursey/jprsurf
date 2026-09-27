@@ -64,9 +64,18 @@ class Scene final {
   // namespace, or is already used. On failure the property is destroyed.
   template <typename PropertyType>
     requires std::derived_from<PropertyType, ViewProperty>
-  PropertyType* AddProperty(std::unique_ptr<PropertyType> property) {
-    return static_cast<PropertyType*>(AddViewProperty(std::move(property)));
+  PropertyType* AddUserProperty(std::unique_ptr<PropertyType> property) {
+    return static_cast<PropertyType*>(DoAddUserProperty(std::move(property)));
   }
+
+  // Adds a property that always reads the value, and ignores writes, such as a
+  // light that is always on in a view. It has a new name in the const:
+  // namespace, so a mapping refers to it by the returned property's GetName().
+  //
+  // This returns null if the type and value can't be a constant (see
+  // CreateConstProperty() for the ones that can).
+  ViewProperty* AddConstProperty(ViewProperty::Type type,
+                                 ViewProperty::Value value);
 
   // Adds a new toggle property that can be mapped to an unused modifier flag.
   //
@@ -97,8 +106,8 @@ class Scene final {
   // the views are running, as it enables and disables them.
   void ApplyViewConditions();
 
-  // Implements AddProperty() for any property type.
-  ViewProperty* AddViewProperty(std::unique_ptr<ViewProperty> property);
+  // Implements AddUserProperty() for any property type.
+  ViewProperty* DoAddUserProperty(std::unique_ptr<ViewProperty> property);
 
   // Called by stateful properties that are being listened to, to register for
   // updates.

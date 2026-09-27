@@ -27,10 +27,12 @@ namespace jpr {
 // - REAPER commands, by command id (see CommandActionProperty).
 // - REAPER's global state: the polled state, the timeline, and the rulers.
 // - Modifiers, built in and added with Scene::AddModifierProperty().
-// - Properties added with Scene::AddProperty().
+// - Values that never change, added with Scene::AddConstProperty().
+// - Properties added with Scene::AddUserProperty().
 inline constexpr std::string_view kCmdNamespace = "cmd:";
 inline constexpr std::string_view kStateNamespace = "state:";
 inline constexpr std::string_view kModNamespace = "mod:";
+inline constexpr std::string_view kConstNamespace = "const:";
 inline constexpr std::string_view kUserNamespace = "user:";
 
 // Properties of the view a mapping is in, which the view looks up:

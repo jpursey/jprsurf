@@ -5,6 +5,7 @@
 
 set(jpr_scene_SOURCE
   command_properties.cc command_properties.h
+  const_property.cc const_property.h
   modifier_property.h
   polled_toggle_property.cc polled_toggle_property.h
   route_properties.cc route_properties.h
@@ -28,6 +29,10 @@ set(jpr_scene_DEPS
   jpr_common
   jpr_device
   reaper_sdk
+)
+
+set(jpr_scene_TEST_SOURCE
+  const_property_test.cc
 )
 
 gb_add_library(jpr_scene)
