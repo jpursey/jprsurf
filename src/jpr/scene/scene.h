@@ -51,14 +51,16 @@ class Scene final {
 
   // Controls and Properties
   Control* GetControl(std::string_view name) const;
+
+  // Returns the global property with the name, or null if there is none (see
+  // the property namespaces in view_property.h).
   ViewProperty* GetProperty(std::string_view name);
 
   // Adds a property created outside the scene (for instance, by the plugin), so
   // it can be mapped by name like any built-in property.
   //
-  // This returns the added property, or null if the name is already used by
-  // another property or reserved for a built-in property. On failure the
-  // property is destroyed.
+  // This returns the added property, or null if the name is not in the user:
+  // namespace, or is already used. On failure the property is destroyed.
   template <typename PropertyType>
     requires std::derived_from<PropertyType, ViewProperty>
   PropertyType* AddProperty(std::unique_ptr<PropertyType> property) {
@@ -67,12 +69,12 @@ class Scene final {
 
   // Adds a new toggle property that can be mapped to an unused modifier flag.
   //
-  // If no more modifier flags are available, or the property name is already
-  // used or reserved, this will return zero.
+  // If no more modifier flags are available, or the name is not in the mod:
+  // namespace or is already used, this will return zero.
   //
-  // Modifier properties are already preset for "shift", "ctrl", "alt", and
-  // "opt" modifiers, but this allows for up to 60 additional modifiers to be
-  // added for mapping to custom properties.
+  // Modifier properties are already preset for "mod:shift", "mod:ctrl",
+  // "mod:alt", and "mod:opt", but this allows for up to 60 additional modifiers
+  // to be added for mapping to custom properties.
   Modifiers AddModifierProperty(std::string_view name);
 
   // Activation and deactivation

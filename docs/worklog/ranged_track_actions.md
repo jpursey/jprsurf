@@ -107,20 +107,20 @@ Each layer only knows what it needs to:
 
 ### plugin: mappings
 
-- `AddTrackAnchorMapping()` adds a per-strip `anchor_<action>_<n>`
+- `AddTrackAnchorMapping()` adds a per-strip `user:anchor_<action>_<n>`
   `CallbackToggleProperty` mapped with `press_release`. True holds the action's
   anchor from the scene's `TrackActions` on the view's track (unless the strip
   is empty) and gives it to the view; false releases it from the view.
 - Select, per Track mode strip:
   - Press: `kUiSelected`. Double press: `kParentTrackChild`.
-  - Long press: `kUiSelected` and `anchor_select_<n>`. The select anchor's hold
-    turns on `mod_select_anchor`.
-  - `kUiSelected` requiring `mod_select_anchor`. While a select anchor is held,
+  - Long press: `kUiSelected` and `user:anchor_select_<n>`. The select
+    anchor's hold turns on `mod:select_anchor`.
+  - `kUiSelected` requiring `mod:select_anchor`. While a select anchor is held,
     other select buttons are in a press group with no double press, so the
     ranged press acts immediately. This is the same approach as holding Send
-    (`pick_send_receive_track_<n>` requires `mod_send_hold`).
-- Mute, solo, rec arm, per Track mode strip: `anchor_<action>_<n>` alongside the
-  existing mappings. They have no long or double press, so need no modifier.
+    (`user:pick_send_receive_track_<n>` requires `mod:send_hold`).
+- Mute, solo, rec arm, per Track mode strip: `user:anchor_<action>_<n>`
+  alongside the existing mappings. They have no long or double press, so need no modifier.
 - Global: `kTrackParent` on press, `kTrackRoot` on long press.
   `View::kTrackParent` centers the child context on the track that was left,
   sharing code with `kParentTrackParent`.

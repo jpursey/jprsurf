@@ -14,6 +14,35 @@
 
 namespace jpr {
 
+//==============================================================================
+// Property namespaces
+//==============================================================================
+
+// Every property name is a namespace and a name within it, such as
+// "track:mute". The namespace alone decides where the name is looked up.
+
+// Global properties, which the scene looks up (see Scene::GetProperty()):
+// - REAPER commands, by command id (see CommandActionProperty).
+// - REAPER's global state: the polled state, the timeline, and the rulers.
+// - Modifiers, built in and added with Scene::AddModifierProperty().
+// - Properties added with Scene::AddProperty().
+inline constexpr std::string_view kCmdNamespace = "cmd:";
+inline constexpr std::string_view kStateNamespace = "state:";
+inline constexpr std::string_view kModNamespace = "mod:";
+inline constexpr std::string_view kUserNamespace = "user:";
+
+// Properties of the view a mapping is in, which the view looks up:
+// - The view's track (see TrackProperties).
+// - The view's route (see RouteProperties).
+// - The view itself: its child context, and navigation (see View).
+inline constexpr std::string_view kTrackNamespace = "track:";
+inline constexpr std::string_view kRouteNamespace = "route:";
+inline constexpr std::string_view kViewNamespace = "view:";
+
+//==============================================================================
+// ViewProperty
+//==============================================================================
+
 // A view property represents a single property of the REAPER state that is
 // being mapped by one or more active views.
 //

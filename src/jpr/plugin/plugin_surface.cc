@@ -51,15 +51,16 @@ constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
 constexpr int kInfoStrip = 7;
 
 // The modifier property that is on while the Send/Receive mode button is held.
-constexpr std::string_view kSendHold = "mod_send_hold";
+constexpr std::string_view kSendHold = "mod:send_hold";
 
 // The modifier property that is on while a select button is held as the anchor
 // for a range of tracks.
-constexpr std::string_view kSelectAnchor = "mod_select_anchor";
+constexpr std::string_view kSelectAnchor = "mod:select_anchor";
 
 // The polled toggle that is on while the global automation override is Latch or
 // Latch Preview (see the automation buttons in InitViews()).
-constexpr std::string_view kAutoOverrideAnyLatch = "auto_override_any_latch";
+constexpr std::string_view kAutoOverrideAnyLatch =
+    "user:auto_override_any_latch";
 
 // The Send/Receive mode button only acts when released if it was pressed for
 // less than this. Holding it longer only shows which tracks have routes. This
@@ -108,8 +109,8 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
                    absl::StrCat(device_prefix, DeviceXTouch::Meter(strip)));
 }
 
-// Adds a property (anchor_<action>_<strip_index>) that anchors the view's track
-// for a ranged track action while the control is held, and maps it to the
+// Adds a property (user:anchor_<action>_<strip_index>) that anchors the view's
+// track for a ranged track action while the control is held, and maps it to the
 // control. Pressing the same control on another strip then acts on the range
 // from the anchor (see TrackActions). The anchor is released when the control
 // is released, or when the view releases it (see View::SetAnchor()). The
@@ -120,7 +121,8 @@ void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
                            InputConfig::PressBehavior press_behavior =
                                InputConfig::PressBehavior::kNormal,
                            Modifiers modifier = 0) {
-  const std::string name = absl::StrCat("anchor_", action, "_", strip_index);
+  const std::string name =
+      absl::StrCat(kUserNamespace, "anchor_", action, "_", strip_index);
   scene->AddProperty(std::make_unique<CallbackToggleProperty>(
       name, [scene, view, property, modifier](bool pressed) {
         Anchor<Track>& anchor = scene->GetTrackActions().GetAnchor(property);
@@ -140,13 +142,13 @@ void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
       {.read = {.press_behavior = press_behavior, .press_release = true}});
 }
 
-// Adds a property (toggle_<property>) that toggles the property, and turns
-// other off whenever it turns the property on. The control triggers it, and is
-// lit while the property is on. Only changes made through this property keep
-// the two exclusive, so nothing else should turn the property on.
-void AddExclusiveToggleMapping(Scene* scene, View* view, ViewProperty* property,
-                               ViewProperty* other, std::string_view control) {
-  const std::string name = absl::StrCat("toggle_", property->GetName());
+// Adds a property with the name that toggles the property, and turns other off
+// whenever it turns the property on. The control triggers it, and is lit while
+// the property is on. Only changes made through this property keep the two
+// exclusive, so nothing else should turn the property on.
+void AddExclusiveToggleMapping(Scene* scene, View* view, std::string_view name,
+                               ViewProperty* property, ViewProperty* other,
+                               std::string_view control) {
   scene->AddProperty(
       std::make_unique<CallbackActionProperty>(name, [property, other] {
         const bool on = !property->GetBool();
@@ -330,8 +332,8 @@ void PluginSurface::InitViews() {
   bool has_xtouch = (xtouch_in_ != nullptr && xtouch_out_ != nullptr);
   bool has_xtouch_ext =
       (xtouch_ext_in_ != nullptr && xtouch_ext_out_ != nullptr);
-  constexpr std::string_view kModMarker = "mod_marker";
-  constexpr std::string_view kModNudge = "mod_nudge";
+  constexpr std::string_view kModMarker = "mod:marker";
+  constexpr std::string_view kModNudge = "mod:nudge";
   Modifiers mod_marker = 0;
   Modifiers mod_nudge = 0;
   if (has_xtouch) {
@@ -489,9 +491,11 @@ void PluginSurface::InitViews() {
     // no Rewind or Forward mapping would match.
     ViewProperty* marker = scene_->GetProperty(kModMarker);
     ViewProperty* nudge = scene_->GetProperty(kModNudge);
-    AddExclusiveToggleMapping(scene_.get(), root_view, marker, nudge,
+    AddExclusiveToggleMapping(scene_.get(), root_view, "user:toggle_marker",
+                              marker, nudge,
                               absl::StrCat("XTouch/", DeviceXTouch::kMarker));
-    AddExclusiveToggleMapping(scene_.get(), root_view, nudge, marker,
+    AddExclusiveToggleMapping(scene_.get(), root_view, "user:toggle_nudge",
+                              nudge, marker,
                               absl::StrCat("XTouch/", DeviceXTouch::kNudge));
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
                           absl::StrCat("XTouch/", DeviceXTouch::kCycle));
@@ -582,8 +586,8 @@ void PluginSurface::InitViews() {
       track_view->AddMapping(
           ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
           {.read = {.required_modifiers = select_anchor_modifier}});
-      const std::string pick_name =
-          absl::StrCat("pick_send_receive_track_", child_view_index);
+      const std::string pick_name = absl::StrCat(
+          kUserNamespace, "pick_send_receive_track_", child_view_index);
       scene_->AddProperty(std::make_unique<CallbackActionProperty>(
           pick_name, [this, track_view] {
             requested_mode_ = SurfaceMode::kSendReceive;
@@ -759,9 +763,11 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
     const SurfaceMode mode = static_cast<SurfaceMode>(i);
     const ModeInfo& info = kModeInfo[i];
     const std::string available_name =
-        absl::StrCat("mode_", info.name, "_available");
-    const std::string active_name = absl::StrCat("mode_", info.name, "_active");
-    const std::string select_name = absl::StrCat("mode_", info.name, "_select");
+        absl::StrCat(kUserNamespace, "mode_", info.name, "_available");
+    const std::string active_name =
+        absl::StrCat(kUserNamespace, "mode_", info.name, "_active");
+    const std::string select_name =
+        absl::StrCat(kUserNamespace, "mode_", info.name, "_select");
 
     ModeButton& button = mode_buttons_[i];
     button.available = scene_->AddProperty(

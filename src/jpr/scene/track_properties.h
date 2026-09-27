@@ -45,7 +45,7 @@ class TrackProperty : public ViewProperty {
 
 class TrackMeterProperty : public TrackProperty {
  public:
-  static constexpr std::string_view kMeter = "track_meter";
+  static constexpr std::string_view kMeter = "track:meter";
 
   explicit TrackMeterProperty(Track* track)
       : TrackProperty(kMeter, Type::kNormalized, track) {}
@@ -73,27 +73,31 @@ class TrackMeterProperty : public TrackProperty {
 //   or no views are mapped to the track anymore.
 class TrackProperties final : public TrackListener {
  public:
-  static constexpr std::string_view kName = "track_name";
-  static constexpr std::string_view kColor = "track_color";
-  static constexpr std::string_view kSelected = "track_selected";
-  static constexpr std::string_view kMute = "track_mute";
-  static constexpr std::string_view kSolo = "track_solo";
-  static constexpr std::string_view kRecArm = "track_recarm";
-  static constexpr std::string_view kPan = "track_pan";
-  static constexpr std::string_view kVolume = "track_volume";
+  // Selected, mute, solo, record arm, pan, and volume each have two properties,
+  // which read the same value. Writing the plain one sets the value on this
+  // track alone. Writing the ui_ one runs the scene's track action instead
+  // (see TrackActions), which applies the modifiers, grouping, and anchors.
+  static constexpr std::string_view kName = "track:name";
+  static constexpr std::string_view kColor = "track:color";
+  static constexpr std::string_view kSelected = "track:selected";
+  static constexpr std::string_view kMute = "track:mute";
+  static constexpr std::string_view kSolo = "track:solo";
+  static constexpr std::string_view kRecArm = "track:rec_arm";
+  static constexpr std::string_view kPan = "track:pan";
+  static constexpr std::string_view kVolume = "track:volume";
   static constexpr std::string_view kMeter = TrackMeterProperty::kMeter;
-  static constexpr std::string_view kUiSelected = "track_ui_selected";
-  static constexpr std::string_view kUiMute = "track_ui_mute";
-  static constexpr std::string_view kUiSolo = "track_ui_solo";
-  static constexpr std::string_view kUiRecArm = "track_ui_recarm";
-  static constexpr std::string_view kUiPan = "track_ui_pan";
-  static constexpr std::string_view kUiVolume = "track_ui_volume";
-  static constexpr std::string_view kTrackIsFolder = "track_is_folder";
+  static constexpr std::string_view kUiSelected = "track:ui_selected";
+  static constexpr std::string_view kUiMute = "track:ui_mute";
+  static constexpr std::string_view kUiSolo = "track:ui_solo";
+  static constexpr std::string_view kUiRecArm = "track:ui_rec_arm";
+  static constexpr std::string_view kUiPan = "track:ui_pan";
+  static constexpr std::string_view kUiVolume = "track:ui_volume";
+  static constexpr std::string_view kTrackIsFolder = "track:is_folder";
   // True if the track has a parent track, which is every track except the
   // master track (and the stub track).
-  static constexpr std::string_view kTrackHasParent = "track_has_parent";
-  static constexpr std::string_view kTrackExists = "track_exists";
-  static constexpr std::string_view kTrackHasRoutes = "track_has_routes";
+  static constexpr std::string_view kTrackHasParent = "track:has_parent";
+  static constexpr std::string_view kTrackExists = "track:exists";
+  static constexpr std::string_view kTrackHasRoutes = "track:has_routes";
 
   // The track that these properties are tied to, and the track actions they
   // use, which must not be null.

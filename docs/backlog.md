@@ -35,23 +35,15 @@ comes out of this list in the commit that does it.
 - **Background:** [config_model.md](config_model.md) (Properties, Names)
 
 Give every property its final name before the components below add more, so
-none of them has to be renamed later:
-- **Namespaces:** every property is `namespace:name` (`cmd:`, `state:`, `mod:`,
-  `track:`, `route:`, `view:`, or `user:`), and the namespace alone decides
-  where a name is looked up. This replaces looking in the view first and then
-  the scene, and the check in `Scene::AddProperty()` for names that clash with
-  built in ones. Properties the plugin adds itself go in `user:` until the
-  components below replace them.
+none of them has to be renamed later. Every property is now in a namespace,
+which alone decides where its name is looked up. What is left:
 - **Named state rows:** `state:0` to `state:18` become names
-  (`state:can_redo`, and so on), looked up by name when a mapping is added. The
-  timeline and ruler properties move under `state:` too.
-- **The rest of the Names audit:** `track:rec_arm`, `state:secondary_ruler_*`,
-  and `mod:marker` and the other declared modifiers.
+  (`state:can_redo`, and so on), looked up by name when a mapping is added.
+- **`state:auto_override_any_latch`:** a polled state row, rather than a
+  property the plugin adds itself.
 
-This also settles the `track_ui_*` names beside `track_*`, which
-[track_actions.md](worklog/track_actions.md) moved to `scene` without renaming.
-Device control names wait for *Device types and catalogs*. The names are C++ constants today, so this is mostly
-mechanical, and the smoke test verifies it.
+The names are C++ constants today, so this is mostly mechanical, and the smoke
+test verifies it.
 
 ## View conditions and fixed write values
 
@@ -66,7 +58,7 @@ mechanical, and the smoke test verifies it.
   between runs, as views can't be enabled or disabled while it is running
   them. This is the deferral that `requested_mode_` and `ApplyRequestedMode()`
   do by hand today, and the two mode views move onto conditions on the
-  existing `mode_<name>_active` toggles.
+  existing `user:mode_<name>_active` toggles.
 - **Fixed write values:** a write mapping can write a constant instead of a
   property, such as a light that is always on in a view. The mode button
   lights use it once modes are exclusive groups.
@@ -118,11 +110,9 @@ wants a worklog plan.
   descendants, and one declared at the top level is global. Declaring a name
   that is already visible is an error.
 - **Track anchor:** the first component declared on a view, replacing
-  `AddTrackAnchorMapping()` and its `anchor_<action>_<n>` properties with
+  `AddTrackAnchorMapping()` and its `user:anchor_<action>_<n>` properties with
   `user:anchor_select` and so on, the same on every strip. The plugin's empty
   strip check moves into it.
-- **`state:auto_override_any_latch`:** a polled state row, rather than a
-  property the plugin adds itself.
 
 The anchors themselves are in `scene`'s `TrackActions` (see
 [track_actions.md](worklog/track_actions.md)), and the component builds on
@@ -148,7 +138,7 @@ The last of the plugin's surface state and callbacks:
 - **Pick:** sets a reference and turns a toggle on, if a field of the source
   is true. It enters Send/Receive mode from the Send button and from a strip's
   select button, replacing `requested_send_receive_track_`,
-  `TryEnterSendReceiveMode()`, and the `pick_send_receive_track_<n>`
+  `TryEnterSendReceiveMode()`, and the `user:pick_send_receive_track_<n>`
   properties.
 - **Tap:** a press behavior in `device`, alongside long and double press. It
   fires on release if the press was short and the control's held modifier

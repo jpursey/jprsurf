@@ -47,8 +47,8 @@ void SetTrackToParent(View* view) {
 }  // namespace
 
 // A view property that changes the child context index by a specified offset
-// when triggered. This is used for the child_inc, child_dec, child_bank_inc,
-// and child_bank_dec properties.
+// when triggered. This is used for the kChildInc and kChildDec properties, and
+// with ChildIndexBankOffsetProperty for kBankInc and kBankDec.
 class View::ChildIndexOffsetProperty : public ViewProperty {
  public:
   ChildIndexOffsetProperty(View* view, std::string_view name, int offset)
@@ -506,18 +506,17 @@ void View::SetChildRoutes() {
 }
 
 ViewProperty* View::GetProperty(std::string_view name) const {
-  if (ViewProperty* property = track_properties_.GetProperty(name);
-      property != nullptr) {
-    return property;
+  if (name.starts_with(kTrackNamespace)) {
+    return track_properties_.GetProperty(name);
   }
-  if (ViewProperty* property = route_properties_.GetProperty(name);
-      property != nullptr) {
-    return property;
+  if (name.starts_with(kRouteNamespace)) {
+    return route_properties_.GetProperty(name);
   }
-  if (auto it = properties_.find(name); it != properties_.end()) {
-    return it->second.get();
+  if (name.starts_with(kViewNamespace)) {
+    auto it = properties_.find(name);
+    return it != properties_.end() ? it->second.get() : nullptr;
   }
-  return nullptr;
+  return scene_->GetProperty(name);
 }
 
 bool View::AddMapping(ViewMapping::TypeFlags type,
@@ -528,9 +527,6 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
     return false;
   }
   ViewProperty* property = GetProperty(property_name);
-  if (property == nullptr) {
-    property = scene_->GetProperty(property_name);
-  }
   if (property == nullptr) {
     LOG(ERROR) << "Failed to add mapping for view '" << GetName()
                << "': property '" << property_name << "' not found";
@@ -546,9 +542,6 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
   for (const auto& override : config.write.mode_overrides) {
     ViewProperty* mode_property = GetProperty(override.property);
     if (mode_property == nullptr) {
-      mode_property = scene_->GetProperty(override.property);
-    }
-    if (mode_property == nullptr) {
       LOG(ERROR) << "Failed to add mapping for view '" << GetName()
                  << "': mode property '" << override.property << "' not found";
       return false;
@@ -558,9 +551,6 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
   ViewProperty* condition_property = nullptr;
   if (config.condition.has_value()) {
     condition_property = GetProperty(config.condition->property);
-    if (condition_property == nullptr) {
-      condition_property = scene_->GetProperty(config.condition->property);
-    }
     if (condition_property == nullptr) {
       LOG(ERROR) << "Failed to add mapping for view '" << GetName()
                  << "': condition property '" << config.condition->property

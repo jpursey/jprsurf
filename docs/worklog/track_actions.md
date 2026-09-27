@@ -25,8 +25,8 @@ The surface behaves as it did, except in these rare cases:
   dereferenced null.
 - Pressing the pot button on a centered track no longer re-centers its grouped
   tracks: pan skips an unchanged value, as volume does.
-- Writing the plain `track_selected` property no longer sets the last touched
-  track. Nothing maps it today. `track_ui_selected` still sets it, as before.
+- Writing the plain `track:selected` property no longer sets the last touched
+  track. Nothing maps it today. `track:ui_selected` still sets it, as before.
 
 ## REAPER facts
 
@@ -118,7 +118,7 @@ CLAUDE.md performance rule covers that.
     `Scene::GetTrackFilter()` returns it.
   - `GetTrackActions()` gives the actions to views and the plugin.
 - `View` reads the filter from its scene. `TrackProperties` gets its
-  `TrackActions` from its view, and `track_is_folder` uses that filter.
+  `TrackActions` from its view, and `track:is_folder` uses that filter.
 - **`TrackActions`:**
   - `GetAnchor(TrackBoolProperty)` returns the anchor for select, mute, solo, or
     rec arm.
@@ -150,13 +150,12 @@ CLAUDE.md performance rule covers that.
 - **Anchors on deleted tracks.** An anchor held on a track that no longer exists
   is treated as not held, so the press falls through to the modifiers. The
   strip's view releases the hold itself (turning off its modifier, such as
-  `mod_select_anchor`) when the track list refreshes and the strip shows another
+  `mod:select_anchor`) when the track list refreshes and the strip shows another
   track.
-- **`track_ui_*` properties.** These call `TrackActions`, and the plain
-  `track_*` properties call `Track`'s setters directly.
+- **`track:ui_*` properties.** These call `TrackActions`, and the plain
+  `track:*` properties call `Track`'s setters directly.
   - One class covers select, mute, solo, and rec arm (`TrackBoolViewProperty`),
     and `TrackPanProperty` and `TrackVolumeProperty` handle both forms.
-  - The `track_ui_*` names stay until *Property namespaces and names*.
 
 **Brittleness:** the plugin must hold anchors from the same `TrackActions` that
 acts on them. It gets them from the scene, so there is only one place to get

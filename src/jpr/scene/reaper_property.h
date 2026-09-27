@@ -9,6 +9,7 @@
 
 #include "jpr/common/numbered_name.h"
 #include "jpr/scene/scene_state_property.h"
+#include "jpr/scene/view_property.h"
 
 namespace jpr {
 
@@ -19,11 +20,8 @@ namespace jpr {
 // Command properties are named "cmd:<id>", where the id is a REAPER command id.
 // They are a CommandToggleProperty if REAPER reports a toggle state for the
 // command, and a CommandActionProperty otherwise.
-inline constexpr std::string_view kCmdPrefix = "cmd:";
-
-// The name of the command property for a REAPER command id.
 template <int Id>
-inline constexpr std::string_view kCmdName = kNumberedName<kCmdPrefix, Id>;
+inline constexpr std::string_view kCmdName = kNumberedName<kCmdNamespace, Id>;
 
 inline constexpr std::string_view kCmdSoloInFront = kCmdName<40745>;
 inline constexpr std::string_view kCmdMetronome = kCmdName<40364>;
@@ -118,12 +116,9 @@ class CommandToggleProperty final : public SceneStateProperty {
 
 // Polled toggle properties are named "state:<index>", where the index selects
 // one of the states below.
-inline constexpr std::string_view kStatePrefix = "state:";
-
-// The name of the polled toggle property at an index in the table.
 template <int Index>
 inline constexpr std::string_view kStateName =
-    kNumberedName<kStatePrefix, Index>;
+    kNumberedName<kStateNamespace, Index>;
 
 // True while any track is soloed.
 inline constexpr std::string_view kStateAnyTrackSolo = kStateName<0>;

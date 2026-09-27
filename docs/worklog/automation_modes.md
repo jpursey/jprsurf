@@ -136,8 +136,8 @@ All in `PluginSurface::InitViews()`, from a small `kAutoModeButtons` table:
   - Override: a read mapping to its `kStateAutoOverride*` toggle, and a light
     from the same toggle with a `mode_overrides` entry on
     `kStateAutoOverrideLatchPreview` to blink.
-- Latch's override light is instead `auto_override_any_latch`, on for Latch or
-  Latch Preview. It exists only because the X-Touch has no Latch Preview
+- Latch's override light is instead `user:auto_override_any_latch`, on for
+  Latch or Latch Preview. It exists only because the X-Touch has no Latch Preview
   button, so the plugin adds it to the scene itself as a read-only
   `PolledToggleProperty`, rather than it being a scene row.
 - Conditions re-register read mappings when they switch, which loses a pending

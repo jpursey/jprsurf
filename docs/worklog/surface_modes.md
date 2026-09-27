@@ -26,9 +26,10 @@ they behave and how they are built, as a reference for adding more modes.
 - Each mode button is off when the mode is unavailable, solid when it is
   available, and blinking when it is the current mode. The current mode stays
   lit even if it is no longer available.
-- Each button is written from a `mode_<name>_available` `ToggleValueProperty`,
-  with a `mode_overrides` entry on `mode_<name>_active` selecting the blink
-  output mode. Presses go to a `mode_<name>_select` `CallbackActionProperty`.
+- Each button is written from a `user:mode_<name>_available`
+  `ToggleValueProperty`, with a `mode_overrides` entry on
+  `user:mode_<name>_active` selecting the blink output mode. Presses go to a
+  `user:mode_<name>_select` `CallbackActionProperty`.
 - `McuLight()` note outputs have two output modes: mode 0 is off/on (velocity
   0/127) and mode 1 is off/blink (velocity 0/1). The X-Touch blinks natively.
   `MidiOut` compares note-on velocity, so switching between solid and blinking
@@ -43,7 +44,7 @@ they behave and how they are built, as a reference for adding more modes.
 ## View structure
 
 ```
-root                      global mappings: modifiers (including mod_send_hold),
+root                      global mappings: modifiers (including mod:send_hold),
 │                         transport, timecode, misc buttons, mode buttons
 ├── MasterFader           master track volume
 ├── TrackMode             enabled in Track mode
@@ -59,7 +60,8 @@ root                      global mappings: modifiers (including mod_send_hold),
 - Only one of `TrackMode` and `SendReceiveMode` is enabled at a time.
 - The Info strip mappings are on `SendReceiveMode` itself rather than a child
   view: a view's own mappings use its own track and aren't affected by its
-  child context or banking, and it has the `child_route_type_name` property.
+  child context or banking, and it has the `view:child_route_type_name`
+  property.
 - `SendReceiveMode`'s bank size is its child view count, so Bank Left/Right
   pages through all route strips at once.
 - The Send/Receive track is not stored separately: it is always
@@ -78,13 +80,13 @@ root                      global mappings: modifiers (including mod_send_hold),
 
 ### Holding Send
 
-- Send is also a hold modifier (`mod_send_hold`). While it is held:
+- Send is also a hold modifier (`mod:send_hold`). While it is held:
   - Select lights show which tracks have sends or receives
-    (`track_has_routes`) instead of REAPER's selection. The two select light
-    mappings switch with conditions on `mod_send_hold`.
+    (`track:has_routes`) instead of REAPER's selection. The two select light
+    mappings switch with conditions on `mod:send_hold`.
   - Pressing a select button enters Send/Receive mode for that track (if it can
-    be shown), through a per-strip `pick_send_receive_track_<n>` action with
-    `required_modifiers` set to the Send hold modifier. The normal select
+    be shown), through a per-strip `user:pick_send_receive_track_<n>` action
+    with `required_modifiers` set to the Send hold modifier. The normal select
     press, double press, and long press are excluded by the modifier masks.
   - Holding Send never changes REAPER's track selection.
 - Send acts on release, not press, in every mode. The press records the
@@ -112,10 +114,10 @@ root                      global mappings: modifiers (including mod_send_hold),
   off.
 - Scribble: the other track's name on top, the route volume on the bottom, and
   the other track's color.
-- Select navigates to the other end of the route (`parent_route_other_track`):
-  a send goes to the destination track showing its receives, and a receive goes
-  to the source track showing its sends. This never changes REAPER's
-  selection.
+- Select navigates to the other end of the route
+  (`view:parent_route_other_track`): a send goes to the destination track
+  showing its receives, and a receive goes to the source track showing its
+  sends. This never changes REAPER's selection.
 - Rec and Solo are unmapped, so they are cleared.
 - Bank and Channel Left/Right scroll through the routes.
 
@@ -124,7 +126,8 @@ root                      global mappings: modifiers (including mod_send_hold),
 - The last X-Touch strip (`kInfoStrip`) shows the Send/Receive track, with the
   same controls as a Track mode strip (fader, pot, mute, solo, rec arm, meter,
   name, color).
-- The bottom scribble line shows "Send" or "Recv" (`child_route_type_name`).
+- The bottom scribble line shows "Send" or "Recv"
+  (`view:child_route_type_name`).
 - Select is unmapped.
 
 ### Changing the track or route type
@@ -203,13 +206,13 @@ root                      global mappings: modifiers (including mod_send_hold),
   of the view's track, starting at the child context index. Each child view's
   track is the track at the other end of its route (or the stub track past the
   end), so the existing `TrackProperties` show its name and color.
-- `RouteProperties` (`route_volume`, `route_pan`, `route_mute`,
-  `route_exists`) are bound to (track, route type, index).
-- View properties: `parent_route_other_track` (navigate across a route),
-  `child_route_toggle` (toggle sends and receives), and
-  `child_route_type_name` ("Send" / "Recv"). `View::ToggleChildRouteType()`
+- `RouteProperties` (`route:volume`, `route:pan`, `route:mute`,
+  `route:exists`) are bound to (track, route type, index).
+- View properties: `view:parent_route_other_track` (navigate across a route),
+  `view:child_route_toggle` (toggle sends and receives), and
+  `view:child_route_type_name` ("Send" / "Recv"). `View::ToggleChildRouteType()`
   is public for the plugin.
-- `track_has_routes`: a read-only track property, true if the track has any
+- `track:has_routes`: a read-only track property, true if the track has any
   sends or receives.
 
 ### Plugin properties and conditions (scene)

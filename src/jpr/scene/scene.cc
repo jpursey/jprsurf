@@ -19,6 +19,96 @@
 
 namespace jpr {
 
+namespace {
+
+// Creates the property for a "cmd:<id>" name, or returns null if the id is not
+// a command id.
+std::unique_ptr<ViewProperty> CreateCommandProperty(Scene* scene,
+                                                    std::string_view name) {
+  int command_id = 0;
+  if (!absl::SimpleAtoi(name.substr(kCmdNamespace.size()), &command_id) ||
+      command_id == 0) {
+    return nullptr;
+  }
+  int state = GetToggleCommandState(command_id);
+  if (state < 0) {
+    return std::make_unique<CommandActionProperty>(name, command_id);
+  }
+  return std::make_unique<CommandToggleProperty>(scene, name, command_id,
+                                                 state > 0);
+}
+
+// Creates the property for a "state:" name, or returns null if there is none.
+std::unique_ptr<ViewProperty> CreateStateProperty(Scene* scene,
+                                                  std::string_view name) {
+  // Polled toggle properties.
+  if (int index = 0;
+      absl::SimpleAtoi(name.substr(kStateNamespace.size()), &index)) {
+    PolledToggleProperty::ReadFunction read =
+        PolledToggleProperty::GetReadFunction(index);
+    if (read == nullptr) {
+      return nullptr;
+    }
+    return std::make_unique<PolledToggleProperty>(
+        scene, name, read, PolledToggleProperty::GetWriteFunction(index));
+  }
+
+  // Timeline position properties.
+  if (name == kTimelinePosition) {
+    return std::make_unique<TimelinePositionProperty>(
+        scene, name, TimelinePositionProperty::Source::kCurrent);
+  }
+  if (name == kPlaybackPosition) {
+    return std::make_unique<TimelinePositionProperty>(
+        scene, name, TimelinePositionProperty::Source::kPlayback);
+  }
+  if (name == kEditPosition) {
+    return std::make_unique<TimelinePositionProperty>(
+        scene, name, TimelinePositionProperty::Source::kEdit);
+  }
+
+  // Primary ruler mode properties.
+  if (name == kRulerMode) {
+    return std::make_unique<RulerModeProperty>(scene, name);
+  }
+  if (name == kRulerBeats) {
+    return std::make_unique<IsRulerModeProperty>(scene, name,
+                                                 TimelineMode::kBeats);
+  }
+  if (name == kRulerTime) {
+    return std::make_unique<IsRulerModeProperty>(scene, name,
+                                                 TimelineMode::kTime);
+  }
+  if (name == kRulerFrames) {
+    return std::make_unique<IsRulerModeProperty>(scene, name,
+                                                 TimelineMode::kFrames);
+  }
+  if (name == kRulerSamples) {
+    return std::make_unique<IsRulerModeProperty>(scene, name,
+                                                 TimelineMode::kSamples);
+  }
+
+  // Secondary ruler mode properties.
+  if (name == kSecondaryRulerMode) {
+    return std::make_unique<SecondaryRulerModeProperty>(scene, name);
+  }
+  if (name == kSecondaryRulerTime) {
+    return std::make_unique<IsSecondaryRulerModeProperty>(scene, name,
+                                                          TimelineMode::kTime);
+  }
+  if (name == kSecondaryRulerFrames) {
+    return std::make_unique<IsSecondaryRulerModeProperty>(
+        scene, name, TimelineMode::kFrames);
+  }
+  if (name == kSecondaryRulerSamples) {
+    return std::make_unique<IsSecondaryRulerModeProperty>(
+        scene, name, TimelineMode::kSamples);
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 Scene::Scene(std::string_view name, TrackFilter track_filter)
     : name_(name), track_actions_(track_filter) {
   root_view_ = absl::WrapUnique(new View(this, nullptr, "root"));
@@ -57,95 +147,25 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }
-  if (name.starts_with(kCmdPrefix)) {
-    int command_id = 0;
-    if (!absl::SimpleAtoi(name.substr(kCmdPrefix.size()), &command_id) ||
-        command_id == 0) {
-      return nullptr;
-    }
-    int state = GetToggleCommandState(command_id);
-    std::unique_ptr<ViewProperty> property;
-    if (state < 0) {
-      property = std::make_unique<CommandActionProperty>(name, command_id);
-    } else {
-      property = std::make_unique<CommandToggleProperty>(this, name, command_id,
-                                                         state > 0);
-    }
-    auto property_ptr = property.get();
-    properties_[name] = std::move(property);
-    return property_ptr;
-  }
-  if (name.starts_with(kStatePrefix)) {
-    int index = 0;
-    if (!absl::SimpleAtoi(name.substr(kStatePrefix.size()), &index)) {
-      return nullptr;
-    }
-    PolledToggleProperty::ReadFunction read =
-        PolledToggleProperty::GetReadFunction(index);
-    if (read == nullptr) {
-      return nullptr;
-    }
-    auto property = std::make_unique<PolledToggleProperty>(
-        this, name, read, PolledToggleProperty::GetWriteFunction(index));
-    auto property_ptr = property.get();
-    properties_[name] = std::move(property);
-    return property_ptr;
-  }
 
-  // Timeline position properties.
+  // Command and state properties are created the first time they are used.
   std::unique_ptr<ViewProperty> property;
-  if (name == kTimelinePosition) {
-    property = std::make_unique<TimelinePositionProperty>(
-        this, name, TimelinePositionProperty::Source::kCurrent);
-  } else if (name == kPlaybackPosition) {
-    property = std::make_unique<TimelinePositionProperty>(
-        this, name, TimelinePositionProperty::Source::kPlayback);
-  } else if (name == kEditPosition) {
-    property = std::make_unique<TimelinePositionProperty>(
-        this, name, TimelinePositionProperty::Source::kEdit);
+  if (name.starts_with(kCmdNamespace)) {
+    property = CreateCommandProperty(this, name);
+  } else if (name.starts_with(kStateNamespace)) {
+    property = CreateStateProperty(this, name);
   }
-  // Primary ruler mode properties.
-  else if (name == kRulerMode) {
-    property = std::make_unique<RulerModeProperty>(this, name);
-  } else if (name == kRulerBeats) {
-    property =
-        std::make_unique<IsRulerModeProperty>(this, name, TimelineMode::kBeats);
-  } else if (name == kRulerTime) {
-    property =
-        std::make_unique<IsRulerModeProperty>(this, name, TimelineMode::kTime);
-  } else if (name == kRulerFrames) {
-    property = std::make_unique<IsRulerModeProperty>(this, name,
-                                                     TimelineMode::kFrames);
-  } else if (name == kRulerSamples) {
-    property = std::make_unique<IsRulerModeProperty>(this, name,
-                                                     TimelineMode::kSamples);
+  if (property == nullptr) {
+    return nullptr;
   }
-  // Secondary ruler mode properties.
-  else if (name == kRuler2Mode) {
-    property = std::make_unique<SecondaryRulerModeProperty>(this, name);
-  } else if (name == kRuler2Time) {
-    property = std::make_unique<IsSecondaryRulerModeProperty>(
-        this, name, TimelineMode::kTime);
-  } else if (name == kRuler2Frames) {
-    property = std::make_unique<IsSecondaryRulerModeProperty>(
-        this, name, TimelineMode::kFrames);
-  } else if (name == kRuler2Samples) {
-    property = std::make_unique<IsSecondaryRulerModeProperty>(
-        this, name, TimelineMode::kSamples);
-  }
-
-  if (property != nullptr) {
-    auto property_ptr = property.get();
-    properties_[name] = std::move(property);
-    return property_ptr;
-  }
-  return nullptr;
+  ViewProperty* property_ptr = property.get();
+  properties_.emplace(name, std::move(property));
+  return property_ptr;
 }
 
 ViewProperty* Scene::AddViewProperty(std::unique_ptr<ViewProperty> property) {
-  // GetProperty() also finds built-in properties that are created on demand,
-  // so their names can't be taken either.
-  if (property == nullptr || GetProperty(property->GetName()) != nullptr) {
+  if (property == nullptr || !property->GetName().starts_with(kUserNamespace) ||
+      properties_.contains(property->GetName())) {
     return nullptr;
   }
   ViewProperty* added_property = property.get();
@@ -154,7 +174,8 @@ ViewProperty* Scene::AddViewProperty(std::unique_ptr<ViewProperty> property) {
 }
 
 Modifiers Scene::AddModifierProperty(std::string_view name) {
-  if (next_modifier_flag_ == 0 || properties_.contains(name)) {
+  if (next_modifier_flag_ == 0 || !name.starts_with(kModNamespace) ||
+      properties_.contains(name)) {
     return 0;
   }
   Modifiers flag = next_modifier_flag_;

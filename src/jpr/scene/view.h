@@ -42,7 +42,7 @@ class View final {
     // (kReceives) of this view's track. Each child view's route properties
     // refer to its route, and its track is the track at the other end of the
     // route. If there are fewer routes than child views, the remaining child
-    // views have no route (route_exists is false) and the stub track.
+    // views have no route (route:exists is false) and the stub track.
     kSends,
     kReceives,
   };
@@ -52,41 +52,43 @@ class View final {
   //----------------------------------------------------------------------------
 
   // Action properties that will move the child context index one less
-  // (child_dec) or one more (child_inc). The resulting child_index will be
+  // (kChildDec) or one more (kChildInc). The resulting child_index will be
   // clamped to the number of child views that match the child context type.
-  static constexpr std::string_view kChildDec = "child_dec";
-  static constexpr std::string_view kChildInc = "child_inc";
+  static constexpr std::string_view kChildDec = "view:child_dec";
+  static constexpr std::string_view kChildInc = "view:child_inc";
 
-  // Action properties that are the same as "child_dec" and "child_inc" except
-  // that they will move the child context index by a bank size settable via
+  // Action properties that are the same as kChildDec and kChildInc except that
+  // they move the child context index by a bank size settable via
   // SetBankSize(). The default bank size is 8.
-  static constexpr std::string_view kBankDec = "bank_dec";
-  static constexpr std::string_view kBankInc = "bank_inc";
+  static constexpr std::string_view kBankDec = "view:bank_dec";
+  static constexpr std::string_view kBankInc = "view:bank_inc";
 
   // This switches this view's track to be its parent track, if it has a parent
   // track. Otherwise, this does nothing. This is effectively navigating "up"
   // one level. The child context index is set so the track that was left is
   // centered in the child views, if possible.
-  static constexpr std::string_view kTrackParent = "track_parent";
+  static constexpr std::string_view kTrackParent = "view:track_parent";
 
   // This sets his view's track to be the master track.
-  static constexpr std::string_view kTrackRoot = "track_root";
+  static constexpr std::string_view kTrackRoot = "view:track_root";
 
   // Tells the parent view to be the same track view as this view. This
   // effectively results in navigating "in" to the current track. If there is no
   // parent view, or this view does not child tracks, this does nothing.
-  static constexpr std::string_view kParentTrackChild = "parent_track_child";
+  static constexpr std::string_view kParentTrackChild =
+      "view:parent_track_child";
 
   // Tells the parent view to switch to its parent track. This is effectively
   // results in navigating "up" to the parent track from a child track. If there
   // is no parent view, or the parent view's track does not have a parent track,
   // this does nothing. This is the same as kTrackParent on the parent view.
-  static constexpr std::string_view kParentTrackParent = "parent_track_parent";
+  static constexpr std::string_view kParentTrackParent =
+      "view:parent_track_parent";
 
   // Tells the parent view to switch to the master track. This is effectively
   // results in navigating "up" to the root track from a child track. If there
   // is no parent view, this does nothing.
-  static constexpr std::string_view kParentTrackRoot = "parent_track_root";
+  static constexpr std::string_view kParentTrackRoot = "view:parent_track_root";
 
   // Tells the parent view to show the routes of the track at the other end of
   // this view's route, switching between sends and receives. This effectively
@@ -95,17 +97,18 @@ class View final {
   // scrolled so the route back to the original track is shown. If this view has
   // no route, or the parent view is not showing routes, this does nothing.
   static constexpr std::string_view kParentRouteOtherTrack =
-      "parent_route_other_track";
+      "view:parent_route_other_track";
 
   // Switches this view's child views between showing sends and receives. This
   // does nothing if this view is not showing routes, or its track has no routes
   // of the other type.
-  static constexpr std::string_view kChildRouteToggle = "child_route_toggle";
+  static constexpr std::string_view kChildRouteToggle =
+      "view:child_route_toggle";
 
   // A text property with the name of the routes shown by this view's child
   // views: "Send" or "Recv", or empty if this view is not showing routes.
   static constexpr std::string_view kChildRouteTypeName =
-      "child_route_type_name";
+      "view:child_route_type_name";
 
   //----------------------------------------------------------------------------
   // Construction / Destruction
@@ -292,11 +295,9 @@ class View final {
 
   View(Scene* scene, View* parent_view, std::string_view name);
 
-  // Returns the property with the given name in this view's scope, or null if
-  // no such property exists. For example, if this view has a track context,
-  // this will return the track property with the given name for that track, if
-  // it exists. If it is a view-specific property, such as "child_inc", then
-  // this will return that property.
+  // Returns the property with the given name, as seen from this view, or null
+  // if no such property exists (see the property namespaces in
+  // view_property.h).
   ViewProperty* GetProperty(std::string_view name) const;
 
   // Sets the context for all child views with a track context type to the

@@ -11,9 +11,10 @@ it seeds the public spec of the config language. Until those items land,
 JPRSurf's surface is still built in C++ by `PluginSurface`, and this doc
 describes what that code turns into.
 
-Property names in this doc use the proposed namespaces (`track:name`), and are
-otherwise illustrative. The **Today** notes use the current C++ names.
-[Names](#names) covers what changes before any of them are frozen.
+Property names in this doc are the ones the code uses, except for properties
+that components will provide, whose names are illustrative. The **Today** notes
+use the current C++ names. [Names](#names) covers what changes before any of
+them are frozen.
 
 ## Principles
 
@@ -230,6 +231,13 @@ guessing between a view and the scene:
 As built in properties and declared ones are in different namespaces, a
 config's names can never clash with a built in name, including one added in a
 later version.
+
+**Track changes.** A track's selected, mute, solo, rec arm, pan, and volume
+each have two properties, which read the same value but change it differently.
+The plain one (`track:mute`) sets the value on the track alone. The `ui_` one
+(`track:ui_mute`) runs the scene's track action, like the control in REAPER's
+UI, with the surface's modifiers, grouping, and anchors (see
+[track_actions.md](worklog/track_actions.md)).
 
 ### References
 
@@ -496,8 +504,8 @@ behavior.
 - **Parameters:** none.
 - **Provides:** `mod:<name>`, a toggle backed by a modifier bit, which modifier
   sets can use.
-- **Today:** `Scene::AddModifierProperty()`, for `mod_marker`, `mod_nudge`,
-  `mod_send_hold`, and `mod_select_anchor`.
+- **Today:** `Scene::AddModifierProperty()`, for `mod:marker`, `mod:nudge`,
+  `mod:send_hold`, and `mod:select_anchor`.
 
 ### Exclusive group
 
@@ -523,7 +531,7 @@ behavior.
     `send_receive` requiring `user:current_track`): `SurfaceMode`,
     `kModeInfo`, `ModeButton`, `InitModeButtons()`, `UpdateModeButtons()`,
     `IsModeAvailable()`, the `Enter*Mode()` functions, `mode_buttons_changed_`,
-    and the `mode_<name>_*` properties.
+    and the `user:mode_<name>_*` properties.
 
 ### Track anchor
 
@@ -533,7 +541,7 @@ behavior.
 - **Provides:** a toggle, for a held mapping. While it is on, it holds the
   action's anchor on the view's track, unless the strip is empty. The anchor is
   released with the button, or when the view's subject changes.
-- **Today:** `AddTrackAnchorMapping()` and its `anchor_<action>_<n>`
+- **Today:** `AddTrackAnchorMapping()` and its `user:anchor_<action>_<n>`
   properties.
 
 ### Reference
@@ -565,10 +573,11 @@ behavior.
 - **Provides:** an action that, if the source has a subject and the field is
   true, sets the reference to the source's subject, and turns the toggle on.
 - **Today:** `requested_send_receive_track_`, `TryEnterSendReceiveMode()`,
-  `CanShowRoutes()`, and the `pick_send_receive_track_<n>` properties. JPRSurf
-  picks `user:current_track` and turns on `user:surface_mode.send_receive`,
-  requiring `has_routes`: at the top level from `state:selected_track` (tapping
-  Send), and on each strip view from its track (select while Send is held).
+  `CanShowRoutes()`, and the `user:pick_send_receive_track_<n>` properties.
+  JPRSurf picks `user:current_track` and turns on
+  `user:surface_mode.send_receive`, requiring `has_routes`: at the top level
+  from `state:selected_track` (tapping Send), and on each strip view from its
+  track (select while Send is held).
 
 ### Tap or hold
 
@@ -690,10 +699,13 @@ views, so a destroyed scene holds none.
 ## Names
 
 The public spec freezes every name a config can use. Today's names grew one
-feature at a time, so they need these changes before they are frozen. Most are
-made early, by *Property namespaces and names*, so that the components built
-after it use the final names, including `track_ui_*`. Device control names and
-output modes wait for *Device types and catalogs*.
+feature at a time, so they need changes before they are frozen. *Property
+namespaces and names* made the ones that didn't need a new component: every
+property is in a namespace, rec arm is `rec_arm` everywhere, and the secondary
+ruler is `state:secondary_ruler_*` rather than `ruler2_*`. The audit below is
+what is left. Properties the plugin adds itself are in `user:` until the
+components that replace them, and device control names and output modes wait
+for *Device types and catalogs*.
 
 ### Conventions
 
@@ -710,17 +722,13 @@ output modes wait for *Device types and catalogs*.
 
 | Today                                                                      | Problem                                                                                             | Change                                                                                                         |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `mod_shift`, `track_name`, `route_volume`, `bank_inc`, `timeline_position` | Prefixes that sometimes say where a property comes from, and sometimes don't                        | Namespaces: `mod:shift`, `track:name`, `route:volume`, `view:bank_inc`, `state:timeline_position`              |
 | `state:0` to `state:18`                                                    | An index into a C++ table: meaningless, and tied to the table's order                               | Named rows (`state:can_redo`, `state:auto_override_active`, ...), looked up by name when the scene is built    |
-| `anchor_<action>_<n>`, `pick_send_receive_track_<n>`                       | Generated from a strip index                                                                        | Declared on the strip view, with one name on every strip (`user:anchor_select`)                                |
-| `mode_<name>_available`, `_active`, `_select`                              | Generated from a mode name                                                                          | The mode toggles of an exclusive group, named by the group and mode the config declares                        |
-| `toggle_<property>`                                                        | Generated, and only exists to keep two toggles exclusive                                            | Removed: an exclusive group's toggles are mapped directly                                                      |
-| `mod_marker`, `mod_nudge`, `mod_send_hold`, `mod_select_anchor`            | Declared by the plugin                                                                              | Declared by the config: `mod:marker`, and so on                                                                |
-| `auto_override_any_latch`                                                  | Added by the plugin                                                                                 | A polled state row, `state:auto_override_any_latch`                                                            |
-| `track_recarm`                                                             | Everything else says rec arm (`TrackBoolProperty::kRecArm`, `anchor_rec_arm_<n>`)                   | `track:rec_arm`                                                                                                |
-| `track_ui_*` beside `track_*`                                              | Two names for most track properties. The UI ones run the scene's track actions.                     | Settled by *Property namespaces and names*                                                                     |
-| `track_parent`, `track_root`, and the other view properties                | Read like track properties, but move the view                                                       | In `view:`, with names settled when navigation is reviewed as a component                                      |
-| `ruler2_*`                                                                 | An abbreviation                                                                                     | `state:secondary_ruler_*`                                                                                      |
+| `user:anchor_<action>_<n>`, `user:pick_send_receive_track_<n>`             | Generated from a strip index                                                                        | Declared on the strip view, with one name on every strip (`user:anchor_select`)                                |
+| `user:mode_<name>_available`, `_active`, `_select`                         | Generated from a mode name                                                                          | The mode toggles of an exclusive group, named by the group and mode the config declares                        |
+| `user:toggle_<name>`                                                       | Generated, and only exists to keep two toggles exclusive                                            | Removed: an exclusive group's toggles are mapped directly                                                      |
+| `mod:marker`, `mod:nudge`, `mod:send_hold`, `mod:select_anchor`            | Declared by the plugin                                                                              | Declared by the config: `mod:marker`, and so on                                                                |
+| `user:auto_override_any_latch`                                             | Added by the plugin                                                                                 | A polled state row, `state:auto_override_any_latch`                                                            |
+| `view:track_parent`, `view:track_root`, and the other view properties      | Named before the model had references and lists                                                     | Settled when navigation is reviewed as a component                                                             |
 | `Fader1`, `Scribble1Line2`, `AssignTrack`                                  | Mixed case, with 1-based numbers inside names                                                       | Catalog arrays with lower case fields (a strip's `fader`), and lower case single controls (`assign_track`)     |
 | `XTouch/`, `XTouchExt/`                                                    | Mappings name devices                                                                               | Widgets                                                                                                        |
 | Output modes 0, 1, 5, and 8                                                | Numbers from the MCU protocol                                                                       | Named by the device type for each output: solid and blink for lights, and the ring styles and off for encoders |
@@ -815,7 +823,7 @@ What becomes of the plugin's code:
 | `requested_mode_` and `ApplyRequestedMode()`                                                | Deferred view changes                                            |
 | `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`                            | Tap or hold                                                      |
 | `RefreshTrackViews()`, `EnsureTrackIsVisible()`, `SetSendReceiveTrack()`, the views' tracks | References, subjects, and lists                                  |
-| `auto_override_any_latch`                                                                   | Polled state                                                     |
+| `user:auto_override_any_latch`                                             | Added by the plugin                                                                                 | A polled state row, `state:auto_override_any_latch`                                                            |
 | Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log   | Host plumbing                                                    |
 
 ## Getting there

@@ -16,20 +16,24 @@ namespace jpr {
 // Property name constants
 //==============================================================================
 
-inline constexpr std::string_view kTimelinePosition = "timeline_position";
-inline constexpr std::string_view kPlaybackPosition = "playback_position";
-inline constexpr std::string_view kEditPosition = "edit_position";
+inline constexpr std::string_view kTimelinePosition = "state:timeline_position";
+inline constexpr std::string_view kPlaybackPosition = "state:playback_position";
+inline constexpr std::string_view kEditPosition = "state:edit_position";
 
-inline constexpr std::string_view kRulerMode = "ruler_mode";
-inline constexpr std::string_view kRulerBeats = "ruler_beats";
-inline constexpr std::string_view kRulerTime = "ruler_time";
-inline constexpr std::string_view kRulerFrames = "ruler_frames";
-inline constexpr std::string_view kRulerSamples = "ruler_samples";
+inline constexpr std::string_view kRulerMode = "state:ruler_mode";
+inline constexpr std::string_view kRulerBeats = "state:ruler_beats";
+inline constexpr std::string_view kRulerTime = "state:ruler_time";
+inline constexpr std::string_view kRulerFrames = "state:ruler_frames";
+inline constexpr std::string_view kRulerSamples = "state:ruler_samples";
 
-inline constexpr std::string_view kRuler2Mode = "ruler2_mode";
-inline constexpr std::string_view kRuler2Time = "ruler2_time";
-inline constexpr std::string_view kRuler2Frames = "ruler2_frames";
-inline constexpr std::string_view kRuler2Samples = "ruler2_samples";
+inline constexpr std::string_view kSecondaryRulerMode =
+    "state:secondary_ruler_mode";
+inline constexpr std::string_view kSecondaryRulerTime =
+    "state:secondary_ruler_time";
+inline constexpr std::string_view kSecondaryRulerFrames =
+    "state:secondary_ruler_frames";
+inline constexpr std::string_view kSecondaryRulerSamples =
+    "state:secondary_ruler_samples";
 
 //==============================================================================
 // TimelinePositionProperty
