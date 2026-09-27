@@ -6,6 +6,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace jpr {
 
@@ -19,5 +22,12 @@ struct Color {
 };
 
 double GetLuminance(Color color);
+
+// Returns the color as text in the form "#rrggbb", with lowercase hex digits.
+std::string FormatColor(Color color);
+
+// Parses a color in the form "#rrggbb" (in either case), or returns
+// std::nullopt if the text is not in that form.
+std::optional<Color> ParseColor(std::string_view text);
 
 }  // namespace jpr

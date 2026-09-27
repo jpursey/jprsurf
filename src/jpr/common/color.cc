@@ -5,7 +5,10 @@
 
 #include "jpr/common/color.h"
 
+#include <charconv>
 #include <cmath>
+
+#include "absl/strings/str_cat.h"
 
 namespace jpr {
 
@@ -21,6 +24,26 @@ double GetLuminance(Color color) {
   double g = linearize(color.g);
   double b = linearize(color.b);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+std::string FormatColor(Color color) {
+  return absl::StrCat("#", absl::Hex(color.r, absl::kZeroPad2),
+                      absl::Hex(color.g, absl::kZeroPad2),
+                      absl::Hex(color.b, absl::kZeroPad2));
+}
+
+std::optional<Color> ParseColor(std::string_view text) {
+  if (text.size() != 7 || text[0] != '#') {
+    return std::nullopt;
+  }
+  const char* end = text.data() + text.size();
+  uint32_t rgb = 0;
+  auto [ptr, error] = std::from_chars(text.data() + 1, end, rgb, 16);
+  if (error != std::errc() || ptr != end) {
+    return std::nullopt;
+  }
+  return Color{static_cast<uint8_t>(rgb >> 16), static_cast<uint8_t>(rgb >> 8),
+               static_cast<uint8_t>(rgb)};
 }
 
 }  // namespace jpr

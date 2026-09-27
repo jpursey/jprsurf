@@ -5,6 +5,7 @@
 
 #include "jpr/scene/view_property.h"
 
+#include <optional>
 #include <string_view>
 
 #include "absl/strings/numbers.h"
@@ -190,12 +191,8 @@ std::string ViewProperty::GetText() const {
       return absl::StrCat(ReadDouble());
     case Type::kText:
       return ReadString();
-    case Type::kColor: {
-      Color color = ReadColor();
-      return absl::StrCat("#", absl::Hex(color.r, absl::kZeroPad2),
-                          absl::Hex(color.g, absl::kZeroPad2),
-                          absl::Hex(color.b, absl::kZeroPad2));
-    }
+    case Type::kColor:
+      return FormatColor(ReadColor());
     case Type::kTimelinePosition:
       return ReadTimelinePosition().ToString(GetRulerMode());
     case Type::kEnumerated:
@@ -469,11 +466,8 @@ void ViewProperty::SetText(std::string_view value) {
       WriteString(value);
       break;
     case Type::kColor:
-      if (value.size() == 7 && value[0] == '#') {
-        uint8_t r = std::stoi(std::string(value.substr(1, 2)), nullptr, 16);
-        uint8_t g = std::stoi(std::string(value.substr(3, 2)), nullptr, 16);
-        uint8_t b = std::stoi(std::string(value.substr(5, 2)), nullptr, 16);
-        WriteColor({r, g, b});
+      if (std::optional<Color> color = ParseColor(value)) {
+        WriteColor(*color);
       }
       break;
     case Type::kTimelinePosition:
@@ -501,12 +495,9 @@ void ViewProperty::SetColor(const Color& value) {
     case Type::kNormalized:
       WriteDouble(std::clamp(GetLuminance(value), 0.0, 1.0));
       break;
-    case Type::kText: {
-      WriteString(absl::StrCat("#", absl::Hex(value.r, absl::kZeroPad2),
-                               absl::Hex(value.g, absl::kZeroPad2),
-                               absl::Hex(value.b, absl::kZeroPad2)));
+    case Type::kText:
+      WriteString(FormatColor(value));
       break;
-    }
     case Type::kColor:
       WriteColor(value);
       break;

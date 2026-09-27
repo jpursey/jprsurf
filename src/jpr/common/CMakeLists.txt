@@ -35,6 +35,7 @@ set(jpr_common_DEPS
 
 set(jpr_common_TEST_SOURCE
   anchor_test.cc
+  color_test.cc
   numbered_name_test.cc
   prefixed_name_test.cc
 )
