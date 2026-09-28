@@ -121,17 +121,17 @@ class ViewMapping final {
     ReadConfig read;
     WriteConfig write;
 
-    // If set, the mapping is only active while this condition is met. This
-    // allows several mappings to share a control, with only one of them active
-    // depending on some state (for instance, while a modifier is held).
+    // If set, the mapping only acts while this condition is met. This allows
+    // several mappings to share a control, with only one of them acting
+    // depending on some state.
     //
-    // Note: When the condition of a read mapping changes, a pending press on
-    // its control (waiting for a long or double press) is lost. For reads that
-    // should switch with a modifier, prefer ReadConfig::required_modifiers,
-    // which doesn't lose them. Conditions are best suited to write mappings,
-    // which have no pending presses. A condition is still fine for a read
-    // mapping that switches on state required_modifiers can't express (such as
-    // REAPER state), as long as it has no long or double press to lose.
+    // A write mapping writes to the control, and holds its output, only while
+    // the condition is met. A read mapping keeps its input while its view is
+    // active, and checks the condition when the input arrives. While the
+    // condition isn't met the input does nothing, but it still counts in the
+    // control's modifier sets and press groups, so it doesn't fall through to
+    // another mapping. A press_release mapping still applies the release of a
+    // press it applied, so what it holds can't stick on.
     std::optional<ViewCondition::Config> condition;
   };
 
@@ -150,7 +150,8 @@ class ViewMapping final {
 
   // Returns true if this mapping is actively synchronizing the view property
   // and control. A mapping is active if it is enabled, its parent view is
-  // active, and its condition (if any) is met.
+  // active, and its condition (if any) is met. A read mapping keeps its input
+  // while its condition isn't met (see Config::condition).
   bool IsActive() const { return active_; }
 
   // Synchronizes the view property and control according to the type of the
@@ -173,8 +174,9 @@ class ViewMapping final {
               std::vector<ViewProperty*> mode_properties = {},
               ViewProperty* condition_property = nullptr);
 
-  // Refreshes the active state of this mapping based on whether it is enabled,
-  // whether its parent view is active, and whether its condition is met.
+  // Refreshes the active state of this mapping, and whether it has its input,
+  // based on whether it is enabled, whether its parent view is active, and
+  // whether its condition is met.
   void RefreshActive(bool parent_active);
 
   void InitReadControl();
@@ -222,6 +224,10 @@ class ViewMapping final {
   bool reads_property_ = false;
   bool control_changed_ = false;
   bool property_changed_ = false;
+
+  // Whether a press_release mapping applied a press, and so must apply its
+  // release.
+  bool holding_ = false;
 };
 
 }  // namespace jpr

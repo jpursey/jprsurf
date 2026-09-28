@@ -1207,6 +1207,17 @@ void ViewMapping::RefreshActive(bool parent_active) {
   }
   parent_active_ = parent_active;
 
+  // The input is registered whatever the condition, as ReadControl() checks it.
+  bool should_read = enabled_ && parent_active && read_control_ != nullptr;
+  if (should_read != input_handle_.IsRegistered()) {
+    if (should_read) {
+      input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
+    } else {
+      input_handle_ = {};
+      holding_ = false;
+    }
+  }
+
   bool should_be_active = enabled_ && parent_active &&
                           (condition_ == nullptr || condition_->IsMet());
   if (active_ == should_be_active) {
@@ -1221,9 +1232,6 @@ void ViewMapping::RefreshActive(bool parent_active) {
         mode_property->RegisterFlag(&property_changed_);
       }
     }
-    if (read_control_ != nullptr) {
-      input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
-    }
     if (type_.IsSet(kWriteControl)) {
       output_handle_ = control_->RegisterOutputWriter();
     }
@@ -1234,7 +1242,6 @@ void ViewMapping::RefreshActive(bool parent_active) {
         mode_property->UnregisterFlag(&property_changed_);
       }
     }
-    input_handle_ = {};
     output_handle_ = {};
   }
 }
@@ -1243,22 +1250,34 @@ void ViewMapping::Sync() {
   if (condition_ != nullptr && condition_->HasChanged()) {
     RefreshActive(parent_active_);
   }
-  if (!active_) {
-    return;
-  }
   if (control_changed_) {
     ReadControl();
   }
-  if (property_changed_) {
+  if (active_ && property_changed_) {
     WriteControl();
   }
 }
 
 void ViewMapping::ReadControl() {
   control_changed_ = false;
-  if (read_control_ != nullptr) {
-    read_control_(*property_, *control_, input_handle_.GetId());
+  if (!input_handle_.IsRegistered()) {
+    return;
   }
+  InputId id = input_handle_.GetId();
+  bool pressed = config_.read.press_release && control_->IsPressed(id);
+  if (config_.read.press_release && !pressed) {
+    // A release is applied only for a press that was, whether or not the
+    // condition is met now, so what the mapping holds can't stick on.
+    if (!holding_) {
+      return;
+    }
+  } else if (!active_) {
+    // With the input registered, the mapping is inactive only while its
+    // condition isn't met.
+    return;
+  }
+  read_control_(*property_, *control_, id);
+  holding_ = pressed;
 }
 
 void ViewMapping::WriteControl() {

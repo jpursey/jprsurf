@@ -268,7 +268,7 @@ Depends on: nothing.
   errors, smoke test). The smoke test covers the press, long press, and double
   press handling the tap sits beside.
 
-### CL2 [ ] scene: Read conditions checked when the input arrives
+### CL2 [x] scene: Read conditions checked when the input arrives
 
 Depends on: nothing.
 
