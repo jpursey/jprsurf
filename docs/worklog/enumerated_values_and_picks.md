@@ -345,7 +345,7 @@ Depends on: nothing.
 **Verify**
 - Standard checks.
 
-### CL6 [ ] plugin: Rewind and Forward steps as an enumerated value
+### CL6 [x] plugin: Rewind and Forward steps as an enumerated value
 
 Depends on: CL2, CL3, CL4.
 

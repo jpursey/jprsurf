@@ -5,11 +5,13 @@
 
 #include "jpr/plugin/plugin_surface.h"
 
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -99,6 +101,23 @@ constexpr std::string_view kPickSendReceiveTrack =
 // matches the long press duration of controls.
 constexpr absl::Duration kSendHoldDuration = absl::Milliseconds(350);
 
+// What Rewind and Forward move by, whose values are the steps in
+// kTransportSteps, in order.
+constexpr std::string_view kTransportStep = kUserName<"transport_step">;
+
+// A step Rewind and Forward can move by, and the button that picks it, if any.
+struct TransportStep {
+  std::string_view name;
+  std::string_view button;
+  std::string_view prev_command;
+  std::string_view next_command;
+};
+constexpr TransportStep kTransportSteps[] = {
+    {"measure", {}, kCmdGoPrevMeasure, kCmdGoNextMeasure},
+    {"beat", DeviceXTouch::kNudge, kCmdGoPrevBeat, kCmdGoNextBeat},
+    {"marker", DeviceXTouch::kMarker, kCmdGoPrevMarker, kCmdGoNextMarker},
+};
+
 // Returns true if Send/Receive mode can show this track: it exists, is on the
 // surface, and has sends or receives.
 bool CanShowRoutes(const Track* track, TrackFilter filter) {
@@ -154,25 +173,6 @@ void AddTrackAnchorMapping(View* view, std::string_view name,
   view->AddMapping(
       ViewMapping::kReadControl, name, control,
       {.read = {.press_behavior = press_behavior, .press_release = true}});
-}
-
-// Adds a property with the name that toggles the property, and turns other off
-// whenever it turns the property on. The control triggers it, and is lit while
-// the property is on. Only changes made through this property keep the two
-// exclusive, so nothing else should turn the property on.
-void AddExclusiveToggleMapping(Scene* scene, View* view, std::string_view name,
-                               ViewProperty* property, ViewProperty* other,
-                               std::string_view control) {
-  scene->AddUserProperty(
-      std::make_unique<CallbackActionProperty>(name, [property, other] {
-        const bool on = !property->GetBool();
-        if (on) {
-          other->SetBool(false);
-        }
-        property->SetBool(on);
-      }));
-  view->AddMapping(ViewMapping::kReadControl, name, control);
-  view->AddMapping(ViewMapping::kWriteControl, property->GetName(), control);
 }
 
 }  // namespace
@@ -322,16 +322,10 @@ void PluginSurface::InitViews() {
   bool has_xtouch = (xtouch_in_ != nullptr && xtouch_out_ != nullptr);
   bool has_xtouch_ext =
       (xtouch_ext_in_ != nullptr && xtouch_ext_out_ != nullptr);
-  constexpr std::string_view kModMarker = kModName<"marker">;
-  constexpr std::string_view kModNudge = kModName<"nudge">;
-  Modifiers mod_marker = 0;
-  Modifiers mod_nudge = 0;
   if (has_xtouch) {
     scene_->AddDevice("XTouch", std::make_unique<DeviceXTouch>(
                                     DeviceXTouch::Type::kFull, device_runner_,
                                     xtouch_in_.get(), xtouch_out_.get()));
-    mod_marker = scene_->AddModifierProperty(kModMarker);
-    mod_nudge = scene_->AddModifierProperty(kModNudge);
   }
   if (has_xtouch_ext) {
     scene_->AddDevice("XTouchExt",
@@ -480,17 +474,8 @@ void PluginSurface::InitViews() {
            .condition = in_override});
     }
 
-    // Misc buttons (above transport). Marker and Nudge each pick what Rewind
-    // and Forward move by, so turning one on turns the other off. With both on,
-    // no Rewind or Forward mapping would match.
-    ViewProperty* marker = scene_->GetProperty(kModMarker);
-    ViewProperty* nudge = scene_->GetProperty(kModNudge);
-    AddExclusiveToggleMapping(scene_.get(), root_view,
-                              kUserName<"toggle_marker">, marker, nudge,
-                              absl::StrCat("XTouch/", DeviceXTouch::kMarker));
-    AddExclusiveToggleMapping(scene_.get(), root_view,
-                              kUserName<"toggle_nudge">, nudge, marker,
-                              absl::StrCat("XTouch/", DeviceXTouch::kNudge));
+    // Misc buttons (above transport). Marker and Nudge are with the transport
+    // controls below.
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
                           absl::StrCat("XTouch/", DeviceXTouch::kCycle));
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome,
@@ -502,23 +487,39 @@ void PluginSurface::InitViews() {
         ViewMapping::kReadControl, kCmdSoloDefeat, solo,
         {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
 
-    // Transport controls
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevMeasure,
-                          absl::StrCat("XTouch/", DeviceXTouch::kRewind));
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevBeat,
-                          absl::StrCat("XTouch/", DeviceXTouch::kRewind),
-                          {.read = {.required_modifiers = mod_nudge}});
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoPrevMarker,
-                          absl::StrCat("XTouch/", DeviceXTouch::kRewind),
-                          {.read = {.required_modifiers = mod_marker}});
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoNextMeasure,
-                          absl::StrCat("XTouch/", DeviceXTouch::kForward));
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoNextBeat,
-                          absl::StrCat("XTouch/", DeviceXTouch::kForward),
-                          {.read = {.required_modifiers = mod_nudge}});
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdGoNextMarker,
-                          absl::StrCat("XTouch/", DeviceXTouch::kForward),
-                          {.read = {.required_modifiers = mod_marker}});
+    // Transport controls. Rewind and Forward move by the transport step, which
+    // Marker and Nudge pick. It is one value, so turning one on turns the other
+    // off. Each toggles between its step and the first (a measure), and is lit
+    // while its step is picked.
+    std::vector<std::string> step_names;
+    for (const TransportStep& step : kTransportSteps) {
+      step_names.emplace_back(step.name);
+    }
+    CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
+              kTransportStep, std::move(step_names))) != nullptr);
+    const std::string lit(
+        scene_->AddConstProperty(ViewProperty::Type::kToggle, true)->GetName());
+    const std::string rewind = absl::StrCat("XTouch/", DeviceXTouch::kRewind);
+    const std::string forward = absl::StrCat("XTouch/", DeviceXTouch::kForward);
+    for (int i = 0; i < static_cast<int>(std::size(kTransportSteps)); ++i) {
+      const TransportStep& step = kTransportSteps[i];
+      const ViewCondition::Config on_step = {
+          .property = std::string(kTransportStep), .value = i};
+      root_view->AddMapping(ViewMapping::kReadControl, step.prev_command,
+                            rewind, {.condition = on_step});
+      root_view->AddMapping(ViewMapping::kReadControl, step.next_command,
+                            forward, {.condition = on_step});
+      if (step.button.empty()) {
+        continue;
+      }
+      const std::string button = absl::StrCat("XTouch/", step.button);
+      root_view->AddMapping(
+          ViewMapping::kReadControl, kTransportStep, button,
+          {.read = {
+               .property_min = 0, .property_max = i, .press_toggles = true}});
+      root_view->AddMapping(ViewMapping::kWriteControl, lit, button,
+                            {.condition = on_step});
+    }
     root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportStop,
                           absl::StrCat("XTouch/", DeviceXTouch::kStop));
     root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportPlayPause,
