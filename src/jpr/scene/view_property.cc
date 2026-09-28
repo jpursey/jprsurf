@@ -6,7 +6,10 @@
 #include "jpr/scene/view_property.h"
 
 #include <optional>
+#include <string>
 #include <string_view>
+#include <type_traits>
+#include <variant>
 
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
@@ -39,26 +42,36 @@ void ViewProperty::NotifyChanged() {
   }
 }
 
-ViewProperty::Value ViewProperty::GetValue() const {
-  switch (type_) {
-    case Type::kAction:
-      return std::monostate{};
-    case Type::kToggle:
-      return ReadBool();
-    case Type::kPan:
-    case Type::kVolume:
-    case Type::kNormalized:
-      return ReadDouble();
-    case Type::kText:
-      return ReadString();
-    case Type::kColor:
-      return ReadColor();
-    case Type::kTimelinePosition:
-      return ReadTimelinePosition();
-    case Type::kEnumerated:
-      return ReadInt();
-  }
-  return std::monostate{};
+bool ViewProperty::Equals(const Value& value) const {
+  return std::visit(
+      [this](const auto& other) -> bool {
+        using T = std::decay_t<decltype(other)>;
+        if constexpr (std::is_same_v<T, bool>) {
+          return GetBool() == other;
+        } else if constexpr (std::is_same_v<T, int>) {
+          return GetInt() == other;
+        } else if constexpr (std::is_same_v<T, double>) {
+          switch (type_) {
+            case Type::kPan:
+              return GetPan() == other;
+            case Type::kVolume:
+              return GetVolume() == other;
+            default:
+              return GetNormalized() == other;
+          }
+        } else if constexpr (std::is_same_v<T, std::string>) {
+          return GetText() == other;
+        } else if constexpr (std::is_same_v<T, Color>) {
+          return GetColor() == other;
+        } else if constexpr (std::is_same_v<T, TimelinePosition>) {
+          // Other types read as a zero position, so they are not compared.
+          return type_ == Type::kTimelinePosition &&
+                 GetTimelinePosition() == other;
+        } else {
+          return false;
+        }
+      },
+      value);
 }
 
 bool ViewProperty::GetBool() const {

@@ -305,6 +305,11 @@ class View final {
   // valid, in which case the caller must discard the view.
   bool ApplyConfig(const Config& config);
 
+  // Creates a condition, with its property as seen from this view. Returns
+  // null (logging that adding `what` failed) if the property isn't found.
+  std::unique_ptr<ViewCondition> CreateCondition(
+      const ViewCondition::Config& config, std::string_view what) const;
+
   // Returns the subject's field with the name (without its namespace), or null
   // if the view's subject isn't of the kind, or has no such field.
   ViewProperty* GetSubjectField(SubjectKind kind, std::string_view name) const;

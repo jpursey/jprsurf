@@ -351,12 +351,12 @@ can be done at any time, such as when a second case turns up.
 - **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Mappings)
 
-A `ViewCondition` is met while its property, as a bool, equals true or false.
-It could instead compare the property's value with any `ViewProperty::Value`
-(equal, not equal, less, greater, and so on), so a condition could test an
-enumerated state or a level directly, rather than needing a toggle made for
-it. This needs rules for comparing across value types (numbers, text, colors)
-and for a value whose type doesn't match the property's. Mode overrides are a
+A `ViewCondition` is met while its property, read as its value's type, equals
+it (`ViewProperty::Equals()`, see
+[enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)). It
+could also compare in other ways (not equal, less, greater, and so on), so a
+condition could test a level directly, rather than needing a toggle made for
+it. Less and greater need an order for text and colors. Mode overrides are a
 value to mode map today, and could become conditions with it. The config model
 keeps a condition to one property as a bool, with combining states left to
 components, so it needs updating too.

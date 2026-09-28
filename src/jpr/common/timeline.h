@@ -176,6 +176,8 @@ class TimelinePosition final {
   TimelinePosition& operator=(const TimelinePosition&) = default;
   ~TimelinePosition() = default;
 
+  bool operator==(const TimelinePosition&) const = default;
+
   // Gets or sets the core timeline position value.
   double GetValue() const { return position_; }
   void SetValue(double position) { position_ = position; }

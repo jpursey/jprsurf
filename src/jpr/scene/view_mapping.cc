@@ -77,50 +77,21 @@ double ToggleDouble(double current, double min, double max) {
   return min;
 }
 
-// Compares two ViewProperty::Value instances for equality. Returns true if both
-// hold the same alternative type and their values are equal. Types that do not
-// support equality (e.g. TimelinePosition) always return false.
-bool PropertyValueEquals(const ViewProperty::Value& a,
-                         const ViewProperty::Value& b) {
-  if (a.index() != b.index()) {
-    return false;
-  }
-  return std::visit(
-      [&b](const auto& a_val) -> bool {
-        using T = std::decay_t<decltype(a_val)>;
-        if constexpr (std::is_same_v<T, std::monostate>) {
-          return true;
-        } else if constexpr (std::is_same_v<T, bool> ||
-                             std::is_same_v<T, int> ||
-                             std::is_same_v<T, double> ||
-                             std::is_same_v<T, std::string> ||
-                             std::is_same_v<T, Color>) {
-          return a_val == std::get<T>(b);
-        } else {
-          return false;
-        }
-      },
-      a);
-}
-
 }  // namespace
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
                          Control* control, Config config,
                          std::vector<ViewProperty*> mode_properties,
-                         ViewProperty* condition_property)
+                         std::unique_ptr<ViewCondition> condition)
     : type_(type),
       view_(view),
       property_(property),
       control_(control),
       config_(std::move(config)),
       mode_properties_(std::move(mode_properties)),
+      condition_(std::move(condition)),
       reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
-  if (condition_property != nullptr) {
-    condition_ = std::make_unique<ViewCondition>(condition_property,
-                                                 config_.condition->value);
-  }
   InitReadControl();
   InitWriteControl();
 }
@@ -662,13 +633,22 @@ void ViewMapping::InitReadEnumeratedSyncFunction() {
     return;
   }
 
-  // If there is a press input, we cycle to the next enumerated value, wrapping
-  // around from max to min.
+  // If there is a press input, we either toggle between max and min, or cycle
+  // to the next enumerated value, wrapping around from max to min.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_config_.input_type = ControlInput::Type::kPress;
     int min = cfg_min.value_or(0);
     int max = cfg_max.value_or(property_->GetMaxValue());
     reads_property_ = true;
+    if (config_.read.press_toggles) {
+      read_control_ = [min, max](ViewProperty& property, Control& control,
+                                 InputId id) {
+        if (control.GetPressCount(id) % 2 != 0) {
+          property.SetInt(property.GetInt() == max ? min : max);
+        }
+      };
+      return;
+    }
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
       int press_count = control.GetPressCount(id);
@@ -1289,10 +1269,9 @@ void ViewMapping::WriteControl() {
 
 int ViewMapping::ResolveMode() const {
   for (int i = 0; i < static_cast<int>(mode_properties_.size()); ++i) {
-    ViewProperty::Value value = mode_properties_[i]->GetValue();
     for (const auto& [map_value, map_mode] :
          config_.write.mode_overrides[i].value_to_mode) {
-      if (PropertyValueEquals(value, map_value)) {
+      if (mode_properties_[i]->Equals(map_value)) {
         return map_mode;
       }
     }

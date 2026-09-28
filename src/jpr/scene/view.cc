@@ -57,16 +57,23 @@ bool View::ApplyConfig(const Config& config) {
 
   // The condition may refer to any of the view's properties.
   if (config.condition.has_value()) {
-    ViewProperty* condition_property = GetProperty(config.condition->property);
-    if (condition_property == nullptr) {
-      LOG(ERROR) << "Failed to add view '" << name_ << "': condition property '"
-                 << config.condition->property << "' not found";
+    condition_ = CreateCondition(*config.condition, "view");
+    if (condition_ == nullptr) {
       return false;
     }
-    condition_ = std::make_unique<ViewCondition>(condition_property,
-                                                 config.condition->value);
   }
   return true;
+}
+
+std::unique_ptr<ViewCondition> View::CreateCondition(
+    const ViewCondition::Config& config, std::string_view what) const {
+  ViewProperty* property = GetProperty(config.property);
+  if (property == nullptr) {
+    LOG(ERROR) << "Failed to add " << what << " '" << name_
+               << "': condition property '" << config.property << "' not found";
+    return nullptr;
+  }
+  return std::make_unique<ViewCondition>(property, config.value);
 }
 
 View::~View() {
@@ -283,19 +290,16 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
     }
     mode_properties.push_back(mode_property);
   }
-  ViewProperty* condition_property = nullptr;
+  std::unique_ptr<ViewCondition> condition;
   if (config.condition.has_value()) {
-    condition_property = GetProperty(config.condition->property);
-    if (condition_property == nullptr) {
-      LOG(ERROR) << "Failed to add mapping for view '" << GetName()
-                 << "': condition property '" << config.condition->property
-                 << "' not found";
+    condition = CreateCondition(*config.condition, "mapping for view");
+    if (condition == nullptr) {
       return false;
     }
   }
   mappings_.push_back(absl::WrapUnique(
       new ViewMapping(this, type, property, control, std::move(config),
-                      std::move(mode_properties), condition_property)));
+                      std::move(mode_properties), std::move(condition))));
   return true;
 }
 

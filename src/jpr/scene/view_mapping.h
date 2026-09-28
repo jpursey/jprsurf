@@ -75,11 +75,18 @@ class ViewMapping final {
     //     both are specified. If the value is not currently at either the min
     //     or max value, then it will be toggled to the max value if it is
     //     closer to the max value, or the min value if it is closer to the min
-    //     value.
+    //     value. An enumerated property is different (see press_toggles).
     //
     // These values are ignored for action and toggle properties.
     std::optional<ViewProperty::Value> property_min;
     std::optional<ViewProperty::Value> property_max;
+
+    // For an enumerated property with a Press input: without press_toggles, a
+    // press steps to the next value in [property_min, property_max], wrapping
+    // around (such as the timecode display's modes). With it, a press sets
+    // property_max, or property_min if the value already is property_max.
+    // Other property types ignore it.
+    bool press_toggles = false;
 
     // If true, then the property value will be set to property_max when the
     // control is pressed and property_min when the control is released. If the
@@ -90,8 +97,9 @@ class ViewMapping final {
   };
 
   // A mode override maps a property's value to an output mode. When the
-  // property's current value matches an entry in the value-to-mode map, the
-  // corresponding mode is used for the control output.
+  // property's current value matches an entry in the value-to-mode map (see
+  // ViewProperty::Equals()), the corresponding mode is used for the control
+  // output.
   struct ModeOverride {
     // The name of a property in the same view scope whose value determines
     // the output mode.
@@ -172,7 +180,7 @@ class ViewMapping final {
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
               Control* control, Config config = {},
               std::vector<ViewProperty*> mode_properties = {},
-              ViewProperty* condition_property = nullptr);
+              std::unique_ptr<ViewCondition> condition = nullptr);
 
   // Refreshes the active state of this mapping, and whether it has its input,
   // based on whether it is enabled, whether its parent view is active, and

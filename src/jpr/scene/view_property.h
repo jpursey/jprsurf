@@ -181,8 +181,12 @@ class ViewProperty {
   // Type of the property.
   Type GetType() const { return type_; }
 
-  // Reads and returns the current value of the property from REAPER.
-  Value GetValue() const;
+  // Returns true if the property's value, read as the value's type with the
+  // adapter functions below, equals it. A double is read in the property's own
+  // range: GetPan() for a pan property, GetVolume() for a volume property, and
+  // GetNormalized() otherwise. A TimelinePosition is only compared with a
+  // timeline position property, and an empty value is never equal.
+  bool Equals(const Value& value) const;
 
   // Adapter functions that read and write the value of the property as a
   // specific type. These will reinterpret the underlying value of the property

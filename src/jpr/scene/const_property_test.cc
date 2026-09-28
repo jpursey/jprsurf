@@ -25,7 +25,7 @@ TEST(ConstPropertyTest, Toggle) {
       CreateConstProperty(Type::kToggle, true);
   ASSERT_NE(property, nullptr);
   EXPECT_EQ(property->GetType(), Type::kToggle);
-  EXPECT_EQ(std::get<bool>(property->GetValue()), true);
+  EXPECT_EQ(property->GetBool(), true);
 }
 
 TEST(ConstPropertyTest, NamesAreUniqueConstNames) {
@@ -46,7 +46,7 @@ TEST(ConstPropertyTest, Normalized) {
         CreateConstProperty(Type::kNormalized, value);
     ASSERT_NE(property, nullptr) << value;
     EXPECT_EQ(property->GetType(), Type::kNormalized) << value;
-    EXPECT_EQ(std::get<double>(property->GetValue()), value) << value;
+    EXPECT_EQ(property->GetNormalized(), value) << value;
   }
 }
 
@@ -55,7 +55,7 @@ TEST(ConstPropertyTest, Text) {
       CreateConstProperty(Type::kText, std::string("Track"));
   ASSERT_NE(property, nullptr);
   EXPECT_EQ(property->GetType(), Type::kText);
-  EXPECT_EQ(std::get<std::string>(property->GetValue()), "Track");
+  EXPECT_EQ(property->GetText(), "Track");
 }
 
 TEST(ConstPropertyTest, Color) {
@@ -63,7 +63,7 @@ TEST(ConstPropertyTest, Color) {
       CreateConstProperty(Type::kColor, Color{255, 128, 0});
   ASSERT_NE(property, nullptr);
   EXPECT_EQ(property->GetType(), Type::kColor);
-  EXPECT_EQ(std::get<Color>(property->GetValue()), (Color{255, 128, 0}));
+  EXPECT_EQ(property->GetColor(), (Color{255, 128, 0}));
 }
 
 TEST(ConstPropertyTest, IgnoresWrites) {
@@ -73,7 +73,7 @@ TEST(ConstPropertyTest, IgnoresWrites) {
   bool changed = false;
   property->RegisterFlag(&changed);
   property->SetBool(false);
-  EXPECT_EQ(std::get<bool>(property->GetValue()), true);
+  EXPECT_EQ(property->GetBool(), true);
   EXPECT_FALSE(changed);
   property->UnregisterFlag(&changed);
 }

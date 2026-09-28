@@ -124,27 +124,36 @@ is only its timing.
 - The only read conditions today are the automation buttons', which behave the
   same.
 
-### scene: Conditions that compare values (view_condition.h/.cc)
+### scene: Conditions that compare values (view_condition.h, view_property.h/.cc)
 
 ```
 struct Config {
   std::string property;
 
-  // A bool is met while the property, as a bool, equals it, as today. Any
-  // other value is met while the property's value equals it exactly, with the
-  // same type (so an int for an enumerated property).
+  // The value the property must equal, such as true for a toggle, or an int
+  // for an enumerated property.
   ViewProperty::Value value = true;
 };
 ```
 
-- Equality is the rule mode overrides already use (`PropertyValueEquals()` in
-  view_mapping.cc), which moves to view_property.h so both share it.
-- A value of a type the property's values never have (other than a bool) is
-  an error, so the view or mapping with the condition isn't added, logging
-  why. Both create their conditions through one function that checks this.
+- **`ViewProperty::Equals(value)`** reads the property as the value's type,
+  with its adapter functions (`GetBool()`, `GetInt()`, `GetText()`,
+  `GetColor()`), and compares. A double is read in the property's own range:
+  `GetPan()` for a pan property, `GetVolume()` for a volume property, and
+  `GetNormalized()` otherwise. A `TimelinePosition` is only compared with a
+  timeline position property (it gains `operator==`), and an empty value is
+  never equal.
+- A bool compares `GetBool()`, which is today's rule, so every condition
+  behaves the same. Mode overrides use `Equals()` too, replacing
+  `PropertyValueEquals()` (an exact match of the same type) in
+  view_mapping.cc. Every override today is a bool on a toggle, which reads the
+  same either way.
+- Any value can be compared with any property, so no value is an error. A
+  value that the property never reads as, such as an int on a toggle (whose
+  `GetInt()` is 0), is never met, rather than being caught when the view or
+  mapping is added.
 - The rest of *Conditions that compare values* in the
-  [backlog](../backlog.md) (less, greater, and comparing across types) stays
-  there.
+  [backlog](../backlog.md) (not equal, less, greater) stays there.
 
 ### scene: press_toggles (view_mapping.h/.cc)
 
@@ -282,26 +291,26 @@ Depends on: nothing.
   sets the selected tracks' mode or the override, as before, and switching the
   override in and out doesn't leave a button acting for the other state.
 
-### CL3 [ ] scene: Conditions that compare values, and press_toggles
+### CL3 [x] scene: Conditions that compare values, and press_toggles
 
 Depends on: nothing.
 
-- `ViewCondition::Config::value` becomes a `ViewProperty::Value`, with its type
-  checked when views and mappings create their conditions.
-- `PropertyValueEquals()` moves to view_property.h.
+- `ViewCondition::Config::value` becomes a `ViewProperty::Value`.
+- `ViewProperty::Equals()`, used by conditions and mode overrides, replaces
+  `PropertyValueEquals()`. `ViewProperty::GetValue()`, then unused, is removed.
 - `ReadConfig::press_toggles`.
 - The backlog's *Conditions that compare values* drops equality.
-- No visible change: every condition today is a bool, and nothing sets
-  `press_toggles`.
+- No visible change: every condition and mode override today is a bool, and
+  nothing sets `press_toggles`.
 
 **Verify**
 - Standard checks. The smoke test covers the existing conditions (the pan
   ring's overrides, the select light while Send is held, and the automation
   lights with and without an override), and the timecode display still cycles
   its modes.
-- `jpr_scene_test` (new `view_condition_test.cc`, with test properties): bool
-  conditions on toggle and non-toggle properties, int conditions on an
-  enumerated property, and a mismatched value type rejected.
+- `jpr_scene_test`: new `view_property_test.cc` (`Equals()` for each value
+  type, on properties of the same and other types) and `view_condition_test.cc`
+  (met while the property equals the value, and changes while watched).
 
 ### CL4 [ ] scene: Enumerated values
 
