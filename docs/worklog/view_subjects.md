@@ -546,7 +546,7 @@ checks whether the reference's track exists rather than whether it has one.
 
 ## CLs
 
-### CL1 [ ] common: Track list and selection versions
+### CL1 [x] common: Track list and selection versions
 
 Depends on: nothing.
 

@@ -143,6 +143,7 @@ void TrackCache::Refresh() {
     }
   }
   RebuildTrackIndices();
+  ++track_list_version_;
 
   // Any track may have changed, including by switching projects.
   selected_auto_modes_valid_ = false;
@@ -190,6 +191,7 @@ bool TrackCache::RefreshVisibility() {
   }
 
   RebuildTrackIndices();
+  ++track_list_version_;
   for (Track* parent_track : changed_parents) {
     parent_track->NotifyHierarchyChanged();
   }

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <bit>
+#include <cstdint>
 #include <memory>
 
 #include "absl/base/no_destructor.h"
@@ -45,6 +46,15 @@ class TrackCache final {
   // REAPER provides no control surface notification when a track is shown or
   // hidden in the mixer or track control panel, so this must be polled.
   bool RefreshVisibility();
+
+  // Returns a number that changes whenever the track list, or any track's
+  // visibility, may have changed: on every Refresh(), and on any
+  // RefreshVisibility() that returns true. Comparing it with a saved value
+  // tells a caller whether anything it derived from the track list may be
+  // stale. It does not change when one track's own values are refreshed
+  // (Track::Refresh() or Track::RefreshRoutes()); subscribe to the track
+  // (TrackListener) for those.
+  int64_t GetTrackListVersion() const { return track_list_version_; }
 
   // Returns the stub track, which is a special non-null track that represents
   // no track at all. The track GUID is empty and the track ID is null, and it
@@ -104,8 +114,18 @@ class TrackCache final {
   // Called when the track selection, or any track's automation mode, may have
   // changed. These are cheap, so they may be called for every notification
   // REAPER sends.
-  void OnSelectionChanged() { selected_auto_modes_valid_ = false; }
+  void OnSelectionChanged() {
+    selected_auto_modes_valid_ = false;
+    ++selection_version_;
+  }
   void OnAutoModeChanged() { selected_auto_modes_valid_ = false; }
+
+  // Returns a number that changes whenever the track selection may have changed
+  // (see OnSelectionChanged()). Comparing it with a saved value tells a caller
+  // whether anything it derived from the selection may be stale. A track list
+  // change may also change the selection, which only GetTrackListVersion()
+  // reflects.
+  int64_t GetSelectionVersion() const { return selection_version_; }
 
  private:
   friend class absl::NoDestructor<TrackCache>;
@@ -146,6 +166,10 @@ class TrackCache final {
   TrackIdMap track_id_map_;
 
   Track* last_touched_track_ = nullptr;
+
+  // See GetTrackListVersion() and GetSelectionVersion().
+  int64_t track_list_version_ = 0;
+  int64_t selection_version_ = 0;
 
   // All non-master tracks that currently exist in REAPER, in order.
   std::vector<Track*> all_tracks_;
