@@ -7,7 +7,6 @@
 
 #include <string_view>
 
-#include "jpr/common/anchor.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/track.h"
 #include "jpr/scene/view.h"
@@ -22,8 +21,9 @@ namespace jpr {
 // A toggle that anchors a track action on its view's track while it is on (see
 // TrackActions::GetAnchor()), for a mapping that turns it on while a button is
 // held (a press_release mapping). Pressing the same action on another track
-// then acts on the range from this one. It is added to a view, and holds the
-// anchor on the view's track, unless the view has no track.
+// then acts on the range from this one. It is added to a view (see
+// View::AddUserProperty()), and holds the anchor on the view's track, unless
+// the view has no track. Added anywhere else, it does nothing.
 //
 // The anchor is released when the property turns off, or when the view releases
 // it (see View::SetAnchor()). The property always reads as off.
@@ -37,23 +37,18 @@ class TrackAnchorProperty final : public ViewProperty {
     Modifiers modifier = 0;
   };
 
-  // Creates a track anchor with the name, and adds it to the view (see
-  // View::AddUserProperty()). Returns null if the name can't be added there.
-  static TrackAnchorProperty* AddToView(View* view, std::string_view name,
-                                        const Config& config);
-
+  TrackAnchorProperty(std::string_view name, const Config& config);
   ~TrackAnchorProperty() override = default;
 
  protected:
   // Overrides from ViewProperty.
   void WriteBool(bool value) override;
+  void SetView(View* view) override { view_ = view; }
 
  private:
-  TrackAnchorProperty(View* view, std::string_view name, const Config& config);
-
-  View* const view_;
-  Anchor<Track>* const anchor_;
+  const TrackBoolProperty action_;
   const Modifiers modifier_;
+  View* view_ = nullptr;  // The view that owns this, if any.
 };
 
 }  // namespace jpr

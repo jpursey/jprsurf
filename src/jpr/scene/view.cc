@@ -229,6 +229,7 @@ ViewProperty* View::DoAddUserProperty(std::unique_ptr<ViewProperty> property) {
     return nullptr;
   }
   ViewProperty* added_property = property.get();
+  added_property->SetView(this);
   user_properties_.emplace(name, std::move(property));
   return added_property;
 }

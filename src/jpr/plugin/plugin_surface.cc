@@ -150,7 +150,7 @@ void AddTrackAnchorMapping(View* view, std::string_view name,
                            std::string_view control,
                            InputConfig::PressBehavior press_behavior =
                                InputConfig::PressBehavior::kNormal) {
-  TrackAnchorProperty::AddToView(view, name, config);
+  view->AddUserProperty(std::make_unique<TrackAnchorProperty>(name, config));
   view->AddMapping(
       ViewMapping::kReadControl, name, control,
       {.read = {.press_behavior = press_behavior, .press_release = true}});

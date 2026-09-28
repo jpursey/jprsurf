@@ -269,7 +269,9 @@ class View final {
 
   // Adds a property to this view, in the user: namespace, which the view and
   // its descendants see by its name (see GetProperty()). Each view that adds a
-  // name has its own instance, so every item of a list can add the same one.
+  // name has its own instance, so every item of a list can add the same one. A
+  // property that acts on its view is told it when it is added (see
+  // ViewProperty::SetView()).
   //
   // This returns the added property, or null (logging why) if the name is not
   // in the user: namespace or contains a '.', or if it is already visible from

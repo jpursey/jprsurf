@@ -301,8 +301,9 @@ error, so a declaration never silently hides another.
 **Today:** `Scene::AddUserProperty()` declares at the top level, and
 `View::AddUserProperty()` on a view. Both refuse a name that would hide, or be
 hidden by, another ([declared_properties.md](worklog/declared_properties.md)).
-A component that acts on its view is added with its own `AddToView()`, so it
-can't act on one view and be added to another.
+A component that acts on its view is told the view when it is added
+(`ViewProperty::SetView()`), so it can't act on one view and be added to
+another.
 
 **Modifiers** are the exception to `user:`. A declared modifier is in `mod:`
 with the built in ones, as what matters wherever a modifier is used is that it
@@ -570,7 +571,7 @@ one at a time and with no change in behavior.
 - **Provides:** a toggle, for a held mapping. While it is on, it holds the
   action's anchor on the view's track, unless the strip is empty. The anchor is
   released with the button, or when the view's subject changes.
-- **Today:** `TrackAnchorProperty::AddToView()`. JPRSurf's strip views add
+- **Today:** `TrackAnchorProperty`. JPRSurf's strip views add
   `user:anchor_select` (with `mod:select_anchor`), `user:anchor_mute`,
   `user:anchor_solo`, and `user:anchor_rec_arm`.
 

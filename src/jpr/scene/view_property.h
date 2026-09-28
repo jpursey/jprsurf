@@ -16,6 +16,8 @@
 
 namespace jpr {
 
+class View;
+
 //==============================================================================
 // Property namespaces
 //==============================================================================
@@ -273,7 +275,15 @@ class ViewProperty {
   // being tracked, such as unsubscribing from REAPER notifications.
   virtual void OnUnregistered() {}
 
+  // Called when the property is added to a view (see View::AddUserProperty()),
+  // with the view that owns it. A property that acts on its view overrides
+  // this to keep it, and must do nothing if it is never called, as when the
+  // property is added to the scene instead.
+  virtual void SetView(View* view) {}
+
  private:
+  friend class View;  // Calls SetView().
+
   std::string name_;
   Type type_;
   absl::flat_hash_set<bool*> flags_;

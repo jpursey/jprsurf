@@ -29,14 +29,21 @@ There is no change in behavior.
   strips of a list, may each declare the same name. The check walks the view
   tree, which only happens while the scene is built, so no extra index of
   names has to be kept in sync.
-- **A component that acts on its view adds itself.** The track anchor needs its
-  view for the view's anchor slot (see below) and its track, so with a public
-  constructor the caller would name the view twice, once to construct it and
-  once to add it, and nothing would make them match. Instead it has a private
-  constructor and a static `AddToView(view, name, config)`, which creates it and
-  adds it to that view, so an anchor for one view can't be added to another.
-  A property that doesn't need its view, such as the plugin's callbacks, is
-  added with `View::AddUserProperty()` directly.
+- **A property is told its view when it is added.** The track anchor needs its
+  view for the view's anchor slot (see below) and its track. If it took the
+  view in its constructor, the caller would name the view twice, once to
+  construct it and once to add it, and nothing would make them match. Instead
+  `View::AddUserProperty()` calls the property's `SetView()`, a protected
+  virtual on `ViewProperty` for derived classes to override, which does nothing
+  by default, so the caller never names the view at all. Every property is
+  added the same way, and the hierarchy stays flat: a component that needs its
+  view overrides one function, rather than deriving from another base class.
+  (CL2 first did this with a private constructor and a static `AddToView()` on
+  the component, which CL4 replaces.)
+- **A property that needs its view does nothing without one.** Nothing stops
+  one being added to the scene, where it is never told a view. The track anchor
+  then just never anchors, which is harmless, and simpler than a compile time
+  check on `Scene::AddUserProperty()`.
 - **The view still holds the anchor.** A view holds at most one anchor, and
   releases it when its subject changes or it deactivates (`View::SetAnchor()`).
   The track anchor uses that slot, rather than each anchor holding its own and
@@ -54,8 +61,7 @@ There is no change in behavior.
   the top level (`Scene::AddUserProperty()`, unchanged). It is only used in
   docs and comments. Code says "add", which in `scene` always means create,
   own, and register (`AddChildView()`, `AddTrackReference()`), so both use the
-  `AddUserProperty` name, and the track anchor uses `AddToView()`.
-  "Create" is left for factories that return a `unique_ptr` to their caller
+  `AddUserProperty` name. "Create" is left for factories that return a `unique_ptr` to their caller
   (`ViewList::Create()`).
 - **Track anchor** (`TrackAnchorProperty`): the component. "Anchor" is already
   the `common` class it holds (`Anchor<Track>`), and the property is named for
@@ -122,9 +128,9 @@ views and declarations are added in.
 // another track acts on the range from this one. It is added to a view, and
 // holds the anchor on the view's track, unless the view has no track.
 //
-// The anchor is released when the property turns off, and when the view
-// releases it (see View::SetAnchor()): when the view's subject changes, when
-// it is deactivated, or when it holds another anchor. It always reads as off.
+// The anchor is released when the property turns off, or when the view releases
+// it (see View::SetAnchor()). Added anywhere but a view, it does nothing. It
+// always reads as off.
 class TrackAnchorProperty final : public ViewProperty {
  public:
   struct Config {
@@ -134,26 +140,26 @@ class TrackAnchorProperty final : public ViewProperty {
     Modifiers modifier = 0;
   };
 
-  // Creates a track anchor with the name, and adds it to the view (see
-  // View::AddUserProperty()). Returns null if the name can't be added there.
-  static TrackAnchorProperty* AddToView(View* view, std::string_view name,
-                                        const Config& config);
+  TrackAnchorProperty(std::string_view name, const Config& config);
 
  protected:
   void WriteBool(bool value) override;
+
+ private:
+  void SetView(View* view) override;
 };
 ```
 
 - The body is today's `AddTrackAnchorMapping()` callback: on, it holds the
   scene's anchor for the action on the view's track, if the track exists; off,
   it releases the view's anchor if it is this one.
-- It keeps a pointer to its view and to the anchor in the scene's
-  `TrackActions`, which outlives every view.
+- It keeps a pointer to its view, which owns it.
 - The mapping stays with the caller, as the button, press behavior, and
   `press_release` are the mapping's, not the component's.
 
-**Brittleness:** none new. The constructor is private, so the anchor can only act
-on the view it is declared on.
+**Brittleness:** none new. The caller never names the view, and outside the
+property itself only `View` can call `SetView()`, so the anchor can only act on
+the view it is added to.
 
 ### plugin
 
@@ -219,3 +225,20 @@ Depends on: CL2.
   - Bank while holding an anchor: the anchor is released.
 - Holding Send and pressing a strip's select enters Send/Receive mode for that
   track, also while holding a select anchor.
+
+### CL4 [x] scene, plugin: Tell a property its view when it is added
+
+Depends on: CL3.
+
+- `ViewProperty` gets a protected virtual `SetView(View*)`, which does nothing
+  by default, with `View` as a friend so it can call it. `View::AddUserProperty()` calls it once the
+  name is accepted.
+- `TrackAnchorProperty` gets a public constructor taking a name and config, and
+  overrides `SetView()`. `AddToView()`, and its private constructor, go. It
+  does nothing if it has no view.
+- The plugin adds anchors with `View::AddUserProperty()`, like any other
+  property. `config_model.md`'s Today notes follow.
+
+**Verify**
+- Standard checks.
+- The range checks from CL3.

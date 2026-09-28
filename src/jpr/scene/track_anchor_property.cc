@@ -5,28 +5,26 @@
 
 #include "jpr/scene/track_anchor_property.h"
 
-#include "absl/memory/memory.h"
+#include "jpr/common/anchor.h"
+#include "jpr/common/track.h"
 #include "jpr/scene/scene.h"
 
 namespace jpr {
 
-TrackAnchorProperty* TrackAnchorProperty::AddToView(View* view,
-                                                    std::string_view name,
-                                                    const Config& config) {
-  return view->AddUserProperty(
-      absl::WrapUnique(new TrackAnchorProperty(view, name, config)));
-}
-
-TrackAnchorProperty::TrackAnchorProperty(View* view, std::string_view name,
+TrackAnchorProperty::TrackAnchorProperty(std::string_view name,
                                          const Config& config)
     : ViewProperty(name, Type::kToggle),
-      view_(view),
-      anchor_(&view->GetScene()->GetTrackActions().GetAnchor(config.action)),
+      action_(config.action),
       modifier_(config.modifier) {}
 
 void TrackAnchorProperty::WriteBool(bool value) {
+  if (view_ == nullptr) {
+    return;
+  }
+  Anchor<Track>& anchor =
+      view_->GetScene()->GetTrackActions().GetAnchor(action_);
   if (!value) {
-    view_->ReleaseAnchor(anchor_);
+    view_->ReleaseAnchor(&anchor);
     return;
   }
 
@@ -35,7 +33,7 @@ void TrackAnchorProperty::WriteBool(bool value) {
   if (!track->Exists()) {
     return;
   }
-  view_->SetAnchor(anchor_->Hold(track, modifier_));
+  view_->SetAnchor(anchor.Hold(track, modifier_));
 }
 
 }  // namespace jpr
