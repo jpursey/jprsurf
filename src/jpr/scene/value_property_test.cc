@@ -34,7 +34,7 @@ TEST(EnumeratedValuePropertyTest, SetsTheValueAskedFor) {
   property.SetInt(2);
   EXPECT_EQ(property.GetInt(), 2);
   EXPECT_EQ(property.GetText(), "marker");
-  property.SetValue(1);
+  property.SetInt(1);
   EXPECT_EQ(property.GetInt(), 1);
   EXPECT_EQ(property.GetText(), "beat");
   property.SetInt(7);

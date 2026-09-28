@@ -206,13 +206,6 @@ class ViewProperty {
   virtual Color GetColor() const;
   virtual TimelinePosition GetTimelinePosition() const;
 
-  // Sets the value of the property in REAPER.
-  //
-  // The value must be of the correct type for the property or it will have no
-  // effect (see the documentation for each Type for details). Values will be
-  // clamped to the valid range for the property if they are out of range.
-  void SetValue(const Value& value);
-
   // Adapter functions that set the value of the property as a specific type.
   // These will reinterpret the passed in value as the underlying type of the
   // property (for instance mapping a double value greater than 0.5 to an on

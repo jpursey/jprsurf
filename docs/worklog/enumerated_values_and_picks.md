@@ -11,8 +11,10 @@ below `plugin`:
 - **Read conditions are checked when the input arrives**, rather than by
   registering and unregistering the mapping's input, so a mapping keeps its
   gesture and never loses a pending press.
-- **Picks** enter Send/Receive mode, from the Send button and from a strip's
-  select button, replacing `TryEnterSendReceiveMode()` and the pick callback.
+- **Picks** set Send/Receive mode's track, from the Send button and from a
+  strip's select button, and mappings on the same presses that set
+  `user:surface_mode` enter the mode, replacing `TryEnterSendReceiveMode()` and
+  the pick callback.
 - **Tap** is a press behavior in `device`, replacing `send_press_mode_`,
   `send_press_time_`, and `ApplySendRelease()`.
 - **Mode lights** become mappings in the mode views.
@@ -166,8 +168,14 @@ bool press_toggles = false;
 ```
 
 Marker is `[measure, marker]` with `press_toggles`, and Nudge `[measure,
-beat]`. The Track button is `[track, track]`, which sets `track` either way.
-`ReadConfig`'s range comment is corrected to match.
+beat]`. `ReadConfig`'s range comment is corrected to match.
+
+**Setting one value.** With the same min and max, a press sets that value, for
+every property type but toggles (whose press always flips them). The Track
+button is `[track, track]`, and the mappings beside the picks
+`[send_receive, send_receive]`. `ReadConfig`'s range comment says so. A config
+file (and possibly the SurfaceSpec) may offer a single value as shorthand for
+this, but the runtime keeps only the range, as it is simpler.
 
 ### scene: EnumeratedValueProperty (value_property.h)
 
@@ -204,35 +212,28 @@ constants, until the spec names values instead.
 ### scene: TrackPickProperty (track_pick_property.h/.cc)
 
 ```
-// An action that sets a track reference to a source's track, and then sets a
-// property to a value, if the source has a track. It is added to a view (see
-// View::AddUserProperty()), which its property is looked up from, and does
-// nothing if it is added to the scene instead. A top level pick is added to
-// the root view.
+// An action that picks a track: it sets a track reference to a source's track,
+// if the source has a track. With no source, it picks its view's track, so it
+// must be added to a view with a track subject.
 class TrackPickProperty final : public ViewProperty {
  public:
-  struct Config {
-    // The reference the pick sets, which must outlive it.
-    TrackReference* reference = nullptr;
-
-    // The reference whose track is picked, which must outlive it. If null,
-    // the pick picks its view's track.
-    const TrackReference* source = nullptr;
-
-    // If set, the property to set after the track is picked, and its value.
-    std::string set_property;
-    ViewProperty::Value set_value;
-  };
+  // The pick sets `reference` to the track of `source`, or of its view if
+  // `source` is null. Both must outlive the pick.
+  TrackPickProperty(std::string_view name, TrackReference& reference,
+                    const TrackReference* source = nullptr);
 };
 ```
 
 - `Scene::GetTrackReference()` becomes public, as it is const, so a source can
   be a built in reference such as `state:selected_track`.
-- `set_property` is looked up in `SetView()`. If it isn't found, or the pick
-  has no source and its view has no track subject, that is logged, and the
-  pick does nothing.
+- With no source, it picks `View::GetTrack()`, as `TrackAnchorProperty` does,
+  which is the stub track (never existing) in a view without a track subject.
+- A pick acts only if the source's track exists.
 - Whether a pick should happen (such as `has_routes`) is its mapping's
-  condition (see Where conditions go).
+  condition (see Where conditions go), and anything else the same press does,
+  such as entering the mode, is another mapping on it (see Setting one
+  value), with
+  the same condition.
 - The reference is a pointer, as only its owner can change it: a pick can't
   set a reference it wasn't given.
 
@@ -246,17 +247,20 @@ order already guarantees.
   condition on their value. Rewind and Forward switch on conditions instead
   of `mod:marker` and `mod:nudge`.
 - **Send**: the root view holds `mod:send_hold` (`press_release`, as today).
-  The Track mode view maps a tap to `user:pick_selected_track`, with the
-  condition `state:selected_track.has_routes`, and the Send/Receive mode view
-  a tap to `view:child_route_toggle`.
+  The Track mode view maps a tap to `user:pick_selected_track`, and another to
+  `user:surface_mode` with the range `[send_receive, send_receive]`, both with
+  the condition `state:selected_track.has_routes`. The Send/Receive mode view
+  maps a tap to `view:child_route_toggle`.
 - **Mode lights**: each mode view lights the mode buttons with `const:` on
   values. Track mode: Track blinks, and Send is lit from
   `state:selected_track.has_routes`. Send/Receive mode: Track is solid, and
   Send blinks. This keeps the current mode lit whether or not it is available.
 - **Modes**: `user:surface_mode`. The mode views are enabled by its values,
-  the Track button sets `track`, and both picks set `user:current_track` and
-  then `send_receive`. Each strip's pick mappings have the condition
-  `track:has_routes`.
+  and the Track button sets `track` (`[track, track]`). Both picks set
+  `user:current_track`, and a mapping beside each pick mapping sets
+  `send_receive`. Each strip's pick and mode mappings have the condition
+  `track:has_routes`. Mappings sync in order, and view conditions apply after
+  the run, so the track is always set before the mode's view activates.
 
 ### To confirm
 
@@ -328,11 +332,13 @@ Depends on: nothing.
 - `jpr_scene_test` (new `value_property_test.cc`): the start value, setting and
   clamping, change notices only on a change, `GetMaxValue()`, and `GetText()`.
 
-### CL5 [ ] scene: Track picks
+### CL5 [x] scene: Track picks
 
 Depends on: nothing.
 
 - `TrackPickProperty`, and `Scene::GetTrackReference()` made public.
+- `ReadConfig`'s range comment notes that the same min and max set a value.
+- `ViewProperty::SetValue()`, which nothing calls, is removed.
 - Unused, so no visible change. It needs `TrackCache`, so it has no unit test,
   and is tested through CL9.
 
@@ -404,7 +410,8 @@ Depends on: CL2, CL3, CL4, CL5, CL7, CL8.
 
 - `user:surface_mode`, the mode views enabled by its values, the Track button
   setting `track`, `user:pick_selected_track` (on the root view) and each
-  strip's `user:pick_track`, and their mappings' `has_routes` conditions.
+  strip's `user:pick_track`, the mappings beside them that set
+  `send_receive`, and their `has_routes` conditions.
 - Removes `SurfaceMode`, `kSurfaceModeCount`, `kModeInfo`,
   `GetModePropertyName()`, `ModeButton`, `mode_`, `mode_buttons_`,
   `InitModeButtons()`, `UpdateModeButtons()`, `EnterTrackMode()`,
@@ -428,6 +435,7 @@ Depends on: CL2, CL3, CL4, CL5, CL7, CL8.
 When the feature is done, this plan becomes a summary, and
 [config_model.md](../config_model.md) and [surface_modes.md](surface_modes.md)
 are brought up to date: Exclusive group becomes Enumerated value, the pick
-loses its field, Tap loses its held modifier rule, Where conditions go is
+loses its field and no longer turns the mode on (another mapping on the same
+press does, with a single value range), Tap loses its held modifier rule, Where conditions go is
 added, the caveat about read conditions under Sharing a control goes, and the
 "Today" notes follow the code.

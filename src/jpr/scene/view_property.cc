@@ -252,56 +252,6 @@ Color ViewProperty::GetColor() const {
   return {0, 0, 0};
 }
 
-void ViewProperty::SetValue(const Value& value) {
-  switch (type_) {
-    case Type::kAction:
-      if (std::holds_alternative<std::monostate>(value)) {
-        TriggerAction();
-      }
-      break;
-    case Type::kToggle:
-      if (std::holds_alternative<bool>(value)) {
-        WriteBool(std::get<bool>(value));
-      }
-      break;
-    case Type::kPan:
-      if (std::holds_alternative<double>(value)) {
-        WriteDouble(std::clamp(-1.0, 1.0, std::get<double>(value)));
-      }
-      break;
-    case Type::kVolume:
-      if (std::holds_alternative<double>(value)) {
-        WriteDouble(std::max(0.0, std::get<double>(value)));
-      }
-      break;
-    case Type::kNormalized:
-      if (std::holds_alternative<double>(value)) {
-        WriteDouble(std::clamp(0.0, 1.0, std::get<double>(value)));
-      }
-      break;
-    case Type::kText:
-      if (std::holds_alternative<std::string>(value)) {
-        WriteString(std::get<std::string>(value));
-      }
-      break;
-    case Type::kColor:
-      if (std::holds_alternative<Color>(value)) {
-        WriteColor(std::get<Color>(value));
-      }
-      break;
-    case Type::kTimelinePosition:
-      if (std::holds_alternative<TimelinePosition>(value)) {
-        WriteTimelinePosition(std::get<TimelinePosition>(value));
-      }
-      break;
-    case Type::kEnumerated:
-      if (std::holds_alternative<int>(value)) {
-        WriteInt(std::clamp(std::get<int>(value), 0, GetMaxValue()));
-      }
-      break;
-  }
-}
-
 void ViewProperty::SetBool(bool value) {
   switch (type_) {
     case Type::kAction:

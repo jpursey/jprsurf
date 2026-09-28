@@ -114,6 +114,10 @@ class Scene final {
   // to.
   const ViewReference* GetReference(std::string_view name) const;
 
+  // Returns the track reference with the name, built in or added, or null if
+  // there is none.
+  const TrackReference* GetTrackReference(std::string_view name) const;
+
   // Adds a track reference, which anything given the returned pointer may set
   // (see TrackReference::Set()). The scene updates it at the start of each run,
   // in the order references were added (see TrackReference::Update()).
@@ -135,9 +139,6 @@ class Scene final {
   friend class SceneStateProperty;
 
   void OnRun(const RunTime& time);
-
-  // Returns the track reference with the name, or null if there is none.
-  const TrackReference* GetTrackReference(std::string_view name) const;
 
   // Returns the track reference with the name if it is one anything may set
   // (see AddTrackReference()), or null if it isn't, or there is none.

@@ -76,6 +76,7 @@ class ViewMapping final {
     //     or max value, then it will be toggled to the max value if it is
     //     closer to the max value, or the min value if it is closer to the min
     //     value. An enumerated property is different (see press_toggles).
+    //     Either way, if min and max are the same, a press sets that value.
     //
     // These values are ignored for action and toggle properties.
     std::optional<ViewProperty::Value> property_min;

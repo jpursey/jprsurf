@@ -16,6 +16,7 @@ set(jpr_scene_SOURCE
   timeline_property.cc timeline_property.h
   track_actions.cc track_actions.h
   track_anchor_property.cc track_anchor_property.h
+  track_pick_property.cc track_pick_property.h
   track_properties.cc track_properties.h
   track_reference.cc track_reference.h
   value_property.h

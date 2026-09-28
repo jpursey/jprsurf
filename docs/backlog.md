@@ -361,6 +361,24 @@ value to mode map today, and could become conditions with it. The config model
 keeps a condition to one property as a bool, with combining states left to
 components, so it needs updating too.
 
+## Share a condition across mappings
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:**
+  [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)
+
+When one press does two things, each is its own mapping with the same
+condition, such as the pick and the mapping that sets `user:surface_mode` to
+enter Send/Receive mode, both requiring `has_routes`. The condition is written, and
+watched, once per mapping, and the copies must be kept the same by hand. A
+mapping could instead name a condition declared once on its view, shared by
+every mapping that uses it and watched once, for less to write (ergonomics)
+and fewer watches (performance). Worth doing once a config has several such
+groups, or a measurement shows the extra watches matter.
+
 ## Value names for every enumerated property
 
 - **Layers:** scene
