@@ -228,6 +228,14 @@ guessing between a view and the scene:
   condition, or mode override is in.
 - `user:` resolves to its declaration: in that view, one of its ancestors, or
   the top level.
+- A name with a `.` is a property of a named thing: the part before the `.` is
+  looked up by the rules above, and asked for the part after it. The thing is a
+  reference (whose properties are its fields, see [References](#references)),
+  or a component that provides more than one property
+  (`user:surface_mode.send_receive`). It is only ever one level deep.
+- Views give names a context, but never a scope: no name refers to another
+  view's properties, as that view may be inactive, and its properties not
+  current.
 
 **Constants.** A `const:` property is added with an explicit type and value
 (`Scene::AddConstProperty()`): a toggle, normalized, text, or color value so
@@ -248,11 +256,18 @@ UI, with the surface's modifiers, grouping, and anchors (see
 
 ### References
 
-A **reference** is a property whose value is a subject (a track, a route, or
-later any other kind, see [Subjects](#subjects)), or nothing. Its fields are
-the properties of the subject it refers to, so `state:selected_track.has_routes`
-is the selected track's `track:has_routes`. As a bool, in a condition, a
-reference is true while it refers to something.
+A **reference** is a named value that is a subject (a track, a route, or later
+any other kind, see [Subjects](#subjects)), or nothing. It isn't a property
+itself, but its **fields** are: the properties of the subject it refers to,
+named after a `.`, so `state:selected_track.has_routes` is the selected track's
+`track:has_routes`. A reference's name has a namespace like a property's, which
+says where it is looked up. Only a reference's name can be bound to or
+followed, so a property can never be used where a reference is needed.
+- A condition on whether a reference refers to something uses its `exists`
+  field (`user:current_track.exists`), which is also false while it refers to a
+  deleted track.
+- Fields are one level deep: `route:other_track.name`, but never a field of a
+  field.
 - **Built in** references are global and read-only: `state:master_track`,
   `state:last_touched_track`, and `state:selected_track`, which is the selected
   track if exactly one track other than the master is selected and it is on the
@@ -349,10 +364,10 @@ A view can have a **list**: an ordered list of subjects of one kind, with a
 **scroll position**. A child view repeated over an array widget shows it (see
 [Showing a list](#showing-a-list)).
 
-| List     | Items                                                                            |
-| -------- | -------------------------------------------------------------------------------- |
-| Children | The child tracks of the view's track that are on the surface                     |
-| Routes   | The sends or the receives of the view's track, depending on the list's direction |
+| List         | Items                                                                            |
+| ------------ | -------------------------------------------------------------------------------- |
+| Child tracks | The child tracks of the view's track that are on the surface                     |
+| Routes       | The sends or the receives of the view's track, depending on the list's direction |
 
 A routes list's **direction** (sends or receives) is part of its state:
 - A parameter picks the direction whenever the view's track changes: sends,
@@ -394,9 +409,9 @@ own subject (Send/Receive mode's Info strip could be one).
 - The scroll position stays in range when the list changes, such as when
   tracks are deleted or hidden.
 - A list can **reveal** a reference: scroll so that its subject is shown,
-  whenever the reference changes while the view is active, and when the view
-  becomes active. For a list of child tracks, revealing a track in another
-  folder first moves the view's bound reference to that folder.
+  whenever the track it refers to changes while the view is active, and when
+  the view becomes active. For a list of child tracks, revealing a track in
+  another folder first moves the view's bound reference to that folder.
 
 ### Modes
 
@@ -411,8 +426,8 @@ A mode isn't a concept of its own. It is:
 A mode that shows a particular subject, such as Send/Receive mode's track, is
 bound to a declared reference. It is entered with a **pick**, which sets the
 reference and turns the mode on together, but only if the new subject can be
-shown (see [Pick](#pick)). The mode requires the reference to refer to
-something, so if its track is deleted, the group returns to the default mode.
+shown (see [Pick](#pick)). The mode requires the reference's `exists`
+field, so if its track is deleted, the group returns to the default mode.
 
 ### Templates
 
@@ -536,7 +551,7 @@ behavior.
     `AddExclusiveToggleMapping()` and its `toggle_<property>` actions, which
     only keep the two exclusive for changes made through the actions.
   - For the surface modes (`user:surface_mode`, with `track` the default, and
-    `send_receive` requiring `user:current_track`): `SurfaceMode`,
+    `send_receive` requiring `user:current_track.exists`): `SurfaceMode`,
     `kModeInfo`, `ModeButton`, `InitModeButtons()`, `UpdateModeButtons()`,
     `IsModeAvailable()`, the `Enter*Mode()` functions, `mode_buttons_changed_`,
     and the `user:mode_<name>_*` properties.
@@ -762,7 +777,8 @@ declared at the top level
                        user:current_track, a track following the last
                        touched track
   exclusive group      user:surface_mode: track (the default), and
-                       send_receive, which requires user:current_track
+                       send_receive, which requires
+                       user:current_track.exists
   pick                 tapping Send: user:current_track from
                        state:selected_track if it has routes, turning on
                        user:surface_mode.send_receive
@@ -839,7 +855,9 @@ come together:
   1. *Property namespaces and names* (done): the final names, before anything
      else adds more.
   2. View conditions and constant properties (done).
-  3. *View subjects, lists, and references*: the largest change to `View`.
+  3. *View subjects, lists, and references*
+     ([view_subjects.md](worklog/view_subjects.md)): the largest change to
+     `View`.
   4. *Properties declared on views, and track anchors*.
   5. *Modes from exclusive groups and picks*: after this, the plugin has no
      surface state or callbacks left.

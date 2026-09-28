@@ -26,39 +26,6 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## View subjects, lists, and references
-
-- **Layers:** scene, plugin
-- **Size:** large
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (References, Subjects,
-  Lists), [surface_modes.md](worklog/surface_modes.md)
-
-Replace the view's track and child context with the model's subjects and
-lists:
-- **Subjects:** a view's subject has a kind (none, a track, or a route), and
-  comes from its parent, a reference it is bound to, or an item of its
-  parent's list. A route's other track becomes the `route:other_track`
-  reference, rather than the route view's track.
-- **Lists:** children or routes, with a scroll position and a bank size, shown
-  by the view's children. A routes list's direction is its own state, with a
-  rule for picking it when the view's track changes, replacing `kSends`,
-  `kReceives`, and `SetSendReceiveTrack()`. A list can reveal a reference,
-  replacing `EnsureTrackIsVisible()`.
-- **References:** properties whose value is a subject, with fields
-  (`state:selected_track.has_routes`). Built in ones for the master, selected,
-  and last touched tracks, and a declared one that is writable, with a fallback
-  and a reference to follow, which navigation writes.
-- **Keeping current:** references and lists react to track list and
-  visibility changes themselves, replacing `RefreshTrackViews()`.
-
-The Send/Receive track becomes `user:current_track`, which follows the last
-touched track in every mode, and which the track list reveals (see JPRSurf's
-surface in the config model). That should look the same as today, but needs
-checking in REAPER. This is the largest and riskiest change to `View`, so it
-wants a worklog plan.
-
 ## Properties declared on views, and track anchors
 
 - **Layers:** scene, plugin
@@ -86,8 +53,9 @@ those.
 - **Layers:** device, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *View subjects, lists, and references*, and *Properties
-  declared on views, and track anchors*
+- **Depends on:** *View subjects, lists, and references*
+  ([view_subjects.md](worklog/view_subjects.md)), and *Properties declared on
+  views, and track anchors*
 - **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
   Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md)
 
