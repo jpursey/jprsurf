@@ -26,34 +26,13 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Properties declared on views, and track anchors
-
-- **Layers:** scene, plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Declared properties,
-  Track anchor), [ranged_track_actions.md](worklog/ranged_track_actions.md)
-
-- **Declared properties:** a component declared on a view gives each view its
-  own instance under one `user:` name, visible in the view and its
-  descendants, and one declared at the top level is global. Declaring a name
-  that is already visible is an error.
-- **Track anchor:** the first component declared on a view, replacing
-  `AddTrackAnchorMapping()` and its `user:anchor_<action>_<n>` properties with
-  `user:anchor_select` and so on, the same on every strip. The plugin's empty
-  strip check moves into it.
-
-The anchors themselves are in `scene`'s `TrackActions` (see
-[track_actions.md](worklog/track_actions.md)), and the component builds on
-those.
-
 ## Modes from exclusive groups and picks
 
 - **Layers:** device, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
 - **Depends on:** *Properties declared on views, and track anchors*
+  ([declared_properties.md](worklog/declared_properties.md))
 - **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
   Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md),
   [view_subjects.md](worklog/view_subjects.md)
