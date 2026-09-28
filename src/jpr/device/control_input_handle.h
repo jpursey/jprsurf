@@ -1,3 +1,4 @@
+// Copyright (c) 2026 John Pursey
 //
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
@@ -20,7 +21,7 @@ using InputId = int;
 //
 // This defines what physical input type to listen to, what modifier keys must
 // be active for the input to trigger, and for press inputs, the press behavior
-// (normal, long press, or double press).
+// (normal, long press, double press, or tap).
 struct InputConfig {
   // The type of physical input to listen to.
   ControlInput::Type input_type = ControlInput::Type::kPress;
@@ -49,6 +50,13 @@ struct InputConfig {
     // Double press behavior. The press is delivered only after the button has
     // been pressed twice within a configurable time window.
     kDoublePress,
+
+    // Tap behavior. The press is delivered when the button is released, if it
+    // was held for less than a long press. This lets a button that does
+    // something while held also do something when tapped. A tap never defers
+    // its siblings. Without release support, every press is a tap, so it is
+    // delivered on the press.
+    kTap,
   };
   PressBehavior press_behavior = PressBehavior::kNormal;
 };

@@ -402,6 +402,9 @@ void Control::RebuildPressGroups() {
       case InputConfig::PressBehavior::kDoublePress:
         group->double_press_ids.push_back(id);
         break;
+      case InputConfig::PressBehavior::kTap:
+        group->tap_ids.push_back(id);
+        break;
     }
   }
 }
@@ -490,15 +493,11 @@ void Control::OnPressInputChangedWithRelease() {
         continue;
       }
 
+      if (!group.tap_ids.empty()) {
+        group.tap_press_time = last_run_time_;
+      }
       if (group.long_press_ids.empty() && group.double_press_ids.empty()) {
-        DeliverNormalPress(group);
-        for (InputId id : group.normal_ids) {
-          auto it = registrations_.find(id);
-          if (it != registrations_.end()) {
-            it->second.is_pressed = true;
-            *it->second.flag = true;
-          }
-        }
+        DeliverPress(group.normal_ids, /*hold=*/true);
       } else if (group.state == PressGroup::State::kIdle) {
         group.state = (!group.long_press_ids.empty()
                            ? PressGroup::State::kPendingLong
@@ -506,7 +505,7 @@ void Control::OnPressInputChangedWithRelease() {
         group.state_start_time = last_run_time_;
         group.pending_press_count = 1;
       } else if (group.state == PressGroup::State::kPendingDouble) {
-        DeliverDoublePress(group);
+        DeliverPress(group.double_press_ids);
         group.state = PressGroup::State::kIdle;
       }
     }
@@ -514,6 +513,12 @@ void Control::OnPressInputChangedWithRelease() {
     // On release, don't check modifiers. Release whichever group latched the
     // press, identified by is_pressed state or pending state machine state.
     for (auto& group : press_groups_) {
+      if (group.tap_press_time.has_value()) {
+        if (last_run_time_ - *group.tap_press_time < kLongPressDuration) {
+          DeliverPress(group.tap_ids);
+        }
+        group.tap_press_time.reset();
+      }
       if (group.long_press_ids.empty() && group.double_press_ids.empty()) {
         ReleasePressed(group.normal_ids);
       } else if (group.state == PressGroup::State::kPendingLong ||
@@ -523,7 +528,7 @@ void Control::OnPressInputChangedWithRelease() {
           group.state = PressGroup::State::kPendingDouble;
           group.state_start_time = last_run_time_;
         } else {
-          DeliverNormalPress(group);
+          DeliverPress(group.normal_ids);
           group.state = PressGroup::State::kIdle;
         }
       } else {
@@ -538,8 +543,8 @@ void Control::OnPressInputChangedWithRelease() {
 void Control::OnPressInputChangedWithoutRelease() {
   // Without release support, IsPressed() always returns false. We detect
   // presses via GetPressCount() instead. Long press is not possible without
-  // release, so long_press_ids are ignored. Each listener callback represents
-  // exactly one press event.
+  // release, so long_press_ids are ignored, and every press is a tap. Each
+  // listener callback represents exactly one press event.
   int press_count = press_input_->GetPressCount();
   if (press_count == 0) {
     return;
@@ -553,10 +558,12 @@ void Control::OnPressInputChangedWithoutRelease() {
       continue;
     }
 
+    DeliverPress(group.tap_ids);
+
     // If the group has no double press (long press is impossible without
     // release), deliver immediately.
     if (group.double_press_ids.empty()) {
-      DeliverNormalPress(group);
+      DeliverPress(group.normal_ids);
       continue;
     }
 
@@ -579,39 +586,21 @@ void Control::OnPressInputChangedWithoutRelease() {
 
       case PressGroup::State::kPendingDouble:
         // Second press within the double press window.
-        DeliverDoublePress(group);
+        DeliverPress(group.double_press_ids);
         group.state = PressGroup::State::kIdle;
         break;
     }
   }
 }
 
-void Control::DeliverNormalPress(PressGroup& group) {
-  for (InputId id : group.normal_ids) {
+void Control::DeliverPress(const std::vector<InputId>& ids, bool hold) {
+  for (InputId id : ids) {
     auto it = registrations_.find(id);
     if (it != registrations_.end()) {
       it->second.press_count++;
-      *it->second.flag = true;
-    }
-  }
-}
-
-void Control::DeliverLongPress(PressGroup& group) {
-  for (InputId id : group.long_press_ids) {
-    auto it = registrations_.find(id);
-    if (it != registrations_.end()) {
-      it->second.press_count++;
-      it->second.is_pressed = true;
-      *it->second.flag = true;
-    }
-  }
-}
-
-void Control::DeliverDoublePress(PressGroup& group) {
-  for (InputId id : group.double_press_ids) {
-    auto it = registrations_.find(id);
-    if (it != registrations_.end()) {
-      it->second.press_count++;
+      if (hold) {
+        it->second.is_pressed = true;
+      }
       *it->second.flag = true;
     }
   }
@@ -660,7 +649,7 @@ void Control::UpdatePressTimers(double current_time) {
 
       case PressGroup::State::kPendingLong:
         if (current_time - group.state_start_time >= kLongPressDuration) {
-          DeliverLongPress(group);
+          DeliverPress(group.long_press_ids, /*hold=*/true);
           group.state = PressGroup::State::kIdle;
         }
         break;
@@ -668,7 +657,7 @@ void Control::UpdatePressTimers(double current_time) {
       case PressGroup::State::kPendingRelease:
         if (current_time - group.state_start_time >= kDoublePressWindow) {
           // Held too long for a double press. Deliver as a normal press.
-          DeliverNormalPress(group);
+          DeliverPress(group.normal_ids);
           group.state = PressGroup::State::kIdle;
         }
         break;
@@ -677,7 +666,7 @@ void Control::UpdatePressTimers(double current_time) {
         if (current_time - group.state_start_time >= kDoublePressWindow) {
           // Double press window expired without a second press.
           // Deliver as a normal press.
-          DeliverNormalPress(group);
+          DeliverPress(group.normal_ids);
           group.state = PressGroup::State::kIdle;
         }
         break;

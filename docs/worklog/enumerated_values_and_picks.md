@@ -256,7 +256,7 @@ order already guarantees.
 
 ## CLs
 
-### CL1 [ ] device: Tap
+### CL1 [x] device: Tap
 
 Depends on: nothing.
 

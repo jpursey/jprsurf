@@ -225,7 +225,7 @@ class Control final {
   // A long press input is pressed from when its long press is delivered until
   // the button is released. A normal press input only reports pressed if no
   // long press or double press input shares its modifiers, as otherwise its
-  // press is deferred.
+  // press is deferred. A tap input is never pressed.
   bool IsPressed(InputId id) const;
 
   //----------------------------------------------------------------------------
@@ -300,7 +300,8 @@ class Control final {
 
   // Press timing state for a group of press registrations that share the same
   // modifier on/off masks. This tracks whether we need to defer press delivery
-  // due to long-press or double-press siblings.
+  // due to long-press or double-press siblings, and whether a press is short
+  // enough to be a tap.
   struct PressGroup {
     // Press timing state machine.
     enum class State {
@@ -322,6 +323,7 @@ class Control final {
     std::vector<InputId> normal_ids;
     std::vector<InputId> long_press_ids;
     std::vector<InputId> double_press_ids;
+    std::vector<InputId> tap_ids;
 
     State state = State::kIdle;
     double state_start_time = 0.0;
@@ -329,6 +331,11 @@ class Control final {
     // The number of press events that occurred during the first press (should
     // be 1, but tracked for correctness).
     int pending_press_count = 0;
+
+    // When the button was pressed, if this group has taps and handled the
+    // press. The tap is delivered on release if it was held for less than a
+    // long press. Tap timing is independent of the state machine above.
+    std::optional<double> tap_press_time;
   };
 
   struct PendingOutput {
@@ -354,9 +361,7 @@ class Control final {
   void RebuildPressGroups();
   bool CheckModifiers(const InputRegistration& reg) const;
   PressGroup* FindPressGroup(Modifiers on_mask, Modifiers off_mask);
-  void DeliverNormalPress(PressGroup& group);
-  void DeliverLongPress(PressGroup& group);
-  void DeliverDoublePress(PressGroup& group);
+  void DeliverPress(const std::vector<InputId>& ids, bool hold = false);
   void ReleasePressed(const std::vector<InputId>& ids);
   bool HasRegistrations() const { return !registrations_.empty(); }
 
