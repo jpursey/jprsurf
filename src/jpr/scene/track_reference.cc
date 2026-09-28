@@ -28,8 +28,13 @@ void TrackReference::Set(Track* track) {
   if (track == nullptr || !track->Exists()) {
     track = GetFallbackTrack();
   }
-  properties_.SetTrack(track != nullptr ? track
-                                        : TrackCache::Get().GetStubTrack());
+  if (track == nullptr) {
+    track = TrackCache::Get().GetStubTrack();
+  }
+  if (track != properties_.GetTrack()) {
+    ++version_;
+    properties_.SetTrack(track);
+  }
 }
 
 ViewProperty* TrackReference::GetField(std::string_view name) const {
@@ -37,17 +42,15 @@ ViewProperty* TrackReference::GetField(std::string_view name) const {
 }
 
 void TrackReference::Update() {
-  if (follow_ != nullptr) {
-    Track* followed_track = follow_->GetTrack();
-    if (followed_track != followed_track_) {
-      followed_track_ = followed_track;
+  if (follow_ != nullptr && follow_->GetVersion() != followed_version_) {
+    followed_version_ = follow_->GetVersion();
 
-      // Only a track with a place in the filter is on the surface, which
-      // leaves out the master track, and tracks that don't exist.
-      if (followed_track != nullptr &&
-          followed_track->GetGlobalIndex(filter_).has_value()) {
-        Set(followed_track);
-      }
+    // Only a track with a place in the filter is on the surface, which leaves
+    // out the master track, and tracks that don't exist.
+    Track* followed_track = follow_->GetTrack();
+    if (followed_track != nullptr &&
+        followed_track->GetGlobalIndex(filter_).has_value()) {
+      Set(followed_track);
     }
   }
 

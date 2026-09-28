@@ -139,6 +139,14 @@ const TrackReference* Scene::GetTrackReference(std::string_view name) const {
   return it != track_references_by_name_.end() ? it->second : nullptr;
 }
 
+TrackReference* Scene::GetWritableTrackReference(std::string_view name) {
+  if (!name.starts_with(kUserNamespace)) {
+    return nullptr;
+  }
+  auto it = track_references_by_name_.find(name);
+  return it != track_references_by_name_.end() ? it->second : nullptr;
+}
+
 TrackReference* Scene::CreateTrackReference(std::string_view name,
                                             const TrackReference* fallback,
                                             const TrackReference* follow) {

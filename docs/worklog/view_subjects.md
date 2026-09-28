@@ -51,12 +51,12 @@ These are the same, but move from the plugin to the scene:
   something that has no value of its own. Whether a reference refers to
   anything is its `exists` field.
 - **Views notice changes, rather than being told.** A view compares its subject
-  and the track list's version with the ones it last laid out for, when it
-  syncs and when it becomes active, and lays out its list again if either
-  changed. That costs two comparisons per active view per run, and needs no
-  subscriptions, so there are no Subscribe/Unsubscribe pairs to keep. The one
-  exception is navigation, which lays out the list at once, as today, so a
-  strip never lags a button press.
+  reference's version and the track list's version with the ones it last laid
+  out for, when it syncs and when it becomes active, and lays out its list
+  again if either changed. That costs two comparisons per active view per run,
+  and needs no subscriptions, so there are no Subscribe/Unsubscribe pairs to
+  keep. The one exception is navigation, which lays out the list at once, as
+  today, so a strip never lags a button press.
 - **The scene updates references at the start of each run,** before view
   conditions and mappings, so everything that reads one in a run sees the same
   value. Built in references react to `TrackCache` versions (below), so they
@@ -67,12 +67,12 @@ These are the same, but move from the plugin to the scene:
   `route:` property on a track item, or a `view:` property that doesn't apply
   to the view is not found, and adding the mapping fails with an error.
 - **A view's subject is always a reference,** or nothing. A bound view borrows
-  a scene reference, a list item owns one its parent's list sets, and a
-  `kParent` view uses its parent's. So `track:x` and `route:x` always mean field
-  `x` of the view's subject reference, and `View` holds no `TrackProperties` or
-  `RouteProperties` of its own. A `TrackReference` and a `RouteReference` are
-  both a general `ViewReference`, so an FX reference later is a new class, not
-  a change to lookups or binding.
+  a scene reference, a list item owns one its parent's list sets, and a view
+  with a `ParentSubject` uses its parent's. So `track:x` and `route:x` always
+  mean field `x` of the view's subject reference, and `View` holds no
+  `TrackProperties` or `RouteProperties` of its own. A `TrackReference` and a
+  `RouteReference` are both a general `ViewReference`, so an FX reference later
+  is a new class, not a change to lookups or binding.
 - **Views don't scope names.** A view's name only identifies the view. Property
   names never contain a view path: `track:`, `route:`, and `view:` resolve
   against the view a mapping is in, and nothing can name another view's
@@ -122,8 +122,10 @@ These are the same, but move from the plugin to the scene:
   reference's field, and later a component's property
   (`user:surface_mode.send_receive`). Only one level: `route:other_track.name`
   names the `other_track` reference in `route:`, and its field.
-- **`SubjectKind`**: none, track, or route. **`View::SubjectSource`**: the
-  parent, a reference, or an item of the parent's list.
+- **`SubjectKind`**: none, track, or route. **`View::Config::subject`**: where
+  the subject comes from, the parent (`View::ParentSubject`), a reference
+  (`View::ReferenceSubject`), or an item of the parent's list
+  (`View::ListItemSubject`).
 - **List** (`View::ListConfig`, with `View::ChildTracks` or `View::Routes`),
   **list item** (a child view showing one item of its parent's list), and
   **scroll position** (the index of the item the first list item shows). These
@@ -162,8 +164,8 @@ declares its references before its root view, so views are destroyed first.
 - **A view** owns its `view:` properties, its list's state, and if it is a
   list item, its subject reference (a `TrackReference`, or a `RouteReference`
   with its `route:other_track`).
-- **Neither**: a bound view borrows the scene's reference, and a `kParent` view
-  its parent's.
+- **Neither**: a bound view borrows the scene's reference, and a view with a
+  `ParentSubject` its parent's.
 
 Since nothing is ever removed, where an object lives is for scope and cost, not
 correctness. Existing costs nothing: what costs is keeping it current, and the
@@ -261,6 +263,9 @@ class TrackReference final : public ViewReference {
   Track* GetTrack() const;
   void Set(Track* track);
 
+  // Changes whenever the track it refers to changes.
+  int64_t GetVersion() const;
+
   ViewProperty* GetField(std::string_view name) const override;
 
   // Applies the follow, then the fallback, then refreshes its track from
@@ -317,8 +322,9 @@ class Scene {
     returns to its fallback's track, or nothing. This is checked every run,
     which is as cheap as checking the track list version. A hidden track is
     kept, as the track list keeps a hidden folder today.
-  - Following compares the followed reference's track with the one it last
-    saw, every run.
+  - Following compares the followed reference's version with the one it last
+    saw, every run. A version, unlike the track pointer, notices a new track
+    that reuses a deleted track's memory.
   - `Set()` takes effect at once, fallback included, so a change from a
     mapping (navigation, and later picks) is seen by every other mapping in
     the same run.
@@ -351,21 +357,23 @@ them. Everything that needs a reference looks one up as a reference, so it
 can't be given a property by mistake. A reference can refer to a track that
 exists but is hidden, which is deliberate (see above). Changing a reference
 takes non-const access, which only its owner has, and gives to others only on
-purpose: `Scene::GetReference()` returns const, and only
-`Scene::AddTrackReference()` returns a reference anything else may set. The
-built in ones, a route's other track, and a list's item references are never
-given out non-const.
+purpose: `Scene::GetReference()` returns const, and only the `user:` references
+are given out to be set: by `Scene::AddTrackReference()`, and to the views bound
+to them (for navigation). The built in ones, a route's other track, and a
+list's item references are never given out non-const.
 
 ### scene: View config and subjects
 
 ```
 class View {
  public:
-  enum class SubjectSource {
-    kParent,     // The parent's subject. The root has none.
-    kReference,  // A reference the view is bound to.
-    kListItem,   // An item of the parent's list.
+  // Where a view's subject comes from.
+  struct ParentSubject {};     // The parent's subject. The root has none.
+  struct ReferenceSubject {    // A reference the view is bound to.
+    std::string name;
   };
+  struct ListItemSubject {};   // An item of the parent's list.
+
   enum class RouteTypeRule { kSends, kReceives, kSendsUnlessOnlyReceives };
 
   // A list of the child tracks of the view's track that are on the surface.
@@ -392,8 +400,7 @@ class View {
 
   struct Config {
     std::optional<ViewCondition::Config> condition;
-    SubjectSource subject = SubjectSource::kParent;
-    std::string reference;  // For kReference.
+    std::variant<ParentSubject, ReferenceSubject, ListItemSubject> subject;
     std::optional<ListConfig> list;
   };
 
@@ -412,14 +419,15 @@ class View {
 };
 ```
 
-- **Kinds** are fixed when a view is created, by its source: `kParent` takes
-  the parent's kind (the root has none), `kReference` the reference's, and
-  `kListItem` the kind of its parent's list's items (a track for child tracks,
-  and a route for routes). So a view has a subject only if it, or an ancestor
-  it takes its subject from, is bound or is a list item.
+- **Kinds** are fixed when a view is created, by its subject: a
+  `ParentSubject` takes the parent's kind (the root has none), a
+  `ReferenceSubject` the reference's, and a `ListItemSubject` the kind of its
+  parent's list's items (a track for child tracks, and a route for routes). So
+  a view has a subject only if it, or an ancestor it takes its subject from, is
+  bound or is a list item.
 - **Subjects**: a view points at the reference holding its subject: the
-  scene's (`kReference`), its parent's (`kParent`), or its own (`kListItem`),
-  which the view owns and its parent's list sets.
+  scene's (`ReferenceSubject`), its parent's (`ParentSubject`), or its own
+  (`ListItemSubject`), which the view owns and its parent's list sets.
 - **Lookups**: `track:x` and `route:x` are field `x` of the view's subject
   reference, if the namespace matches its kind, and otherwise not found. So a
   route item has no `track:` properties, and the route strip shows
@@ -436,8 +444,9 @@ class View {
 kind can't change under mappings that were checked against it, and there is
 nothing to set up in the right order. The one ordering left is inherent: a list
 item must be added to a parent that already has its list, which the check
-catches. The list's options are a variant, so an option can't be given to a
-list it doesn't apply to.
+catches. The subject and the list's options are variants, so a reference name
+can't be given to a view that isn't bound, or an option to a list it doesn't
+apply to.
 
 ### scene: Lists
 
@@ -598,18 +607,19 @@ Depends on: CL1.
     (see To confirm).
 - Performance: the `Run()` log line's avg is unchanged on a 150-track project.
 
-### CL3 [ ] scene: View config and bound views
+### CL3 [x] scene: View config and bound views
 
 Depends on: CL2.
 
 - `View::Config` and `AddChildView(name, config)`, with the condition and a
-  reference to bind to (`SubjectSource::kReference`). The plugin's two
+  reference to bind to (`ReferenceSubject`). The plugin's two
   `AddChildView()` calls with conditions change to the new signature.
 - A bound view points at its reference: its `track:` properties are the
   reference's fields, and it doesn't refresh the track itself. It notices a
-  subject change when it syncs or becomes active: it releases its anchor, and
-  resets and lays out its child context. Unbound views keep their own
-  `TrackProperties` and `RouteProperties` until CL5.
+  subject change (`TrackReference::GetVersion()`, which following uses too)
+  when it syncs or becomes active: it releases its anchor, and resets and lays
+  out its child context. Unbound views keep their own `TrackProperties` and
+  `RouteProperties` until CL5.
 - For now, `SetTrack()` on a bound view sets a writable reference (and does
   nothing for a built in one), so the plugin's code that positions views keeps
   working. CL5 removes it.
@@ -647,18 +657,21 @@ Depends on: CL3.
 Depends on: CL4.
 
 - `View::ListConfig` (`ChildTracks` or `Routes`) and
-  `SubjectSource::kListItem`: the item vector, the bank size (defaulting to the
+  `ListItemSubject`: the item vector, the bank size (defaulting to the
   item count), the route type rule, and layout, replacing the child context.
   Each kind of list is its own object, owning its `view:` properties.
 - `RouteReference`. A list item owns its subject reference (a `TrackReference`
   or a `RouteReference`), which its parent's list sets, and `View` no longer
   has a `TrackProperties` or `RouteProperties` of its own.
 - Subject kinds, and lookups that only find a view's own kind of properties,
-  with `kParent` the default subject. Route items have no track.
+  with `ParentSubject` the default subject. Route items have no track.
 - Lists keep current: on a subject change (route type rule, and scroll 0), and
   on a track list version change (clamp).
 - Navigation sets the bound reference and the list position, and each `view:`
-  property is only found where it applies.
+  property is only found where it applies. The list holds the writable
+  reference its navigation (and later reveal) sets, and only has those
+  properties when there is one, so `View` keeps only its const subject, and
+  `writable_reference_` goes with `SetTrack()`.
 - `View::Reveal(Track*)`, public for now, is `EnsureTrackIsVisible()`.
 - Removed: `ChildContextType`, `SetChildContext()`, `ClearChildContext()`,
   `SetChildContextIndex()`, `GetChildContextIndex()`,

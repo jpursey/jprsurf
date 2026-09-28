@@ -108,8 +108,8 @@ class Scene final {
       kStateName<"selected_track">;
 
   // Returns the reference with the name, built in or added, or null if there is
-  // none. Only the scene, and whoever added the reference, can change what it
-  // refers to.
+  // none. Only the scene, whoever added the reference, and views bound to it
+  // (see View::SetTrack()) can change what it refers to.
   const ViewReference* GetReference(std::string_view name) const;
 
   // Adds a track reference, which anything given the returned pointer may set
@@ -135,6 +135,10 @@ class Scene final {
 
   // Returns the track reference with the name, or null if there is none.
   const TrackReference* GetTrackReference(std::string_view name) const;
+
+  // Returns the track reference with the name if it is one anything may set
+  // (see AddTrackReference()), or null if it isn't, or there is none.
+  TrackReference* GetWritableTrackReference(std::string_view name);
 
   // Creates a track reference, and adds it to the references by name. The name
   // must be unused, and the fallback and follow are null if there are none.

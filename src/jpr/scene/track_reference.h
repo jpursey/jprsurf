@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -54,6 +55,11 @@ class TrackReference final : public ViewReference {
   // Returns the track this refers to, or null if it refers to nothing.
   Track* GetTrack() const;
 
+  // Changes whenever the track it refers to changes. Only compared for
+  // equality, and unlike comparing tracks, it notices a change to a new track
+  // that reuses a deleted track's memory.
+  int64_t GetVersion() const { return version_; }
+
   // Refers to the track, or to the fallback's track if it is null or doesn't
   // exist. The fields are notified if the track changed.
   void Set(Track* track);
@@ -75,8 +81,10 @@ class TrackReference final : public ViewReference {
   const TrackReference* const fallback_;
   const TrackReference* const follow_;
 
-  // The follow's track when it was last checked.
-  Track* followed_track_ = nullptr;
+  int64_t version_ = 0;
+
+  // The follow's version when it was last checked.
+  int64_t followed_version_ = -1;
 
   // Refers to the stub track while the reference refers to nothing.
   TrackProperties properties_;

@@ -533,8 +533,9 @@ void PluginSurface::InitViews() {
   // Add the Track mode view, which holds everything that is specific to Track
   // mode. Each mode's view is active while its mode is the current mode.
   track_mode_view_ = root_view->AddChildView(
-      "TrackMode", ViewCondition::Config{.property = GetModePropertyName(
-                                             SurfaceMode::kTrack, "active")});
+      "TrackMode",
+      {.condition = ViewCondition::Config{
+           .property = GetModePropertyName(SurfaceMode::kTrack, "active")}});
   CHECK(track_mode_view_ != nullptr);
 
   // On while a track's select button is held as the anchor for a range.
@@ -661,9 +662,9 @@ void PluginSurface::InitViews() {
 
   // Add the Send/Receive mode view.
   send_receive_mode_view_ = root_view->AddChildView(
-      "SendReceiveMode",
-      ViewCondition::Config{.property = GetModePropertyName(
-                                SurfaceMode::kSendReceive, "active")});
+      "SendReceiveMode", {.condition = ViewCondition::Config{
+                              .property = GetModePropertyName(
+                                  SurfaceMode::kSendReceive, "active")}});
   CHECK(send_receive_mode_view_ != nullptr);
 
   // Add a route view for each channel strip, which will show consecutive sends

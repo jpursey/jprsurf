@@ -5,16 +5,19 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/anchor.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/track_properties.h"
+#include "jpr/scene/track_reference.h"
 #include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
@@ -48,6 +51,28 @@ class View final {
     // views have no route (route:exists is false) and the stub track.
     kSends,
     kReceives,
+  };
+
+  // Where a view's subject (its track) comes from (see Config::subject).
+
+  // The view's own track, which SetTrack() and its parent's child context set.
+  struct ParentSubject {};
+
+  // A reference the view is bound to. Its track is the view's track, and its
+  // fields are the view's track: properties.
+  struct ReferenceSubject {
+    // The name of a track reference (see Scene::GetReference()).
+    std::string name;
+  };
+
+  // Configures a new view (see AddChildView()).
+  struct Config {
+    // If set, the view is only active while the condition is met. The scene
+    // applies changes to the condition between runs, so the condition's
+    // property may change at any time.
+    std::optional<ViewCondition::Config> condition;
+
+    std::variant<ParentSubject, ReferenceSubject> subject;
   };
 
   //----------------------------------------------------------------------------
@@ -143,7 +168,7 @@ class View final {
   // These take effect immediately, so they must not be called while the scene
   // is running (for instance, from a property a mapping triggers). A view that
   // changes while the scene runs needs a condition instead (see
-  // AddChildView()), which may change at any time.
+  // Config::condition), which may change at any time.
   bool IsEnabled() const { return enabled_; }
   void Enable();
   void Disable();
@@ -166,15 +191,12 @@ class View final {
   // view.
   View* GetParentView() const { return parent_view_; }
 
-  // Adds a child view to this view. If there is a condition, the child view is
-  // only active while it is met. The scene applies changes to the condition
-  // between runs, so the condition's property may change at any time.
+  // Adds a child view to this view, configured by the config.
   //
-  // This will return null if a view with the same name already exists, or the
+  // This returns null (logging why) if a view with the same name already
+  // exists, the reference doesn't exist or isn't a track reference, or the
   // condition's property doesn't exist (as seen from the child view).
-  View* AddChildView(
-      std::string_view name,
-      const std::optional<ViewCondition::Config>& condition = {});
+  View* AddChildView(std::string_view name, const Config& config = {});
 
   int GetChildViewCount() const { return child_views_.size(); }
   View* GetChildViewAt(int index) const { return child_views_[index].get(); }
@@ -184,7 +206,8 @@ class View final {
   // View Context
   //----------------------------------------------------------------------------
 
-  // Returns the current track for this view.
+  // Returns the current track for this view, which is the stub track if it has
+  // none.
   Track* GetTrack() const;
 
   // Sets the track for this view.
@@ -192,6 +215,10 @@ class View final {
   // If track is null, this will set the context to a default stub track that
   // has no real functionality, but can be used for mappings. This is useful if
   // a parent view will be setting the actual track dynamically.
+  //
+  // For a view bound to a reference, this sets the reference instead, if
+  // anything may set it (see Scene::AddTrackReference()), and otherwise does
+  // nothing. A null track sets the reference to its fallback's track.
   //
   // The child context index is also reset, which will update the context for
   // all child views if there is a child context type set.
@@ -308,15 +335,21 @@ class View final {
   class ChildRouteToggleProperty;
   class ChildRouteTypeNameProperty;
 
-  // The condition's property is looked up from this view. If there is no such
-  // property, the view has no condition, and the caller must discard it.
-  View(Scene* scene, View* parent_view, std::string_view name,
-       const std::optional<ViewCondition::Config>& condition = {});
+  View(Scene* scene, View* parent_view, std::string_view name);
+
+  // Applies the config to a new view. Returns false (logging why) if it isn't
+  // valid, in which case the caller must discard the view.
+  bool ApplyConfig(const Config& config);
 
   // Returns the property with the given name, as seen from this view, or null
   // if no such property exists (see the property namespaces in
   // view_property.h).
   ViewProperty* GetProperty(std::string_view name) const;
+
+  // If the view is bound to a reference whose track changed since the view
+  // last noticed, releases the anchor, lays out the child context from the
+  // child context index, and returns true.
+  bool NoticeReferenceChange(int child_context_index = 0);
 
   // Sets the context for all child views with a track context type to the
   // child tracks of this view's track context, starting at the child context
@@ -349,7 +382,13 @@ class View final {
   std::vector<std::unique_ptr<View>> child_views_;
   absl::flat_hash_map<std::string, View*> child_views_by_name_;
 
-  // Context
+  // Context. A view bound to a reference uses the reference's track and fields
+  // rather than its own track properties. The writable reference is the same
+  // reference, if anything may set it (see Scene::AddTrackReference()), and
+  // otherwise null.
+  const TrackReference* reference_ = nullptr;
+  TrackReference* writable_reference_ = nullptr;
+  int64_t reference_version_ = -1;  // See NoticeReferenceChange().
   TrackProperties track_properties_;
   RouteProperties route_properties_;  // Set by a parent that shows routes.
   ChildContextType child_context_type_ = ChildContextType::kNone;

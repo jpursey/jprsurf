@@ -6,6 +6,7 @@
 #include "jpr/scene/view.h"
 
 #include <utility>
+#include <variant>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -245,8 +246,7 @@ class View::ChildRouteTypeNameProperty : public ViewProperty {
   View* const view_;
 };
 
-View::View(Scene* scene, View* parent_view, std::string_view name,
-           const std::optional<ViewCondition::Config>& condition)
+View::View(Scene* scene, View* parent_view, std::string_view name)
     : scene_(scene),
       parent_view_(parent_view),
       name_(name),
@@ -287,18 +287,32 @@ View::View(Scene* scene, View* parent_view, std::string_view name,
   child_route_type_name_property_ = child_route_type_name_property.get();
   properties_.emplace(kChildRouteTypeName,
                       std::move(child_route_type_name_property));
+}
 
-  // The condition may refer to any of the properties above.
-  if (condition.has_value()) {
-    ViewProperty* condition_property = GetProperty(condition->property);
-    if (condition_property == nullptr) {
-      LOG(ERROR) << "Failed to add view '" << name << "': condition property '"
-                 << condition->property << "' not found";
-      return;
+bool View::ApplyConfig(const Config& config) {
+  // The reference comes first, as the condition may be on its fields.
+  if (const auto* subject = std::get_if<ReferenceSubject>(&config.subject)) {
+    reference_ = scene_->GetTrackReference(subject->name);
+    if (reference_ == nullptr) {
+      LOG(ERROR) << "Failed to add view '" << name_ << "': reference '"
+                 << subject->name << "' is not a track reference";
+      return false;
     }
-    condition_ =
-        std::make_unique<ViewCondition>(condition_property, condition->value);
+    writable_reference_ = scene_->GetWritableTrackReference(subject->name);
   }
+
+  // The condition may refer to any of the view's properties.
+  if (config.condition.has_value()) {
+    ViewProperty* condition_property = GetProperty(config.condition->property);
+    if (condition_property == nullptr) {
+      LOG(ERROR) << "Failed to add view '" << name_ << "': condition property '"
+                 << config.condition->property << "' not found";
+      return false;
+    }
+    condition_ = std::make_unique<ViewCondition>(condition_property,
+                                                 config.condition->value);
+  }
+  return true;
 }
 
 View::~View() {
@@ -341,7 +355,9 @@ void View::RefreshActive() {
   if (active_ != should_be_active) {
     active_ = should_be_active;
     if (active_) {
-      RefreshChildContext();
+      if (!NoticeReferenceChange()) {
+        RefreshChildContext();
+      }
     } else {
       ClearAnchor();
     }
@@ -357,17 +373,16 @@ void View::RefreshActive() {
   }
 }
 
-View* View::AddChildView(
-    std::string_view name,
-    const std::optional<ViewCondition::Config>& condition) {
+View* View::AddChildView(std::string_view name, const Config& config) {
   if (child_views_by_name_.contains(name)) {
+    LOG(ERROR) << "Failed to add view '" << name << "': the name is used";
     return nullptr;
   }
-  auto child_view = absl::WrapUnique(new View(scene_, this, name, condition));
-  if (condition.has_value()) {
-    if (child_view->condition_ == nullptr) {
-      return nullptr;
-    }
+  auto child_view = absl::WrapUnique(new View(scene_, this, name));
+  if (!child_view->ApplyConfig(config)) {
+    return nullptr;
+  }
+  if (child_view->condition_ != nullptr) {
     scene_->AddConditionalView(child_view.get());
   }
   View* child_view_ptr = child_view.get();
@@ -382,6 +397,17 @@ View* View::GetChildView(std::string_view name) const {
 }
 
 void View::SetTrack(Track* track, int child_context_index) {
+  if (reference_ != nullptr) {
+    if (writable_reference_ == nullptr) {
+      return;
+    }
+    writable_reference_->Set(track);
+    if (!NoticeReferenceChange(child_context_index)) {
+      SetChildContextIndex(child_context_index);
+    }
+    return;
+  }
+
   if (track == nullptr) {
     track = TrackCache::Get().GetStubTrack();
   }
@@ -395,7 +421,24 @@ void View::SetTrack(Track* track, int child_context_index) {
   }
 }
 
-Track* View::GetTrack() const { return track_properties_.GetTrack(); }
+Track* View::GetTrack() const {
+  if (reference_ == nullptr) {
+    return track_properties_.GetTrack();
+  }
+  Track* track = reference_->GetTrack();
+  return track != nullptr ? track : TrackCache::Get().GetStubTrack();
+}
+
+bool View::NoticeReferenceChange(int child_context_index) {
+  if (reference_ == nullptr || reference_->GetVersion() == reference_version_) {
+    return false;
+  }
+  reference_version_ = reference_->GetVersion();
+  ClearAnchor();
+  child_context_index_ = child_context_index;
+  RefreshChildContext();
+  return true;
+}
 
 void View::SetRoute(Track* track, TrackRouteType type, int index) {
   if (route_properties_.GetTrack() != track ||
@@ -543,6 +586,9 @@ void View::SetChildRoutes() {
 
 ViewProperty* View::GetProperty(std::string_view name) const {
   if (name.starts_with(kTrackNamespace)) {
+    if (reference_ != nullptr) {
+      return reference_->GetField(name.substr(kTrackNamespace.size()));
+    }
     return track_properties_.GetProperty(name);
   }
   if (name.starts_with(kRouteNamespace)) {
@@ -605,11 +651,18 @@ void View::SyncMappings() {
     return;
   }
 
+  // A bound view notices a change to its reference from outside the view (its
+  // rules, or another view's mapping) here, or when it becomes active.
+  NoticeReferenceChange();
+
   // First sync the track context if there is one, since some mappings may
-  // depend on it.
+  // depend on it. A reference refreshes its own track while its fields are
+  // watched (see TrackReference::Update()).
   Track* track = GetTrack();
-  track->Refresh();
-  track->RefreshMeter();
+  if (reference_ == nullptr) {
+    track->Refresh();
+    track->RefreshMeter();
+  }
 
   // REAPER doesn't reliably report route volume, pan, and mute changes, so they
   // are polled for the track whose routes are shown by the child views.
