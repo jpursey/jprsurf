@@ -298,6 +298,12 @@ the view's track, and an exclusive group at the top level. Declaring a name
 that is already visible (in the same view, an ancestor, or the top level) is an
 error, so a declaration never silently hides another.
 
+**Today:** `Scene::AddUserProperty()` declares at the top level, and
+`View::AddUserProperty()` on a view. Both refuse a name that would hide, or be
+hidden by, another ([declared_properties.md](worklog/declared_properties.md)).
+A component that acts on its view is added with its own `AddToView()`, so it
+can't act on one view and be added to another.
+
 **Modifiers** are the exception to `user:`. A declared modifier is in `mod:`
 with the built in ones, as what matters wherever a modifier is used is that it
 is one: global, backed by a modifier bit that is cheap to test, and allowed in
@@ -517,9 +523,9 @@ owns its state, provides properties (including references, which views can be
 bound to), and enforces its own rules, so a config can't use it wrong.
 
 These are the components needed to express what `PluginSurface` does today.
-Apart from navigation, none exist yet as components. The backlog items in
-[Getting there](#getting-there) build them, one at a time and with no change in
-behavior.
+Apart from navigation, references, and the track anchor, none exist yet as
+components. The backlog items in [Getting there](#getting-there) build them,
+one at a time and with no change in behavior.
 
 ### Modifier
 
@@ -564,8 +570,9 @@ behavior.
 - **Provides:** a toggle, for a held mapping. While it is on, it holds the
   action's anchor on the view's track, unless the strip is empty. The anchor is
   released with the button, or when the view's subject changes.
-- **Today:** `AddTrackAnchorMapping()` and its `user:anchor_<action>_<n>`
-  properties.
+- **Today:** `TrackAnchorProperty::AddToView()`. JPRSurf's strip views add
+  `user:anchor_select` (with `mod:select_anchor`), `user:anchor_mute`,
+  `user:anchor_solo`, and `user:anchor_rec_arm`.
 
 ### Reference
 
@@ -596,7 +603,8 @@ behavior.
 - **Provides:** an action that, if the source has a subject and the field is
   true, sets the reference to the source's subject, and turns the toggle on.
 - **Today:** `requested_send_receive_track_`, `TryEnterSendReceiveMode()`,
-  `CanShowRoutes()`, and the `user:pick_send_receive_track_<n>` properties.
+  `CanShowRoutes()`, and the `user:pick_send_receive_track` property each
+  strip view adds.
   JPRSurf picks `user:current_track` and turns on
   `user:surface_mode.send_receive`, requiring `has_routes`: at the top level
   from `state:selected_track` (tapping Send), and on each strip view from its
@@ -746,7 +754,6 @@ for *Device types and catalogs*.
 
 | Today                                                                      | Problem                                                                                             | Change                                                                                                         |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `user:anchor_<action>_<n>`, `user:pick_send_receive_track_<n>`             | Generated from a strip index                                                                        | Declared on the strip view, with one name on every strip (`user:anchor_select`)                                |
 | `user:mode_<name>_available`, `_active`, `_select`                         | Generated from a mode name                                                                          | The mode toggles of an exclusive group, named by the group and mode the config declares                        |
 | `user:toggle_<name>`                                                       | Generated, and only exists to keep two toggles exclusive                                            | Removed: an exclusive group's toggles are mapped directly                                                      |
 | `mod:marker`, `mod:nudge`, `mod:send_hold`, `mod:select_anchor`            | Declared by the plugin                                                                              | Declared by the config: `mod:marker`, and so on                                                                |

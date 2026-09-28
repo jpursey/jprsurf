@@ -47,8 +47,8 @@ The last of the plugin's surface state and callbacks:
 - **Pick:** sets a reference and turns a toggle on, if a field of the source
   is true. It enters Send/Receive mode from the Send button and from a strip's
   select button, replacing `requested_send_receive_track_`,
-  `TryEnterSendReceiveMode()`, and the `user:pick_send_receive_track_<n>`
-  properties.
+  `TryEnterSendReceiveMode()`, and the `user:pick_send_receive_track`
+  property each strip view adds.
 - **Tap:** a press behavior in `device`, alongside long and double press. It
   fires on release if the press was short and the control's held modifier
   wasn't used, replacing `send_press_mode_`, `send_press_time_`, and

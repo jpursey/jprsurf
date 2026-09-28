@@ -196,7 +196,7 @@ Depends on: CL1.
 **Verify**
 - Standard checks.
 
-### CL3 [ ] plugin: Declare anchors and picks on the strips
+### CL3 [x] plugin: Declare anchors and picks on the strips
 
 Depends on: CL2.
 

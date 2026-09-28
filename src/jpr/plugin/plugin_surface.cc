@@ -16,7 +16,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "gb/config/text_config.h"
-#include "jpr/common/anchor.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/prefixed_name.h"
@@ -26,6 +25,7 @@
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/state_properties.h"
+#include "jpr/scene/track_anchor_property.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/value_property.h"
 #include "jpr/scene/view_mapping.h"
@@ -83,6 +83,17 @@ constexpr std::string_view kSendHold = kModName<"send_hold">;
 // for a range of tracks.
 constexpr std::string_view kSelectAnchor = kModName<"select_anchor">;
 
+// The anchors each track strip adds for its track, for ranges of tracks.
+constexpr std::string_view kAnchorSelect = kUserName<"anchor_select">;
+constexpr std::string_view kAnchorMute = kUserName<"anchor_mute">;
+constexpr std::string_view kAnchorSolo = kUserName<"anchor_solo">;
+constexpr std::string_view kAnchorRecArm = kUserName<"anchor_rec_arm">;
+
+// Picks a track strip's track for Send/Receive mode, which each track strip
+// adds.
+constexpr std::string_view kPickSendReceiveTrack =
+    kUserName<"pick_send_receive_track">;
+
 // The Send/Receive mode button only acts when released if it was pressed for
 // less than this. Holding it longer only shows which tracks have routes. This
 // matches the long press duration of controls.
@@ -130,34 +141,16 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
                    absl::StrCat(device_prefix, DeviceXTouch::Meter(strip)));
 }
 
-// Adds a property (user:anchor_<action>_<strip_index>) that anchors the view's
-// track for a ranged track action while the control is held, and maps it to the
+// Adds a track anchor with the name to the view, which anchors the view's track
+// for a ranged track action while the control is held, and maps it to the
 // control. Pressing the same control on another strip then acts on the range
-// from the anchor (see TrackActions). The anchor is released when the control
-// is released, or when the view releases it (see View::SetAnchor()). The
-// modifier, if any, is on while the anchor is held.
-void AddTrackAnchorMapping(Scene* scene, View* view, int strip_index,
-                           TrackBoolProperty property, std::string_view action,
+// from the anchor (see TrackAnchorProperty).
+void AddTrackAnchorMapping(View* view, std::string_view name,
+                           TrackAnchorProperty::Config config,
                            std::string_view control,
                            InputConfig::PressBehavior press_behavior =
-                               InputConfig::PressBehavior::kNormal,
-                           Modifiers modifier = 0) {
-  const std::string name =
-      absl::StrCat(kUserNamespace, "anchor_", action, "_", strip_index);
-  scene->AddUserProperty(std::make_unique<CallbackToggleProperty>(
-      name, [scene, view, property, modifier](bool pressed) {
-        Anchor<Track>& anchor = scene->GetTrackActions().GetAnchor(property);
-        if (!pressed) {
-          view->ReleaseAnchor(&anchor);
-          return;
-        }
-        // An empty strip has no place in a range.
-        Track* track = view->GetTrack();
-        if (!track->Exists()) {
-          return;
-        }
-        view->SetAnchor(anchor.Hold(track, modifier));
-      }));
+                               InputConfig::PressBehavior::kNormal) {
+  TrackAnchorProperty::AddToView(view, name, config);
   view->AddMapping(
       ViewMapping::kReadControl, name, control,
       {.read = {.press_behavior = press_behavior, .press_release = true}});
@@ -594,29 +587,27 @@ void PluginSurface::InitViews() {
       track_view->AddMapping(
           ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
           {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackBoolProperty::kSelected, "select", select,
-                            InputConfig::PressBehavior::kLongPress,
-                            select_anchor_modifier);
+      AddTrackAnchorMapping(track_view, kAnchorSelect,
+                            {.action = TrackBoolProperty::kSelected,
+                             .modifier = select_anchor_modifier},
+                            select, InputConfig::PressBehavior::kLongPress);
       track_view->AddMapping(
           ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
           {.read = {.required_modifiers = select_anchor_modifier}});
-      const std::string pick_name = absl::StrCat(
-          kUserNamespace, "pick_send_receive_track_", child_view_index);
-      scene_->AddUserProperty(std::make_unique<CallbackActionProperty>(
-          pick_name, [this, track_view] {
+      track_view->AddUserProperty(std::make_unique<CallbackActionProperty>(
+          kPickSendReceiveTrack, [this, track_view] {
             // Send was held to pick a track, so releasing it does nothing, even
             // if the picked track has no routes.
             send_press_mode_.reset();
             TryEnterSendReceiveMode(track_view->GetTrack());
           }));
       track_view->AddMapping(
-          ViewMapping::kReadControl, pick_name, select,
+          ViewMapping::kReadControl, kPickSendReceiveTrack, select,
           {.read = {.required_modifiers = send_hold_modifier_}});
       // Required modifiers must match exactly, so picking also needs a mapping
       // for Send held along with a select anchor. Picking wins over the range.
       track_view->AddMapping(
-          ViewMapping::kReadControl, pick_name, select,
+          ViewMapping::kReadControl, kPickSendReceiveTrack, select,
           {.read = {.required_modifiers =
                         send_hold_modifier_ | select_anchor_modifier}});
 
@@ -635,14 +626,14 @@ void PluginSurface::InitViews() {
       // Holding mute, solo, or record arm anchors the track, so pressing the
       // same button on another track sets the range between them to the held
       // track's value.
-      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackBoolProperty::kMute, "mute",
+      AddTrackAnchorMapping(track_view, kAnchorMute,
+                            {.action = TrackBoolProperty::kMute},
                             absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
-      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackBoolProperty::kSolo, "solo",
+      AddTrackAnchorMapping(track_view, kAnchorSolo,
+                            {.action = TrackBoolProperty::kSolo},
                             absl::StrCat(device_prefix, DeviceXTouch::Solo(i)));
-      AddTrackAnchorMapping(scene_.get(), track_view, child_view_index,
-                            TrackBoolProperty::kRecArm, "rec_arm",
+      AddTrackAnchorMapping(track_view, kAnchorRecArm,
+                            {.action = TrackBoolProperty::kRecArm},
                             absl::StrCat(device_prefix, DeviceXTouch::Rec(i)));
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiVolume,
