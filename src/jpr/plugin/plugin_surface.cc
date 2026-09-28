@@ -19,11 +19,14 @@
 #include "jpr/common/anchor.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
+#include "jpr/common/prefixed_name.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
+#include "jpr/scene/route_properties.h"
 #include "jpr/scene/state_properties.h"
+#include "jpr/scene/track_reference.h"
 #include "jpr/scene/value_property.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
@@ -58,6 +61,20 @@ std::string GetModePropertyName(SurfaceMode mode, std::string_view suffix) {
 
 // The X-Touch strip that shows the Send/Receive mode track itself.
 constexpr int kInfoStrip = 7;
+
+// The track whose child tracks the track list shows. It starts as, and returns
+// to, the master track if its track is deleted. A folder that is only hidden is
+// kept: its strips go blank, and come back as soon as it is shown again.
+constexpr std::string_view kFolder = kUserName<"folder">;
+
+// The track whose routes Send/Receive mode shows.
+constexpr std::string_view kCurrentTrack = kUserName<"current_track">;
+
+// The name and color of the track at the other end of a route strip's route.
+constexpr std::string_view kOtherTrackName =
+    kPrefixedName<RouteProperties::kOtherTrack, ".name">;
+constexpr std::string_view kOtherTrackColor =
+    kPrefixedName<RouteProperties::kOtherTrack, ".color">;
 
 // The modifier property that is on while the Send/Receive mode button is held.
 constexpr std::string_view kSendHold = kModName<"send_hold">;
@@ -247,7 +264,8 @@ void PluginSurface::OnTracksChanged() {
   mode_buttons_changed_ = true;
 
   // If the track shown in Send/Receive mode was deleted, there is nothing left
-  // to show.
+  // to show. The scene only updates the current track reference in its next
+  // run, so it still refers to the deleted track, which doesn't exist.
   if (mode_ == SurfaceMode::kSendReceive &&
       !send_receive_mode_view_->GetTrack()->Exists()) {
     LOG(INFO) << "Send/Receive track was deleted";
@@ -349,15 +367,25 @@ void PluginSurface::InitViews() {
                           xtouch_ext_in_.get(), xtouch_ext_out_.get()));
   }
 
+  const TrackReference* folder = scene_->AddTrackReference(
+      kFolder, {.fallback = std::string(Scene::kMasterTrack)});
+  CHECK(folder != nullptr);
+  const TrackReference* current_track =
+      scene_->AddTrackReference(kCurrentTrack);
+  CHECK(current_track != nullptr);
+
   // Add global mappings
   auto* root_view = scene_->GetRootView();
   if (has_xtouch) {
     // Master fader
-    master_track_view_ = root_view->AddChildView("MasterFader");
-    master_track_view_->AddMapping(
+    View* master_track_view = root_view->AddChildView(
+        "MasterFader", {.subject = View::ReferenceSubject{
+                            .name = std::string(Scene::kMasterTrack)}});
+    CHECK(master_track_view != nullptr);
+    master_track_view->AddMapping(
         ViewMapping::kReadWriteControl, TrackProperties::kVolume,
         absl::StrCat("XTouch/", DeviceXTouch::kMasterFader));
-    master_track_view_->Enable();
+    master_track_view->Enable();
 
     // Modifiers
     root_view->AddMapping(ViewMapping::kReadWriteControl,
@@ -544,8 +572,11 @@ void PluginSurface::InitViews() {
   CHECK(select_anchor_modifier != 0);
 
   // Add TrackList view with 8 track views, which will correspond to the 8
-  // tracks on the X-Touch.
-  track_list_view_ = track_mode_view_->AddChildView("TrackList");
+  // tracks on the X-Touch. They show the child tracks of the folder.
+  track_list_view_ = track_mode_view_->AddChildView(
+      "TrackList",
+      {.subject = View::ReferenceSubject{.name = std::string(kFolder)}});
+  CHECK(track_list_view_ != nullptr);
   int child_view_index = 0;
   for (int d = 0; d < 2; ++d) {
     if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
@@ -660,11 +691,13 @@ void PluginSurface::InitViews() {
   track_list_view_->Enable();
   track_mode_view_->Enable();
 
-  // Add the Send/Receive mode view.
+  // Add the Send/Receive mode view, which shows the current track.
   send_receive_mode_view_ = root_view->AddChildView(
-      "SendReceiveMode", {.condition = ViewCondition::Config{
-                              .property = GetModePropertyName(
-                                  SurfaceMode::kSendReceive, "active")}});
+      "SendReceiveMode",
+      {.condition =
+           ViewCondition::Config{.property = GetModePropertyName(
+                                     SurfaceMode::kSendReceive, "active")},
+       .subject = View::ReferenceSubject{.name = std::string(kCurrentTrack)}});
   CHECK(send_receive_mode_view_ != nullptr);
 
   // Add a route view for each channel strip, which will show consecutive sends
@@ -704,13 +737,13 @@ void PluginSurface::InitViews() {
           ViewMapping::kReadWriteControl, RouteProperties::kVolume,
           absl::StrCat(device_prefix, DeviceXTouch::Fader(i)));
       route_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kName,
+          ViewMapping::kWriteControl, kOtherTrackName,
           absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 0)));
       route_view->AddMapping(
           ViewMapping::kWriteControl, RouteProperties::kVolume,
           absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)));
       route_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kColor,
+          ViewMapping::kWriteControl, kOtherTrackColor,
           absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(i)));
       route_view->Enable();
     }
@@ -899,20 +932,6 @@ void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
 }
 
 void PluginSurface::RefreshTrackViews() {
-  Track* master_track = TrackCache::Get().GetMasterTrack();
-  if (master_track_view_ != nullptr) {
-    master_track_view_->SetTrack(master_track);
-  }
-
-  // The track list view is parented to a track whose children fill the strips.
-  // If that track was deleted there is nothing left to show, so return to the
-  // master track. A track that is merely hidden on the surface is deliberately
-  // left in place: its strips go blank, but they come back as soon as it is
-  // shown again, and the user can navigate up explicitly if they want to.
-  if (!track_list_view_->GetTrack()->Exists()) {
-    track_list_view_->SetTrack(master_track, 0);
-  }
-
   // Hiding tracks can shorten the child list out from under the current bank,
   // which would otherwise leave the strips blank.
   track_list_view_->SetChildContextIndex(

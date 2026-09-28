@@ -63,9 +63,9 @@ class PluginSurface final : private ControlSurfaceListener {
   void InitViews();
   void EnsureTrackIsVisible(Track* track);
 
-  // Re-points the views at the current track list. This is called whenever the
-  // track list changes, or a track is shown or hidden on the surface. Only a
-  // deleted parent track moves the track list view; a hidden one does not.
+  // Lays out the track list and Send/Receive views again, keeping their child
+  // context indexes in range. This is called whenever the track list changes,
+  // or a track is shown or hidden on the surface.
   void RefreshTrackViews();
 
   // Surface modes
@@ -112,10 +112,13 @@ class PluginSurface final : private ControlSurfaceListener {
   std::unique_ptr<MidiOut> xtouch_ext_out_;
   std::unique_ptr<Scene> scene_;
   View* track_mode_view_ = nullptr;  // Parent of all Track mode views.
-  // The Send/Receive mode view. Its track is the track whose routes are shown
-  // (which route navigation can change), and its child views show the routes.
+  // The Send/Receive mode view. It is bound to the current track, whose routes
+  // are shown (which route navigation can change), and its child views show
+  // the routes.
   View* send_receive_mode_view_ = nullptr;
-  View* master_track_view_ = nullptr;
+
+  // The track list view, which is bound to the folder, and whose child views
+  // show its child tracks.
   View* track_list_view_ = nullptr;
 
   // Surface mode state.

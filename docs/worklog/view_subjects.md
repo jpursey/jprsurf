@@ -628,7 +628,7 @@ Depends on: CL2.
 **Verify**
 - Standard checks.
 
-### CL4 [ ] plugin: Bind views to references
+### CL4 [x] plugin: Bind views to references
 
 Depends on: CL3.
 
