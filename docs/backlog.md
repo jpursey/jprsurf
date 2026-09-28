@@ -361,6 +361,25 @@ value to mode map today, and could become conditions with it. The config model
 keeps a condition to one property as a bool, with combining states left to
 components, so it needs updating too.
 
+## Value names for every enumerated property
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:**
+  [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)
+
+`EnumeratedValueProperty` has a name for each value: `GetText()` returns it,
+and `SetText()` sets the value by name. Other enumerated properties don't. The
+ruler mode properties spell out their names in `GetText()` switches, and
+`SetText()` reads a number. Names could be part of `ViewProperty` for every
+enumerated property instead (a names list, or a virtual that names a value),
+with the base `GetText()` and `SetText()` mapping between names and values. A
+config could then refer to any enumerated value by name, rather than by an
+index that has to match the order of the names. Worth doing when a config
+names enumerated values (see *Build the scene from a SurfaceSpec*).
+
 ## Read-only toggle mappings register for changes they ignore
 
 - **Layers:** scene

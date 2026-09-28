@@ -169,7 +169,7 @@ Marker is `[measure, marker]` with `press_toggles`, and Nudge `[measure,
 beat]`. The Track button is `[track, track]`, which sets `track` either way.
 `ReadConfig`'s range comment is corrected to match.
 
-### scene: EnumeratedValueProperty (value_property.h/.cc)
+### scene: EnumeratedValueProperty (value_property.h)
 
 ```
 // An enumerated property that holds its own value, for state owned by the code
@@ -177,18 +177,22 @@ beat]`. The Track button is `[track, track]`, which sets `track` either way.
 // way.
 class EnumeratedValueProperty final : public ViewProperty {
  public:
-  // The value names, in order, which GetText() returns. There must be at
-  // least one, and the value starts as `value`.
+  // The value names, in order, which GetText() returns. Its values are 0 to
+  // the number of names minus one, and it starts as `value` (clamped to them).
   EnumeratedValueProperty(std::string_view name,
                           std::vector<std::string> value_names, int value = 0);
 
   int GetMaxValue() const override;
   std::string GetText() const override;
+
+  // Sets the value with the name, or reads other text as a number.
+  void SetText(std::string_view value) override;
 };
 ```
 
 - Its type is `kEnumerated`, with values 0 to `GetMaxValue()`, the number of
-  names minus one.
+  names minus one. With no names it has one value, whose text is empty.
+- Header only, beside `ToggleValueProperty`.
 - Setting it always sets the value asked for (clamped, as for any enumerated
   property), and notifies only on a change.
 - Pure state, with no REAPER dependency, so it is unit tested.
@@ -312,7 +316,7 @@ Depends on: nothing.
   type, on properties of the same and other types) and `view_condition_test.cc`
   (met while the property equals the value, and changes while watched).
 
-### CL4 [ ] scene: Enumerated values
+### CL4 [x] scene: Enumerated values
 
 Depends on: nothing.
 

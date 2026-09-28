@@ -38,6 +38,7 @@ set(jpr_scene_DEPS
 
 set(jpr_scene_TEST_SOURCE
   const_property_test.cc
+  value_property_test.cc
   view_condition_test.cc
   view_property_test.cc
 )
