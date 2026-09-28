@@ -860,8 +860,9 @@ come together:
      `View`.
   4. *Properties declared on views, and track anchors* (done,
      [declared_properties.md](worklog/declared_properties.md)).
-  5. *Modes from exclusive groups and picks*: after this, the plugin has no
-     surface state or callbacks left.
+  5. *Modes from enumerated values and picks*
+     ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)):
+     after this, the plugin has no surface state or callbacks left.
 - **Devices and widgets**, unit tested: *Widgets*, then *Device types and
   catalogs*, ending with the plugin creating devices by type and mapping
   through widgets.

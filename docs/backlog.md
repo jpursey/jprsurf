@@ -26,47 +26,6 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Modes from exclusive groups and picks
-
-- **Layers:** device, scene, plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** *Properties declared on views, and track anchors*
-  ([declared_properties.md](worklog/declared_properties.md))
-- **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
-  Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md),
-  [view_subjects.md](worklog/view_subjects.md)
-
-The last of the plugin's surface state and callbacks:
-- **Exclusive groups:** at most one member is on, however it is turned on, and
-  optionally a default (so exactly one is on) and a condition each member
-  requires. Marker and Nudge move onto one, replacing
-  `AddExclusiveToggleMapping()`, and the surface modes onto another
-  (`user:surface_mode`), replacing `SurfaceMode`, `kModeInfo`, `ModeButton`,
-  and the mode functions.
-- **Pick:** sets a reference and turns a toggle on, if a field of the source
-  is true. It enters Send/Receive mode from the Send button and from a strip's
-  select button, replacing `requested_send_receive_track_`,
-  `TryEnterSendReceiveMode()`, and the `user:pick_send_receive_track`
-  property each strip view adds.
-- **Tap:** a press behavior in `device`, alongside long and double press. It
-  fires on release if the press was short and the control's held modifier
-  wasn't used, replacing `send_press_mode_`, `send_press_time_`, and
-  `ApplySendRelease()`.
-- **Mode lights:** mappings, using `const:` properties and conditions. The
-  Send/Receive button's light becomes a mapping on
-  `state:selected_track.has_routes`. Today it reads
-  `TrackCache::GetOnlySelectedTrack()`, as `UpdateModeButtons()` runs before
-  the scene's run updates `state:selected_track`, so it would read the previous
-  selection.
-- **Leaving a deleted track:** `OnTracksChanged()` returns to Track mode when
-  the Send/Receive track is deleted. This moves into the mode group, perhaps
-  as a condition on `user:current_track.exists`.
-
-After this, `PluginSurface` has no surface state or callbacks left: only host
-plumbing (see [extension_host.md](worklog/extension_host.md)) and its
-mappings, which *Build the scene from a SurfaceSpec* turns into data.
-
 ## Named command IDs
 
 - **Layers:** scene
@@ -167,8 +126,10 @@ it.
 - **Layers:** a new spec library, scene, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Device types and catalogs*, *Modes from exclusive groups and
-  picks*, and *Named command IDs*
+- **Depends on:** *Device types and catalogs*, *Modes from enumerated values
+  and picks*
+  ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)),
+  and *Named command IDs*
 - **Background:** [config_model.md](config_model.md)
 
 The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
@@ -305,13 +266,14 @@ A row can also have a write function, so the button can change the state too.
 - **Layers:** scene, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** ideally *Modes from exclusive groups and picks*, so new modes
-  don't add plugin state
+- **Depends on:** ideally *Modes from enumerated values and picks*
+  ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)),
+  so new modes don't add plugin state
 - **Background:** [config_model.md](config_model.md) (Modes),
   [surface_modes.md](worklog/surface_modes.md)
 
-Track and Send/Receive use two of the X-Touch assign buttons. Once modes are
-exclusive groups, another mode is another toggle in `user:surface_mode`, a view
+Track and Send/Receive use two of the X-Touch assign buttons. Once modes are an
+enumerated value, another mode is another value of `user:surface_mode`, a view
 enabled by it, and perhaps a pick and a new kind of subject (a track's FX, for
 the Plugin button). What is missing is what the other modes should do, which
 is the design work.
