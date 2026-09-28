@@ -57,13 +57,11 @@ class PluginSurface final : private ControlSurfaceListener {
   void OnRun(absl::Time now) override;
   void OnTracksChanged() override;
   void OnSelectionChanged() override;
-  void OnLastTouchedTrackChanged(Track* track) override;
   std::string GetConfig() const override;
 
   // Implementation
   void ConnectDevices();
   void InitViews();
-  void EnsureTrackIsVisible(Track* track);
 
   // Surface modes
   //
@@ -90,9 +88,6 @@ class PluginSurface final : private ControlSurfaceListener {
   // the scene runs, as that is when the release is recorded.
   void ApplySendRelease(absl::Time now);
 
-  // Sets the current track, whose routes Send/Receive mode shows.
-  void SetSendReceiveTrack(Track* track);
-
   // Completes a mode change from `old_mode`.
   void FinishModeChange(SurfaceMode old_mode);
 
@@ -108,18 +103,15 @@ class PluginSurface final : private ControlSurfaceListener {
   std::unique_ptr<MidiOut> xtouch_ext_out_;
   std::unique_ptr<Scene> scene_;
 
-  // The track whose routes Send/Receive mode shows, which route navigation can
-  // also change.
+  // The track whose routes Send/Receive mode shows, and which the track list
+  // reveals. It follows the last touched track, and entering Send/Receive mode
+  // and route navigation also change it.
   TrackReference* current_track_ = nullptr;
 
   View* track_mode_view_ = nullptr;  // Parent of all Track mode views.
   // The Send/Receive mode view, which is bound to the current track, and lists
   // its routes.
   View* send_receive_mode_view_ = nullptr;
-
-  // The track list view, which is bound to the folder, and whose child views
-  // show its child tracks.
-  View* track_list_view_ = nullptr;
 
   // Surface mode state.
   struct ModeButton {

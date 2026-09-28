@@ -162,14 +162,6 @@ Track* View::GetTrack() const {
   return track != nullptr ? track : TrackCache::Get().GetStubTrack();
 }
 
-void View::Reveal(Track* track) {
-  if (list_ == nullptr) {
-    return;
-  }
-  UpdateSubject();
-  list_->Reveal(track);
-}
-
 void View::UpdateSubject() {
   if (subject_ != nullptr && subject_->GetVersion() != subject_version_) {
     subject_version_ = subject_->GetVersion();

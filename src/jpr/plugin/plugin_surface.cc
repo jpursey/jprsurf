@@ -276,24 +276,6 @@ void PluginSurface::OnSelectionChanged() {
   mode_buttons_changed_ = true;
 }
 
-void PluginSurface::OnLastTouchedTrackChanged(Track* track) {
-  if (track_list_view_ == nullptr) {
-    return;
-  }
-  if (mode_ == SurfaceMode::kSendReceive) {
-    // Follow the touched track, unless it is already shown, or it couldn't be
-    // shown by entering Send/Receive mode from Track mode: it doesn't exist, is
-    // the master track, or isn't on the surface.
-    if (track != nullptr && track != send_receive_mode_view_->GetTrack() &&
-        track->Exists() && track != TrackCache::Get().GetMasterTrack() &&
-        track->IsVisible(scene_->GetTrackFilter())) {
-      SetSendReceiveTrack(track);
-    }
-  } else {
-    EnsureTrackIsVisible(track);
-  }
-}
-
 std::string PluginSurface::GetConfig() const {
   return gb::WriteConfigToText(config_, gb::kCompactTextConfig);
 }
@@ -368,7 +350,8 @@ void PluginSurface::InitViews() {
   const TrackReference* folder = scene_->AddTrackReference(
       kFolder, {.fallback = std::string(Scene::kMasterTrack)});
   CHECK(folder != nullptr);
-  current_track_ = scene_->AddTrackReference(kCurrentTrack);
+  current_track_ = scene_->AddTrackReference(
+      kCurrentTrack, {.follow = std::string(Scene::kLastTouchedTrack)});
   CHECK(current_track_ != nullptr);
 
   // Add global mappings
@@ -569,12 +552,16 @@ void PluginSurface::InitViews() {
   CHECK(select_anchor_modifier != 0);
 
   // Add TrackList view with a track view for each strip, which show the child
-  // tracks of the folder. Bank left/right pages by 8, a device at a time.
-  track_list_view_ = track_mode_view_->AddChildView(
+  // tracks of the folder. Bank left/right pages by 8, a device at a time. It
+  // reveals the current track whenever it changes, and when returning to Track
+  // mode.
+  View* track_list_view = track_mode_view_->AddChildView(
       "TrackList",
       {.subject = View::ReferenceSubject{.name = std::string(kFolder)},
-       .list = View::ListConfig{.items = View::ChildTracks{}, .bank_size = 8}});
-  CHECK(track_list_view_ != nullptr);
+       .list = View::ListConfig{
+           .items = View::ChildTracks{.reveal = std::string(kCurrentTrack)},
+           .bank_size = 8}});
+  CHECK(track_list_view != nullptr);
   int child_view_index = 0;
   for (int d = 0; d < 2; ++d) {
     if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
@@ -582,7 +569,7 @@ void PluginSurface::InitViews() {
     }
     std::string device_prefix = (d == 0) ? "XTouchExt/" : "XTouch/";
     for (int i = 0; i < 8; ++i) {
-      View* track_view = track_list_view_->AddChildView(
+      View* track_view = track_list_view->AddChildView(
           absl::StrCat("Track", ++child_view_index),
           {.subject = View::ListItemSubject{}});
       CHECK(track_view != nullptr);
@@ -667,27 +654,27 @@ void PluginSurface::InitViews() {
     // Global navigates up one level, or all the way to the root when held. It
     // is lit while there is a level to go up to.
     const std::string global = absl::StrCat("XTouch/", DeviceXTouch::kGlobal);
-    track_list_view_->AddMapping(ViewMapping::kReadControl, View::kTrackParent,
-                                 global);
-    track_list_view_->AddMapping(
+    track_list_view->AddMapping(ViewMapping::kReadControl, View::kTrackParent,
+                                global);
+    track_list_view->AddMapping(
         ViewMapping::kReadControl, View::kTrackRoot, global,
         {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-    track_list_view_->AddMapping(ViewMapping::kWriteControl,
-                                 TrackProperties::kTrackHasParent, global);
-    track_list_view_->AddMapping(
+    track_list_view->AddMapping(ViewMapping::kWriteControl,
+                                TrackProperties::kTrackHasParent, global);
+    track_list_view->AddMapping(
         ViewMapping::kReadControl, View::kChildDec,
         absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));
-    track_list_view_->AddMapping(
+    track_list_view->AddMapping(
         ViewMapping::kReadControl, View::kChildInc,
         absl::StrCat("XTouch/", DeviceXTouch::kChannelRight));
-    track_list_view_->AddMapping(
+    track_list_view->AddMapping(
         ViewMapping::kReadControl, View::kBankDec,
         absl::StrCat("XTouch/", DeviceXTouch::kBankLeft));
-    track_list_view_->AddMapping(
+    track_list_view->AddMapping(
         ViewMapping::kReadControl, View::kBankInc,
         absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
   }
-  track_list_view_->Enable();
+  track_list_view->Enable();
   track_mode_view_->Enable();
 
   // Add the Send/Receive mode view, which shows the routes of the current
@@ -899,11 +886,6 @@ void PluginSurface::EnterTrackMode() {
   }
   const SurfaceMode old_mode = mode_;
   mode_ = SurfaceMode::kTrack;
-
-  // Show the track that was shown in Send/Receive mode among its siblings. This
-  // does nothing if it was deleted or is hidden, leaving the track list where
-  // it was.
-  EnsureTrackIsVisible(send_receive_mode_view_->GetTrack());
   FinishModeChange(old_mode);
 }
 
@@ -911,12 +893,8 @@ void PluginSurface::EnterSendReceiveMode(Track* track) {
   DCHECK(track != nullptr);
   const SurfaceMode old_mode = mode_;
   mode_ = SurfaceMode::kSendReceive;
-  SetSendReceiveTrack(track);
-  FinishModeChange(old_mode);
-}
-
-void PluginSurface::SetSendReceiveTrack(Track* track) {
   current_track_->Set(track);
+  FinishModeChange(old_mode);
 }
 
 void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
@@ -925,10 +903,6 @@ void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
   LOG(INFO) << "Surface mode changed from "
             << kModeInfo[static_cast<int>(old_mode)].name << " to "
             << kModeInfo[static_cast<int>(mode_)].name;
-}
-
-void PluginSurface::EnsureTrackIsVisible(Track* track) {
-  track_list_view_->Reveal(track);
 }
 
 }  // namespace jpr

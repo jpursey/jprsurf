@@ -107,8 +107,10 @@ root                      global mappings: modifiers (including mod:send_hold),
 
 - The context is a single track. The track hierarchy has no meaning in this
   mode. Hardware outputs and the master track are not supported.
-- Entering shows the track's sends, or its receives if it has only receives
-  (`SetSendReceiveTrack()`).
+- The Send/Receive track is `user:current_track`. Entering sets it, and shows
+  the track's sends, or its receives if it has only receives (the routes
+  list's `kSendsUnlessOnlyReceives` rule). Re-entering for the track it last
+  showed keeps the route type and position it had.
 
 ### Route strips
 
@@ -136,18 +138,20 @@ root                      global mappings: modifiers (including mod:send_hold),
 ### Changing the track or route type
 
 - A short press of Send toggles between sends and receives if the track has
-  both (`View::ToggleChildRouteType()`), and otherwise does nothing. Toggling
+  both (`view:child_route_toggle`), and otherwise does nothing. Toggling
   starts from the first route.
-- When REAPER's last touched track changes (`OnSetLastTouchedTrack`), the view
-  moves to that track, unless it is the master track or isn't visible on the
-  surface. It shows the track's sends, or its receives if it has only
-  receives. A track with no routes shows empty sends, and the mode stays.
+- `user:current_track` follows REAPER's last touched track, unless it is the
+  master track or isn't on the surface, so the view moves to a newly touched
+  track. It shows the track's sends, or its receives if it has only receives.
+  A track with no routes shows empty sends, and the mode stays. Touching the
+  last touched track again does nothing.
 - Hiding the Send/Receive track on the surface doesn't leave the mode.
 
 ### Leaving
 
 - Pressing Track returns to Track mode, showing the Send/Receive track among
-  its siblings (`EnsureTrackIsVisible()`).
+  its siblings, as the track list reveals `user:current_track` when it becomes
+  active.
 - If the Send/Receive track is deleted, the surface returns to Track mode with
   the track list where it was (or the top level, if its parent was deleted
   too).
@@ -205,16 +209,17 @@ root                      global mappings: modifiers (including mod:send_hold),
 
 ### Route views (scene)
 
-- `ChildContextType::kSends` / `kReceives` give child views consecutive routes
-  of the view's track, starting at the child context index. Each child view's
-  track is the track at the other end of its route (or the stub track past the
-  end), so the existing `TrackProperties` show its name and color.
+- A routes list (`View::Routes`, see [view_subjects.md](view_subjects.md))
+  gives its list items consecutive routes of the view's track, from its scroll
+  position. Each item's subject is a route reference, whose
+  `route:other_track` is the track at the other end of its route (or nothing
+  past the end), for its name and color.
 - `RouteProperties` (`route:volume`, `route:pan`, `route:mute`,
   `route:exists`) are bound to (track, route type, index).
 - View properties: `view:parent_route_other_track` (navigate across a route),
   `view:child_route_toggle` (toggle sends and receives), and
-  `view:child_route_type_name` ("Send" / "Recv"). `View::ToggleChildRouteType()`
-  is public for the plugin.
+  `view:child_route_type_name` ("Send" / "Recv"). The plugin's Send tap runs
+  `view:child_route_toggle`.
 - `track:has_routes`: a read-only track property, true if the track has any
   sends or receives.
 

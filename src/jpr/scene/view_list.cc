@@ -40,7 +40,6 @@ class ChildTrackList final : public ViewList {
   }
   void OnActivated() override;
   void Sync() override;
-  void Reveal(Track* track) override;
 
  private:
   int GetLength() const override {
@@ -55,6 +54,12 @@ class ChildTrackList final : public ViewList {
 
   // Reveals the reveal reference's track, and records its version.
   void RevealReference();
+
+  // Scrolls the list so the track is shown: as little as possible if it is in
+  // the list's folder, or otherwise by setting the writable reference to the
+  // track's folder, scrolled so the track is the last item. This does nothing
+  // if the track is null or not on the surface (hidden, or the master track).
+  void Reveal(Track* track);
 
   // See View::ChildTracks::reveal.
   const TrackReference* const reveal_;

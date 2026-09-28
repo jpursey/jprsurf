@@ -580,12 +580,12 @@ behavior.
     too.
 - **Provides:** a writable reference (see [References](#references)), which
   views can be bound to, and which navigation and picks write.
-- **Today:** the tracks of `track_list_view_` and `send_receive_mode_view_`,
-  `RefreshTrackViews()`, `SetSendReceiveTrack()`, and the view handling in
-  `OnLastTouchedTrackChanged()`. JPRSurf declares `user:folder` (falling back to
-  `state:master_track`) for the track list, and `user:current_track`
-  (following `state:last_touched_track`) for Send/Receive mode, which the
-  track list also reveals.
+- **Today:** `Scene::AddTrackReference()`, and the view configs
+  (`View::Config`) that bind to references and list their tracks or routes
+  ([view_subjects.md](worklog/view_subjects.md)). JPRSurf declares
+  `user:folder` (falling back to `state:master_track`) for the track list, and
+  `user:current_track` (following `state:last_touched_track`) for Send/Receive
+  mode, which the track list also reveals.
 
 ### Pick
 
@@ -643,7 +643,7 @@ These are needed, but a config never names them:
   running them.
 - **Keeping subjects and lists current**: references and lists react to track
   list and visibility changes themselves, rather than the plugin re-pointing
-  views (`RefreshTrackViews()` and `EnsureTrackIsVisible()` today).
+  views (`TrackReference::Update()` and `ViewList::Update()`).
 - **Host plumbing**: forwarding REAPER's notifications to `TrackCache`, polling
   track visibility, `ContinuousUndo`, and the `Run()` performance log
   ([extension_host.md](worklog/extension_host.md)).
@@ -823,29 +823,21 @@ load, where today the extender alone gives 8 strips with no transport, modes,
 or navigation. That's a deliberate change: the extender alone was never a
 useful surface.
 
-One thing works differently inside. Today the Send/Receive track only follows
-the last touched track in Send/Receive mode, and the track list reveals the last
-touched track in Track mode. In the model, `user:current_track` follows it in
-every mode, and the track list reveals `user:current_track`. Both skip hidden
-tracks and the master, so this should look the same, including returning to
-Track mode showing the Send/Receive track. It still needs checking in REAPER
-when it is built.
-
 What becomes of the plugin's code:
 
-| `PluginSurface` today                                                                       | In the model                                                     |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `ConnectDevices()`                                                                          | Devices                                                          |
-| `has_xtouch` checks, device prefixes, and the strip loops                                   | Widgets and repeated views                                       |
-| `AddTrackStripMappings()`                                                                   | The `track_strip` template                                       |
-| The `kAutoModeButtons` table                                                                | The `auto_mode_button` template                                  |
-| `AddTrackAnchorMapping()`                                                                   | Track anchor                                                     |
-| `AddExclusiveToggleMapping()`                                                               | Exclusive group                                                  |
-| Surface modes and mode buttons                                                              | An exclusive group with a default, view conditions, and mappings |
-| Entering Send/Receive mode, and picking its track with select                               | Pick                                                             |
-| `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`                            | Tap or hold                                                      |
-| `RefreshTrackViews()`, `EnsureTrackIsVisible()`, `SetSendReceiveTrack()`, the views' tracks | References, subjects, and lists                                  |
-| Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log   | Host plumbing                                                    |
+| `PluginSurface` today                                                                     | In the model                                                     |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `ConnectDevices()`                                                                        | Devices                                                          |
+| `has_xtouch` checks, device prefixes, and the strip loops                                 | Widgets and repeated views                                       |
+| `AddTrackStripMappings()`                                                                 | The `track_strip` template                                       |
+| The `kAutoModeButtons` table                                                              | The `auto_mode_button` template                                  |
+| `AddTrackAnchorMapping()`                                                                 | Track anchor                                                     |
+| `AddExclusiveToggleMapping()`                                                             | Exclusive group                                                  |
+| Surface modes and mode buttons                                                            | An exclusive group with a default, view conditions, and mappings |
+| Entering Send/Receive mode, and picking its track with select                             | Pick                                                             |
+| `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`                          | Tap or hold                                                      |
+| `user:folder`, `user:current_track`, and the views' configs                               | References, subjects, and lists                                  |
+| Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log | Host plumbing                                                    |
 
 ## Getting there
 

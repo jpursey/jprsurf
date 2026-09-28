@@ -31,6 +31,11 @@ Everything should look and work as it does today, except:
   touch, but the touched track is on a strip already, so revealing it moves
   nothing. In Send/Receive mode only the Info strip touches a track, and that
   is already the Send/Receive track.
+- **Touching the last touched track again in REAPER moves nothing.** REAPER
+  reports it again, and today the surface acts on each report: Track mode
+  scrolls back to it if the user banked away, and Send/Receive mode returns to
+  it after crossing a route. References only act on a change, so now touching
+  another track first is needed (see To confirm).
 
 These are the same, but move from the plugin to the scene:
 - After a track list or visibility change, lists stay in range and show the
@@ -554,6 +559,10 @@ checks whether the reference's track exists rather than whether it has one.
   touched version counted on every report and followed as a change.
   **Answer (CL2):** it does. Clicking an already selected track in REAPER
   reports it again (10 of 18 reports in the test were the same track).
+  **Decision (before CL7):** re-reports are ignored, as references only act on
+  a change (see Behavior). Keeping today's behavior exactly needs a second
+  "renewed" signal on track references, apart from their version, which isn't
+  worth it unless this turns out to be annoying.
 - **Watched references stay current.** A field or bound view that is only
   shown through a reference (the master fader, the Info strip's meter and
   name, a route strip's other track) updates when the value changes in REAPER.
@@ -727,7 +736,7 @@ Depends on: CL5.
     and of the reference the view is bound to each fail with an error in the
     log.
 
-### CL7 [ ] plugin: Follow the last touched track, and reveal it
+### CL7 [x] plugin: Follow the last touched track, and reveal it
 
 Depends on: CL6.
 
@@ -736,7 +745,7 @@ Depends on: CL6.
 - Remove `OnLastTouchedTrackChanged()`, `EnsureTrackIsVisible()`, and
   `SetSendReceiveTrack()`. Entering Send/Receive mode sets
   `user:current_track`, and `EnterTrackMode()` no longer reveals anything
-  itself.
+  itself. `track_list_view_` becomes a local in `InitViews()`.
 - `View::Reveal()` and `ViewList::Reveal()` go away, as only the child tracks
   list reveals, by its `reveal` option.
 - Docs: the **Today** notes and plugin table in
@@ -747,7 +756,8 @@ Depends on: CL6.
 - Standard checks.
 - Track mode: touching a track in REAPER that is scrolled off the surface, or
   in another folder, reveals it. Touching the master or a hidden track moves
-  nothing.
+  nothing, and neither does touching the last touched track again after
+  banking away from it (see Behavior).
 - Send/Receive mode: touching a track in REAPER shows its routes (sends,
   unless it only has receives), except the master or a hidden track.
 - Enter Send/Receive mode by tapping Send and by Send and select, then return

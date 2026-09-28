@@ -238,13 +238,6 @@ class View final {
   // no track subject, or it refers to nothing.
   Track* GetTrack() const;
 
-  // For a view with a child tracks list bound to a writable reference, scrolls
-  // the list so the track is shown: as little as possible if it is in the
-  // list's folder, or otherwise by setting the reference to the track's folder,
-  // scrolled so the track is the last item. This does nothing if the track is
-  // null or not on the surface (hidden, or the master track).
-  void Reveal(Track* track);
-
   //----------------------------------------------------------------------------
   // Anchor
   //----------------------------------------------------------------------------

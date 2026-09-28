@@ -63,9 +63,6 @@ class ViewList {
   // active, after Update().
   virtual void Sync() {}
 
-  // See View::Reveal(). The view updates its subject before calling this.
-  virtual void Reveal(Track* track) {}
-
  protected:
   ViewList(View* view, std::optional<int> bank_size,
            TrackReference* writable_reference);
