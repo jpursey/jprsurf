@@ -19,6 +19,8 @@
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
 #include "jpr/scene/scene.h"
+#include "jpr/scene/track_reference.h"
+#include "jpr/scene/view.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -63,11 +65,6 @@ class PluginSurface final : private ControlSurfaceListener {
   void InitViews();
   void EnsureTrackIsVisible(Track* track);
 
-  // Lays out the track list and Send/Receive views again, keeping their child
-  // context indexes in range. This is called whenever the track list changes,
-  // or a track is shown or hidden on the surface.
-  void RefreshTrackViews();
-
   // Surface modes
   //
   // Each mode has a button that is lit when the mode is available, and blinks
@@ -93,8 +90,7 @@ class PluginSurface final : private ControlSurfaceListener {
   // the scene runs, as that is when the release is recorded.
   void ApplySendRelease(absl::Time now);
 
-  // Shows the routes of `track` in Send/Receive mode: its receives if it has
-  // only receives, and otherwise its sends (even if it has no routes at all).
+  // Sets the current track, whose routes Send/Receive mode shows.
   void SetSendReceiveTrack(Track* track);
 
   // Completes a mode change from `old_mode`.
@@ -111,10 +107,14 @@ class PluginSurface final : private ControlSurfaceListener {
   std::unique_ptr<MidiIn> xtouch_ext_in_;
   std::unique_ptr<MidiOut> xtouch_ext_out_;
   std::unique_ptr<Scene> scene_;
+
+  // The track whose routes Send/Receive mode shows, which route navigation can
+  // also change.
+  TrackReference* current_track_ = nullptr;
+
   View* track_mode_view_ = nullptr;  // Parent of all Track mode views.
-  // The Send/Receive mode view. It is bound to the current track, whose routes
-  // are shown (which route navigation can change), and its child views show
-  // the routes.
+  // The Send/Receive mode view, which is bound to the current track, and lists
+  // its routes.
   View* send_receive_mode_view_ = nullptr;
 
   // The track list view, which is bound to the folder, and whose child views

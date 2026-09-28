@@ -8,297 +8,48 @@
 #include <utility>
 #include <variant>
 
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
+#include "jpr/common/track_cache.h"
 #include "jpr/scene/scene.h"
+#include "jpr/scene/track_reference.h"
+#include "jpr/scene/view_list.h"
 
 namespace jpr {
 
-namespace {
-
-// Returns the type of route shown by a kSends or kReceives child context.
-TrackRouteType GetChildRouteType(View::ChildContextType context_type) {
-  return context_type == View::ChildContextType::kSends
-             ? TrackRouteType::kSend
-             : TrackRouteType::kReceive;
-}
-
-// Switches the view's track to its parent track, with the child context index
-// centering the track that was left in the child views. This does nothing if
-// the track has no parent track.
-void SetTrackToParent(View* view) {
-  Track* track = view->GetTrack();
-  Track* parent_track = track->GetParentTrack();
-  if (parent_track == nullptr) {
-    // Already at the top level.
-    return;
-  }
-  const TrackFilter filter = view->GetScene()->GetTrackFilter();
-  int track_count = parent_track->GetChildTrackCount(filter);
-  int view_count = view->GetChildViewCount();
-  // If the track we are moving up from is not on the surface itself, there is
-  // no position to center on, so fall back to the start of the child list.
-  int start_index =
-      std::clamp(track->GetIndex(filter).value_or(0) - view_count / 2, 0,
-                 std::max(0, track_count - view_count));
-  view->SetTrack(parent_track, start_index);
-}
-
-}  // namespace
-
-// A view property that changes the child context index by a specified offset
-// when triggered. This is used for the kChildInc and kChildDec properties, and
-// with ChildIndexBankOffsetProperty for kBankInc and kBankDec.
-class View::ChildIndexOffsetProperty : public ViewProperty {
- public:
-  ChildIndexOffsetProperty(View* view, std::string_view name, int offset)
-      : view_(view), ViewProperty(name, Type::kAction), offset_(offset) {}
-  ~ChildIndexOffsetProperty() override = default;
-
- protected:
-  void TriggerAction() override {
-    int new_index =
-        std::clamp(view_->GetChildContextIndex() + offset_ * GetStepSize(), 0,
-                   view_->GetMaxChildContextIndex());
-    view_->SetChildContextIndex(new_index);
-  }
-
-  View* GetView() const { return view_; }
-  virtual int GetStepSize() const { return 1; }
-
- private:
-  View* const view_;
-  const int offset_;
-};
-
-class View::ChildIndexBankOffsetProperty : public ChildIndexOffsetProperty {
- public:
-  ChildIndexBankOffsetProperty(View* view, std::string_view name, int offset)
-      : ChildIndexOffsetProperty(view, name, offset) {}
-
- protected:
-  int GetStepSize() const override { return GetView()->GetBankSize(); }
-};
-
-class View::TrackParentProperty : public ViewProperty {
- public:
-  explicit TrackParentProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~TrackParentProperty() override = default;
-
- protected:
-  void TriggerAction() override { SetTrackToParent(view_); }
-
- private:
-  View* const view_;
-};
-
-class View::TrackRootProperty : public ViewProperty {
- public:
-  explicit TrackRootProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~TrackRootProperty() override = default;
-
- protected:
-  void TriggerAction() override {
-    view_->SetTrack(TrackCache::Get().GetMasterTrack(), 0);
-  }
-
- private:
-  View* const view_;
-};
-
-class View::ParentTrackChildProperty : public ViewProperty {
- public:
-  explicit ParentTrackChildProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~ParentTrackChildProperty() override = default;
-
- protected:
-  void TriggerAction() override {
-    Track* track = view_->GetTrack();
-    if (view_->GetParentView() == nullptr ||
-        track->GetChildTrackCount(view_->GetScene()->GetTrackFilter()) == 0) {
-      return;
-    }
-    view_->GetParentView()->SetTrack(track, 0);
-  }
-
- private:
-  View* const view_;
-};
-
-class View::ParentTrackParentProperty : public ViewProperty {
- public:
-  explicit ParentTrackParentProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~ParentTrackParentProperty() override = default;
-
- protected:
-  void TriggerAction() override {
-    if (view_->GetParentView() != nullptr) {
-      SetTrackToParent(view_->GetParentView());
-    }
-  }
-
- private:
-  View* const view_;
-};
-
-class View::ParentTrackRootProperty : public ViewProperty {
- public:
-  explicit ParentTrackRootProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~ParentTrackRootProperty() override = default;
-
- protected:
-  void TriggerAction() override {
-    if (view_->GetParentView() == nullptr) {
-      return;
-    }
-    view_->GetParentView()->SetTrack(TrackCache::Get().GetMasterTrack(), 0);
-  }
-
- private:
-  View* const view_;
-};
-
-class View::ParentRouteOtherTrackProperty : public ViewProperty {
- public:
-  explicit ParentRouteOtherTrackProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~ParentRouteOtherTrackProperty() override = default;
-
- protected:
-  void TriggerAction() override {
-    View* parent_view = view_->GetParentView();
-    if (parent_view == nullptr ||
-        (parent_view->child_context_type_ != ChildContextType::kSends &&
-         parent_view->child_context_type_ != ChildContextType::kReceives)) {
-      return;
-    }
-    const TrackRoute* route = view_->route_properties_.GetRoute();
-    if (route == nullptr) {
-      return;
-    }
-    Track* track = parent_view->GetTrack();
-    Track* other_track = route->other_track;
-    const ChildContextType other_context_type =
-        parent_view->child_context_type_ == ChildContextType::kSends
-            ? ChildContextType::kReceives
-            : ChildContextType::kSends;
-
-    // Scroll so the route back to the original track is shown.
-    absl::Span<const TrackRoute> other_routes =
-        other_track->GetRoutes(GetChildRouteType(other_context_type));
-    const int view_count = parent_view->GetChildViewCount();
-    int start_index = 0;
-    for (int i = 0; i < static_cast<int>(other_routes.size()); ++i) {
-      if (other_routes[i].other_track == track) {
-        start_index = std::max(0, i - view_count + 1);
-        break;
-      }
-    }
-    parent_view->SetChildContext(other_context_type);
-    parent_view->SetTrack(other_track, start_index);
-  }
-
- private:
-  View* const view_;
-};
-
-class View::ChildRouteToggleProperty : public ViewProperty {
- public:
-  explicit ChildRouteToggleProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kAction), view_(view) {}
-  ~ChildRouteToggleProperty() override = default;
-
- protected:
-  void TriggerAction() override { view_->ToggleChildRouteType(); }
-
- private:
-  View* const view_;
-};
-
-class View::ChildRouteTypeNameProperty : public ViewProperty {
- public:
-  explicit ChildRouteTypeNameProperty(View* view, std::string_view name)
-      : ViewProperty(name, Type::kText), view_(view) {}
-  ~ChildRouteTypeNameProperty() override = default;
-
-  // Called by the view when its child context type changes.
-  void OnChildContextChanged() { NotifyChanged(); }
-
- protected:
-  std::string ReadString() const override {
-    switch (view_->child_context_type_) {
-      case ChildContextType::kSends:
-        return "Send";
-      case ChildContextType::kReceives:
-        return "Recv";
-      default:
-        return "";
-    }
-  }
-
- private:
-  View* const view_;
-};
-
 View::View(Scene* scene, View* parent_view, std::string_view name)
-    : scene_(scene),
-      parent_view_(parent_view),
-      name_(name),
-      track_properties_(&scene->GetTrackActions()),
-      route_properties_(&scene->GetTrackActions()) {
-  // Add properties for changing the child context index.
-  properties_.emplace(kChildDec, std::make_unique<ChildIndexOffsetProperty>(
-                                     this, kChildDec, -1));
-  properties_.emplace(kChildInc, std::make_unique<ChildIndexOffsetProperty>(
-                                     this, kChildInc, 1));
-  properties_.emplace(kBankDec, std::make_unique<ChildIndexBankOffsetProperty>(
-                                    this, kBankDec, -1));
-  properties_.emplace(kBankInc, std::make_unique<ChildIndexBankOffsetProperty>(
-                                    this, kBankInc, 1));
-  // Add properties for navigating track contexts.
-  properties_.emplace(
-      kTrackParent, std::make_unique<TrackParentProperty>(this, kTrackParent));
-  properties_.emplace(kTrackRoot,
-                      std::make_unique<TrackRootProperty>(this, kTrackRoot));
-  properties_.emplace(
-      kParentTrackChild,
-      std::make_unique<ParentTrackChildProperty>(this, kParentTrackChild));
-  properties_.emplace(
-      kParentTrackParent,
-      std::make_unique<ParentTrackParentProperty>(this, kParentTrackParent));
-  properties_.emplace(
-      kParentTrackRoot,
-      std::make_unique<ParentTrackRootProperty>(this, kParentTrackRoot));
-  // Add properties for navigating and showing route contexts.
-  properties_.emplace(kParentRouteOtherTrack,
-                      std::make_unique<ParentRouteOtherTrackProperty>(
-                          this, kParentRouteOtherTrack));
-  properties_.emplace(
-      kChildRouteToggle,
-      std::make_unique<ChildRouteToggleProperty>(this, kChildRouteToggle));
-  auto child_route_type_name_property =
-      std::make_unique<ChildRouteTypeNameProperty>(this, kChildRouteTypeName);
-  child_route_type_name_property_ = child_route_type_name_property.get();
-  properties_.emplace(kChildRouteTypeName,
-                      std::move(child_route_type_name_property));
-}
+    : scene_(scene), parent_view_(parent_view), name_(name) {}
 
 bool View::ApplyConfig(const Config& config) {
-  // The reference comes first, as the condition may be on its fields.
+  // The subject comes first, as the list and the condition depend on it.
+  TrackReference* writable_reference = nullptr;
   if (const auto* subject = std::get_if<ReferenceSubject>(&config.subject)) {
-    reference_ = scene_->GetTrackReference(subject->name);
-    if (reference_ == nullptr) {
+    subject_ = scene_->GetReference(subject->name);
+    if (subject_ == nullptr) {
       LOG(ERROR) << "Failed to add view '" << name_ << "': reference '"
-                 << subject->name << "' is not a track reference";
+                 << subject->name << "' not found";
       return false;
     }
-    writable_reference_ = scene_->GetWritableTrackReference(subject->name);
+    writable_reference = scene_->GetWritableTrackReference(subject->name);
+  } else if (std::holds_alternative<ListItemSubject>(config.subject)) {
+    if (parent_view_->list_ == nullptr) {
+      LOG(ERROR) << "Failed to add view '" << name_
+                 << "': a list item's parent has no list";
+      return false;
+    }
+    item_reference_ = parent_view_->list_->CreateItemReference();
+    subject_ = item_reference_.get();
+  } else {
+    subject_ = parent_view_->subject_;
+  }
+
+  if (config.list.has_value()) {
+    if (subject_ == nullptr || subject_->GetKind() != SubjectKind::kTrack) {
+      LOG(ERROR) << "Failed to add view '" << name_
+                 << "': a list needs a track subject";
+      return false;
+    }
+    list_ = ViewList::Create(this, *config.list, writable_reference);
   }
 
   // The condition may refer to any of the view's properties.
@@ -355,9 +106,7 @@ void View::RefreshActive() {
   if (active_ != should_be_active) {
     active_ = should_be_active;
     if (active_) {
-      if (!NoticeReferenceChange()) {
-        RefreshChildContext();
-      }
+      UpdateSubject();
     } else {
       ClearAnchor();
     }
@@ -382,6 +131,9 @@ View* View::AddChildView(std::string_view name, const Config& config) {
   if (!child_view->ApplyConfig(config)) {
     return nullptr;
   }
+  if (child_view->item_reference_ != nullptr) {
+    list_->AddItem(child_view.get());
+  }
   if (child_view->condition_ != nullptr) {
     scene_->AddConditionalView(child_view.get());
   }
@@ -396,130 +148,29 @@ View* View::GetChildView(std::string_view name) const {
   return it != child_views_by_name_.end() ? it->second : nullptr;
 }
 
-void View::SetTrack(Track* track, int child_context_index) {
-  if (reference_ != nullptr) {
-    if (writable_reference_ == nullptr) {
-      return;
-    }
-    writable_reference_->Set(track);
-    if (!NoticeReferenceChange(child_context_index)) {
-      SetChildContextIndex(child_context_index);
-    }
-    return;
-  }
-
-  if (track == nullptr) {
-    track = TrackCache::Get().GetStubTrack();
-  }
-  if (GetTrack() == track) {
-    SetChildContextIndex(child_context_index);
-  } else {
-    ClearAnchor();
-    track_properties_.SetTrack(track);
-    child_context_index_ = child_context_index;
-    RefreshChildContext();
-  }
-}
-
 Track* View::GetTrack() const {
-  if (reference_ == nullptr) {
-    return track_properties_.GetTrack();
+  Track* track = nullptr;
+  if (subject_ != nullptr && subject_->GetKind() == SubjectKind::kTrack) {
+    track = static_cast<const TrackReference*>(subject_)->GetTrack();
   }
-  Track* track = reference_->GetTrack();
   return track != nullptr ? track : TrackCache::Get().GetStubTrack();
 }
 
-bool View::NoticeReferenceChange(int child_context_index) {
-  if (reference_ == nullptr || reference_->GetVersion() == reference_version_) {
-    return false;
+void View::Reveal(Track* track) {
+  if (list_ == nullptr) {
+    return;
   }
-  reference_version_ = reference_->GetVersion();
-  ClearAnchor();
-  child_context_index_ = child_context_index;
-  RefreshChildContext();
-  return true;
+  UpdateSubject();
+  list_->Reveal(track);
 }
 
-void View::SetRoute(Track* track, TrackRouteType type, int index) {
-  if (route_properties_.GetTrack() != track ||
-      route_properties_.GetType() != type ||
-      route_properties_.GetIndex() != index) {
+void View::UpdateSubject() {
+  if (subject_ != nullptr && subject_->GetVersion() != subject_version_) {
+    subject_version_ = subject_->GetVersion();
     ClearAnchor();
   }
-  route_properties_.SetRoute(track, type, index);
-  const TrackRoute* route = route_properties_.GetRoute();
-  SetTrack(route != nullptr ? route->other_track : nullptr);
-}
-
-int View::GetMaxChildContextIndex() const {
-  switch (child_context_type_) {
-    case ChildContextType::kNone:
-      return 0;
-    case ChildContextType::kTrack:
-      return std::max<int>(
-          0, GetTrack()->GetChildTrackCount(scene_->GetTrackFilter()) -
-                 GetChildViewCount());
-    case ChildContextType::kSends:
-    case ChildContextType::kReceives: {
-      const int route_count = static_cast<int>(
-          GetTrack()->GetRoutes(GetChildRouteType(child_context_type_)).size());
-      return std::max(0, route_count - GetChildViewCount());
-    }
-  }
-  return 0;
-}
-
-void View::SetChildContext(ChildContextType context_type, int context_index) {
-  const bool type_changed = (child_context_type_ != context_type);
-  child_context_type_ = context_type;
-  child_context_index_ = context_index;
-  if (type_changed) {
-    child_route_type_name_property_->OnChildContextChanged();
-  }
-  RefreshChildContext();
-}
-
-bool View::ToggleChildRouteType() {
-  ChildContextType other_context_type;
-  switch (child_context_type_) {
-    case ChildContextType::kSends:
-      other_context_type = ChildContextType::kReceives;
-      break;
-    case ChildContextType::kReceives:
-      other_context_type = ChildContextType::kSends;
-      break;
-    default:
-      return false;
-  }
-  if (GetTrack()->GetRoutes(GetChildRouteType(other_context_type)).empty()) {
-    return false;
-  }
-  SetChildContext(other_context_type);
-  return true;
-}
-
-void View::SetChildContextIndex(int context_index) {
-  if (child_context_index_ == context_index) {
-    return;
-  }
-  child_context_index_ = context_index;
-  RefreshChildContext();
-}
-
-void View::RefreshChildContext() {
-  if (!active_) {
-    return;
-  }
-  switch (child_context_type_) {
-    case ChildContextType::kNone:
-      return;
-    case ChildContextType::kTrack:
-      SetChildTracks();
-      break;
-    case ChildContextType::kSends:
-    case ChildContextType::kReceives:
-      SetChildRoutes();
-      break;
+  if (list_ != nullptr) {
+    list_->Update();
   }
 }
 
@@ -536,63 +187,22 @@ void View::ReleaseAnchor(const AnchorBase* anchor) {
   }
 }
 
-void View::SetChildTracks() {
-  CHECK(active_);
-  CHECK(scene_ != nullptr);
-  const TrackFilter filter = scene_->GetTrackFilter();
-
-  // Walk the child tracks, skipping any that are not on the surface, and give
-  // the child views the run of them that starts at the child context index.
-  int skip_count = child_context_index_;
-  auto child_view = child_views_.begin();
-  for (Track* track : GetTrack()->GetChildTracks()) {
-    if (!track->IsVisible(filter)) {
-      continue;
-    }
-    if (skip_count > 0) {
-      --skip_count;
-      continue;
-    }
-    if (child_view == child_views_.end()) {
-      break;
-    }
-    (*child_view)->SetTrack(track);
-    (*child_view)->RefreshChildContext();
-    ++child_view;
+ViewProperty* View::GetSubjectField(SubjectKind kind,
+                                    std::string_view name) const {
+  if (subject_ == nullptr || subject_->GetKind() != kind) {
+    return nullptr;
   }
-
-  // Any views left over have no track to show.
-  for (; child_view != child_views_.end(); ++child_view) {
-    (*child_view)->SetTrack(TrackCache::Get().GetStubTrack());
-    (*child_view)->RefreshChildContext();
-  }
-}
-
-void View::SetChildRoutes() {
-  CHECK(active_);
-  CHECK(scene_ != nullptr);
-  const TrackRouteType type = GetChildRouteType(child_context_type_);
-  Track* track = GetTrack();
-
-  // Views past the last route still refer to the route index they would show,
-  // but have no route, and no track to show.
-  int index = child_context_index_;
-  for (auto& child_view : child_views_) {
-    child_view->SetRoute(track, type, index);
-    child_view->RefreshChildContext();
-    ++index;
-  }
+  return subject_->GetField(name);
 }
 
 ViewProperty* View::GetProperty(std::string_view name) const {
   if (name.starts_with(kTrackNamespace)) {
-    if (reference_ != nullptr) {
-      return reference_->GetField(name.substr(kTrackNamespace.size()));
-    }
-    return track_properties_.GetProperty(name);
+    return GetSubjectField(SubjectKind::kTrack,
+                           name.substr(kTrackNamespace.size()));
   }
   if (name.starts_with(kRouteNamespace)) {
-    return route_properties_.GetProperty(name);
+    return GetSubjectField(SubjectKind::kRoute,
+                           name.substr(kRouteNamespace.size()));
   }
   if (name.starts_with(kViewNamespace)) {
     auto it = properties_.find(name);
@@ -651,26 +261,17 @@ void View::SyncMappings() {
     return;
   }
 
-  // A bound view notices a change to its reference from outside the view (its
-  // rules, or another view's mapping) here, or when it becomes active.
-  NoticeReferenceChange();
-
-  // First sync the track context if there is one, since some mappings may
-  // depend on it. A reference refreshes its own track while its fields are
-  // watched (see TrackReference::Update()).
-  Track* track = GetTrack();
-  if (reference_ == nullptr) {
-    track->Refresh();
-    track->RefreshMeter();
+  // A change to the subject or the track list from outside the view (a
+  // reference's rules, another view's mapping, or REAPER) is noticed here, or
+  // when the view becomes active. Then a list item updates the reference it
+  // owns, and a list polls what it shows, as mappings depend on them.
+  UpdateSubject();
+  if (item_reference_ != nullptr) {
+    item_reference_->Update();
   }
-
-  // REAPER doesn't reliably report route volume, pan, and mute changes, so they
-  // are polled for the track whose routes are shown by the child views.
-  if (child_context_type_ == ChildContextType::kSends ||
-      child_context_type_ == ChildContextType::kReceives) {
-    track->RefreshRoutes();
+  if (list_ != nullptr) {
+    list_->Sync();
   }
-  route_properties_.UpdateOtherTrack();
 
   // Now update all active mappings for this view. This will update the REAPER
   // state and hardware controls according to the current state of the view

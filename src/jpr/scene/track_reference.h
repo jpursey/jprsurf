@@ -55,13 +55,9 @@ class TrackReference final : public ViewReference {
   // Returns the track this refers to, or null if it refers to nothing.
   Track* GetTrack() const;
 
-  // Changes whenever the track it refers to changes. Only compared for
-  // equality, and unlike comparing tracks, it notices a change to a new track
-  // that reuses a deleted track's memory.
-  int64_t GetVersion() const { return version_; }
-
   // Refers to the track, or to the fallback's track if it is null or doesn't
-  // exist. The fields are notified if the track changed.
+  // exist. If the track changed, the fields are notified, and the version
+  // changes.
   void Set(Track* track);
 
   ViewProperty* GetField(std::string_view name) const override;
@@ -71,7 +67,7 @@ class TrackReference final : public ViewReference {
   // TrackProperties::IsWatched()), and its meter if the meter field is. The
   // owner calls this once per run, after it updates the references the rules
   // refer to.
-  void Update();
+  void Update() override;
 
  private:
   // Returns the fallback's track, or null if there is no fallback.
@@ -80,8 +76,6 @@ class TrackReference final : public ViewReference {
   const TrackFilter filter_;
   const TrackReference* const fallback_;
   const TrackReference* const follow_;
-
-  int64_t version_ = 0;
 
   // The follow's version when it was last checked.
   int64_t followed_version_ = -1;

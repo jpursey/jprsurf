@@ -258,8 +258,6 @@ void PluginSurface::OnRun(absl::Time now) {
 }
 
 void PluginSurface::OnTracksChanged() {
-  RefreshTrackViews();
-
   // Mode availability depends on the tracks on the surface.
   mode_buttons_changed_ = true;
 
@@ -370,9 +368,8 @@ void PluginSurface::InitViews() {
   const TrackReference* folder = scene_->AddTrackReference(
       kFolder, {.fallback = std::string(Scene::kMasterTrack)});
   CHECK(folder != nullptr);
-  const TrackReference* current_track =
-      scene_->AddTrackReference(kCurrentTrack);
-  CHECK(current_track != nullptr);
+  current_track_ = scene_->AddTrackReference(kCurrentTrack);
+  CHECK(current_track_ != nullptr);
 
   // Add global mappings
   auto* root_view = scene_->GetRootView();
@@ -571,11 +568,12 @@ void PluginSurface::InitViews() {
       scene_->AddModifierProperty(kSelectAnchor);
   CHECK(select_anchor_modifier != 0);
 
-  // Add TrackList view with 8 track views, which will correspond to the 8
-  // tracks on the X-Touch. They show the child tracks of the folder.
+  // Add TrackList view with a track view for each strip, which show the child
+  // tracks of the folder. Bank left/right pages by 8, a device at a time.
   track_list_view_ = track_mode_view_->AddChildView(
       "TrackList",
-      {.subject = View::ReferenceSubject{.name = std::string(kFolder)}});
+      {.subject = View::ReferenceSubject{.name = std::string(kFolder)},
+       .list = View::ListConfig{.items = View::ChildTracks{}, .bank_size = 8}});
   CHECK(track_list_view_ != nullptr);
   int child_view_index = 0;
   for (int d = 0; d < 2; ++d) {
@@ -585,7 +583,9 @@ void PluginSurface::InitViews() {
     std::string device_prefix = (d == 0) ? "XTouchExt/" : "XTouch/";
     for (int i = 0; i < 8; ++i) {
       View* track_view = track_list_view_->AddChildView(
-          absl::StrCat("Track", ++child_view_index));
+          absl::StrCat("Track", ++child_view_index),
+          {.subject = View::ListItemSubject{}});
+      CHECK(track_view != nullptr);
       // Select selects the track, and double press navigates into it. While
       // Send is held, pressing select instead picks the track for Send/Receive
       // mode. This uses required modifiers rather than a condition, so holding
@@ -663,7 +663,6 @@ void PluginSurface::InitViews() {
       track_view->Enable();
     }
   }
-  track_list_view_->SetChildContext(View::ChildContextType::kTrack);
   if (has_xtouch) {
     // Global navigates up one level, or all the way to the root when held. It
     // is lit while there is a level to go up to.
@@ -691,18 +690,20 @@ void PluginSurface::InitViews() {
   track_list_view_->Enable();
   track_mode_view_->Enable();
 
-  // Add the Send/Receive mode view, which shows the current track.
+  // Add the Send/Receive mode view, which shows the routes of the current
+  // track: its sends, unless it only has receives. Bank left/right pages
+  // through all the route strips at once.
   send_receive_mode_view_ = root_view->AddChildView(
       "SendReceiveMode",
       {.condition =
            ViewCondition::Config{.property = GetModePropertyName(
                                      SurfaceMode::kSendReceive, "active")},
-       .subject = View::ReferenceSubject{.name = std::string(kCurrentTrack)}});
+       .subject = View::ReferenceSubject{.name = std::string(kCurrentTrack)},
+       .list = View::ListConfig{.items = View::Routes{}}});
   CHECK(send_receive_mode_view_ != nullptr);
 
   // Add a route view for each channel strip, which will show consecutive sends
-  // or receives of the Send/Receive mode track. Each route view's track is the
-  // track at the other end of its route.
+  // or receives of the Send/Receive mode track.
   int route_view_index = 0;
   for (int d = 0; d < 2; ++d) {
     if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
@@ -715,7 +716,9 @@ void PluginSurface::InitViews() {
         continue;
       }
       View* route_view = send_receive_mode_view_->AddChildView(
-          absl::StrCat("Route", ++route_view_index));
+          absl::StrCat("Route", ++route_view_index),
+          {.subject = View::ListItemSubject{}});
+      CHECK(route_view != nullptr);
       // Select navigates across the route to the track at its other end.
       route_view->AddMapping(
           ViewMapping::kReadControl, View::kParentRouteOtherTrack,
@@ -770,9 +773,6 @@ void PluginSurface::InitViews() {
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
         absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
   }
-  // Bank left/right pages through all the route strips at once.
-  send_receive_mode_view_->SetBankSize(
-      send_receive_mode_view_->GetChildViewCount());
   send_receive_mode_view_->Enable();
 
   // Finally activate the scene, which will start it running and activate all
@@ -887,7 +887,8 @@ void PluginSurface::ApplySendRelease(absl::Time now) {
       TryEnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
       break;
     case SurfaceMode::kSendReceive:
-      send_receive_mode_view_->ToggleChildRouteType();
+      send_receive_mode_view_->GetProperty(View::kChildRouteToggle)
+          ->RunAction();
       break;
   }
 }
@@ -915,12 +916,7 @@ void PluginSurface::EnterSendReceiveMode(Track* track) {
 }
 
 void PluginSurface::SetSendReceiveTrack(Track* track) {
-  const bool show_receives =
-      track->GetSends().empty() && !track->GetReceives().empty();
-  send_receive_mode_view_->SetChildContext(
-      show_receives ? View::ChildContextType::kReceives
-                    : View::ChildContextType::kSends);
-  send_receive_mode_view_->SetTrack(track);
+  current_track_->Set(track);
 }
 
 void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
@@ -931,57 +927,8 @@ void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
             << kModeInfo[static_cast<int>(mode_)].name;
 }
 
-void PluginSurface::RefreshTrackViews() {
-  // Hiding tracks can shorten the child list out from under the current bank,
-  // which would otherwise leave the strips blank.
-  track_list_view_->SetChildContextIndex(
-      std::clamp(track_list_view_->GetChildContextIndex(), 0,
-                 track_list_view_->GetMaxChildContextIndex()));
-  track_list_view_->RefreshChildContext();
-
-  // Routes are only added or removed when the track list changes, which can
-  // also shorten the route list out from under the current bank.
-  send_receive_mode_view_->SetChildContextIndex(
-      std::clamp(send_receive_mode_view_->GetChildContextIndex(), 0,
-                 send_receive_mode_view_->GetMaxChildContextIndex()));
-  send_receive_mode_view_->RefreshChildContext();
-}
-
 void PluginSurface::EnsureTrackIsVisible(Track* track) {
-  // This can happen if we get events for tracks before the TrackCache has been
-  // refreshed, which only happens at the start of a run.
-  if (track == nullptr) {
-    return;
-  }
-
-  // The track may be hidden in the mixer while still selectable in the arrange
-  // view, in which case it has no strip to scroll to, so leave the bank put.
-  // This also covers the master and stub tracks, which have no parent track and
-  // so can never be made visible this way.
-  const TrackFilter filter = scene_->GetTrackFilter();
-  const std::optional<int> track_index = track->GetIndex(filter);
-  if (!track_index.has_value()) {
-    return;
-  }
-  Track* parent_track = track->GetParentTrack();
-
-  const int num_tracks_in_view = track_list_view_->GetChildViewCount();
-  const int last_child_context_index =
-      std::max(0, *track_index - num_tracks_in_view + 1);
-
-  // If the track is already in the current view, we only need to make sure it
-  // is in view, or do a minimum scroll to get it in view.
-  if (track_list_view_->GetTrack() == parent_track) {
-    int first_index = track_list_view_->GetChildContextIndex();
-    if (*track_index < first_index) {
-      track_list_view_->SetChildContextIndex(*track_index);
-    } else if (*track_index >= first_index + num_tracks_in_view) {
-      track_list_view_->SetChildContextIndex(last_child_context_index);
-    }
-  } else {
-    // We are switching to a nested track.
-    track_list_view_->SetTrack(parent_track, last_child_context_index);
-  }
+  track_list_view_->Reveal(track);
 }
 
 }  // namespace jpr

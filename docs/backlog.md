@@ -448,3 +448,21 @@ order:
    one switch for every polled state and command toggle state that can use it.
    It is the second choice because whether a selection change bumps the count
    depends on the user's undo preferences.
+
+## Poll only the routes a routes list shows
+
+- **Layers:** common, scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *View subjects, lists, and references*
+  ([view_subjects.md](worklog/view_subjects.md))
+- **Background:** [view_subjects.md](worklog/view_subjects.md) (Lists)
+
+Only worth doing if route polling shows up in the `Run()` average. REAPER
+doesn't reliably report route volume, pan, and mute changes, so a routes list
+calls `Track::RefreshRoutes()` every run while it is active, which reads every
+send and every receive of its track (two REAPER calls each). Only the routes
+of the list's route type are shown, one per item from its scroll position, so
+a track with 40 receives shown as sends costs 80+ calls a run where at most 2
+per strip are needed. A `Track::RefreshRoutes(type, first, count)`
+would bound it to what the strips show.

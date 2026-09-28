@@ -9,6 +9,7 @@ set(jpr_scene_SOURCE
   modifier_property.h
   polled_toggle_property.cc polled_toggle_property.h
   route_properties.cc route_properties.h
+  route_reference.cc route_reference.h
   scene.cc scene.h
   scene_state_property.cc scene_state_property.h
   state_properties.cc state_properties.h
@@ -19,6 +20,7 @@ set(jpr_scene_SOURCE
   value_property.h
   view.cc view.h
   view_condition.cc view_condition.h
+  view_list.cc view_list.h
   view_mapping.cc view_mapping.h
   view_property.cc view_property.h
   view_reference.h

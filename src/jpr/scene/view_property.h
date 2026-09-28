@@ -45,10 +45,9 @@ inline constexpr std::string_view kConstNamespace = "const:";
 inline constexpr std::string_view kUserNamespace = "user:";
 
 // Properties of the view a mapping is in, which the view looks up:
-// - The view's track (see TrackProperties).
-// - The view's route (see RouteProperties), including its other track's
-//   fields.
-// - The view itself: its child context, and navigation (see View).
+// - The fields of the view's subject, if it is a track (see TrackReference),
+//   or a route (see RouteReference), including its other track's fields.
+// - The view itself: its list, and navigation (see View).
 inline constexpr std::string_view kTrackNamespace = "track:";
 inline constexpr std::string_view kRouteNamespace = "route:";
 inline constexpr std::string_view kViewNamespace = "view:";

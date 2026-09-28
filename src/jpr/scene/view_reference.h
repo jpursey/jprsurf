@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -21,7 +22,7 @@ namespace jpr {
 enum class SubjectKind {
   kNone,   // No subject.
   kTrack,  // A track (see TrackReference).
-  kRoute,  // A send or receive of a track.
+  kRoute,  // A send or receive of a track (see RouteReference).
 };
 
 // A reference to a subject of some kind, or to nothing.
@@ -43,18 +44,32 @@ class ViewReference {
   // The kind of subject the reference refers to.
   SubjectKind GetKind() const { return kind_; }
 
+  // Changes whenever what it refers to changes. Only compared for equality,
+  // and unlike comparing subjects, it notices a change to a new track that
+  // reuses a deleted track's memory.
+  int64_t GetVersion() const { return version_; }
+
   // Returns the field with the name, without its namespace (so "name" for a
   // track's track:name), or null if there is no such field. The field is owned
   // by the reference, and follows it to whatever it refers to.
   virtual ViewProperty* GetField(std::string_view name) const = 0;
 
+  // Updates what it refers to by its rules, and refreshes from REAPER what its
+  // watched fields show. Its owner calls this once per run while anything may
+  // show it.
+  virtual void Update() = 0;
+
  protected:
   ViewReference(std::string_view name, SubjectKind kind)
       : name_(name), kind_(kind) {}
 
+  // Called by the derived class whenever what it refers to changes.
+  void ChangeVersion() { ++version_; }
+
  private:
   const std::string name_;
   const SubjectKind kind_;
+  int64_t version_ = 0;
 };
 
 }  // namespace jpr

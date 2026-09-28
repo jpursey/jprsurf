@@ -230,6 +230,9 @@ class ViewReference {
   std::string_view GetName() const;
   SubjectKind GetKind() const;
 
+  // Changes whenever what it refers to changes.
+  int64_t GetVersion() const;
+
   // The field with the name (such as "name" for a track's track:name), which
   // follows the reference to whatever it refers to. Null if there is no such
   // field.
@@ -263,9 +266,6 @@ class TrackReference final : public ViewReference {
   Track* GetTrack() const;
   void Set(Track* track);
 
-  // Changes whenever the track it refers to changes.
-  int64_t GetVersion() const;
-
   ViewProperty* GetField(std::string_view name) const override;
 
   // Applies the follow, then the fallback, then refreshes its track from
@@ -276,10 +276,9 @@ class TrackReference final : public ViewReference {
 
 class RouteReference final : public ViewReference {
  public:
-  // The route it refers to (see RouteProperties), and the reference to the
-  // track at its other end, which is its other_track field.
+  // The route it refers to (see RouteProperties), by track, type, and index.
+  // The track at its other end is its other_track field.
   const TrackRoute* GetRoute() const;
-  const TrackReference& GetOtherTrack() const;
   void Set(Track* track, TrackRouteType type, int index);
 
   // Handles other_track.<name> as the other track's fields.
@@ -457,11 +456,14 @@ apply to.
   count, and the bank size defaults to the item count. Other children aren't
   counted, and share the view's own subject (the Send/Receive Info strip could
   be one, but stays on the mode view itself for now).
-- **Implementation**: the view owns a small object per kind of list, which
-  lays out its items and owns that kind's `view:` properties. So
-  `view:child_route_toggle` only exists on a routes list, and the other
-  "only where it applies" rules below are the list's, not checks spread
-  through `View`.
+- **Implementation**: the view owns a small object per kind of list
+  (`ViewList` in `view_list.h`, a child tracks or routes list), which lays out
+  its items and creates that kind's `view:` properties, on the view and on
+  each child as it is added. So `view:child_route_toggle` only exists on a
+  routes list, and the other "only where it applies" rules below are the
+  list's, not checks spread through `View`. A list lays out whenever it acts
+  (navigation, even on an inactive view), and its per-run work (polling, and
+  updating its items' references) only while the view is active.
 - **Layout**: items past the end of the list show nothing (the stub track, or
   a route with `route:exists` false), as today.
 - **Keeping current**: when an active view syncs, and when it becomes active,
@@ -482,7 +484,7 @@ apply to.
   | `child_inc`, `child_dec`, `bank_inc`, `bank_dec` | A view with a list                                                     | Scrolls, as today                                                           |
   | `track_parent`, `track_root`                     | A view with a child tracks list, bound to a writable reference         | Moves the reference to the parent track (centering the one left), or master |
   | `parent_track_child`                             | A track item of such a view                                            | Moves the parent's reference to this track, if it has children              |
-  | `parent_track_parent`, `parent_track_root`       | Any child of such a view                                               | As `track_parent` and `track_root` on the parent                            |
+  | `parent_track_parent`, `parent_track_root`       | A track item of such a view                                            | As `track_parent` and `track_root` on the parent                            |
   | `parent_route_other_track`                       | A route item of a routes list bound to a writable reference            | Moves the parent's reference across the route, with the other route type    |
   | `child_route_toggle`, `child_route_type_name`    | A view with a routes list                                              | Toggles and names the route type, as today                                  |
 
@@ -534,7 +536,8 @@ track list revealing it when it becomes active.
 
 Stays until *Modes from exclusive groups and picks*: `mode_`, the mode buttons
 and their availability (`OnSelectionChanged()`, `IsModeAvailable()`), the
-Send press handling, which calls `View::ToggleChildRouteType()`, and
+Send press handling, which runs the Send/Receive view's
+`view:child_route_toggle` (see `View::GetProperty()`), and
 `OnTracksChanged()` returning to Track mode when the Send/Receive track is
 deleted. That check runs before the scene's run updates the reference, so it
 checks whether the reference's track exists rather than whether it has one.
@@ -652,7 +655,7 @@ Depends on: CL3.
 - In Send/Receive mode, rename and recolor a route's other track in REAPER:
   the strip follows. The Info strip's meter, name, and controls work.
 
-### CL5 [ ] scene: Lists and list items
+### CL5 [x] scene: Lists and list items
 
 Depends on: CL4.
 
@@ -672,7 +675,9 @@ Depends on: CL4.
   reference its navigation (and later reveal) sets, and only has those
   properties when there is one, so `View` keeps only its const subject, and
   `writable_reference_` goes with `SetTrack()`.
-- `View::Reveal(Track*)`, public for now, is `EnsureTrackIsVisible()`.
+- `View::Reveal(Track*)`, until CL7, is `EnsureTrackIsVisible()`.
+- `View::GetProperty()` is public, so the plugin's Send press runs
+  `view:child_route_toggle` rather than a `View` method.
 - Removed: `ChildContextType`, `SetChildContext()`, `ClearChildContext()`,
   `SetChildContextIndex()`, `GetChildContextIndex()`,
   `GetMaxChildContextIndex()`, `RefreshChildContext()`, `SetBankSize()`,
@@ -721,7 +726,8 @@ Depends on: CL6.
   `SetSendReceiveTrack()`. Entering Send/Receive mode sets
   `user:current_track`, and `EnterTrackMode()` no longer reveals anything
   itself.
-- `View::Reveal()` becomes private, as only the list uses it.
+- `View::Reveal()` and `ViewList::Reveal()` go away, as only the child tracks
+  list reveals, by its `reveal` option.
 - Docs: the **Today** notes and plugin table in
   [config_model.md](../config_model.md), and the parts of
   [surface_modes.md](surface_modes.md) that name the removed functions.

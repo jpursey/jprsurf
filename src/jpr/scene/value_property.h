@@ -51,8 +51,8 @@ class ToggleValueProperty final : public ViewProperty {
 // The callback runs while the scene is synchronizing its views, so it must not
 // enable, disable, or otherwise restructure views directly. Instead, it can
 // change a property that a view's condition depends on (see
-// View::AddChildView()), or record what needs to change and apply it after the
-// scene has run.
+// View::Config::condition), or record what needs to change and apply it after
+// the scene has run.
 class CallbackActionProperty final : public ViewProperty {
  public:
   using Callback = absl::AnyInvocable<void()>;

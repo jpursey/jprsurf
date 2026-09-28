@@ -32,7 +32,7 @@ void TrackReference::Set(Track* track) {
     track = TrackCache::Get().GetStubTrack();
   }
   if (track != properties_.GetTrack()) {
-    ++version_;
+    ChangeVersion();
     properties_.SetTrack(track);
   }
 }
