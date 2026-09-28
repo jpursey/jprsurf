@@ -43,39 +43,21 @@ class MidiListener {
 
 // This class represents a MIDI input port.
 //
-// It can be used to read MIDI messages from the port, and will automatically
-// poll for new messages when Open() is called, and stop polling when Close() is
-// called. The port will be automatically closed when the object is destroyed.
+// It can be used to read MIDI messages from the port once it is opened by
+// MidiPorts, which polls it for new messages. The port will be automatically
+// closed when the object is destroyed.
 class MidiIn final {
  public:
-  // Enumerates the available MIDI input ports available in Reaper and returns a
-  // list of constructed MidiIn objects. The ports are not opened yet, so Open()
-  // must be called on any desired port.
-  static std::vector<std::unique_ptr<MidiIn>> GetPorts();
-
   MidiIn(const MidiIn&) = delete;
   MidiIn& operator=(const MidiIn&) = delete;
   ~MidiIn();
 
-  // Returns the index of this MIDI port within Reaper, which can be used to
-  // identify the port when opening it.
+  // Returns the index of this MIDI port within Reaper.
   int GetIndex() const { return index_; }
 
   // Returns the name of this MIDI port in Reaper, which may be overriden by the
   // user. It is not necessarily the device name from the OS.
   std::string_view GetName() const { return name_; }
-
-  // Opens the MIDI input port and starts polling for messages.
-  //
-  // Returns true if the port was successfully opened.
-  bool Open(RunRegistry& registry);
-
-  // Closes the MIDI input port and stops polling for messages. After this is
-  // called, the port will no longer receive any MIDI messages.
-  //
-  // Close() will be automatically called when the object is destroyed, so it
-  // does not need to be called explicitly.
-  void Close();
 
   // Subscribes a listener to a specific MIDI message. If data is specified, the
   // listener will only be called for messages with matching the first data
@@ -89,7 +71,21 @@ class MidiIn final {
   void Unsubscribe(MidiListener* listener);
 
  private:
+  friend class MidiPorts;
+
+  // Enumerates the MIDI input ports available in Reaper, none of them open.
+  static std::vector<std::unique_ptr<MidiIn>> GetPorts();
+
   MidiIn(int index, std::string name) : index_(index), name_(std::move(name)) {}
+
+  bool IsOpen() const { return port_ != nullptr; }
+
+  // Opens the MIDI input port and starts polling for messages with the
+  // registry. Returns true if the port is open, including if it already was.
+  bool Open(RunRegistry& registry);
+
+  // Closes the MIDI input port and stops polling for messages.
+  void Close();
 
   void DoSubscribe(MidiListener* listener, uint16_t key);
 
@@ -110,39 +106,22 @@ class MidiIn final {
 // This class represents a MIDI output port.
 //
 // It can be used to send MIDI messages from the port, and will automatically
-// manage the state of sent messages to avoid sending redundant messages. The
-// port will be automatically closed when the object is destroyed, which will
-// stop any pending messages from being sent.
+// manage the state of sent messages to avoid sending redundant messages. It is
+// opened by MidiPorts, which runs it to send the messages. The port will be
+// automatically closed when the object is destroyed, which will stop any
+// pending messages from being sent.
 class MidiOut final {
  public:
-  // Enumerates the available MIDI output ports available in Reaper and returns
-  // a list of constructed MidiOut objects. The ports are not opened yet, so
-  // Open() must be called on any desired port.
-  static std::vector<std::unique_ptr<MidiOut>> GetPorts();
-
   MidiOut(const MidiOut&) = delete;
   MidiOut& operator=(const MidiOut&) = delete;
   ~MidiOut();
 
-  // Returns the index of this MIDI port within Reaper, which can be used to
-  // identify the port when opening it.
+  // Returns the index of this MIDI port within Reaper.
   int GetIndex() const { return index_; }
 
   // Returns the name of this MIDI port in Reaper, which may be overriden by the
   // user. It is not necessarily the device name from the OS.
   std::string_view GetName() const { return name_; }
-
-  // Opens the MIDI output port.
-  //
-  // Returns true if the port was successfully opened.
-  bool Open(RunRegistry& registry);
-
-  // Closes the MIDI output port. After this is called, the port will no longer
-  // be available for sending MIDI messages.
-  //
-  // Close() will be automatically called when the object is destroyed, so it
-  // does not need to be called explicitly.
-  void Close();
 
   // Queues a MIDI message to be sent from this output port.
   //
@@ -267,8 +246,22 @@ class MidiOut final {
   void ResetAllState();
 
  private:
+  friend class MidiPorts;
+
+  // Enumerates the MIDI output ports available in Reaper, none of them open.
+  static std::vector<std::unique_ptr<MidiOut>> GetPorts();
+
   MidiOut(int index, std::string name)
       : index_(index), name_(std::move(name)) {}
+
+  bool IsOpen() const { return port_ != nullptr; }
+
+  // Opens the MIDI output port, sending its messages when the registry runs.
+  // Returns true if the port is open, including if it already was.
+  bool Open(RunRegistry& registry);
+
+  // Closes the MIDI output port, dropping any messages not yet sent.
+  void Close();
 
   enum class StateType {
     kNote,

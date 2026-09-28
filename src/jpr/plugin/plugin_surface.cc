@@ -15,7 +15,6 @@
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
-#include "absl/time/clock.h"
 #include "gb/config/text_config.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
@@ -189,7 +188,6 @@ PluginSurface::PluginSurface(std::string_view config) {
   }
   LOG(INFO) << "PluginSurface created";
 
-  ConnectDevices();
   InitViews();
 }
 
@@ -197,18 +195,11 @@ PluginSurface::~PluginSurface() {
   // Clear the surface, so it doesn't keep showing the last state after REAPER
   // exits or the surface is removed. Deactivating the scene releases every
   // mapping's output writer, which clears each control on its next run. There
-  // are no more calls to OnRun(), so run the devices to clear their controls,
-  // and then MIDI output to send it.
+  // are no more calls to OnRun(), so run the devices to clear their controls.
+  // Destroying the MIDI ports sends it.
   if (scene_ != nullptr) {
     scene_->Deactivate();
     device_runner_.Run();
-    midi_out_runner_.Run();
-
-    // The MIDI ports are destroyed right after this, and MIDI still being sent
-    // when a port is destroyed is lost (the X-Touch Extender, whose port is
-    // destroyed first, did not clear without this). REAPER has no way to flush
-    // a port, so give them time to finish sending.
-    absl::SleepFor(absl::Milliseconds(100));
   }
   LOG(INFO) << "PluginSurface destroyed";
 }
@@ -219,9 +210,9 @@ PluginSurface::~PluginSurface() {
 
 void PluginSurface::OnRun(absl::Time now) {
   device_runner_.Run();
-  midi_in_runner_.Run();
+  midi_ports_.RunInput();
   scene_runner_.Run();
-  midi_out_runner_.Run();
+  midi_ports_.RunOutput();
 }
 
 std::string PluginSurface::GetConfig() const {
@@ -232,61 +223,27 @@ std::string PluginSurface::GetConfig() const {
 // Implementation
 //------------------------------------------------------------------------------
 
-void PluginSurface::ConnectDevices() {
-  for (auto& port : MidiIn::GetPorts()) {
-    LOG(INFO) << "MIDI Input Port: " << port->GetName() << " (index "
-              << port->GetIndex() << ")";
-    if (port->GetName() == "X-Touch") {
-      xtouch_in_ = std::move(port);
-      if (!xtouch_in_->Open(midi_in_runner_)) {
-        LOG(ERROR) << "Failed to open MIDI input port for X-Touch";
-        xtouch_in_.reset();
-      }
-    } else if (port->GetName() == "X-Touch-Ext") {
-      xtouch_ext_in_ = std::move(port);
-      if (!xtouch_ext_in_->Open(midi_in_runner_)) {
-        LOG(ERROR) << "Failed to open MIDI input port for X-Touch Extender";
-        xtouch_ext_in_.reset();
-      }
-    }
-  }
-  for (auto& port : MidiOut::GetPorts()) {
-    LOG(INFO) << "MIDI Output Port: " << port->GetName() << " (index "
-              << port->GetIndex() << ")";
-    if (port->GetName() == "X-Touch") {
-      xtouch_out_ = std::move(port);
-      if (!xtouch_out_->Open(midi_out_runner_)) {
-        LOG(ERROR) << "Failed to open MIDI output port for X-Touch";
-        xtouch_out_.reset();
-      }
-    } else if (port->GetName() == "X-Touch-Ext") {
-      xtouch_ext_out_ = std::move(port);
-      if (!xtouch_ext_out_->Open(midi_out_runner_)) {
-        LOG(ERROR) << "Failed to open MIDI output port for X-Touch Extender";
-        xtouch_ext_out_.reset();
-      }
-    }
-  }
-}
-
 void PluginSurface::InitViews() {
   // Note: For now we are just hard-coding views to my development setup, which
   // is an X-Touch and X-Touch Extender, with the X-Touch extender to the left
   // of the X-Touch.
+  MidiIn* xtouch_in = midi_ports_.OpenInput("X-Touch");
+  MidiOut* xtouch_out = midi_ports_.OpenOutput("X-Touch");
+  MidiIn* xtouch_ext_in = midi_ports_.OpenInput("X-Touch-Ext");
+  MidiOut* xtouch_ext_out = midi_ports_.OpenOutput("X-Touch-Ext");
   scene_ = std::make_unique<Scene>("Scene");
-  bool has_xtouch = (xtouch_in_ != nullptr && xtouch_out_ != nullptr);
-  bool has_xtouch_ext =
-      (xtouch_ext_in_ != nullptr && xtouch_ext_out_ != nullptr);
+  bool has_xtouch = (xtouch_in != nullptr && xtouch_out != nullptr);
+  bool has_xtouch_ext = (xtouch_ext_in != nullptr && xtouch_ext_out != nullptr);
   if (has_xtouch) {
     scene_->AddDevice("XTouch", std::make_unique<DeviceXTouch>(
                                     DeviceXTouch::Type::kFull, device_runner_,
-                                    xtouch_in_.get(), xtouch_out_.get()));
+                                    xtouch_in, xtouch_out));
   }
   if (has_xtouch_ext) {
     scene_->AddDevice("XTouchExt",
                       std::make_unique<DeviceXTouch>(
                           DeviceXTouch::Type::kExtender, device_runner_,
-                          xtouch_ext_in_.get(), xtouch_ext_out_.get()));
+                          xtouch_ext_in, xtouch_ext_out));
   }
 
   const TrackReference* folder = scene_->AddTrackReference(

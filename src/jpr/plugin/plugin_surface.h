@@ -12,7 +12,7 @@
 #include "absl/time/time.h"
 #include "gb/config/config.h"
 #include "jpr/common/control_surface.h"
-#include "jpr/common/midi_port.h"
+#include "jpr/common/midi_ports.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
@@ -43,19 +43,13 @@ class PluginSurface final : private ControlSurfaceListener {
   std::string GetConfig() const override;
 
   // Implementation
-  void ConnectDevices();
   void InitViews();
 
   // State
   gb::Config config_;
-  Runner device_runner_;    // Resets device state, sends pending messages.
-  Runner midi_in_runner_;   // Reads MIDI messages from the ports.
-  Runner scene_runner_;     // Updates the scene.
-  Runner midi_out_runner_;  // Sends MIDI messages to the ports.
-  std::unique_ptr<MidiIn> xtouch_in_;
-  std::unique_ptr<MidiOut> xtouch_out_;
-  std::unique_ptr<MidiIn> xtouch_ext_in_;
-  std::unique_ptr<MidiOut> xtouch_ext_out_;
+  Runner device_runner_;  // Resets device state, sends pending messages.
+  Runner scene_runner_;   // Updates the scene.
+  MidiPorts midi_ports_;  // Outlives the scene, whose devices use the ports.
   std::unique_ptr<Scene> scene_;
 };
 

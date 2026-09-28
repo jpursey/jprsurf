@@ -44,7 +44,7 @@ them are frozen.
 
 | Part       | What it is                                                                   | Today                                              |
 | ---------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `ConnectDevices()`, `Scene::AddDevice()`           |
+| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `MidiPorts`, `Scene::AddDevice()`                  |
 | Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `"XTouchExt/"` prefixes and the strip loops        |
 | Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, `Scene::AddUserProperty()` |
 | Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                             |
@@ -849,7 +849,7 @@ What becomes of the plugin's code:
 
 | `PluginSurface` today                                                                     | In the model                                                     |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `ConnectDevices()`                                                                        | Devices                                                          |
+| Opening the MIDI ports and adding the devices                                             | Devices                                                          |
 | `has_xtouch` checks, device prefixes, and the strip loops                                 | Widgets and repeated views                                       |
 | `AddTrackStripMappings()`                                                                 | The `track_strip` template                                       |
 | The `kAutoModeButtons` table                                                              | The `auto_mode_button` template                                  |

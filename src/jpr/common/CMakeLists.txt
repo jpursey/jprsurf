@@ -12,6 +12,7 @@ set(jpr_common_SOURCE
   log_file.cc log_file.h
   midi_message.h
   midi_port.cc midi_port.h
+  midi_ports.cc midi_ports.h
   midi_sysex.cc midi_sysex.h
   modifiers.cc modifiers.h
   numbered_name.h

@@ -1,0 +1,66 @@
+// Copyright (c) 2026 John Pursey
+//
+// Use of this source code is governed by an MIT-style License that can be found
+// in the LICENSE file or at https://opensource.org/licenses/MIT.
+
+#pragma once
+
+#include <memory>
+#include <string_view>
+#include <vector>
+
+#include "jpr/common/midi_port.h"
+#include "jpr/common/runner.h"
+
+namespace jpr {
+
+//==============================================================================
+// MidiPorts
+//==============================================================================
+
+// This class opens MIDI ports by name, owns them, and runs them.
+//
+// Ports stay open until MidiPorts is destroyed. Destroying it sends any MIDI
+// output still queued, and waits briefly for the ports to finish sending, so
+// anything that writes to the ports can queue its final output before then
+// (for instance, clearing a surface on shutdown).
+class MidiPorts final {
+ public:
+  // Lists the MIDI ports available in REAPER, none of them open yet.
+  MidiPorts();
+
+  MidiPorts(const MidiPorts&) = delete;
+  MidiPorts& operator=(const MidiPorts&) = delete;
+  ~MidiPorts();
+
+  // Opens the MIDI input or output port with the given name in REAPER.
+  //
+  // Opening a port that is already open returns the same port. Returns null if
+  // there is no port with this name, or if it fails to open.
+  MidiIn* OpenInput(std::string_view name);
+  MidiOut* OpenOutput(std::string_view name);
+
+  // Reads the MIDI input received since the last call, and passes it to the
+  // input ports' listeners.
+  void RunInput() { input_runner_.Run(); }
+
+  // Sends the MIDI output queued on the output ports.
+  void RunOutput() { output_runner_.Run(); }
+
+ private:
+  // Implements OpenInput() and OpenOutput() for either type of port.
+  template <typename Port>
+  static Port* Open(std::string_view name, std::string_view kind,
+                    RunRegistry& registry,
+                    const std::vector<std::unique_ptr<Port>>& ports);
+
+  // The runners must outlive the ports, which are registered with them.
+  Runner input_runner_;
+  Runner output_runner_;
+
+  // Every port in REAPER, whether or not it is open.
+  std::vector<std::unique_ptr<MidiIn>> inputs_;
+  std::vector<std::unique_ptr<MidiOut>> outputs_;
+};
+
+}  // namespace jpr

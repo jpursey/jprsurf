@@ -204,9 +204,10 @@ root                      global mappings: modifiers (including mod:send_hold),
   mode.
 - A mapping that can't write anything for its property doesn't hold a handle,
   so it never keeps a control from clearing.
-- On shutdown, `PluginSurface` deactivates the scene, runs the devices and
-  MIDI output once more, and waits 100ms so the MIDI is sent before the ports
-  are destroyed. This clears the whole surface, including the extender.
+- On shutdown, `PluginSurface` deactivates the scene and runs the devices once
+  more. Its `MidiPorts` then sends that output when it is destroyed, and waits
+  100ms so the MIDI is sent before the ports are. This clears the whole
+  surface, including the extender.
 
 ### Route views (scene)
 
