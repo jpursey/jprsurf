@@ -185,7 +185,7 @@ Depends on: nothing.
   (fails), globally (fails), and on two sibling strips under a new name
   (succeeds). The log shows exactly the two expected errors.
 
-### CL2 [ ] scene: Track anchor component
+### CL2 [x] scene: Track anchor component
 
 Depends on: CL1.
 

@@ -258,9 +258,6 @@ class View final {
   // the anchor that replaced it.
   void ReleaseAnchor(const AnchorBase* anchor);
 
-  // Releases the view's anchor, whatever it is held on.
-  void ClearAnchor() { anchor_hold_.Reset(); }
-
   //----------------------------------------------------------------------------
   // Properties and mappings
   //----------------------------------------------------------------------------
@@ -316,6 +313,9 @@ class View final {
   // ViewList::Update()). This is called when the view syncs and becomes
   // active, and before its list acts.
   void UpdateSubject();
+
+  // Releases the view's anchor, whatever it is held on.
+  void ClearAnchor() { anchor_hold_.Reset(); }
 
   // Implements AddUserProperty() for any property type.
   ViewProperty* DoAddUserProperty(std::unique_ptr<ViewProperty> property);
