@@ -26,22 +26,6 @@ When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it.
 
-## Named command IDs
-
-- **Layers:** scene
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (The escape hatch)
-
-`cmd:` properties take a named command ID, such as `_SWS_ABOUT` or a script's
-`_RS...` ID, as well as a number, resolved with `NamedCommandLookup()` when the
-property is created. It returns 0 for a name nothing has registered, which is
-an error. This also confirms that other extensions' commands are registered
-before REAPER creates control surfaces, and whether `kbd_getTextFromCmd()` can
-tell that a numeric ID doesn't exist. It is useful straight away: a mapping can
-run any script or extension action.
-
 ## Widgets
 
 - **Layers:** device
@@ -126,7 +110,7 @@ it.
 - **Layers:** a new spec library, scene, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Device types and catalogs*, and *Named command IDs*
+- **Depends on:** *Device types and catalogs*
 - **Background:** [config_model.md](config_model.md)
 
 The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,

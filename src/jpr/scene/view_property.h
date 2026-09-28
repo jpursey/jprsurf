@@ -33,7 +33,8 @@ class View;
 // a name is split with absl::StrSplit(name, absl::MaxSplits('.', 1)).
 
 // Global properties, which the scene looks up (see Scene::GetProperty()):
-// - REAPER commands, by command id (see CommandActionProperty).
+// - REAPER commands, by numeric or named command id (see
+//   CreateCommandProperty()).
 // - REAPER's global state: the polled state, the timeline, and the rulers.
 // - Modifiers, built in and added with Scene::AddModifierProperty().
 // - Values that never change, added with Scene::AddConstProperty().

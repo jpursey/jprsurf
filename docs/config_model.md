@@ -208,7 +208,7 @@ says what kind of property it is and what its scope is:
 
 | Namespace | What                                                                            | Scope          | Examples                                                            |
 | --------- | ------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------- |
-| `cmd:`    | REAPER commands: a toggle if REAPER reports a toggle state, otherwise an action | Global         | `cmd:40029` (Undo)                                                  |
+| `cmd:`    | REAPER commands: a toggle if REAPER reports a toggle state, otherwise an action | Global         | `cmd:40029` (Undo), `cmd:_SWS_ABOUT`                                |
 | `state:`  | REAPER state: the polled state rows, the timeline, the rulers, and references   | Global         | `state:can_redo`, `state:timeline_position`, `state:selected_track` |
 | `mod:`    | Modifiers, built in and declared                                                | Global         | `mod:shift`, `mod:send_hold`                                        |
 | `const:`  | Fixed values that mappings write, with an explicit type, named by a number      | Global         | `const:1`                                                           |
@@ -678,23 +678,22 @@ These are needed, but a config never names them:
 
 ## The escape hatch: REAPER commands
 
-- A command is mapped by its ID, as a number, or as a named command ID (such as
-  `_SWS_ABOUT` or a script's `_RS...` ID), resolved when the scene is built.
-  Only numeric IDs work today.
+- A command is mapped by its ID, as a number (`cmd:40029`), or as a named
+  command ID starting with `_` (`cmd:_SWS_ABOUT`, or a script's `cmd:_RS...`
+  ID), resolved when its property is created.
 - A command that reports a toggle state is a toggle, so it can light a button.
 - A command acts on REAPER's own state (its selection, its last touched track),
   not on a view's subject. Anything that needs the view's track or route is
   a component.
-- A named command that isn't installed is a config error. `NamedCommandLookup()`
-  returns 0 for a name nothing has registered, so building the scene detects
-  it, and the config doesn't load, with an error naming the command. As with a
-  required device, a config never runs half working. A numeric ID REAPER
-  doesn't know should be an error too, if REAPER can tell (perhaps with
-  `kbd_getTextFromCmd()`), which is to be confirmed when it is built.
-- Other extensions register their commands when REAPER starts, before it
-  creates control surfaces, so they should all be known by the time the scene
-  is built. That is also to be confirmed when it is built, so an installed
-  command is never reported missing.
+- A command that isn't installed is a config error, so building the scene
+  detects it, and the config doesn't load, with an error naming the command. As
+  with a required device, a config never runs half working. Today the mapping
+  fails with its property not found. `NamedCommandLookup()` returns 0 for a
+  name nothing has registered, and `kbd_getTextFromCmd()` returns empty text
+  for a numeric ID REAPER doesn't know.
+- Other extensions and scripts register their commands when REAPER starts,
+  before it creates control surfaces, so they are all known by the time the
+  scene is built.
 - If a config later needs to work whether or not a command is installed, a
   mapping could be marked **optional**, so a missing command only makes that
   mapping do nothing. That is purely additive, so it can wait until it is
@@ -778,7 +777,6 @@ device control names and output modes wait for *Device types and catalogs*.
 | `Fader1`, `Scribble1Line2`, `AssignTrack`                                  | Mixed case, with 1-based numbers inside names                                                       | Catalog arrays with lower case fields (a strip's `fader`), and lower case single controls (`assign_track`)     |
 | `XTouch/`, `XTouchExt/`                                                    | Mappings name devices                                                                               | Widgets                                                                                                        |
 | Output modes 0, 1, 5, and 8                                                | Numbers from the MCU protocol                                                                       | Named by the device type for each output: solid and blink for lights, and the ring styles and off for encoders |
-| `cmd:<id>`                                                                 | Numbers only                                                                                        | Also named command IDs                                                                                         |
 | `Track1` to `Track16`, `Route1` to `Route15`, `TrackMode`                  | Generated, and mixed case                                                                           | Repeated views need no names. The others follow the conventions.                                               |
 
 ## JPRSurf's surface in the model
@@ -880,7 +878,7 @@ come together:
 - **Devices and widgets**, unit tested: *Widgets*, then *Device types and
   catalogs*, ending with the plugin creating devices by type and mapping
   through widgets.
-- **Independent pieces**: *Named command IDs*, *Track actions in scene*
+- **Independent pieces**: *Named command IDs* (done), *Track actions in scene*
   ([track_actions.md](worklog/track_actions.md), done), and *Extension host in
   common* ([extension_host.md](worklog/extension_host.md), done).
 

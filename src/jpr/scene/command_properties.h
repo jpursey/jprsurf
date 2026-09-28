@@ -19,8 +19,10 @@ namespace jpr {
 //==============================================================================
 
 // Command properties are named "cmd:<id>" (see kCmdName), where the id is a
-// REAPER command id. They are a CommandToggleProperty if REAPER reports a
-// toggle state for the command, and a CommandActionProperty otherwise.
+// REAPER command id: a number, such as "cmd:40029", or a named command id
+// registered by an extension or script, such as "cmd:_SWS_ABOUT". They are a
+// CommandToggleProperty if REAPER reports a toggle state for the command, and a
+// CommandActionProperty otherwise.
 inline constexpr std::string_view kCmdSoloInFront = kCmdName<40745>;
 inline constexpr std::string_view kCmdMetronome = kCmdName<40364>;
 inline constexpr std::string_view kCmdTransportRepeat = kCmdName<1068>;
@@ -113,7 +115,7 @@ class CommandToggleProperty final : public SceneStateProperty {
 //==============================================================================
 
 // Creates the property for a "cmd:<id>" name (see kCmdName), or returns null if
-// the id is not a command id.
+// REAPER has no command with that id.
 std::unique_ptr<ViewProperty> CreateCommandProperty(Scene* scene,
                                                     std::string_view name);
 
