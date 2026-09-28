@@ -96,9 +96,13 @@ class View {
 - `View::GetProperty()`: a `user:` name is looked up on the view and each of its
   ancestors in turn, and then in the scene. Declared names have no `.`, so a
   reference's field (`user:current_track.exists`) always goes to the scene.
-- `Scene::AddUserProperty()` and `AddTrackReference()` also fail if any view
-  has the name (`root_view_->HasUserPropertyInSubtree()`), so a global name
-  can't be hidden by a view that declared it first.
+- One check says whether a name is new where it is declared
+  (`View::IsNewUserName()`): unused by the scene's own properties and
+  references (`Scene::IsUnusedUserName()`), not found by `GetProperty()` from
+  the view, and not added to any descendant. `Scene::IsNewUserName()`, which
+  `Scene::AddUserProperty()` and `AddTrackReference()` use, is that check on
+  the root view, so a global name can't be hidden by a view that declared it
+  first.
 - `view_property.h`'s namespace comment says where `user:` names resolve.
 - **Performance:** nothing per run. Lookups and checks walk the view tree only
   while the scene is built, and mappings keep the property pointer.
@@ -165,7 +169,7 @@ Nothing: the REAPER behavior is unchanged.
 
 ## CLs
 
-### CL1 [ ] scene: Properties declared on views
+### CL1 [x] scene: Properties declared on views
 
 Depends on: nothing.
 

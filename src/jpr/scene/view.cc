@@ -206,7 +206,51 @@ ViewProperty* View::GetProperty(std::string_view name) const {
     auto it = properties_.find(name);
     return it != properties_.end() ? it->second.get() : nullptr;
   }
+  if (name.starts_with(kUserNamespace)) {
+    for (const View* view = this; view != nullptr; view = view->parent_view_) {
+      if (auto it = view->user_properties_.find(name);
+          it != view->user_properties_.end()) {
+        return it->second.get();
+      }
+    }
+  }
   return scene_->GetProperty(name);
+}
+
+ViewProperty* View::DoAddUserProperty(std::unique_ptr<ViewProperty> property) {
+  if (property == nullptr) {
+    return nullptr;
+  }
+  const std::string_view name = property->GetName();
+  if (!IsNewUserName(name)) {
+    LOG(ERROR) << "Failed to add property '" << name << "' to view '" << name_
+               << "': the name is not a new user: name, or is already used by "
+                  "the view, an ancestor, a descendant, or the scene";
+    return nullptr;
+  }
+  ViewProperty* added_property = property.get();
+  user_properties_.emplace(name, std::move(property));
+  return added_property;
+}
+
+bool View::IsNewUserName(std::string_view name) const {
+  // GetProperty() finds a property added to this view, an ancestor, or the
+  // scene. The scene's check covers what it doesn't: the namespace, a '.' (a
+  // reference's field), and the names of references, which aren't properties.
+  return scene_->IsUnusedUserName(name) && GetProperty(name) == nullptr &&
+         !HasUserPropertyInSubtree(name);
+}
+
+bool View::HasUserPropertyInSubtree(std::string_view name) const {
+  if (user_properties_.contains(name)) {
+    return true;
+  }
+  for (const auto& child_view : child_views_) {
+    if (child_view->HasUserPropertyInSubtree(name)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool View::AddMapping(ViewMapping::TypeFlags type,

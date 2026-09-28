@@ -48,6 +48,10 @@ inline constexpr std::string_view kUserNamespace = "user:";
 // - The fields of the view's subject, if it is a track (see TrackReference),
 //   or a route (see RouteReference), including its other track's fields.
 // - The view itself: its list, and navigation (see View).
+// - Properties added to the view or one of its ancestors with
+//   View::AddUserProperty(), which are in user: like the scene's, and are
+//   looked up before them. A name is never added both to a view and to one of
+//   its ancestors or the scene, so no property hides another.
 inline constexpr std::string_view kTrackNamespace = "track:";
 inline constexpr std::string_view kRouteNamespace = "route:";
 inline constexpr std::string_view kViewNamespace = "view:";

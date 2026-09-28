@@ -93,6 +93,10 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
 }
 
 bool Scene::IsNewUserName(std::string_view name) const {
+  return root_view_->IsNewUserName(name);
+}
+
+bool Scene::IsUnusedUserName(std::string_view name) const {
   return name.starts_with(kUserNamespace) && !absl::StrContains(name, '.') &&
          !properties_.contains(name) &&
          !track_references_by_name_.contains(name);

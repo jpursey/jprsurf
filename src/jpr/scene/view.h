@@ -5,11 +5,13 @@
 
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -268,6 +270,20 @@ class View final {
   // view_property.h).
   ViewProperty* GetProperty(std::string_view name) const;
 
+  // Adds a property to this view, in the user: namespace, which the view and
+  // its descendants see by its name (see GetProperty()). Each view that adds a
+  // name has its own instance, so every item of a list can add the same one.
+  //
+  // This returns the added property, or null (logging why) if the name is not
+  // in the user: namespace or contains a '.', or if it is already visible from
+  // this view (added to it, an ancestor, or the scene), or added to one of its
+  // descendants. On failure the property is destroyed.
+  template <typename PropertyType>
+    requires std::derived_from<PropertyType, ViewProperty>
+  PropertyType* AddUserProperty(std::unique_ptr<PropertyType> property) {
+    return static_cast<PropertyType*>(DoAddUserProperty(std::move(property)));
+  }
+
   // Adds a mapping to this view.
   //
   // This will return false if the mapping is invalid, for instance if the
@@ -301,6 +317,20 @@ class View final {
   // active, and before its list acts.
   void UpdateSubject();
 
+  // Implements AddUserProperty() for any property type.
+  ViewProperty* DoAddUserProperty(std::unique_ptr<ViewProperty> property);
+
+  // Returns true if the name can be given to a new user: property added to
+  // this view: it is unused by the scene (see Scene::IsUnusedUserName()), and
+  // by this view, its ancestors, and its descendants. For the root view, that
+  // is every view, so this is also the check for a new name in the scene (see
+  // Scene::IsNewUserName()).
+  bool IsNewUserName(std::string_view name) const;
+
+  // Returns true if this view or any of its descendants has a user: property
+  // with the name.
+  bool HasUserPropertyInSubtree(std::string_view name) const;
+
   // Constructed state
   Scene* scene_;
   View* parent_view_;
@@ -318,6 +348,11 @@ class View final {
   const ViewReference* subject_ = nullptr;
   int64_t subject_version_ = -1;  // See UpdateSubject().
   std::unique_ptr<ViewList> list_;
+
+  // The user: properties added to this view. These are declared before the
+  // child views, whose mappings may use them.
+  absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>>
+      user_properties_;
 
   // View hierarchy
   std::vector<std::unique_ptr<View>> child_views_;

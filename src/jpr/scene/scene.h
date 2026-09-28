@@ -66,8 +66,9 @@ class Scene final {
   // it can be mapped by name like any built-in property.
   //
   // This returns the added property, or null if the name is not in the user:
-  // namespace, contains a '.', or is already used by a property or reference.
-  // On failure the property is destroyed.
+  // namespace, contains a '.', or is already used by a property or reference,
+  // including a property added to any view (see View::AddUserProperty()). On
+  // failure the property is destroyed.
   template <typename PropertyType>
     requires std::derived_from<PropertyType, ViewProperty>
   PropertyType* AddUserProperty(std::unique_ptr<PropertyType> property) {
@@ -118,8 +119,9 @@ class Scene final {
   // in the order references were added (see TrackReference::Update()).
   //
   // This returns null if the name is not in the user: namespace, contains a
-  // '.', or is already used by a property or reference, or if the fallback or
-  // follow is not the name of a track reference.
+  // '.', or is already used by a property (including one added to a view) or
+  // reference, or if the fallback or follow is not the name of a track
+  // reference.
   TrackReference* AddTrackReference(std::string_view name,
                                     TrackReference::Config config = {});
 
@@ -153,8 +155,14 @@ class Scene final {
   void UpdateReferences();
 
   // Returns true if the name can be given to a new property or reference added
-  // by the user: it is in the user: namespace, has no '.', and is unused.
+  // to the scene: it is in the user: namespace, has no '.', and is unused by
+  // the scene and every view (see View::IsNewUserName()).
   bool IsNewUserName(std::string_view name) const;
+
+  // Returns true if the name is in the user: namespace, has no '.', and is
+  // unused by the scene's own properties and references. This is the scene's
+  // part of IsNewUserName(), which also checks the views.
+  bool IsUnusedUserName(std::string_view name) const;
 
   // Called when a view with a condition is added, so the scene applies changes
   // to its condition (see ApplyViewConditions()).
