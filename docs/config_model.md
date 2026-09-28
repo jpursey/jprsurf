@@ -847,8 +847,8 @@ come together:
   1. *Property namespaces and names* (done): the final names, before anything
      else adds more.
   2. View conditions and constant properties (done).
-  3. *View subjects, lists, and references*
-     ([view_subjects.md](worklog/view_subjects.md)): the largest change to
+  3. *View subjects, lists, and references* (done,
+     [view_subjects.md](worklog/view_subjects.md)): the largest change to
      `View`.
   4. *Properties declared on views, and track anchors*.
   5. *Modes from exclusive groups and picks*: after this, the plugin has no

@@ -53,11 +53,10 @@ those.
 - **Layers:** device, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *View subjects, lists, and references*
-  ([view_subjects.md](worklog/view_subjects.md)), and *Properties declared on
-  views, and track anchors*
+- **Depends on:** *Properties declared on views, and track anchors*
 - **Background:** [config_model.md](config_model.md) (Modes, Exclusive group,
-  Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md)
+  Pick, Tap or hold), [surface_modes.md](worklog/surface_modes.md),
+  [view_subjects.md](worklog/view_subjects.md)
 
 The last of the plugin's surface state and callbacks:
 - **Exclusive groups:** at most one member is on, however it is turned on, and
@@ -75,7 +74,15 @@ The last of the plugin's surface state and callbacks:
   fires on release if the press was short and the control's held modifier
   wasn't used, replacing `send_press_mode_`, `send_press_time_`, and
   `ApplySendRelease()`.
-- **Mode lights:** mappings, using `const:` properties and conditions.
+- **Mode lights:** mappings, using `const:` properties and conditions. The
+  Send/Receive button's light becomes a mapping on
+  `state:selected_track.has_routes`. Today it reads
+  `TrackCache::GetOnlySelectedTrack()`, as `UpdateModeButtons()` runs before
+  the scene's run updates `state:selected_track`, so it would read the previous
+  selection.
+- **Leaving a deleted track:** `OnTracksChanged()` returns to Track mode when
+  the Send/Receive track is deleted. This moves into the mode group, perhaps
+  as a condition on `user:current_track.exists`.
 
 After this, `PluginSurface` has no surface state or callbacks left: only host
 plumbing (see [extension_host.md](worklog/extension_host.md)) and its
@@ -254,10 +261,10 @@ writing a real config in it.
 - **Background:** [surface_modes.md](worklog/surface_modes.md)
 
 In Send/Receive mode the route strips leave Rec and Solo unmapped, so they
-clear and sit dark. Each route strip's track is the track at the other end of
-the route, and the existing `TrackProperties` already cover its solo and rec
-arm, so the work is mostly deciding what the buttons should mean on a route
-strip.
+clear and sit dark. A route strip's `route:other_track` fields already cover
+the solo and rec arm of the track at the other end of the route
+(`route:other_track.ui_solo` and so on), so the work is mostly deciding what
+the buttons should mean on a route strip.
 
 ## Info strip select behavior
 
@@ -454,8 +461,7 @@ order:
 - **Layers:** common, scene
 - **Size:** small
 - **Feature workflow:** no
-- **Depends on:** *View subjects, lists, and references*
-  ([view_subjects.md](worklog/view_subjects.md))
+- **Depends on:** nothing
 - **Background:** [view_subjects.md](worklog/view_subjects.md) (Lists)
 
 Only worth doing if route polling shows up in the `Run()` average. REAPER
@@ -466,3 +472,45 @@ of the list's route type are shown, one per item from its scroll position, so
 a track with 40 receives shown as sends costs 80+ calls a run where at most 2
 per strip are needed. A `Track::RefreshRoutes(type, first, count)`
 would bound it to what the strips show.
+
+## Act on REAPER re-reporting the last touched track
+
+- **Layers:** common, scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [view_subjects.md](worklog/view_subjects.md) (Behavior)
+
+Only worth doing if it turns out to be annoying. REAPER reports the last
+touched track again when the same track is touched again, but references only
+act on a change, so touching it again moves nothing. Track mode no longer
+scrolls back to a track the user banked away from, and Send/Receive mode no
+longer returns to it after crossing a route. Before references, the plugin
+acted on every report.
+
+A re-report can't simply count as a change: re-touching the track Send/Receive
+mode already shows would then reset its routes list and release its anchor, as
+views bound to `user:current_track` reset on its version. It needs a second
+signal on track references, apart from their version:
+- `TrackCache` counts REAPER's reports (not the surface's own touches, which
+  `TrackActions` sets directly), and `state:last_touched_track` is "renewed" on
+  each one, even for the same track.
+- A follower passes a renewal on as a renewal, and a list's reveal watches
+  renewals as well as changes, while bound views keep watching only the
+  version.
+
+## Reset the Send/Receive routes on entering the mode
+
+- **Layers:** scene, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [view_subjects.md](worklog/view_subjects.md) (Behavior)
+
+Only worth doing if the current behavior is unwelcome. Re-entering Send/Receive
+mode for the track it last showed keeps the route type and scroll position it
+had, as a list only resets when its track changes. Before references, entering
+always showed sends (or receives, if the track only has receives) from the
+first route. Entering the mode could reset the list explicitly, such as with a
+`view:` action on a routes list that re-applies its route type rule and scrolls
+to the start.
