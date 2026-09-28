@@ -858,8 +858,8 @@ come together:
   3. *View subjects, lists, and references* (done,
      [view_subjects.md](worklog/view_subjects.md)): the largest change to
      `View`.
-  4. *Properties declared on views, and track anchors*
-     ([declared_properties.md](worklog/declared_properties.md)).
+  4. *Properties declared on views, and track anchors* (done,
+     [declared_properties.md](worklog/declared_properties.md)).
   5. *Modes from exclusive groups and picks*: after this, the plugin has no
      surface state or callbacks left.
 - **Devices and widgets**, unit tested: *Widgets*, then *Device types and

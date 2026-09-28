@@ -1,244 +1,140 @@
 # Properties Declared on Views, and Track Anchors
 
-Adds the declared properties of the [config model](../config_model.md)
-(Declared properties, Track anchor). Today every `user:` property is global, so
-a property that each strip needs gets a name generated from the strip's index:
-`user:anchor_select_3`, and `user:pick_send_receive_track_3`. Afterwards a
-property can be declared on a view, which gives each view its own instance
-under one name, visible from that view and its descendants. Every strip
-declares `user:anchor_select`, and its mappings use that name.
+A `user:` property can be declared on a view, as in the
+[config model](../config_model.md) (Declared properties, Track anchor). Each
+view that declares a name gets its own instance, visible from that view and its
+descendants. Before this, every `user:` property was global, so a property that
+each strip needed got a name generated from the strip's index
+(`user:anchor_select_3`, `user:pick_send_receive_track_3`). Now every track
+strip declares `user:anchor_select`, and its mappings use that name. No `user:`
+name is generated from an index any more.
 
-The track anchor becomes the first component declared on a view. The plugin's
-`AddTrackAnchorMapping()` callback, and its empty strip check, move into
+The track anchor is the first component declared on a view. The plugin's
+`AddTrackAnchorMapping()` callback, and its empty strip check, moved into
 `scene` as `TrackAnchorProperty`.
 
 There is no change in behavior.
 
-## Design
-
-### Decisions
+## Design decisions
 
 - **Declared on a view, looked up through its ancestors.** A `user:` name in a
-  view resolves to the declaration on that view, or the nearest ancestor that
-  has one, and then to the scene's global properties and references. Names
-  never say which view they are declared on, as the config model requires.
-- **A declaration never hides another.** Declaring a name fails if it is
-  already visible where it is declared (on the view, an ancestor, or globally),
-  or if a declaration made earlier would see it hidden (on a descendant of the
-  view, or on any view, for a global declaration). Siblings, such as the
-  strips of a list, may each declare the same name. The check walks the view
-  tree, which only happens while the scene is built, so no extra index of
-  names has to be kept in sync.
-- **A property is told its view when it is added.** The track anchor needs its
-  view for the view's anchor slot (see below) and its track. If it took the
-  view in its constructor, the caller would name the view twice, once to
-  construct it and once to add it, and nothing would make them match. Instead
-  `View::AddUserProperty()` calls the property's `SetView()`, a protected
-  virtual on `ViewProperty` for derived classes to override, which does nothing
-  by default, so the caller never names the view at all. Every property is
-  added the same way, and the hierarchy stays flat: a component that needs its
-  view overrides one function, rather than deriving from another base class.
-  (CL2 first did this with a private constructor and a static `AddToView()` on
-  the component, which CL4 replaces.)
+  view resolves to the property added to that view or one of its ancestors,
+  and then to the scene's. Names never say which view they are declared on, as
+  the config model requires.
+- **A declaration never hides another.** Adding a name fails if it is already
+  visible where it is added (on the view, an ancestor, or the scene), or if it
+  would hide one added earlier (on a descendant, or on any view, for the
+  scene). Siblings, such as the strips of a list, may each add the same name.
+  The check walks the view tree, which only happens while the scene is built,
+  so no index of names has to be kept in sync.
+- **A property is told its view when it is added.** A component that acts on
+  its view doesn't take the view in its constructor, where the caller would
+  name the view twice (once to construct it, once to add it) with nothing to
+  make them match. `View::AddUserProperty()` calls the property's `SetView()`
+  instead, a protected virtual on `ViewProperty` that does nothing by default.
+  Every property is added the same way, and the hierarchy stays flat: a
+  component that needs its view overrides one function, rather than deriving
+  from another base class. A first version gave the track anchor a private
+  constructor and a static `AddToView()`, which this replaced.
 - **A property that needs its view does nothing without one.** Nothing stops
   one being added to the scene, where it is never told a view. The track anchor
-  then just never anchors, which is harmless, and simpler than a compile time
-  check on `Scene::AddUserProperty()`.
+  then never anchors, which is harmless, and simpler than a compile time check.
 - **The view still holds the anchor.** A view holds at most one anchor, and
   releases it when its subject changes or it deactivates (`View::SetAnchor()`).
   The track anchor uses that slot, rather than each anchor holding its own and
-  the view having to tell them all when to release. As today, holding a second
-  anchor on the same strip releases the first.
-- **The pick moves too.** The Send/Receive pick is still a plugin callback until
-  *Modes from exclusive groups and picks* makes it a component, but it is
-  declared on each strip view now, as `user:pick_send_receive_track`, so no
-  `user:` name is generated from an index any more.
+  the view having to tell them all when to release. Holding a second anchor on
+  the same strip releases the first, as before.
+- **The pick moved too.** The Send/Receive pick is still a plugin callback,
+  until *Modes from exclusive groups and picks* makes it a component, but each
+  strip view adds it as `user:pick_send_receive_track`.
 
-### Names
+## Names
 
-- **Declared**: the config model's term for a property added to a view
-  (`View::AddUserProperty()`), or to the scene, which the config model calls
-  the top level (`Scene::AddUserProperty()`, unchanged). It is only used in
-  docs and comments. Code says "add", which in `scene` always means create,
-  own, and register (`AddChildView()`, `AddTrackReference()`), so both use the
-  `AddUserProperty` name. "Create" is left for factories that return a `unique_ptr` to their caller
+- **Declared**: the config model's term for a property added to a view or the
+  scene (the top level). It is only used in docs and comments. Code says "add",
+  which in `scene` always means create, own, and register (`AddChildView()`,
+  `AddTrackReference()`), so both places use `AddUserProperty()`. "Create" is
+  left for factories that return a `unique_ptr` to their caller
   (`ViewList::Create()`).
-- **Track anchor** (`TrackAnchorProperty`): the component. "Anchor" is already
-  the `common` class it holds (`Anchor<Track>`), and the property is named for
-  what it is, like `TrackBoolViewProperty`.
+- **Track anchor** (`TrackAnchorProperty`): the component. "Anchor" is the
+  `common` class it holds (`Anchor<Track>`), and the property is named for what
+  it is, like `TrackBoolViewProperty`.
 - **`user:anchor_select`**, **`user:anchor_mute`**, **`user:anchor_solo`**,
   **`user:anchor_rec_arm`**, and **`user:pick_send_receive_track`**: the names
-  every strip declares, replacing the `_<n>` ones.
+  every track strip adds.
 
-### scene: Declared properties (view.h/.cc, scene.h/.cc)
+## Structure
 
-```
-class View {
- public:
-  // Adds a property to this view, in the user: namespace, which the view and
-  // its descendants see by its name (see GetProperty()). Each view that adds a
-  // name has its own instance, so every item of a list can add the same one.
-  //
-  // This returns the added property, or null (logging why) if the name is not
-  // in the user: namespace or contains a '.', or if it is already visible from
-  // this view (added to it, an ancestor, or the scene), or added to one of its
-  // descendants. On failure the property is destroyed.
-  template <typename PropertyType>
-    requires std::derived_from<PropertyType, ViewProperty>
-  PropertyType* AddUserProperty(std::unique_ptr<PropertyType> property);
+### scene: Declared properties (view.h/.cc, scene.h/.cc, view_property.h)
 
- private:
-  // Returns true if this view or any of its descendants has a user: property
-  // with the name.
-  bool HasUserPropertyInSubtree(std::string_view name) const;
-
-  // The user: properties added to this view. Declared before the child views,
-  // whose mappings may use them.
-  absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>>
-      user_properties_;
-};
-```
-
-- `View::GetProperty()`: a `user:` name is looked up on the view and each of its
-  ancestors in turn, and then in the scene. Declared names have no `.`, so a
+- **`View::AddUserProperty(std::unique_ptr<PropertyType>)`** adds a `user:`
+  property to the view, calls its `SetView()`, and returns it, or returns null
+  (logging why) if the name isn't new there. The view owns it.
+- **Lookups**: `View::GetProperty()` looks a `user:` name up on the view and each
+  of its ancestors in turn, then in the scene. Added names have no `.`, so a
   reference's field (`user:current_track.exists`) always goes to the scene.
-- One check says whether a name is new where it is declared
-  (`View::IsNewUserName()`): unused by the scene's own properties and
-  references (`Scene::IsUnusedUserName()`), not found by `GetProperty()` from
-  the view, and not added to any descendant. `Scene::IsNewUserName()`, which
-  `Scene::AddUserProperty()` and `AddTrackReference()` use, is that check on
-  the root view, so a global name can't be hidden by a view that declared it
-  first.
-- `view_property.h`'s namespace comment says where `user:` names resolve.
-- **Performance:** nothing per run. Lookups and checks walk the view tree only
-  while the scene is built, and mappings keep the property pointer.
+  `Scene::GetProperty()` never sees a view's properties.
+- **One check for a new name**, `View::IsNewUserName()`:
+  - `Scene::IsUnusedUserName()`: the name is in `user:`, has no `.`, and isn't
+    one of the scene's own properties or references. `GetProperty()` alone
+    would miss the namespace, a `.`, and reference names, which aren't
+    properties.
+  - `GetProperty()` from the view finds nothing, so no property on the view, an
+    ancestor, or the scene has it.
+  - `HasUserPropertyInSubtree()` finds nothing, so no descendant has it.
+- **`Scene::IsNewUserName()`** is that check on the root view, which covers
+  every view. `Scene::AddUserProperty()` and `AddTrackReference()` use it, so a
+  global name can't be hidden by a view that added it first.
+- **`ViewProperty::SetView(View*)`**: a protected virtual, a no-op by default,
+  with `View` as a friend to call it. A property that overrides it must do
+  nothing if it is never called.
+- `View::ClearAnchor()` is private, as only the view uses it.
 
 **Brittleness:** member order. Mappings in child views hold pointers to their
-ancestors' declared properties, so a view's declared properties must outlive
-its child views: `user_properties_` is declared before `child_views_`, with a
-comment saying why. Nothing else is paired or ordered: a declaration is checked
-against everything declared before it, in both directions, whichever order the
-views and declarations are added in.
+ancestors' properties, so a view's `user_properties_` is declared before its
+`child_views_`, and outlives them, with a comment saying why. Nothing else is
+paired or ordered: an added name is checked against everything added before it,
+in both directions, whatever order views and properties are added in.
 
 ### scene: Track anchor (track_anchor_property.h/.cc)
 
-```
-// A toggle for a held button that anchors a track action on its view's track
-// (see TrackActions::GetAnchor()). While it is on, pressing the same action on
-// another track acts on the range from this one. It is added to a view, and
-// holds the anchor on the view's track, unless the view has no track.
-//
-// The anchor is released when the property turns off, or when the view releases
-// it (see View::SetAnchor()). Added anywhere but a view, it does nothing. It
-// always reads as off.
-class TrackAnchorProperty final : public ViewProperty {
- public:
-  struct Config {
-    TrackBoolProperty action = TrackBoolProperty::kSelected;
-
-    // Modifier bits that are on while the anchor is held, if any.
-    Modifiers modifier = 0;
-  };
-
-  TrackAnchorProperty(std::string_view name, const Config& config);
-
- protected:
-  void WriteBool(bool value) override;
-
- private:
-  void SetView(View* view) override;
-};
-```
-
-- The body is today's `AddTrackAnchorMapping()` callback: on, it holds the
-  scene's anchor for the action on the view's track, if the track exists; off,
-  it releases the view's anchor if it is this one.
-- It keeps a pointer to its view, which owns it.
+- **`TrackAnchorProperty(name, {.action, .modifier})`**: a toggle, for a
+  `press_release` mapping. It always reads as off.
+  - On: holds the scene's anchor for the action (`TrackActions::GetAnchor()`)
+    on the view's track, turning on the modifier bits while it is held, unless
+    the view's track doesn't exist.
+  - Off: releases the view's anchor, if it is still this one.
+  - The view also releases it when its subject changes, when it deactivates, or
+    when it holds another anchor (`View::SetAnchor()`).
+- It overrides `SetView()` to keep its view, and does nothing without one.
 - The mapping stays with the caller, as the button, press behavior, and
   `press_release` are the mapping's, not the component's.
 
-**Brittleness:** none new. The caller never names the view, and outside the
-property itself only `View` can call `SetView()`, so the anchor can only act on
-the view it is added to.
+**Brittleness:** none. The caller never names the view, and outside the
+property only `View` calls `SetView()`, so the anchor only ever acts on the
+view it was added to.
 
-### plugin
+### plugin: PluginSurface (plugin_surface.cc)
 
-- `AddTrackAnchorMapping()` adds a `TrackAnchorProperty` named
-  `user:anchor_<action>` on the strip view, and maps it as today. It loses its
-  scene and strip index parameters, and the callback and empty strip check go.
-- The Send/Receive pick is declared on the strip view as
-  `user:pick_send_receive_track`, with the same callback.
+- `AddTrackAnchorMapping(view, name, config, control, press_behavior)` adds a
+  `TrackAnchorProperty` to the strip view and maps it to the control, held.
+- Each track strip adds `user:anchor_select` (with `mod:select_anchor`, on a
+  long press), `user:anchor_mute`, `user:anchor_solo`, and
+  `user:anchor_rec_arm`, and `user:pick_send_receive_track` with the plugin's
+  pick callback.
 
-### To confirm
+## Building blocks
 
-Nothing: the REAPER behavior is unchanged.
+- **Properties on views (`View::AddUserProperty()`):** any per-view state a
+  component needs, under one name on every view that adds it. Its mappings,
+  conditions, and mode overrides, and its descendants', find it by name.
+- **`ViewProperty::SetView()`:** the hook for a component that acts on the view
+  it is added to, such as the pick when it becomes a component.
+- **`TrackAnchorProperty`:** a held button that anchors a ranged track action
+  on a strip's track.
 
-## CLs
+## Performance
 
-### CL1 [x] scene: Properties declared on views
-
-Depends on: nothing.
-
-- `View::AddUserProperty()`, `user:` lookup through the ancestors, and the
-  global check in `Scene` (see above).
-- Unused, so no visible change.
-
-**Verify**
-- Standard checks (Release build, clang-format, extension loads, log has no new
-  errors, smoke test).
-- Temporary, removed before commit: in the plugin, declare a toggle on the track
-  list view and map it on a strip, then try declaring the same name on a strip
-  (fails), globally (fails), and on two sibling strips under a new name
-  (succeeds). The log shows exactly the two expected errors.
-
-### CL2 [x] scene: Track anchor component
-
-Depends on: CL1.
-
-- `TrackAnchorProperty` in `track_anchor_property.h/.cc`, added to the scene's
-  `CMakeLists.txt`.
-- Unused, so no visible change.
-
-**Verify**
-- Standard checks.
-
-### CL3 [x] plugin: Declare anchors and picks on the strips
-
-Depends on: CL2.
-
-- `AddTrackAnchorMapping()` adds a `TrackAnchorProperty`, and the pick is
-  declared on each strip (see above).
-- `config_model.md`: the Track anchor's **Today** note, and the names audit row
-  for the anchor and pick names. `backlog.md`: *Modes from exclusive groups and
-  picks* replaces `user:pick_send_receive_track` rather than the `_<n>`
-  properties.
-
-**Verify**
-- Standard checks.
-- Ranges work as before, on both devices and after banking:
-  - Hold select on one strip (long press), then press select on another: the
-    range between them is selected.
-  - Hold mute on one strip, then press mute on another: the range takes the
-    held track's value. The same for solo and rec arm.
-  - Holding select or mute on an empty strip anchors nothing: pressing another
-    strip acts on it alone.
-  - Bank while holding an anchor: the anchor is released.
-- Holding Send and pressing a strip's select enters Send/Receive mode for that
-  track, also while holding a select anchor.
-
-### CL4 [x] scene, plugin: Tell a property its view when it is added
-
-Depends on: CL3.
-
-- `ViewProperty` gets a protected virtual `SetView(View*)`, which does nothing
-  by default, with `View` as a friend so it can call it. `View::AddUserProperty()` calls it once the
-  name is accepted.
-- `TrackAnchorProperty` gets a public constructor taking a name and config, and
-  overrides `SetView()`. `AddToView()`, and its private constructor, go. It
-  does nothing if it has no view.
-- The plugin adds anchors with `View::AddUserProperty()`, like any other
-  property. `config_model.md`'s Today notes follow.
-
-**Verify**
-- Standard checks.
-- The range checks from CL3.
+Nothing runs per run. Lookups and name checks walk the view tree only while the
+scene is built, and mappings keep the property pointer. A press of a held
+anchor button does the same work as the plugin callback it replaced.
