@@ -50,6 +50,9 @@ bool View::ApplyConfig(const Config& config) {
       return false;
     }
     list_ = ViewList::Create(this, *config.list, writable_reference);
+    if (list_ == nullptr) {
+      return false;
+    }
   }
 
   // The condition may refer to any of the view's properties.
@@ -107,6 +110,9 @@ void View::RefreshActive() {
     active_ = should_be_active;
     if (active_) {
       UpdateSubject();
+      if (list_ != nullptr) {
+        list_->OnActivated();
+      }
     } else {
       ClearAnchor();
     }

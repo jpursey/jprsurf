@@ -31,7 +31,8 @@ class ViewList {
  public:
   // Creates the list for the view, and adds the view: properties that act on
   // it to the view. The writable reference is the reference the view is bound
-  // to if the view may set it (which navigation moves), and is otherwise null.
+  // to if the view may set it (which navigation and revealing move), and is
+  // otherwise null. Returns null (logging why) if the config isn't valid.
   static std::unique_ptr<ViewList> Create(View* view,
                                           const View::ListConfig& config,
                                           TrackReference* writable_reference);
@@ -54,6 +55,9 @@ class ViewList {
   // route type by its rule), or the track list changed (keeping the scroll
   // position in range).
   void Update();
+
+  // Called when the view becomes active, after Update().
+  virtual void OnActivated() {}
 
   // Polls what the list shows. This is called each run while the view is
   // active, after Update().

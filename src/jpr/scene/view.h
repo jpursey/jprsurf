@@ -66,7 +66,13 @@ class View final {
   };
 
   // A list of the child tracks of the view's track that are on the surface.
-  struct ChildTracks {};
+  struct ChildTracks {
+    // If set, the name of a track reference whose track the list reveals when
+    // it changes while the view is active, and when the view becomes active
+    // (see Reveal()). The view must be bound to a writable reference, other
+    // than this one, which revealing may set.
+    std::string reveal;
+  };
 
   // A list of the sends or receives of the view's track.
   struct Routes {
@@ -210,8 +216,9 @@ class View final {
   //
   // This returns null (logging why) if a view with the same name already
   // exists, the reference doesn't exist, a list item's parent has no list, a
-  // list is given for a view without a track subject, or the condition's
-  // property doesn't exist (as seen from the child view).
+  // list is given for a view without a track subject, a list's reveal isn't
+  // valid (see ChildTracks::reveal), or the condition's property doesn't exist
+  // (as seen from the child view).
   View* AddChildView(std::string_view name, const Config& config = {});
 
   int GetChildViewCount() const { return child_views_.size(); }

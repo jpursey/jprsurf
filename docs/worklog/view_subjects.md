@@ -379,7 +379,8 @@ class View {
   struct ChildTracks {
     // A track reference to reveal, when the track it refers to changes while
     // the view is active, and when the view becomes active. The view must be
-    // bound to a writable reference, which revealing may move.
+    // bound to a writable reference, other than this one, which revealing may
+    // move.
     std::string reveal;
   };
 
@@ -436,8 +437,8 @@ class View {
   Other views notice at their next sync, or when they become active.
 - **Checks** on creation, each logged: the reference exists, a list item's
   parent has a list, a list's view has a track subject, a reveal is on a view
-  bound to a writable reference, and the reference to reveal is a track
-  reference.
+  bound to a writable reference other than the one it reveals, and the
+  reference to reveal is a track reference.
 
 **Brittleness:** the subject and list can't change after creation, so a view's
 kind can't change under mappings that were checked against it, and there is
@@ -705,7 +706,7 @@ Depends on: CL4.
   deleting, and hiding tracks keeps the `Run()` log line's max in the low
   milliseconds, and the avg is unchanged.
 
-### CL6 [ ] scene: Revealing a reference
+### CL6 [x] scene: Revealing a reference
 
 Depends on: CL5.
 
@@ -715,6 +716,16 @@ Depends on: CL5.
 
 **Verify**
 - Standard checks.
+- Temporary, removed before commit: the track list reveals
+  `state:last_touched_track`, and `EnsureTrackIsVisible()` does nothing.
+  - Track mode: touching a track in REAPER that is scrolled off the surface,
+    or in another folder, reveals it. Touching the master or a hidden track
+    moves nothing.
+  - Bank away from the last touched track, enter Send/Receive mode and return
+    to Track mode: the track list reveals it again.
+  - A reveal of a missing reference, on a view bound to a built in reference,
+    and of the reference the view is bound to each fail with an error in the
+    log.
 
 ### CL7 [ ] plugin: Follow the last touched track, and reveal it
 

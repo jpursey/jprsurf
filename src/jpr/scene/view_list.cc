@@ -11,6 +11,7 @@
 #include <utility>
 #include <variant>
 
+#include "absl/log/log.h"
 #include "absl/types/span.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/scene/route_reference.h"
@@ -27,13 +28,18 @@ namespace {
 
 class ChildTrackList final : public ViewList {
  public:
+  // The reveal reference is null if the list reveals nothing, and otherwise
+  // there must be a writable reference.
   ChildTrackList(View* view, std::optional<int> bank_size,
-                 TrackReference* writable_reference);
+                 TrackReference* writable_reference,
+                 const TrackReference* reveal);
 
   std::unique_ptr<ViewReference> CreateItemReference() override {
     return std::make_unique<TrackReference>(
         "", &GetView()->GetScene()->GetTrackActions());
   }
+  void OnActivated() override;
+  void Sync() override;
   void Reveal(Track* track) override;
 
  private:
@@ -46,11 +52,19 @@ class ChildTrackList final : public ViewList {
   // See View::kTrackParent and View::kTrackRoot.
   void MoveToParent();
   void MoveToRoot() { MoveTo(TrackCache::Get().GetMasterTrack(), 0); }
+
+  // Reveals the reveal reference's track, and records its version.
+  void RevealReference();
+
+  // See View::ChildTracks::reveal.
+  const TrackReference* const reveal_;
+  int64_t revealed_version_ = -1;
 };
 
 ChildTrackList::ChildTrackList(View* view, std::optional<int> bank_size,
-                               TrackReference* writable_reference)
-    : ViewList(view, bank_size, writable_reference) {
+                               TrackReference* writable_reference,
+                               const TrackReference* reveal)
+    : ViewList(view, bank_size, writable_reference), reveal_(reveal) {
   if (!HasWritableReference()) {
     return;
   }
@@ -111,6 +125,23 @@ void ChildTrackList::MoveToParent() {
   // is no position to center on, so start at the start of the list.
   MoveTo(parent_track,
          track->GetIndex(GetTrackFilter()).value_or(0) - GetItemCount() / 2);
+}
+
+void ChildTrackList::OnActivated() {
+  if (reveal_ != nullptr) {
+    RevealReference();
+  }
+}
+
+void ChildTrackList::Sync() {
+  if (reveal_ != nullptr && reveal_->GetVersion() != revealed_version_) {
+    RevealReference();
+  }
+}
+
+void ChildTrackList::RevealReference() {
+  revealed_version_ = reveal_->GetVersion();
+  Reveal(reveal_->GetTrack());
 }
 
 void ChildTrackList::Reveal(Track* track) {
@@ -299,8 +330,29 @@ std::unique_ptr<ViewList> ViewList::Create(View* view,
     return std::make_unique<RouteList>(
         view, config.bank_size, writable_reference, routes->route_type_rule);
   }
-  return std::make_unique<ChildTrackList>(view, config.bank_size,
-                                          writable_reference);
+
+  const auto& child_tracks = std::get<View::ChildTracks>(config.items);
+  if (child_tracks.reveal.empty()) {
+    return std::make_unique<ChildTrackList>(view, config.bank_size,
+                                            writable_reference, nullptr);
+  }
+  const ViewReference* reveal =
+      view->GetScene()->GetReference(child_tracks.reveal);
+  if (reveal == nullptr || reveal->GetKind() != SubjectKind::kTrack) {
+    LOG(ERROR) << "Failed to add view '" << view->GetName()
+               << "': the reference to reveal '" << child_tracks.reveal
+               << "' is not a track reference";
+    return nullptr;
+  }
+  if (writable_reference == nullptr || reveal == writable_reference) {
+    LOG(ERROR) << "Failed to add view '" << view->GetName()
+               << "': a list that reveals must be bound to a writable "
+                  "reference, other than the one it reveals";
+    return nullptr;
+  }
+  return std::make_unique<ChildTrackList>(
+      view, config.bank_size, writable_reference,
+      static_cast<const TrackReference*>(reveal));
 }
 
 ViewList::ViewList(View* view, std::optional<int> bank_size,
