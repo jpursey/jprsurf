@@ -378,6 +378,23 @@ config could then refer to any enumerated value by name, rather than by an
 index that has to match the order of the names. Worth doing when a config
 names enumerated values (see *Build the scene from a SurfaceSpec*).
 
+## Friendly names for common commands
+
+- **Layers:** spec library
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *Config file language and loader*
+- **Background:** [config_model.md](config_model.md) (The escape hatch)
+
+REAPER's built in actions only have numbers, so a config that maps Undo says
+`cmd:40029`. A config could name the common commands instead, starting with
+the ones JPRSurf's own config uses (the `kCmd*` constants in
+`command_properties.h`): undo, save, play, stop, the automation modes, and so
+on. As with any shorthand, the config expands a name to its `cmd:<id>` form,
+so `scene` doesn't change. The names are part of the public spec, so the list
+is chosen with *Public config spec and user guide split* in mind, and numbers
+and named command IDs keep working for everything else.
+
 ## Read-only toggle mappings register for changes they ignore
 
 - **Layers:** scene
