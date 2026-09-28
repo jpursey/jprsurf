@@ -19,8 +19,9 @@ them are frozen.
 ## Principles
 
 - **The config says what; C++ says how.** A config composes named,
-  parameterized components. The only logic it expresses is a bool condition on
-  a property. Anything more is a new component, written in C++ below `plugin`.
+  parameterized components. The only logic it expresses is a condition that a
+  property equals a value. Anything more is a new component, written in C++
+  below `plugin`.
 - **REAPER commands are the escape hatch.** Any REAPER action, including
   scripts and other extensions' actions, can be mapped by its command ID, so a
   user can get behavior JPRSurf doesn't have without writing code.
@@ -49,7 +50,7 @@ them are frozen.
 | Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                             |
 | Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                               |
 | Templates  | Named, parameterized sets of mappings                                        | `AddTrackStripMappings()`                          |
-| Components | C++ behavior a config declares: exclusive groups, anchors, references, ...   | `PluginSurface` state and callbacks                |
+| Components | C++ behavior a config declares: enumerated values, anchors, references, ...  | Classes such as `TrackPickProperty`                |
 | Settings   | Surface-wide values                                                          | `Scene`'s track filter                             |
 
 ## Devices
@@ -214,7 +215,7 @@ says what kind of property it is and what its scope is:
 | `track:`  | The view's subject, when it is a track                                          | View           | `track:name`, `track:has_routes`                                    |
 | `route:`  | The view's subject, when it is a send or receive                                | View           | `route:volume`, `route:other_track`                                 |
 | `view:`   | The view itself: its list, and navigation                                       | View           | `view:bank_inc`, `view:child_route_toggle`                          |
-| `user:`   | Declared by the config, other than modifiers                                    | Where declared | `user:anchor_select`, `user:surface_mode.send_receive`              |
+| `user:`   | Declared by the config, other than modifiers                                    | Where declared | `user:anchor_select`, `user:surface_mode`                           |
 
 A namespace groups properties by what they are, not by how they are
 implemented. `state:` holds both the polled state rows and the timeline and
@@ -231,8 +232,8 @@ guessing between a view and the scene:
 - A name with a `.` is a property of a named thing: the part before the `.` is
   looked up by the rules above, and asked for the part after it. The thing is a
   reference (whose properties are its fields, see [References](#references)),
-  or a component that provides more than one property
-  (`user:surface_mode.send_receive`). It is only ever one level deep.
+  or a component that provides more than one property (none does yet). It is
+  only ever one level deep.
 - Views give names a context, but never a scope: no name refers to another
   view's properties, as that view may be inactive, and its properties not
   current.
@@ -284,7 +285,7 @@ A config **declares** an instance of a component, with a name and parameters,
 and gets the properties it provides. The behavior is always C++; only the name
 and parameters come from the config. A declaration that provides one property
 is named by its declared name (`user:anchor_select`), and one that provides
-several gives each its own name under it (`user:surface_mode.send_receive`).
+several would give each its own name under it (`user:<name>.<property>`).
 
 Where a declaration is made fixes its scope, rather than where it is used:
 - **At the top level**: one instance, global.
@@ -294,7 +295,7 @@ Where a declaration is made fixes its scope, rather than where it is used:
   its descendants.
 
 Each component says where it may be declared: an anchor on a view, as it needs
-the view's track, and an exclusive group at the top level. Declaring a name
+the view's track, and an enumerated value at the top level. Declaring a name
 that is already visible (in the same view, an ancestor, or the top level) is an
 error, so a declaration never silently hides another.
 
@@ -329,8 +330,8 @@ siblings, which it only needs if something refers to it.
 ### Enabled
 
 A view is either always enabled, or enabled while a condition is met: a
-property, as a bool, is true (or false), the same as a mapping's condition. A
-mode is a view enabled by one toggle of an exclusive group (see
+property equals a value (true, for a toggle), the same as a mapping's
+condition. A mode is a view enabled by one value of an enumerated value (see
 [Modes](#modes)).
 
 The scene applies changes to which views are enabled between runs, never while
@@ -423,18 +424,20 @@ own subject (Send/Receive mode's Info strip could be one).
 ### Modes
 
 A mode isn't a concept of its own. It is:
-- An **exclusive group** with a default, whose toggles are the modes, such as
-  `user:surface_mode.track` and `user:surface_mode.send_receive`. Exactly one is
-  on (see [Exclusive group](#exclusive-group)).
-- A **view for each mode**, enabled by its toggle.
-- **Mappings** for the mode buttons: a press turns a mode's toggle on, and the
-  light shows whether the mode is available, blinking while it is on.
+- An **enumerated value** whose values are the modes, such as
+  `user:surface_mode` with `track` and `send_receive` (see
+  [Enumerated value](#enumerated-value)). It is always exactly one of them.
+- A **view for each mode**, enabled by a condition on its value.
+- **Mappings** for the mode buttons: a press sets the value (a range whose ends
+  are the same), and each mode's view lights the buttons, so the current mode
+  blinks, and another is lit while it is available.
 
 A mode that shows a particular subject, such as Send/Receive mode's track, is
-bound to a declared reference. It is entered with a **pick**, which sets the
-reference and turns the mode on together, but only if the new subject can be
-shown (see [Pick](#pick)). The mode requires the reference's `exists`
-field, so if its track is deleted, the group returns to the default mode.
+bound to a declared reference. It is entered by two mappings on the same press,
+with the same condition that the new subject can be shown: a **pick**, which
+sets the reference (see [Pick](#pick)), and a mapping that sets the mode. If the
+reference's track is deleted, the mode stays, and shows nothing until the
+reference changes.
 
 ### Templates
 
@@ -462,42 +465,67 @@ A mapping connects one property to one control widget, in one view.
 - **Read options**:
   - **Input**: chosen from the property's type, or named.
   - **Press behavior**: press, long press (held for 350ms), double press, or
-    tap (see [Tap or hold](#tap-or-hold)). A press waits for the release when
-    the control also has a long or double press mapping.
+    tap (see [Tap](#tap)). A press waits for the release when the control also
+    has a long or double press mapping.
   - **Held**: the property is on while the button is held, and off when it is
     released (`press_release`). With a long press, it is on from when the long
     press fires.
   - **Range**: the property values that the control's range maps to. A press
-    toggles between them, so a range from 0 to 0 sets the value (the pot button
-    centers pan).
+    toggles between them. On an enumerated property, a press steps through the
+    range instead, wrapping around, or with **press toggles**, toggles between
+    its ends (Marker and Nudge). A range whose ends are the same sets that
+    value (the pot button centers pan, and Track sets `track`).
   - **Required modifiers** (see [Modifier sets](#modifier-sets)).
 - **Write options**: the output mode, by name, and an ordered list of mode
   overrides, each a condition and a mode. The first override whose condition is
   met picks the mode. A strip's pan ring is off when it has no track, and
   different for a folder.
-- **Condition**: the mapping is only active while a property, as a bool, is
-  true (or false).
+- **Condition**: the mapping only acts while a property equals a value (true,
+  for a toggle), read as the value's type. A write mapping writes, and holds
+  the control, only while it is met. A read mapping keeps its input, and checks
+  the condition when the input arrives (see [Sharing a
+  control](#sharing-a-control)).
 - **Value**: a write mapping can write a fixed value, such as a light that is
   always on in a view (the Track mode button), or a fixed label on a display.
   A config writes the value directly, and the scene adds a `const:` property
   for it, so this is an ordinary mapping.
 
-A condition names exactly one property. Combining states is a component's
-job, or a polled state row's: `state:auto_override_any_latch` is a row that is
-on for Latch or Latch Preview. Mode overrides are value to mode maps today, but
-every use is a bool, so they are conditions too. Conditions and modifier sets
-are the only logic in a config.
+A condition names exactly one property, and compares it for equality.
+Combining states is a component's job, or a polled state row's:
+`state:auto_override_any_latch` is a row that is on for Latch or Latch Preview.
+Mode overrides are value to mode maps, compared the same way. Conditions and
+modifier sets are the only logic in a config.
+
+### Where conditions go
+
+- **A view's condition** switches a whole set of mappings, such as a mode.
+  Leaving a view unregisters its mappings.
+- **A mapping's condition** decides whether that mapping acts right now. For a
+  write, it picks which property drives the control. For a read, it decides
+  whether the input does anything, and the mapping keeps its input either way.
+- **A component** takes a condition only for a rule about state it owns, which
+  must hold however that state is changed. None does yet.
+
+So a condition that says whether a button does something goes on its mapping,
+not in the property the mapping triggers. When one press does two things, such
+as picking a track and entering a mode, each is its own mapping with the same
+condition.
 
 ### Sharing a control
 
 Any number of mappings can use one control. These keep them from fighting:
-- **Conditions**, for writes. The automation lights switch between showing the
-  selected tracks' modes and the global override.
-- **Modifier sets**, for reads. A condition works for a read too, but switching
-  it re-registers the input, which loses a pending long or double press.
+- **Conditions**. The automation lights switch between showing the selected
+  tracks' modes and the global override, and Rewind and Forward between their
+  steps. A read's condition is checked when its input arrives, so switching it
+  never loses a pending long or double press. While it isn't met, the input
+  does nothing, but it still counts in the control's modifier sets and press
+  behaviors, so it doesn't fall through to another mapping. A held mapping
+  still applies the release of a press it applied, so what it holds can't stick
+  on.
+- **Modifier sets**, for reads that depend on buttons held on the surface.
 - **Views**, for whole modes.
-- **Press behaviors**: a press, a long press, and a double press on one control
-  are different gestures.
+- **Press behaviors**: a press, a long press, a double press, and a tap on one
+  control are different gestures.
 
 A control that no active mapping writes clears itself (light off, ring off,
 scribble blank), so a mode doesn't have to map the controls it doesn't use.
@@ -524,9 +552,9 @@ owns its state, provides properties (including references, which views can be
 bound to), and enforces its own rules, so a config can't use it wrong.
 
 These are the components needed to express what `PluginSurface` does today.
-Apart from navigation, references, and the track anchor, none exist yet as
-components. The backlog items in [Getting there](#getting-there) build them,
-one at a time and with no change in behavior.
+All of them exist in `scene` or `device`, and `PluginSurface` composes them
+from C++ until *Build the scene from a SurfaceSpec* (see [Getting
+there](#getting-there)).
 
 ### Modifier
 
@@ -534,34 +562,25 @@ one at a time and with no change in behavior.
 - **Parameters:** none.
 - **Provides:** `mod:<name>`, a toggle backed by a modifier bit, which modifier
   sets can use.
-- **Today:** `Scene::AddModifierProperty()`, for `mod:marker`, `mod:nudge`,
-  `mod:send_hold`, and `mod:select_anchor`.
+- **Today:** `Scene::AddModifierProperty()`, for `mod:send_hold` and
+  `mod:select_anchor`.
 
-### Exclusive group
+### Enumerated value
 
 - **Declared:** at the top level.
-- **Parameters:**
-  - Its members: toggles it declares (`user:<group>.<member>`), or existing
-    toggles, such as modifiers.
-  - Optionally, a default member.
-  - Optionally, for each member, a condition it requires.
-- **Provides:** the toggles it declares. All its members are mapped directly.
-- **Enforces:**
-  - At most one member is on. Turning one on turns the others off, however it
-    is turned on.
-  - With a default, exactly one is on. The default starts on, and turning the
-    member that is on off turns the default on.
-  - A member can't turn on while the condition it requires is false, and if the
-    condition becomes false while it is on, the group turns the default on.
-- **Today:**
-  - For Marker and Nudge (`mod:marker` and `mod:nudge`, with no default):
-    `AddExclusiveToggleMapping()` and its `toggle_<property>` actions, which
-    only keep the two exclusive for changes made through the actions.
-  - For the surface modes (`user:surface_mode`, with `track` the default, and
-    `send_receive` requiring `user:current_track.exists`): `SurfaceMode`,
-    `kModeInfo`, `ModeButton`, `InitModeButtons()`, `UpdateModeButtons()`,
-    `IsModeAvailable()`, the `Enter*Mode()` functions, `mode_buttons_changed_`,
-    and the `user:mode_<name>_*` properties.
+- **Parameters:** the names of its values, in order, and optionally the value
+  it starts as (otherwise the first).
+- **Provides:** `user:<name>`, an enumerated property that is always exactly
+  one of its values, by construction. Mappings set it (a range whose ends are
+  the same sets one value, and press toggles switches between two), and
+  conditions on its values enable views and mappings. Its text is the value's
+  name.
+- **Today:** `EnumeratedValueProperty`. JPRSurf declares `user:transport_step`
+  (`measure`, `beat`, and `marker`), which Marker and Nudge set, and
+  `user:surface_mode` (`track` and `send_receive`)
+  ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)).
+  Values are numbered in the order of their names, which C++ has to match
+  until a config names values.
 
 ### Track anchor
 
@@ -599,29 +618,29 @@ one at a time and with no change in behavior.
 
 - **Declared:** on a view, where the source is the view's subject, or at the
   top level, where the source is a reference.
-- **Parameters:** the reference to set, optionally a field of the source that
-  must be true, and optionally a toggle to turn on.
-- **Provides:** an action that, if the source has a subject and the field is
-  true, sets the reference to the source's subject, and turns the toggle on.
-- **Today:** `requested_send_receive_track_`, `TryEnterSendReceiveMode()`,
-  `CanShowRoutes()`, and the `user:pick_send_receive_track` property each
-  strip view adds.
-  JPRSurf picks `user:current_track` and turns on
-  `user:surface_mode.send_receive`, requiring `has_routes`: at the top level
-  from `state:selected_track` (tapping Send), and on each strip view from its
-  track (select while Send is held).
+- **Parameters:** the reference to set, and the source reference, if it is at
+  the top level.
+- **Provides:** an action that sets the reference to the source's track, if it
+  has one. Whether a pick should happen is its mapping's condition, and
+  anything else the same press does is another mapping on it (see [Where
+  conditions go](#where-conditions-go)).
+- **Today:** `TrackPickProperty`. JPRSurf picks `user:current_track`, with a
+  mapping beside each pick that sets `user:surface_mode` to `send_receive`,
+  both requiring `has_routes`: at the top level from `state:selected_track`
+  (`user:pick_selected_track`, tapping Send), and on each strip view from its
+  track (`user:pick_track`, select while Send is held).
 
-### Tap or hold
+### Tap
 
 - **Parameters:** none. It is a press behavior.
 - **Behavior:** a tap fires on release, if the button was released before a
-  long press, and its held modifier (if it has one) wasn't used while it was
-  down. Send taps and holds: holding it is `mod:send_hold`, and a tap is mapped
-  in each mode's view. In Track mode it picks the selected track for
-  Send/Receive mode, and in Send/Receive mode it toggles between sends and
-  receives. A mode change while Send is held deactivates the view holding the
-  tap mapping, which drops the pending tap, as today.
-- **Today:** `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`.
+  long press. It never delays the control's other presses, so a button can be
+  held for one thing and tapped for another. Send taps and holds: holding it is
+  `mod:send_hold`, and a tap is mapped in each mode's view. In Track mode it
+  enters Send/Receive mode for the selected track, and in Send/Receive mode it
+  toggles between sends and receives. A mode change while Send is held
+  deactivates the view holding the tap mapping, which drops the pending tap.
+- **Today:** `InputConfig::PressBehavior::kTap`.
 
 ### Polled state
 
@@ -699,8 +718,8 @@ can be unit tested. It checks that:
   command ID.
 - Each mapping's property type can use its control's inputs or outputs in the
   mapping's direction.
-- Conditions (on mappings, mode overrides, views, and exclusive group members)
-  name properties that can be read as a bool.
+- Conditions (on mappings, mode overrides, and views) name a property, and a
+  value of a type it can be read as.
 - Every view's subject properties match the kind of its subject, its list
   suits its subject, and every reference it is bound to refers to the right
   kind.
@@ -736,9 +755,8 @@ namespaces and names* made the ones that didn't need a new component: every
 property is in a namespace, the polled state rows have names rather than
 indices, rec arm is `rec_arm` everywhere, and the secondary ruler is
 `state:secondary_ruler_*` rather than `ruler2_*`. The audit below is what is
-left. Properties the plugin adds itself are in `user:` until the
-components that replace them, and device control names and output modes wait
-for *Device types and catalogs*.
+left. Properties the plugin declares are in `user:`, as a config's will be, and
+device control names and output modes wait for *Device types and catalogs*.
 
 ### Conventions
 
@@ -755,9 +773,7 @@ for *Device types and catalogs*.
 
 | Today                                                                      | Problem                                                                                             | Change                                                                                                         |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `user:mode_<name>_available`, `_active`, `_select`                         | Generated from a mode name                                                                          | The mode toggles of an exclusive group, named by the group and mode the config declares                        |
-| `user:toggle_<name>`                                                       | Generated, and only exists to keep two toggles exclusive                                            | Removed: an exclusive group's toggles are mapped directly                                                      |
-| `mod:marker`, `mod:nudge`, `mod:send_hold`, `mod:select_anchor`            | Declared by the plugin                                                                              | Declared by the config: `mod:marker`, and so on                                                                |
+| `mod:send_hold`, `mod:select_anchor`                                       | Declared by the plugin                                                                              | Declared by the config: `mod:send_hold`, and so on                                                             |
 | `view:track_parent`, `view:track_root`, and the other view properties      | Named before the model had references and lists                                                     | Settled when navigation is reviewed as a component                                                             |
 | `Fader1`, `Scribble1Line2`, `AssignTrack`                                  | Mixed case, with 1-based numbers inside names                                                       | Catalog arrays with lower case fields (a strip's `fader`), and lower case single controls (`assign_track`)     |
 | `XTouch/`, `XTouchExt/`                                                    | Mappings name devices                                                                               | Widgets                                                                                                        |
@@ -778,48 +794,48 @@ widgets
   route_strip          joined: xtouch_ext's strips 0-7, then xtouch's 0-6
   info_strip           xtouch's strip 7
 declared at the top level
-  modifiers            mod:marker, mod:nudge, mod:send_hold,
-                       mod:select_anchor
-  exclusive group      mod:marker and mod:nudge
+  modifiers            mod:send_hold, mod:select_anchor
+  enumerated values    user:transport_step: measure, beat, and marker;
+                       user:surface_mode: track and send_receive
   references           user:folder, a track falling back to the master;
                        user:current_track, a track following the last
                        touched track
-  exclusive group      user:surface_mode: track (the default), and
-                       send_receive, which requires
-                       user:current_track.exists
-  pick                 tapping Send: user:current_track from
-                       state:selected_track if it has routes, turning on
-                       user:surface_mode.send_receive
+  pick                 user:pick_selected_track: user:current_track from
+                       state:selected_track
 templates
   track_strip          mute, solo, rec arm, pan and its ring, pot button,
                        volume, name, color, meter
   auto_mode_button     the command and lights for one automation button
 views
   root                 no subject. Modifiers, transport, timecode, utility
-  │                    buttons, automation buttons, Marker and Nudge,
-  │                    holding Send (mod:send_hold), and the mode buttons:
-  │                    a press turns on a mode, and the light blinks while
-  │                    it is on, and otherwise is on while the mode is
-  │                    available (always for Track, and
-  │                    state:selected_track.has_routes for Send/Receive)
+  │                    buttons, automation buttons, Marker and Nudge
+  │                    (press toggles on user:transport_step, lit on their
+  │                    value), Rewind and Forward (conditioned on
+  │                    user:transport_step), holding Send (mod:send_hold),
+  │                    and Track, which sets user:surface_mode to track
   ├── master_fader     bound to state:master_track
-  ├── track_mode       enabled by user:surface_mode.track. Tapping Send runs
-  │   │                the top-level pick
+  ├── track_mode       enabled by user:surface_mode being track. Tapping
+  │   │                Send runs user:pick_selected_track and sets
+  │   │                user:surface_mode to send_receive, both requiring
+  │   │                state:selected_track.has_routes. Track blinks, and
+  │   │                Send is lit from state:selected_track.has_routes
   │   └── track_list   bound to user:folder. Lists its children, revealing
   │       │            user:current_track. Global, Bank, and Channel
   │       └── (strip)  repeated over strip. Declares anchors for select (with
-  │                    mod:select_anchor), mute, solo, and rec arm, and a
-  │                    pick of its track for Send/Receive mode. Maps
-  │                    track_strip, select (press, double press, long press,
-  │                    anchor, and the pick while Send is held), the select
-  │                    light switched on mod:send_hold, the other anchors,
-  │                    and volume on scribble line 2
-  └── send_receive_mode  enabled by user:surface_mode.send_receive, and bound
-      │                to user:current_track. Lists its routes (sends, unless
-      │                it only has receives), banking by all its strips. Bank
-      │                and Channel. Tapping Send toggles the direction.
-      │                track_strip on info_strip, and the direction on its
-      │                line 2
+  │                    mod:select_anchor), mute, solo, and rec arm, and
+  │                    user:pick_track of its track. Maps track_strip, select
+  │                    (press, double press, long press, and anchor), and
+  │                    while Send is held, the pick and setting
+  │                    user:surface_mode to send_receive, both requiring
+  │                    track:has_routes. The select light switches on
+  │                    mod:send_hold. The other anchors, and volume on
+  │                    scribble line 2
+  └── send_receive_mode  enabled by user:surface_mode being send_receive, and
+      │                bound to user:current_track. Lists its routes (sends,
+      │                unless it only has receives), banking by all its
+      │                strips. Bank and Channel. Tapping Send toggles the
+      │                direction. Send blinks, and Track is lit. track_strip
+      │                on info_strip, and the direction on its line 2
       └── (route)      repeated over route_strip: route volume, pan, and
                        mute, route:other_track's name and color, route
                        volume on scribble line 2, select across the route
@@ -840,10 +856,8 @@ What becomes of the plugin's code:
 | `AddTrackStripMappings()`                                                                 | The `track_strip` template                                       |
 | The `kAutoModeButtons` table                                                              | The `auto_mode_button` template                                  |
 | `AddTrackAnchorMapping()`                                                                 | Track anchor                                                     |
-| `AddExclusiveToggleMapping()`                                                             | Exclusive group                                                  |
-| Surface modes and mode buttons                                                            | An exclusive group with a default, view conditions, and mappings |
-| Entering Send/Receive mode, and picking its track with select                             | Pick                                                             |
-| `send_press_mode_`, `send_press_time_`, and `ApplySendRelease()`                          | Tap or hold                                                      |
+| `kTransportSteps`, `user:transport_step`, and `user:surface_mode`                         | Enumerated values, and conditions on their values                |
+| `user:pick_selected_track` and `user:pick_track`, and the mappings beside them            | Pick                                                             |
 | `user:folder`, `user:current_track`, and the views' configs                               | References, subjects, and lists                                  |
 | Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log | Host plumbing                                                    |
 
@@ -860,9 +874,9 @@ come together:
      `View`.
   4. *Properties declared on views, and track anchors* (done,
      [declared_properties.md](worklog/declared_properties.md)).
-  5. *Modes from enumerated values and picks*
-     ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)):
-     after this, the plugin has no surface state or callbacks left.
+  5. *Modes from enumerated values and picks* (done,
+     [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)):
+     the plugin has no surface state or callbacks left.
 - **Devices and widgets**, unit tested: *Widgets*, then *Device types and
   catalogs*, ending with the plugin creating devices by type and mapping
   through widgets.

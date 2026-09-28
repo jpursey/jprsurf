@@ -6,42 +6,43 @@ they behave and how they are built, as a reference for adding more modes.
 
 ## Modes
 
-- `enum class SurfaceMode { kTrack, kSendReceive }` lives in `plugin/`, named
-  by function rather than by X-Touch button label. `kModeInfo` gives each mode
-  a name (for property names and logs) and its button.
+- The mode is `user:surface_mode`, an `EnumeratedValueProperty` with the
+  values `track` (`kTrackMode`) and `send_receive` (`kSendReceiveMode`), named
+  by function rather than by X-Touch button label (see
+  [enumerated_values_and_picks.md](enumerated_values_and_picks.md)).
 - There is one global mode. The extender is just more channel strips in every
   mode.
 - The surface always starts in Track mode.
-- Mode state and all mode logic (availability, button behavior, entering and
-  leaving) live in `PluginSurface`. The scene only provides generic building
-  blocks.
-- Each mode's view has a condition on its `user:mode_<name>_active` toggle
-  (see `View::AddChildView()`). Entering a mode only sets the toggles, so it
-  can happen at any time, including from a mapping while the scene runs. The
-  scene applies the change before it next runs the views, so views are never
+- Modes are built entirely from scene pieces, mapped in `PluginSurface`: the
+  enumerated value, view conditions, picks, and mappings. The plugin holds no
+  mode state.
+- Each mode's view has a condition on one value of `user:surface_mode` (see
+  `View::AddChildView()`). Entering a mode only sets the value, so it can
+  happen at any time, including from a mapping while the scene runs. The scene
+  applies the change before it next runs the views, so views are never
   activated or deactivated while the scene is iterating them.
-- Each mode switch is logged, and the scene logs each mode view's activation
-  and deactivation with its duration.
+- The scene logs each mode view's activation and deactivation with its
+  duration.
 
 ### Mode buttons
 
-- Each mode button is off when the mode is unavailable, solid when it is
-  available, and blinking when it is the current mode. The current mode stays
-  lit even if it is no longer available.
-- Each button is written from a `user:mode_<name>_available`
-  `ToggleValueProperty`, with a `mode_overrides` entry on
-  `user:mode_<name>_active` selecting the blink output mode. Presses go to a
-  `user:mode_<name>_select` `CallbackActionProperty`.
+- The current mode's button blinks. Otherwise, a mode's button is solid when
+  the mode is available, and off when it isn't. The current mode stays lit
+  even if it is no longer available.
+- Each mode view lights both buttons: Track mode blinks Track (a `const:` on
+  toggle, in output mode 1), and lights Send from
+  `state:selected_track.has_routes`. Send/Receive mode blinks Send, and lights
+  Track.
+- Track sets `user:surface_mode` to `track` (a range whose ends are the same).
+  Tapping Send in Track mode enters Send/Receive mode (see Holding Send).
 - `McuLight()` note outputs have two output modes: mode 0 is off/on (velocity
   0/127) and mode 1 is off/blink (velocity 0/1). The X-Touch blinks natively.
   `MidiOut` compares note-on velocity, so switching between solid and blinking
   is sent.
-- Track is always available. Send/Receive is available when exactly one
-  non-master track is selected in REAPER (`TrackCache::GetOnlySelectedTrack()`),
-  it is visible on the surface, and it has sends or receives
-  (`CanShowRoutes()`).
-- Availability is only recomputed when it may have changed: on
-  `SetSurfaceSelected`, a track list refresh, or a visibility change.
+- Track is always available. Send/Receive is available when the selected track
+  (`state:selected_track`: exactly one non-master track is selected in REAPER,
+  and it is on the surface) has sends or receives. The light follows selection,
+  track list, and route changes.
 
 ## View structure
 
@@ -59,17 +60,16 @@ root                      global mappings: modifiers (including mod:send_hold),
     └── Route1..15        one per strip, skipping the Info strip
 ```
 
-- Only one of `TrackMode` and `SendReceiveMode` is active at a time, as only
-  one mode's active toggle is on.
+- Only one of `TrackMode` and `SendReceiveMode` is active at a time, as
+  `user:surface_mode` has one value.
 - The Info strip mappings are on `SendReceiveMode` itself rather than a child
   view: a view's own mappings use its own track and aren't affected by its
   child context or banking, and it has the `view:child_route_type_name`
   property.
 - `SendReceiveMode`'s bank size is its child view count, so Bank Left/Right
   pages through all route strips at once.
-- The Send/Receive track is not stored separately: it is always
-  `send_receive_mode_view_->GetTrack()`, since route navigation changes it from
-  inside the scene.
+- The Send/Receive track is `user:current_track`, which `SendReceiveMode` is
+  bound to, and which picks and route navigation change.
 
 ## Track mode
 
@@ -87,21 +87,23 @@ root                      global mappings: modifiers (including mod:send_hold),
   - Select lights show which tracks have sends or receives
     (`track:has_routes`) instead of REAPER's selection. The two select light
     mappings switch with conditions on `mod:send_hold`.
-  - Pressing a select button enters Send/Receive mode for that track (if it can
-    be shown), through a per-strip `user:pick_send_receive_track_<n>` action
-    with `required_modifiers` set to the Send hold modifier. The normal select
-    press, double press, and long press are excluded by the modifier masks.
+  - Pressing a select button enters Send/Receive mode for that track, if it has
+    sends or receives, and otherwise does nothing. Each strip declares
+    `user:pick_track`, which sets `user:current_track` to its track, and maps
+    it and a mapping that sets `user:surface_mode` to `send_receive`, both
+    with `required_modifiers` set to the Send hold modifier and the condition
+    `track:has_routes`. The normal select press, double press, and long press
+    are excluded by the modifier masks.
   - Holding Send never changes REAPER's track selection.
-- Send acts on release, not press, in every mode. The press records the
-  current mode and time (`send_press_mode_`, `send_press_time_`), and
-  `ApplySendRelease()` acts once the hold modifier is off, only if:
-  - it was held for less than 350ms (`kSendHoldDuration`, the same as a long
-    press), so a hold just to look at the select lights does nothing;
-  - no track was picked with select while it was held (the pick clears
-    `send_press_mode_`); and
-  - the mode is unchanged since the press.
-- A tap shorter than one frame never turns on the modifier, but the press is
-  still recorded, so it is handled as a release.
+- Send acts on a tap (`PressBehavior::kTap`): a release within 350ms of the
+  press, the same as a long press, so a hold just to look at the select lights
+  does nothing. Each mode view maps what a tap does. In Track mode it runs
+  `user:pick_selected_track` (from `state:selected_track`) and sets
+  `user:surface_mode` to `send_receive`, both with the condition
+  `state:selected_track.has_routes`.
+- Picking a track with select changes the mode, which drops the pending tap, so
+  releasing Send afterwards does nothing. Releasing it in the frame right after
+  a pick, before the views switch, runs Track mode's tap too.
 
 ## Send/Receive mode
 
@@ -137,9 +139,9 @@ root                      global mappings: modifiers (including mod:send_hold),
 
 ### Changing the track or route type
 
-- A short press of Send toggles between sends and receives if the track has
-  both (`view:child_route_toggle`), and otherwise does nothing. Toggling
-  starts from the first route.
+- A tap of Send toggles between sends and receives if the track has both
+  (`view:child_route_toggle`), and otherwise does nothing. Toggling starts from
+  the first route.
 - `user:current_track` follows REAPER's last touched track, unless it is the
   master track or isn't on the surface, so the view moves to a newly touched
   track. It shows the track's sends, or its receives if it has only receives.
@@ -152,9 +154,8 @@ root                      global mappings: modifiers (including mod:send_hold),
 - Pressing Track returns to Track mode, showing the Send/Receive track among
   its siblings, as the track list reveals `user:current_track` when it becomes
   active.
-- If the Send/Receive track is deleted, the surface returns to Track mode with
-  the track list where it was (or the top level, if its parent was deleted
-  too).
+- If the Send/Receive track is deleted, the surface stays in Send/Receive mode,
+  showing nothing until another track is touched.
 
 ## Building blocks
 
@@ -218,23 +219,22 @@ root                      global mappings: modifiers (including mod:send_hold),
   `route:exists`) are bound to (track, route type, index).
 - View properties: `view:parent_route_other_track` (navigate across a route),
   `view:child_route_toggle` (toggle sends and receives), and
-  `view:child_route_type_name` ("Send" / "Recv"). The plugin's Send tap runs
-  `view:child_route_toggle`.
+  `view:child_route_type_name` ("Send" / "Recv"). Send/Receive mode's Send tap
+  runs `view:child_route_toggle`.
 - `track:has_routes`: a read-only track property, true if the track has any
   sends or receives.
 
 ### Plugin properties and conditions (scene)
 
-- `Scene::AddUserProperty()` registers plugin-defined properties, failing on a
-  name collision. `ToggleValueProperty` is set by code; `CallbackActionProperty`
-  calls a function when triggered.
-- `ViewMapping::Config::condition` makes a mapping active only while a
-  property in its view's scope has a given bool value. Use conditions for
-  write mappings. Read mappings should use `required_modifiers` instead:
-  switching a read mapping with a condition re-registers its input, which
-  resets any pending press timing. A read mapping may still use a condition
-  for state `required_modifiers` can't express, such as REAPER state, if it
-  has no long or double press (the automation buttons do this).
+- `Scene::AddUserProperty()` and `View::AddUserProperty()` declare
+  plugin-defined properties, failing on a name collision.
+  `EnumeratedValueProperty` and `ToggleValueProperty` hold values set by
+  mappings or code, and `TrackPickProperty` sets a track reference.
+- `ViewMapping::Config::condition` makes a mapping act only while a property in
+  its view's scope equals a value. A write mapping writes only while it is met.
+  A read mapping keeps its input, and checks the condition when the input
+  arrives, so it never loses a pending press (see
+  [enumerated_values_and_picks.md](enumerated_values_and_picks.md)).
 
 ## Testing
 

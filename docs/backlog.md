@@ -126,10 +126,7 @@ it.
 - **Layers:** a new spec library, scene, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Device types and catalogs*, *Modes from enumerated values
-  and picks*
-  ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)),
-  and *Named command IDs*
+- **Depends on:** *Device types and catalogs*, and *Named command IDs*
 - **Background:** [config_model.md](config_model.md)
 
 The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
@@ -266,16 +263,15 @@ A row can also have a write function, so the button can change the state too.
 - **Layers:** scene, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** ideally *Modes from enumerated values and picks*
-  ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)),
-  so new modes don't add plugin state
+- **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Modes),
-  [surface_modes.md](worklog/surface_modes.md)
+  [surface_modes.md](worklog/surface_modes.md),
+  [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)
 
-Track and Send/Receive use two of the X-Touch assign buttons. Once modes are an
-enumerated value, another mode is another value of `user:surface_mode`, a view
-enabled by it, and perhaps a pick and a new kind of subject (a track's FX, for
-the Plugin button). What is missing is what the other modes should do, which
+Track and Send/Receive use two of the X-Touch assign buttons. Modes are an
+enumerated value, so another mode is another value of `user:surface_mode`, a
+view enabled by it, and perhaps a pick and a new kind of subject (a track's FX,
+for the Plugin button). What is missing is what the other modes should do, which
 is the design work.
 
 ## Reload the config without restarting REAPER
@@ -358,8 +354,8 @@ could also compare in other ways (not equal, less, greater, and so on), so a
 condition could test a level directly, rather than needing a toggle made for
 it. Less and greater need an order for text and colors. Mode overrides are a
 value to mode map today, and could become conditions with it. The config model
-keeps a condition to one property as a bool, with combining states left to
-components, so it needs updating too.
+keeps a condition to one property equal to a value, with combining states left
+to components, so it needs updating too.
 
 ## Share a condition across mappings
 
@@ -411,6 +407,29 @@ calls `WriteControl()`, which does nothing, on every change. Registering only
 when the mapping actually writes the control would skip that. No user-visible
 effect, so it needs temporary logging or a performance measurement to show the
 difference.
+
+## Refresh a reference's track only for polled fields
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:**
+  [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)
+  (Performance)
+
+Only worth doing if it shows up in the `Run()` average. While anything watches
+a field of a track reference, `TrackReference::Update()` calls
+`Track::Refresh()` every run (three REAPER reads), even when the watched fields
+never read polled state. Track mode's Send light watches
+`state:selected_track.has_routes`, which only changes through
+`OnTrackRoutesChanged()`, so the selected track is refreshed every run for
+nothing. A track property could say whether it reads polled state (name,
+color, mute, volume, and so on) or only notified state (`has_routes`,
+`exists`, `is_folder`, `has_parent`), and the reference refresh only while a
+polled one is watched, as `IsMeterWatched()` already gates the meter.
+`TrackProperties::OnTrackChanged()` could also skip `has_routes`, which it
+notifies on every change to the track.
 
 ## Cheaper polling for the polled toggles
 

@@ -44,9 +44,10 @@ There is no change in behavior.
   The track anchor uses that slot, rather than each anchor holding its own and
   the view having to tell them all when to release. Holding a second anchor on
   the same strip releases the first, as before.
-- **The pick moved too.** The Send/Receive pick is still a plugin callback,
-  until *Modes from exclusive groups and picks* makes it a component, but each
-  strip view adds it as `user:pick_send_receive_track`.
+- **The pick moved too.** The Send/Receive pick was still a plugin callback,
+  but each strip view added it as `user:pick_send_receive_track`. It later
+  became `TrackPickProperty`, as `user:pick_track`
+  ([enumerated_values_and_picks.md](enumerated_values_and_picks.md)).
 
 ## Names
 
