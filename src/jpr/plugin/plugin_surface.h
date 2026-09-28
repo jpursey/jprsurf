@@ -14,26 +14,12 @@
 #include "jpr/common/control_surface.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/runner.h"
-#include "jpr/common/track.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
 #include "jpr/scene/scene.h"
-#include "jpr/scene/track_reference.h"
-#include "jpr/scene/view.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
-
-class ToggleValueProperty;
-
-// The top level modes of the control surface, which determine what the channel
-// strips control. Values are contiguous starting at zero, and are used directly
-// as indices into per-mode state.
-enum class SurfaceMode {
-  kTrack,        // Channel strips show tracks in the track hierarchy.
-  kSendReceive,  // Channel strips show the sends or receives of one track.
-};
-inline constexpr int kSurfaceModeCount = 2;
 
 class PluginSurface final : private ControlSurfaceListener {
  public:
@@ -54,32 +40,11 @@ class PluginSurface final : private ControlSurfaceListener {
 
   // ControlSurfaceListener overrides
   void OnRun(absl::Time now) override;
-  void OnTracksChanged() override;
   std::string GetConfig() const override;
 
   // Implementation
   void ConnectDevices();
   void InitViews();
-
-  // Surface modes
-  //
-  // Each mode's view has a condition on the mode's active toggle, and lights
-  // the mode buttons, so entering a mode only sets the toggles, and can happen
-  // at any time, including while the scene runs. The scene switches the views
-  // when it next runs, before any mappings sync.
-  void InitModeButtons(bool has_xtouch);
-
-  // Switches the surface to the given mode. The Send/Receive mode track must
-  // not be null.
-  void EnterTrackMode();
-  void EnterSendReceiveMode(Track* track);
-
-  // Enters Send/Receive mode for `track`, if it can be shown: it exists, is on
-  // the surface, and has sends or receives.
-  void TryEnterSendReceiveMode(Track* track);
-
-  // Completes a mode change from `old_mode`.
-  void FinishModeChange(SurfaceMode old_mode);
 
   // State
   gb::Config config_;
@@ -92,25 +57,6 @@ class PluginSurface final : private ControlSurfaceListener {
   std::unique_ptr<MidiIn> xtouch_ext_in_;
   std::unique_ptr<MidiOut> xtouch_ext_out_;
   std::unique_ptr<Scene> scene_;
-
-  // The track whose routes Send/Receive mode shows, and which the track list
-  // reveals. It follows the last touched track, and entering Send/Receive mode
-  // and route navigation also change it.
-  TrackReference* current_track_ = nullptr;
-
-  View* track_mode_view_ = nullptr;  // Parent of all Track mode views.
-  // The Send/Receive mode view, which is bound to the current track, and lists
-  // its routes.
-  View* send_receive_mode_view_ = nullptr;
-
-  // Surface mode state, and each mode's active toggle, the condition for its
-  // view.
-  SurfaceMode mode_ = SurfaceMode::kTrack;
-  ToggleValueProperty* mode_active_[kSurfaceModeCount] = {};
-
-  // The modifier that is on while the Send/Receive mode button is held, so it
-  // can be held to pick a track.
-  Modifiers send_hold_modifier_ = 0;
 };
 
 }  // namespace jpr

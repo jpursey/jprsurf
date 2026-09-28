@@ -20,15 +20,16 @@
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/prefixed_name.h"
-#include "jpr/common/track_cache.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/state_properties.h"
 #include "jpr/scene/track_anchor_property.h"
+#include "jpr/scene/track_pick_property.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/value_property.h"
+#include "jpr/scene/view.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin_functions.h"
@@ -40,25 +41,13 @@ namespace {
 constexpr const char kTypeString[] = "JPRSurf";
 constexpr const char kDescString[] = "Jovian Path Control Surface";
 
-// The name and X-Touch button for each SurfaceMode, indexed by the mode.
-struct ModeInfo {
-  std::string_view name;
-  std::string_view button;
-};
-constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
-    {"track", DeviceXTouch::kAssignTrack},
-    {"send_receive", DeviceXTouch::kAssignSend},
-};
-
-// Returns the name of a mode's property, user:mode_<name>_<suffix>, where the
-// suffix is one of:
-// - active: on while the mode is the current mode.
-// - select: the action the mode's button triggers (for Send, a tap in Track
-//   mode).
-std::string GetModePropertyName(SurfaceMode mode, std::string_view suffix) {
-  return absl::StrCat(kUserNamespace, "mode_",
-                      kModeInfo[static_cast<int>(mode)].name, "_", suffix);
-}
+// The top level mode of the surface, which determines what the channel strips
+// control. Each mode has a view that is active while it is the mode. Its values
+// are the modes below, whose names are kSurfaceModeNames, in order.
+constexpr std::string_view kSurfaceMode = kUserName<"surface_mode">;
+constexpr int kTrackMode = 0;        // Strips show tracks in the hierarchy.
+constexpr int kSendReceiveMode = 1;  // Strips show one track's routes.
+constexpr std::string_view kSurfaceModeNames[] = {"track", "send_receive"};
 
 // The X-Touch strip that shows the Send/Receive mode track itself.
 constexpr int kInfoStrip = 7;
@@ -68,7 +57,9 @@ constexpr int kInfoStrip = 7;
 // kept: its strips go blank, and come back as soon as it is shown again.
 constexpr std::string_view kFolder = kUserName<"folder">;
 
-// The track whose routes Send/Receive mode shows.
+// The track whose routes Send/Receive mode shows, and which the track list
+// reveals. It follows the last touched track, and picks and route navigation
+// also change it.
 constexpr std::string_view kCurrentTrack = kUserName<"current_track">;
 
 // The name and color of the track at the other end of a route strip's route.
@@ -94,10 +85,11 @@ constexpr std::string_view kAnchorMute = kUserName<"anchor_mute">;
 constexpr std::string_view kAnchorSolo = kUserName<"anchor_solo">;
 constexpr std::string_view kAnchorRecArm = kUserName<"anchor_rec_arm">;
 
-// Picks a track strip's track for Send/Receive mode, which each track strip
-// adds.
-constexpr std::string_view kPickSendReceiveTrack =
-    kUserName<"pick_send_receive_track">;
+// Picks the current track for Send/Receive mode: the selected track, or a track
+// strip's track, which each track strip adds.
+constexpr std::string_view kPickSelectedTrack =
+    kUserName<"pick_selected_track">;
+constexpr std::string_view kPickTrack = kUserName<"pick_track">;
 
 // What Rewind and Forward move by, whose values are the steps in
 // kTransportSteps, in order.
@@ -115,13 +107,6 @@ constexpr TransportStep kTransportSteps[] = {
     {"beat", DeviceXTouch::kNudge, kCmdGoPrevBeat, kCmdGoNextBeat},
     {"marker", DeviceXTouch::kMarker, kCmdGoPrevMarker, kCmdGoNextMarker},
 };
-
-// Returns true if Send/Receive mode can show this track: it exists, is on the
-// surface, and has sends or receives.
-bool CanShowRoutes(const Track* track, TrackFilter filter) {
-  return track != nullptr && track->Exists() && track->IsVisible(filter) &&
-         (!track->GetSends().empty() || !track->GetReceives().empty());
-}
 
 // Adds the mappings for the channel strip controls that show a track the same
 // way in every mode: mute, solo, record arm, pan, volume, name, color, and
@@ -239,17 +224,6 @@ void PluginSurface::OnRun(absl::Time now) {
   midi_out_runner_.Run();
 }
 
-void PluginSurface::OnTracksChanged() {
-  // If the track shown in Send/Receive mode was deleted, there is nothing left
-  // to show. The scene only updates the current track reference in its next
-  // run, so it still refers to the deleted track, which doesn't exist.
-  if (mode_ == SurfaceMode::kSendReceive &&
-      !send_receive_mode_view_->GetTrack()->Exists()) {
-    LOG(INFO) << "Send/Receive track was deleted";
-    EnterTrackMode();
-  }
-}
-
 std::string PluginSurface::GetConfig() const {
   return gb::WriteConfigToText(config_, gb::kCompactTextConfig);
 }
@@ -318,9 +292,9 @@ void PluginSurface::InitViews() {
   const TrackReference* folder = scene_->AddTrackReference(
       kFolder, {.fallback = std::string(Scene::kMasterTrack)});
   CHECK(folder != nullptr);
-  current_track_ = scene_->AddTrackReference(
+  TrackReference* current_track = scene_->AddTrackReference(
       kCurrentTrack, {.follow = std::string(Scene::kLastTouchedTrack)});
-  CHECK(current_track_ != nullptr);
+  CHECK(current_track != nullptr);
 
   // Always on, for lights that are lit whenever their mapping is active.
   const std::string lit(
@@ -512,16 +486,41 @@ void PluginSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRecord,
                           absl::StrCat("XTouch/", DeviceXTouch::kRecord));
   }
-  InitModeButtons(has_xtouch);
+
+  // Surface modes. Track returns to Track mode, and each mode view maps what
+  // tapping Send does. Entering Send/Receive mode is two mappings on the same
+  // press, with the same condition: one picks the current track, and the other
+  // sets the mode. The send hold modifier is added even without an X-Touch, as
+  // Track mode mappings refer to it.
+  CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
+            kSurfaceMode,
+            std::vector<std::string>(std::begin(kSurfaceModeNames),
+                                     std::end(kSurfaceModeNames)))) != nullptr);
+  const Modifiers send_hold_modifier = scene_->AddModifierProperty(kSendHold);
+  CHECK(send_hold_modifier != 0);
+  CHECK(scene_->AddUserProperty(std::make_unique<TrackPickProperty>(
+            kPickSelectedTrack, *current_track,
+            scene_->GetTrackReference(Scene::kSelectedTrack))) != nullptr);
+  const std::string track_button =
+      absl::StrCat("XTouch/", DeviceXTouch::kAssignTrack);
+  const std::string send_button =
+      absl::StrCat("XTouch/", DeviceXTouch::kAssignSend);
+  if (has_xtouch) {
+    root_view->AddMapping(
+        ViewMapping::kReadControl, kSurfaceMode, track_button,
+        {.read = {.property_min = kTrackMode, .property_max = kTrackMode}});
+    root_view->AddMapping(ViewMapping::kReadControl, kSendHold, send_button,
+                          {.read = {.press_release = true}});
+  }
   root_view->Enable();
 
   // Add the Track mode view, which holds everything that is specific to Track
-  // mode. Each mode's view is active while its mode is the current mode.
-  track_mode_view_ = root_view->AddChildView(
+  // mode.
+  View* track_mode_view = root_view->AddChildView(
       "TrackMode",
-      {.condition = ViewCondition::Config{
-           .property = GetModePropertyName(SurfaceMode::kTrack, "active")}});
-  CHECK(track_mode_view_ != nullptr);
+      {.condition = ViewCondition::Config{.property = std::string(kSurfaceMode),
+                                          .value = kTrackMode}});
+  CHECK(track_mode_view != nullptr);
 
   // On while a track's select button is held as the anchor for a range.
   const Modifiers select_anchor_modifier =
@@ -532,7 +531,7 @@ void PluginSurface::InitViews() {
   // tracks of the folder. Bank left/right pages by 8, a device at a time. It
   // reveals the current track whenever it changes, and when returning to Track
   // mode.
-  View* track_list_view = track_mode_view_->AddChildView(
+  View* track_list_view = track_mode_view->AddChildView(
       "TrackList",
       {.subject = View::ReferenceSubject{.name = std::string(kFolder)},
        .list = View::ListConfig{
@@ -550,10 +549,7 @@ void PluginSurface::InitViews() {
           absl::StrCat("Track", ++child_view_index),
           {.subject = View::ListItemSubject{}});
       CHECK(track_view != nullptr);
-      // Select selects the track, and double press navigates into it. While
-      // Send is held, pressing select instead picks the track for Send/Receive
-      // mode. This uses required modifiers rather than a condition, so holding
-      // Send never resets a pending press.
+      // Select selects the track, and double press navigates into it.
       const std::string select =
           absl::StrCat(device_prefix, DeviceXTouch::Select(i));
       track_view->AddMapping(ViewMapping::kReadControl,
@@ -578,19 +574,28 @@ void PluginSurface::InitViews() {
       track_view->AddMapping(
           ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
           {.read = {.required_modifiers = select_anchor_modifier}});
-      track_view->AddUserProperty(std::make_unique<CallbackActionProperty>(
-          kPickSendReceiveTrack, [this, track_view] {
-            TryEnterSendReceiveMode(track_view->GetTrack());
-          }));
-      track_view->AddMapping(
-          ViewMapping::kReadControl, kPickSendReceiveTrack, select,
-          {.read = {.required_modifiers = send_hold_modifier_}});
-      // Required modifiers must match exactly, so picking also needs a mapping
-      // for Send held along with a select anchor. Picking wins over the range.
-      track_view->AddMapping(
-          ViewMapping::kReadControl, kPickSendReceiveTrack, select,
-          {.read = {.required_modifiers =
-                        send_hold_modifier_ | select_anchor_modifier}});
+
+      // While Send is held, pressing select instead enters Send/Receive mode
+      // for the track, if it has routes, and otherwise does nothing. This uses
+      // required modifiers rather than a condition, so holding Send never
+      // resets a pending press. Required modifiers must match exactly, so this
+      // also needs mappings for Send held along with a select anchor, where
+      // picking wins over the range.
+      track_view->AddUserProperty(
+          std::make_unique<TrackPickProperty>(kPickTrack, *current_track));
+      const ViewCondition::Config has_routes = {
+          .property = std::string(TrackProperties::kTrackHasRoutes)};
+      for (const Modifiers modifiers :
+           {send_hold_modifier, send_hold_modifier | select_anchor_modifier}) {
+        track_view->AddMapping(ViewMapping::kReadControl, kPickTrack, select,
+                               {.read = {.required_modifiers = modifiers},
+                                .condition = has_routes});
+        track_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode, select,
+                               {.read = {.required_modifiers = modifiers,
+                                         .property_min = kSendReceiveMode,
+                                         .property_max = kSendReceiveMode},
+                                .condition = has_routes});
+      }
 
       // The select light shows whether the track is selected, or while Send is
       // held, whether it has routes to show in Send/Receive mode.
@@ -648,35 +653,41 @@ void PluginSurface::InitViews() {
   }
   track_list_view->Enable();
   if (has_xtouch) {
-    // Tapping Send enters Send/Receive mode for the selected track.
-    const std::string send = absl::StrCat("XTouch/", DeviceXTouch::kAssignSend);
-    track_mode_view_->AddMapping(
-        ViewMapping::kReadControl,
-        GetModePropertyName(SurfaceMode::kSendReceive, "select"), send,
-        {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
+    // Tapping Send enters Send/Receive mode for the selected track, if it has
+    // routes.
+    const ViewCondition::Config has_routes = {
+        .property = std::string(kSelectedTrackHasRoutes)};
+    const InputConfig::PressBehavior tap = InputConfig::PressBehavior::kTap;
+    track_mode_view->AddMapping(
+        ViewMapping::kReadControl, kPickSelectedTrack, send_button,
+        {.read = {.press_behavior = tap}, .condition = has_routes});
+    track_mode_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode,
+                                send_button,
+                                {.read = {.press_behavior = tap,
+                                          .property_min = kSendReceiveMode,
+                                          .property_max = kSendReceiveMode},
+                                 .condition = has_routes});
 
     // Track blinks, as it is the current mode, and Send is lit while the
     // selected track has routes to show.
-    track_mode_view_->AddMapping(
-        ViewMapping::kWriteControl, lit,
-        absl::StrCat("XTouch/", DeviceXTouch::kAssignTrack),
-        {.write = {.mode = 1}});
-    track_mode_view_->AddMapping(ViewMapping::kWriteControl,
-                                 kSelectedTrackHasRoutes, send);
+    track_mode_view->AddMapping(ViewMapping::kWriteControl, lit, track_button,
+                                {.write = {.mode = 1}});
+    track_mode_view->AddMapping(ViewMapping::kWriteControl,
+                                kSelectedTrackHasRoutes, send_button);
   }
-  track_mode_view_->Enable();
+  track_mode_view->Enable();
 
   // Add the Send/Receive mode view, which shows the routes of the current
   // track: its sends, unless it only has receives. Bank left/right pages
-  // through all the route strips at once.
-  send_receive_mode_view_ = root_view->AddChildView(
+  // through all the route strips at once. If the track is deleted, it shows
+  // nothing until another track is touched.
+  View* send_receive_mode_view = root_view->AddChildView(
       "SendReceiveMode",
-      {.condition =
-           ViewCondition::Config{.property = GetModePropertyName(
-                                     SurfaceMode::kSendReceive, "active")},
+      {.condition = ViewCondition::Config{.property = std::string(kSurfaceMode),
+                                          .value = kSendReceiveMode},
        .subject = View::ReferenceSubject{.name = std::string(kCurrentTrack)},
        .list = View::ListConfig{.items = View::Routes{}}});
-  CHECK(send_receive_mode_view_ != nullptr);
+  CHECK(send_receive_mode_view != nullptr);
 
   // Add a route view for each channel strip, which will show consecutive sends
   // or receives of the Send/Receive mode track.
@@ -691,7 +702,7 @@ void PluginSurface::InitViews() {
       if (d == 1 && i == kInfoStrip) {
         continue;
       }
-      View* route_view = send_receive_mode_view_->AddChildView(
+      View* route_view = send_receive_mode_view->AddChildView(
           absl::StrCat("Route", ++route_view_index),
           {.subject = View::ListItemSubject{}});
       CHECK(route_view != nullptr);
@@ -728,131 +739,44 @@ void PluginSurface::InitViews() {
     }
   }
   if (has_xtouch) {
-    send_receive_mode_view_->AddMapping(
+    send_receive_mode_view->AddMapping(
         ViewMapping::kReadControl, View::kChildDec,
         absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));
-    send_receive_mode_view_->AddMapping(
+    send_receive_mode_view->AddMapping(
         ViewMapping::kReadControl, View::kChildInc,
         absl::StrCat("XTouch/", DeviceXTouch::kChannelRight));
-    send_receive_mode_view_->AddMapping(
+    send_receive_mode_view->AddMapping(
         ViewMapping::kReadControl, View::kBankDec,
         absl::StrCat("XTouch/", DeviceXTouch::kBankLeft));
-    send_receive_mode_view_->AddMapping(
+    send_receive_mode_view->AddMapping(
         ViewMapping::kReadControl, View::kBankInc,
         absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
 
     // The Info strip shows the Send/Receive mode track itself, the same as in
     // Track mode, except the bottom scribble line shows whether its sends or
     // receives are shown.
-    AddTrackStripMappings(send_receive_mode_view_, "XTouch/", kInfoStrip);
-    send_receive_mode_view_->AddMapping(
+    AddTrackStripMappings(send_receive_mode_view, "XTouch/", kInfoStrip);
+    send_receive_mode_view->AddMapping(
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
         absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
 
     // Tapping Send switches between showing sends and receives.
-    const std::string send = absl::StrCat("XTouch/", DeviceXTouch::kAssignSend);
-    send_receive_mode_view_->AddMapping(
-        ViewMapping::kReadControl, View::kChildRouteToggle, send,
+    send_receive_mode_view->AddMapping(
+        ViewMapping::kReadControl, View::kChildRouteToggle, send_button,
         {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
 
     // Send blinks, as it is the current mode, even if the track no longer has
     // routes, and Track is lit, as it is always available.
-    send_receive_mode_view_->AddMapping(ViewMapping::kWriteControl, lit, send,
-                                        {.write = {.mode = 1}});
-    send_receive_mode_view_->AddMapping(
-        ViewMapping::kWriteControl, lit,
-        absl::StrCat("XTouch/", DeviceXTouch::kAssignTrack));
+    send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
+                                       send_button, {.write = {.mode = 1}});
+    send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
+                                       track_button);
   }
-  send_receive_mode_view_->Enable();
+  send_receive_mode_view->Enable();
 
   // Finally activate the scene, which will start it running and activate all
   // enabled views.
   scene_->Activate(scene_runner_);
-}
-
-//------------------------------------------------------------------------------
-// Surface modes
-//------------------------------------------------------------------------------
-
-void PluginSurface::InitModeButtons(bool has_xtouch) {
-  View* root_view = scene_->GetRootView();
-
-  // On while the Send/Receive mode button is held. This is added even without
-  // an X-Touch, as Track mode mappings refer to it.
-  send_hold_modifier_ = scene_->AddModifierProperty(kSendHold);
-  CHECK(send_hold_modifier_ != 0);
-
-  for (int i = 0; i < kSurfaceModeCount; ++i) {
-    const SurfaceMode mode = static_cast<SurfaceMode>(i);
-    const std::string select_name = GetModePropertyName(mode, "select");
-
-    // The active toggle starts on for the current mode, so its view is active
-    // as soon as the scene is.
-    mode_active_[i] =
-        scene_->AddUserProperty(std::make_unique<ToggleValueProperty>(
-            GetModePropertyName(mode, "active"), mode == mode_));
-    CHECK(mode_active_[i] != nullptr);
-    scene_->AddUserProperty(
-        std::make_unique<CallbackActionProperty>(select_name, [this, mode] {
-          switch (mode) {
-            case SurfaceMode::kTrack:
-              EnterTrackMode();
-              break;
-            case SurfaceMode::kSendReceive:
-              TryEnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
-              break;
-          }
-        }));
-
-    if (!has_xtouch) {
-      continue;
-    }
-    const std::string control = absl::StrCat("XTouch/", kModeInfo[i].button);
-    switch (mode) {
-      case SurfaceMode::kTrack:
-        root_view->AddMapping(ViewMapping::kReadControl, select_name, control);
-        break;
-      case SurfaceMode::kSendReceive:
-        // Send acts when it is tapped, which each mode view maps, so it can be
-        // held to pick a track instead.
-        root_view->AddMapping(ViewMapping::kReadControl, kSendHold, control,
-                              {.read = {.press_release = true}});
-        break;
-    }
-  }
-}
-
-void PluginSurface::TryEnterSendReceiveMode(Track* track) {
-  if (CanShowRoutes(track, scene_->GetTrackFilter())) {
-    EnterSendReceiveMode(track);
-  }
-}
-
-void PluginSurface::EnterTrackMode() {
-  if (mode_ == SurfaceMode::kTrack) {
-    return;
-  }
-  const SurfaceMode old_mode = mode_;
-  mode_ = SurfaceMode::kTrack;
-  FinishModeChange(old_mode);
-}
-
-void PluginSurface::EnterSendReceiveMode(Track* track) {
-  DCHECK(track != nullptr);
-  const SurfaceMode old_mode = mode_;
-  mode_ = SurfaceMode::kSendReceive;
-  current_track_->Set(track);
-  FinishModeChange(old_mode);
-}
-
-void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
-  // This turns on the new mode's active toggle, which activates its view.
-  for (int i = 0; i < kSurfaceModeCount; ++i) {
-    mode_active_[i]->SetBool(static_cast<SurfaceMode>(i) == mode_);
-  }
-  LOG(INFO) << "Surface mode changed from "
-            << kModeInfo[static_cast<int>(old_mode)].name << " to "
-            << kModeInfo[static_cast<int>(mode_)].name;
 }
 
 }  // namespace jpr

@@ -331,12 +331,12 @@ devices are all present), and a way to say which config was chosen.
 
 A read mapping fires only when exactly its required modifiers are on, among all
 the modifiers the read mappings on its control mention. That keeps Undo and
-Redo, or Rewind by measure, beat, and marker, unambiguous without priorities.
-But a mapping meant to fire with a modifier held "whatever else is held" needs
-a copy for every combination of the other modifiers on the control. Today that
-is the Send/Receive pick on a strip's select button, which needs a second
-mapping for Send held along with a select anchor (`InitViews()` in
-`plugin_surface.cc`).
+Redo, or Save and Save New Version, unambiguous without priorities. But a
+mapping meant to fire with a modifier held "whatever else is held" needs a copy
+for every combination of the other modifiers on the control. Today that is the
+Send/Receive pick on a strip's select button, and the mapping beside it that
+enters the mode, which each need a second copy for Send held along with a
+select anchor (`InitViews()` in `plugin_surface.cc`).
 
 A mapping could also list modifiers it ignores, so the pick is one mapping that
 requires `mod:send_hold` and ignores `mod:select_anchor`. It is purely

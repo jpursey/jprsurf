@@ -407,7 +407,7 @@ Depends on: nothing.
 - Performance: the `Run()` avg in Track mode, with and without one track
   selected, against before the change.
 
-### CL9 [ ] plugin: Modes as an enumerated value, with picks
+### CL9 [x] plugin: Modes as an enumerated value, with picks
 
 Depends on: CL2, CL3, CL4, CL5, CL7, CL8.
 
@@ -416,13 +416,13 @@ Depends on: CL2, CL3, CL4, CL5, CL7, CL8.
   strip's `user:pick_track`, the mappings beside them that set
   `send_receive`, and their `has_routes` conditions.
 - Removes `SurfaceMode`, `kSurfaceModeCount`, `kModeInfo`,
-  `GetModePropertyName()`, `mode_`, `mode_active_`,
-  `InitModeButtons()`, `EnterTrackMode()`,
-  `EnterSendReceiveMode()`, `TryEnterSendReceiveMode()`, `FinishModeChange()`,
-  `CanShowRoutes()`, the CL7 callback, the `OnTracksChanged()` override, and
-  the `current_track_`, `track_mode_view_`, and `send_receive_mode_view_`
-  members. The mode change log line goes too, as the scene logs each mode
-  view's activation.
+  `GetModePropertyName()`, `mode_`, `mode_active_`, `InitModeButtons()`,
+  `EnterTrackMode()`, `EnterSendReceiveMode()`, `TryEnterSendReceiveMode()`,
+  `FinishModeChange()`, `CanShowRoutes()`, the CL7 callback, the
+  `OnTracksChanged()` override, and the `current_track_`, `track_mode_view_`,
+  `send_receive_mode_view_`, and `send_hold_modifier_` members, which become
+  locals in `InitViews()`. The mode change log line goes too, as the scene
+  logs each mode view's activation.
 
 **Verify**
 - Standard checks, and CL7's and CL8's feature checks again.
