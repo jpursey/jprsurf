@@ -16,8 +16,6 @@
 
 namespace jpr {
 
-class Track;
-
 //==============================================================================
 // ControlSurfaceListener
 //
@@ -25,11 +23,6 @@ class Track;
 // ControlSurface. The ControlSurface keeps the rest of the common library (such
 // as TrackCache and ContinuousUndo) up to date itself, before passing each
 // event on.
-//
-// Events are passed on as REAPER sends them, so all but OnRun() may also be
-// called in the middle of OnRun() (for instance, when the surface selects a
-// track). A listener should only record what they mean, and act on it from
-// OnRun().
 //==============================================================================
 
 class ControlSurfaceListener {
@@ -41,21 +34,6 @@ class ControlSurfaceListener {
   // Called on every run (about 30 times a second), after TrackCache is up to
   // date. `now` is when the run started.
   virtual void OnRun(absl::Time now) {}
-
-  // Called at the start of a run, before OnRun(), when the track list or the
-  // visibility of any track has changed since the last run. TrackCache has
-  // already been refreshed.
-  virtual void OnTracksChanged() {}
-
-  // Called when the track selection may have changed. REAPER may send this
-  // once for every track, and also sends it after automation mode changes, and
-  // undo and redo.
-  virtual void OnSelectionChanged() {}
-
-  // Called when REAPER reports a new last touched track, which TrackCache
-  // already holds. The track is null if TrackCache doesn't know it yet (such
-  // as a new track before the next run refreshes it).
-  virtual void OnLastTouchedTrackChanged(Track* track) {}
 
   // Returns the config string REAPER saves in its preferences for the surface.
   virtual std::string GetConfig() const { return {}; }

@@ -147,18 +147,14 @@ void ControlSurface::Run() {
 
     // Refresh() re-read visibility for every track, so the poll can wait.
     last_visibility_time_ = start;
-    listener_->OnTracksChanged();
 
-    // The refresh is the first work done this run, so this is its duration,
-    // including the listener's response to it.
+    // The refresh is the first work done this run, so this is its duration.
     LOG(INFO) << "Refreshed TrackCache with "
               << TrackCache::Get().GetTrackCount() << " tracks in "
               << absl::ToInt64Microseconds(absl::Now() - start) << "us";
   } else if (last_visibility_time_ + kVisibilityInterval < start) {
     last_visibility_time_ = start;
-    if (TrackCache::Get().RefreshVisibility()) {
-      listener_->OnTracksChanged();
-    }
+    TrackCache::Get().RefreshVisibility();
   }
 
   listener_->OnRun(start);
@@ -197,7 +193,6 @@ void ControlSurface::SetSurfaceSelected(MediaTrack* track_id, bool selected) {
   // REAPER also calls this for every track after any track's automation mode
   // changes, and after undo and redo.
   TrackCache::Get().OnSelectionChanged();
-  listener_->OnSelectionChanged();
 }
 
 void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
@@ -537,9 +532,7 @@ void ControlSurface::OnSetFocusedFx(MediaTrack* track_id,
 
 void ControlSurface::OnSetLastTouchedTrack(MediaTrack* track_id) {
   VLOG_REAPER() << "OnSetLastTouchedTrack(track_id=" << track_id << ")";
-  Track* track = TrackCache::Get().GetTrack(track_id);
-  TrackCache::Get().SetLastTouchedTrack(track);
-  listener_->OnLastTouchedTrackChanged(track);
+  TrackCache::Get().SetLastTouchedTrack(TrackCache::Get().GetTrack(track_id));
 }
 
 void ControlSurface::OnSetMixerScroll(MediaTrack* track_id) {
