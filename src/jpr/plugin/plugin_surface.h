@@ -6,7 +6,6 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -83,11 +82,6 @@ class PluginSurface final : private ControlSurfaceListener {
   // the surface, and has sends or receives.
   void TryEnterSendReceiveMode(Track* track);
 
-  // Handles the Send/Receive mode button once it is released (see
-  // send_press_mode_), if it was pressed rather than held. This is called after
-  // the scene runs, as that is when the release is recorded.
-  void ApplySendRelease(absl::Time now);
-
   // Completes a mode change from `old_mode`.
   void FinishModeChange(SurfaceMode old_mode);
 
@@ -123,13 +117,9 @@ class PluginSurface final : private ControlSurfaceListener {
   SurfaceMode mode_ = SurfaceMode::kTrack;
   ModeButton mode_buttons_[kSurfaceModeCount];
 
-  // The Send/Receive mode button acts when it is released rather than pressed,
-  // and only if it wasn't held, so it can be held to pick a track. This is the
-  // modifier that is on while it is held, and the mode and time when it was
-  // pressed, until the release is handled.
+  // The modifier that is on while the Send/Receive mode button is held, so it
+  // can be held to pick a track.
   Modifiers send_hold_modifier_ = 0;
-  std::optional<SurfaceMode> send_press_mode_;
-  absl::Time send_press_time_;
 
   // Set when mode availability may have changed, so the mode buttons are
   // updated on the next run. Availability depends on the track selection and

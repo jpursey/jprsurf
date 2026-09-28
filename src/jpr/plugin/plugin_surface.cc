@@ -7,7 +7,6 @@
 
 #include <iterator>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -55,7 +54,8 @@ constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
 // suffix is one of:
 // - available: on while the mode's button is lit.
 // - active: on while the mode is the current mode.
-// - select: the action the mode's button triggers.
+// - select: the action the mode's button triggers (for Send, a tap in Track
+//   mode).
 std::string GetModePropertyName(SurfaceMode mode, std::string_view suffix) {
   return absl::StrCat(kUserNamespace, "mode_",
                       kModeInfo[static_cast<int>(mode)].name, "_", suffix);
@@ -95,11 +95,6 @@ constexpr std::string_view kAnchorRecArm = kUserName<"anchor_rec_arm">;
 // adds.
 constexpr std::string_view kPickSendReceiveTrack =
     kUserName<"pick_send_receive_track">;
-
-// The Send/Receive mode button only acts when released if it was pressed for
-// less than this. Holding it longer only shows which tracks have routes. This
-// matches the long press duration of controls.
-constexpr absl::Duration kSendHoldDuration = absl::Milliseconds(350);
 
 // What Rewind and Forward move by, whose values are the steps in
 // kTransportSteps, in order.
@@ -242,11 +237,6 @@ void PluginSurface::OnRun(absl::Time now) {
   device_runner_.Run();
   midi_in_runner_.Run();
   scene_runner_.Run();
-
-  // The Send/Receive mode button acts when it is released, which is only
-  // recorded while the scene runs.
-  ApplySendRelease(now);
-
   midi_out_runner_.Run();
 }
 
@@ -597,9 +587,6 @@ void PluginSurface::InitViews() {
           {.read = {.required_modifiers = select_anchor_modifier}});
       track_view->AddUserProperty(std::make_unique<CallbackActionProperty>(
           kPickSendReceiveTrack, [this, track_view] {
-            // Send was held to pick a track, so releasing it does nothing, even
-            // if the picked track has no routes.
-            send_press_mode_.reset();
             TryEnterSendReceiveMode(track_view->GetTrack());
           }));
       track_view->AddMapping(
@@ -667,6 +654,14 @@ void PluginSurface::InitViews() {
         absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
   }
   track_list_view->Enable();
+  if (has_xtouch) {
+    // Tapping Send enters Send/Receive mode for the selected track.
+    track_mode_view_->AddMapping(
+        ViewMapping::kReadControl,
+        GetModePropertyName(SurfaceMode::kSendReceive, "select"),
+        absl::StrCat("XTouch/", DeviceXTouch::kAssignSend),
+        {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
+  }
   track_mode_view_->Enable();
 
   // Add the Send/Receive mode view, which shows the routes of the current
@@ -751,6 +746,12 @@ void PluginSurface::InitViews() {
     send_receive_mode_view_->AddMapping(
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
         absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
+
+    // Tapping Send switches between showing sends and receives.
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kReadControl, View::kChildRouteToggle,
+        absl::StrCat("XTouch/", DeviceXTouch::kAssignSend),
+        {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
   }
   send_receive_mode_view_->Enable();
 
@@ -793,10 +794,7 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
               EnterTrackMode();
               break;
             case SurfaceMode::kSendReceive:
-              // The Send/Receive mode button acts when it is released, so it
-              // can be held to pick a track instead (see ApplySendRelease()).
-              send_press_mode_ = mode_;
-              send_press_time_ = absl::Now();
+              TryEnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
               break;
           }
         }));
@@ -808,10 +806,16 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
     root_view->AddMapping(
         ViewMapping::kWriteControl, available_name, control,
         {.write = {.mode_overrides = {{active_name, {{true, 1}}}}}});
-    root_view->AddMapping(ViewMapping::kReadControl, select_name, control);
-    if (mode == SurfaceMode::kSendReceive) {
-      root_view->AddMapping(ViewMapping::kReadControl, kSendHold, control,
-                            {.read = {.press_release = true}});
+    switch (mode) {
+      case SurfaceMode::kTrack:
+        root_view->AddMapping(ViewMapping::kReadControl, select_name, control);
+        break;
+      case SurfaceMode::kSendReceive:
+        // Send acts when it is tapped, which each mode view maps, so it can be
+        // held to pick a track instead.
+        root_view->AddMapping(ViewMapping::kReadControl, kSendHold, control,
+                              {.read = {.press_release = true}});
+        break;
     }
   }
 }
@@ -844,31 +848,6 @@ void PluginSurface::TryEnterSendReceiveMode(Track* track) {
   // may have changed since the light was last updated.
   if (CanShowRoutes(track, scene_->GetTrackFilter())) {
     EnterSendReceiveMode(track);
-  }
-}
-
-void PluginSurface::ApplySendRelease(absl::Time now) {
-  // A press shorter than a frame never turns on the hold modifier, but the
-  // press is still recorded, so it is handled as released too.
-  if (!send_press_mode_.has_value() || AreModifiersOn(send_hold_modifier_)) {
-    return;
-  }
-  const SurfaceMode press_mode = *send_press_mode_;
-  send_press_mode_.reset();
-
-  // Releasing Send does nothing if it was held rather than pressed (to see
-  // which tracks have routes), or if the mode changed while it was held.
-  if (now - send_press_time_ >= kSendHoldDuration || press_mode != mode_) {
-    return;
-  }
-  switch (mode_) {
-    case SurfaceMode::kTrack:
-      TryEnterSendReceiveMode(TrackCache::Get().GetOnlySelectedTrack());
-      break;
-    case SurfaceMode::kSendReceive:
-      send_receive_mode_view_->GetProperty(View::kChildRouteToggle)
-          ->RunAction();
-      break;
   }
 }
 

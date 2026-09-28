@@ -360,17 +360,18 @@ Depends on: CL2, CL3, CL4.
   (Marker).
 - Performance: the `Run()` log line's avg against before the change.
 
-### CL7 [ ] plugin: Tap Send
+### CL7 [x] plugin: Tap Send
 
 Depends on: CL1.
 
-- The Track mode view maps a Send tap to a temporary
-  `CallbackActionProperty` that enters Send/Receive mode for the selected track
-  (`TryEnterSendReceiveMode()`), and the Send/Receive mode view maps a Send tap
-  to `view:child_route_toggle`.
+- The Track mode view maps a Send tap to the Send button's `select` callback,
+  which now enters Send/Receive mode for the selected track
+  (`TryEnterSendReceiveMode()`) until CL9 removes it, and the Send/Receive mode
+  view maps a Send tap to `view:child_route_toggle`. The root view keeps only
+  Send's `mod:send_hold`.
 - The strip pick no longer resets anything.
-- Removes `send_press_mode_`, `send_press_time_`, `ApplySendRelease()`,
-  `kSendHoldDuration`, and the Send button's `select` callback case.
+- Removes `send_press_mode_`, `send_press_time_`, `ApplySendRelease()`, and
+  `kSendHoldDuration`.
 
 **Verify**
 - Standard checks.
