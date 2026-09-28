@@ -52,7 +52,6 @@ constexpr ModeInfo kModeInfo[kSurfaceModeCount] = {
 
 // Returns the name of a mode's property, user:mode_<name>_<suffix>, where the
 // suffix is one of:
-// - available: on while the mode's button is lit.
 // - active: on while the mode is the current mode.
 // - select: the action the mode's button triggers (for Send, a tap in Track
 //   mode).
@@ -77,6 +76,10 @@ constexpr std::string_view kOtherTrackName =
     kPrefixedName<RouteProperties::kOtherTrack, ".name">;
 constexpr std::string_view kOtherTrackColor =
     kPrefixedName<RouteProperties::kOtherTrack, ".color">;
+
+// Whether the selected track has routes, so Send/Receive mode can show it.
+constexpr std::string_view kSelectedTrackHasRoutes =
+    kPrefixedName<Scene::kSelectedTrack, ".has_routes">;
 
 // The modifier property that is on while the Send/Receive mode button is held.
 constexpr std::string_view kSendHold = kModName<"send_hold">;
@@ -230,10 +233,6 @@ PluginSurface::~PluginSurface() {
 //------------------------------------------------------------------------------
 
 void PluginSurface::OnRun(absl::Time now) {
-  if (mode_buttons_changed_) {
-    UpdateModeButtons();
-  }
-
   device_runner_.Run();
   midi_in_runner_.Run();
   scene_runner_.Run();
@@ -241,9 +240,6 @@ void PluginSurface::OnRun(absl::Time now) {
 }
 
 void PluginSurface::OnTracksChanged() {
-  // Mode availability depends on the tracks on the surface.
-  mode_buttons_changed_ = true;
-
   // If the track shown in Send/Receive mode was deleted, there is nothing left
   // to show. The scene only updates the current track reference in its next
   // run, so it still refers to the deleted track, which doesn't exist.
@@ -252,11 +248,6 @@ void PluginSurface::OnTracksChanged() {
     LOG(INFO) << "Send/Receive track was deleted";
     EnterTrackMode();
   }
-}
-
-void PluginSurface::OnSelectionChanged() {
-  // Mode availability depends on which track is selected.
-  mode_buttons_changed_ = true;
 }
 
 std::string PluginSurface::GetConfig() const {
@@ -330,6 +321,10 @@ void PluginSurface::InitViews() {
   current_track_ = scene_->AddTrackReference(
       kCurrentTrack, {.follow = std::string(Scene::kLastTouchedTrack)});
   CHECK(current_track_ != nullptr);
+
+  // Always on, for lights that are lit whenever their mapping is active.
+  const std::string lit(
+      scene_->AddConstProperty(ViewProperty::Type::kToggle, true)->GetName());
 
   // Add global mappings
   auto* root_view = scene_->GetRootView();
@@ -487,8 +482,6 @@ void PluginSurface::InitViews() {
     }
     CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
               kTransportStep, std::move(step_names))) != nullptr);
-    const std::string lit(
-        scene_->AddConstProperty(ViewProperty::Type::kToggle, true)->GetName());
     const std::string rewind = absl::StrCat("XTouch/", DeviceXTouch::kRewind);
     const std::string forward = absl::StrCat("XTouch/", DeviceXTouch::kForward);
     for (int i = 0; i < static_cast<int>(std::size(kTransportSteps)); ++i) {
@@ -656,11 +649,20 @@ void PluginSurface::InitViews() {
   track_list_view->Enable();
   if (has_xtouch) {
     // Tapping Send enters Send/Receive mode for the selected track.
+    const std::string send = absl::StrCat("XTouch/", DeviceXTouch::kAssignSend);
     track_mode_view_->AddMapping(
         ViewMapping::kReadControl,
-        GetModePropertyName(SurfaceMode::kSendReceive, "select"),
-        absl::StrCat("XTouch/", DeviceXTouch::kAssignSend),
+        GetModePropertyName(SurfaceMode::kSendReceive, "select"), send,
         {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
+
+    // Track blinks, as it is the current mode, and Send is lit while the
+    // selected track has routes to show.
+    track_mode_view_->AddMapping(
+        ViewMapping::kWriteControl, lit,
+        absl::StrCat("XTouch/", DeviceXTouch::kAssignTrack),
+        {.write = {.mode = 1}});
+    track_mode_view_->AddMapping(ViewMapping::kWriteControl,
+                                 kSelectedTrackHasRoutes, send);
   }
   track_mode_view_->Enable();
 
@@ -748,10 +750,18 @@ void PluginSurface::InitViews() {
         absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
 
     // Tapping Send switches between showing sends and receives.
+    const std::string send = absl::StrCat("XTouch/", DeviceXTouch::kAssignSend);
     send_receive_mode_view_->AddMapping(
-        ViewMapping::kReadControl, View::kChildRouteToggle,
-        absl::StrCat("XTouch/", DeviceXTouch::kAssignSend),
+        ViewMapping::kReadControl, View::kChildRouteToggle, send,
         {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
+
+    // Send blinks, as it is the current mode, even if the track no longer has
+    // routes, and Track is lit, as it is always available.
+    send_receive_mode_view_->AddMapping(ViewMapping::kWriteControl, lit, send,
+                                        {.write = {.mode = 1}});
+    send_receive_mode_view_->AddMapping(
+        ViewMapping::kWriteControl, lit,
+        absl::StrCat("XTouch/", DeviceXTouch::kAssignTrack));
   }
   send_receive_mode_view_->Enable();
 
@@ -774,19 +784,14 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
 
   for (int i = 0; i < kSurfaceModeCount; ++i) {
     const SurfaceMode mode = static_cast<SurfaceMode>(i);
-    const ModeInfo& info = kModeInfo[i];
-    const std::string available_name = GetModePropertyName(mode, "available");
-    const std::string active_name = GetModePropertyName(mode, "active");
     const std::string select_name = GetModePropertyName(mode, "select");
 
     // The active toggle starts on for the current mode, so its view is active
     // as soon as the scene is.
-    ModeButton& button = mode_buttons_[i];
-    button.available = scene_->AddUserProperty(
-        std::make_unique<ToggleValueProperty>(available_name));
-    button.active = scene_->AddUserProperty(
-        std::make_unique<ToggleValueProperty>(active_name, mode == mode_));
-    CHECK(button.available != nullptr && button.active != nullptr);
+    mode_active_[i] =
+        scene_->AddUserProperty(std::make_unique<ToggleValueProperty>(
+            GetModePropertyName(mode, "active"), mode == mode_));
+    CHECK(mode_active_[i] != nullptr);
     scene_->AddUserProperty(
         std::make_unique<CallbackActionProperty>(select_name, [this, mode] {
           switch (mode) {
@@ -802,10 +807,7 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
     if (!has_xtouch) {
       continue;
     }
-    const std::string control = absl::StrCat("XTouch/", info.button);
-    root_view->AddMapping(
-        ViewMapping::kWriteControl, available_name, control,
-        {.write = {.mode_overrides = {{active_name, {{true, 1}}}}}});
+    const std::string control = absl::StrCat("XTouch/", kModeInfo[i].button);
     switch (mode) {
       case SurfaceMode::kTrack:
         root_view->AddMapping(ViewMapping::kReadControl, select_name, control);
@@ -820,32 +822,7 @@ void PluginSurface::InitModeButtons(bool has_xtouch) {
   }
 }
 
-bool PluginSurface::IsModeAvailable(SurfaceMode mode) const {
-  switch (mode) {
-    case SurfaceMode::kTrack:
-      return true;
-    case SurfaceMode::kSendReceive:
-      return CanShowRoutes(TrackCache::Get().GetOnlySelectedTrack(),
-                           scene_->GetTrackFilter());
-  }
-  return false;
-}
-
-void PluginSurface::UpdateModeButtons() {
-  mode_buttons_changed_ = false;
-  for (int i = 0; i < kSurfaceModeCount; ++i) {
-    const SurfaceMode mode = static_cast<SurfaceMode>(i);
-    const bool active = (mode == mode_);
-    // The current mode stays lit even if it is no longer available, so it is
-    // always clear which mode the surface is in.
-    mode_buttons_[i].available->SetBool(active || IsModeAvailable(mode));
-    mode_buttons_[i].active->SetBool(active);
-  }
-}
-
 void PluginSurface::TryEnterSendReceiveMode(Track* track) {
-  // This is checked here rather than using the button light, as the selection
-  // may have changed since the light was last updated.
   if (CanShowRoutes(track, scene_->GetTrackFilter())) {
     EnterSendReceiveMode(track);
   }
@@ -870,7 +847,9 @@ void PluginSurface::EnterSendReceiveMode(Track* track) {
 
 void PluginSurface::FinishModeChange(SurfaceMode old_mode) {
   // This turns on the new mode's active toggle, which activates its view.
-  UpdateModeButtons();
+  for (int i = 0; i < kSurfaceModeCount; ++i) {
+    mode_active_[i]->SetBool(static_cast<SurfaceMode>(i) == mode_);
+  }
   LOG(INFO) << "Surface mode changed from "
             << kModeInfo[static_cast<int>(old_mode)].name << " to "
             << kModeInfo[static_cast<int>(mode_)].name;

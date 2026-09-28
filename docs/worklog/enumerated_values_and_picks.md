@@ -385,14 +385,16 @@ Depends on: CL1.
 - The smoke test's select long and double presses, and Solo's long press, still
   work, as they share press group handling with the tap.
 
-### CL8 [ ] plugin: Mode lights as mappings
+### CL8 [x] plugin: Mode lights as mappings
 
 Depends on: nothing.
 
 - The mode views light the mode buttons with `const:` values and
   `state:selected_track.has_routes`, as described above.
 - Removes the `available` toggles, `IsModeAvailable()`, `mode_buttons_changed_`
-  and the `OnSelectionChanged()` override.
+  and the `OnSelectionChanged()` override. With only the `active` toggles
+  left, `ModeButton` and `mode_buttons_` become `mode_active_`, and
+  `UpdateModeButtons()` folds into `FinishModeChange()`.
 
 **Verify**
 - Standard checks.
@@ -414,8 +416,8 @@ Depends on: CL2, CL3, CL4, CL5, CL7, CL8.
   strip's `user:pick_track`, the mappings beside them that set
   `send_receive`, and their `has_routes` conditions.
 - Removes `SurfaceMode`, `kSurfaceModeCount`, `kModeInfo`,
-  `GetModePropertyName()`, `ModeButton`, `mode_`, `mode_buttons_`,
-  `InitModeButtons()`, `UpdateModeButtons()`, `EnterTrackMode()`,
+  `GetModePropertyName()`, `mode_`, `mode_active_`,
+  `InitModeButtons()`, `EnterTrackMode()`,
   `EnterSendReceiveMode()`, `TryEnterSendReceiveMode()`, `FinishModeChange()`,
   `CanShowRoutes()`, the CL7 callback, the `OnTracksChanged()` override, and
   the `current_track_`, `track_mode_view_`, and `send_receive_mode_view_`

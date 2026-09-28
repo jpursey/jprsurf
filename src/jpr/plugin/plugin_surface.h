@@ -55,7 +55,6 @@ class PluginSurface final : private ControlSurfaceListener {
   // ControlSurfaceListener overrides
   void OnRun(absl::Time now) override;
   void OnTracksChanged() override;
-  void OnSelectionChanged() override;
   std::string GetConfig() const override;
 
   // Implementation
@@ -64,14 +63,11 @@ class PluginSurface final : private ControlSurfaceListener {
 
   // Surface modes
   //
-  // Each mode has a button that is lit when the mode is available, and blinks
-  // when it is the current mode. Each mode's view has a condition on the mode's
-  // active toggle, so entering a mode only sets the toggles, and can happen at
-  // any time, including while the scene runs. The scene switches the views
+  // Each mode's view has a condition on the mode's active toggle, and lights
+  // the mode buttons, so entering a mode only sets the toggles, and can happen
+  // at any time, including while the scene runs. The scene switches the views
   // when it next runs, before any mappings sync.
   void InitModeButtons(bool has_xtouch);
-  bool IsModeAvailable(SurfaceMode mode) const;
-  void UpdateModeButtons();
 
   // Switches the surface to the given mode. The Send/Receive mode track must
   // not be null.
@@ -107,25 +103,14 @@ class PluginSurface final : private ControlSurfaceListener {
   // its routes.
   View* send_receive_mode_view_ = nullptr;
 
-  // Surface mode state.
-  struct ModeButton {
-    ToggleValueProperty* available = nullptr;  // Lights the button.
-
-    // Makes the light blink, and is the condition for the mode's view.
-    ToggleValueProperty* active = nullptr;
-  };
+  // Surface mode state, and each mode's active toggle, the condition for its
+  // view.
   SurfaceMode mode_ = SurfaceMode::kTrack;
-  ModeButton mode_buttons_[kSurfaceModeCount];
+  ToggleValueProperty* mode_active_[kSurfaceModeCount] = {};
 
   // The modifier that is on while the Send/Receive mode button is held, so it
   // can be held to pick a track.
   Modifiers send_hold_modifier_ = 0;
-
-  // Set when mode availability may have changed, so the mode buttons are
-  // updated on the next run. Availability depends on the track selection and
-  // routing, which only change when REAPER notifies the surface, so there is no
-  // need to check them every run.
-  bool mode_buttons_changed_ = true;
 };
 
 }  // namespace jpr
