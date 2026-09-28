@@ -250,7 +250,8 @@ View::View(Scene* scene, View* parent_view, std::string_view name,
     : scene_(scene),
       parent_view_(parent_view),
       name_(name),
-      track_properties_(&scene->GetTrackActions()) {
+      track_properties_(&scene->GetTrackActions()),
+      route_properties_(&scene->GetTrackActions()) {
   // Add properties for changing the child context index.
   properties_.emplace(kChildDec, std::make_unique<ChildIndexOffsetProperty>(
                                      this, kChildDec, -1));
@@ -616,6 +617,7 @@ void View::SyncMappings() {
       child_context_type_ == ChildContextType::kReceives) {
     track->RefreshRoutes();
   }
+  route_properties_.UpdateOtherTrack();
 
   // Now update all active mappings for this view. This will update the REAPER
   // state and hardware controls according to the current state of the view

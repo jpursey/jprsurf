@@ -12,6 +12,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/scene/track_actions.h"
+#include "jpr/scene/track_reference.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
@@ -53,8 +55,9 @@ class RouteProperty : public ViewProperty {
 // The properties change whenever the track's routes change (see
 // TrackListener::OnTrackRoutesChanged()), or the track itself changes.
 //
-// The track at the other end of the route is not represented here. A view can
-// show it (its name, color, etc.) with TrackProperties for that track.
+// The track at the other end of the route is a reference, kOtherTrack, whose
+// fields are named with it, such as "route:other_track.name" for its
+// track:name.
 class RouteProperties final : public TrackListener {
  public:
   static constexpr std::string_view kVolume = kRouteName<"volume">;
@@ -62,7 +65,14 @@ class RouteProperties final : public TrackListener {
   static constexpr std::string_view kMute = kRouteName<"mute">;
   static constexpr std::string_view kExists = kRouteName<"exists">;
 
-  explicit RouteProperties(Track* track = TrackCache::Get().GetStubTrack(),
+  // The reference to the track at the other end of the route, which refers to
+  // nothing if there is no such route.
+  static constexpr std::string_view kOtherTrack = kRouteName<"other_track">;
+
+  // The track actions are used by the other track's fields, and must outlive
+  // the properties.
+  explicit RouteProperties(TrackActions* actions,
+                           Track* track = TrackCache::Get().GetStubTrack(),
                            TrackRouteType type = TrackRouteType::kSend,
                            int index = 0);
   RouteProperties(const RouteProperties&) = delete;
@@ -83,22 +93,28 @@ class RouteProperties final : public TrackListener {
   // property of the change.
   void SetRoute(Track* track, TrackRouteType type, int index);
 
-  // Returns the property scoped to this route with the given name, or nullptr
-  // if no such property exists.
+  // Returns the property scoped to this route with the given name, including
+  // the other track's fields, or nullptr if no such property exists.
   ViewProperty* GetProperty(std::string_view name) const;
+
+  // Updates the other track (see TrackReference::Update()). The owner calls
+  // this once per run.
+  void UpdateOtherTrack() { other_track_.Update(); }
 
   // TrackListener implementation.
   void OnTrackChanged(Track* track) override;
   void OnTrackRoutesChanged(Track* track) override;
 
  private:
-  void NotifyChanged();
+  // Points the other track at the route's, and notifies every property.
+  void OnRouteChanged();
 
   std::shared_ptr<Track> track_;
   TrackRouteType type_;
   int index_;
   mutable absl::flat_hash_map<std::string, std::unique_ptr<RouteProperty>>
       properties_;
+  TrackReference other_track_;
 };
 
 }  // namespace jpr

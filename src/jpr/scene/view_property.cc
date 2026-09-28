@@ -18,8 +18,7 @@ ViewProperty::ViewProperty(std::string_view name, Type type)
     : name_(name), type_(type) {}
 
 void ViewProperty::RegisterFlag(bool* flag) {
-  flags_.insert(flag);
-  if (flags_.size() == 1) {
+  if (flags_.insert(flag).second && flags_.size() == 1) {
     OnRegistered();
   }
 }

@@ -7,12 +7,17 @@
 
 #include <memory>
 #include <stack>
+#include <string_view>
+#include <utility>
 
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "jpr/common/track_cache.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/const_property.h"
 #include "jpr/scene/modifier_property.h"
@@ -23,6 +28,10 @@ namespace jpr {
 
 Scene::Scene(std::string_view name, TrackFilter track_filter)
     : name_(name), track_actions_(track_filter) {
+  master_track_reference_ = CreateTrackReference(kMasterTrack);
+  last_touched_track_reference_ = CreateTrackReference(kLastTouchedTrack);
+  selected_track_reference_ = CreateTrackReference(kSelectedTrack);
+
   root_view_ = absl::WrapUnique(new View(this, nullptr, "root"));
   properties_.emplace(
       ModifierProperty::kShift,
@@ -60,6 +69,14 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
     return it->second.get();
   }
 
+  // A name with a '.' is a field of a reference, which the reference owns.
+  const auto [owner, field] = std::pair<std::string_view, std::string_view>(
+      absl::StrSplit(name, absl::MaxSplits('.', 1)));
+  if (!field.empty()) {
+    const ViewReference* reference = GetReference(owner);
+    return reference != nullptr ? reference->GetField(field) : nullptr;
+  }
+
   // Command and state properties are created the first time they are used.
   std::unique_ptr<ViewProperty> property;
   if (name.starts_with(kCmdNamespace)) {
@@ -75,9 +92,14 @@ ViewProperty* Scene::GetProperty(std::string_view name) {
   return property_ptr;
 }
 
+bool Scene::IsNewUserName(std::string_view name) const {
+  return name.starts_with(kUserNamespace) && !absl::StrContains(name, '.') &&
+         !properties_.contains(name) &&
+         !track_references_by_name_.contains(name);
+}
+
 ViewProperty* Scene::DoAddUserProperty(std::unique_ptr<ViewProperty> property) {
-  if (property == nullptr || !property->GetName().starts_with(kUserNamespace) ||
-      properties_.contains(property->GetName())) {
+  if (property == nullptr || !IsNewUserName(property->GetName())) {
     return nullptr;
   }
   ViewProperty* added_property = property.get();
@@ -108,6 +130,50 @@ Modifiers Scene::AddModifierProperty(std::string_view name) {
   return flag;
 }
 
+const ViewReference* Scene::GetReference(std::string_view name) const {
+  return GetTrackReference(name);
+}
+
+const TrackReference* Scene::GetTrackReference(std::string_view name) const {
+  auto it = track_references_by_name_.find(name);
+  return it != track_references_by_name_.end() ? it->second : nullptr;
+}
+
+TrackReference* Scene::CreateTrackReference(std::string_view name,
+                                            const TrackReference* fallback,
+                                            const TrackReference* follow) {
+  TrackReference* reference =
+      track_references_
+          .emplace_back(std::make_unique<TrackReference>(name, &track_actions_,
+                                                         fallback, follow))
+          .get();
+  track_references_by_name_.emplace(name, reference);
+  return reference;
+}
+
+TrackReference* Scene::AddTrackReference(std::string_view name,
+                                         TrackReference::Config config) {
+  if (!IsNewUserName(name)) {
+    LOG(ERROR) << "Failed to add reference '" << name
+               << "': the name is not a new user: name";
+    return nullptr;
+  }
+  const TrackReference* fallback = GetTrackReference(config.fallback);
+  if (!config.fallback.empty() && fallback == nullptr) {
+    LOG(ERROR) << "Failed to add reference '" << name << "': fallback '"
+               << config.fallback << "' is not a track reference";
+    return nullptr;
+  }
+  const TrackReference* follow = GetTrackReference(config.follow);
+  if (!config.follow.empty() && follow == nullptr) {
+    LOG(ERROR) << "Failed to add reference '" << name << "': follow '"
+               << config.follow << "' is not a track reference";
+    return nullptr;
+  }
+
+  return CreateTrackReference(name, fallback, follow);
+}
+
 void Scene::Activate(RunRegistry& registry) {
   run_handle_ =
       registry.AddRunnable([this](const RunTime& time) { OnRun(time); });
@@ -120,6 +186,7 @@ void Scene::Deactivate() {
 }
 
 void Scene::OnRun(const RunTime& time) {
+  UpdateReferences();
   for (const auto& property : state_properties_) {
     property->UpdateState();
   }
@@ -129,6 +196,35 @@ void Scene::OnRun(const RunTime& time) {
   ApplyViewConditions();
   if (root_view_->IsActive()) {
     root_view_->SyncMappings();
+  }
+}
+
+void Scene::UpdateReferences() {
+  TrackCache& cache = TrackCache::Get();
+  const int64_t track_list_version = cache.GetTrackListVersion();
+  const int64_t selection_version = cache.GetSelectionVersion();
+  const bool track_list_changed = (track_list_version != track_list_version_);
+  const bool selection_changed = (selection_version != selection_version_);
+  track_list_version_ = track_list_version;
+  selection_version_ = selection_version;
+
+  if (track_list_changed) {
+    master_track_reference_->Set(cache.GetMasterTrack());
+  }
+  last_touched_track_reference_->Set(cache.GetLastTouchedTrack());
+  if (track_list_changed || selection_changed) {
+    // Only a track with a place in the filter is on the surface.
+    Track* track = cache.GetOnlySelectedTrack();
+    if (track != nullptr && !track->GetGlobalIndex(GetTrackFilter())) {
+      track = nullptr;
+    }
+    selected_track_reference_->Set(track);
+  }
+
+  // A reference is added after the references its rules refer to, so updating
+  // in the order they were added updates those first.
+  for (const auto& reference : track_references_) {
+    reference->Update();
   }
 }
 

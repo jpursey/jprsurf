@@ -22,6 +22,13 @@ namespace jpr {
 
 // Every property name is a namespace and a name within it, such as
 // "track:mute". The namespace alone decides where the name is looked up.
+//
+// A '.' in a name always means a property of a named thing: the part before it
+// names the thing, which is asked for the part after it. For instance,
+// "state:master_track.volume" is the volume field of the state:master_track
+// reference (see ViewReference), and "route:other_track.name" is the name
+// field of a route's other_track reference. Only the first '.' separates, so
+// a name is split with absl::StrSplit(name, absl::MaxSplits('.', 1)).
 
 // Global properties, which the scene looks up (see Scene::GetProperty()):
 // - REAPER commands, by command id (see CommandActionProperty).
@@ -29,6 +36,8 @@ namespace jpr {
 // - Modifiers, built in and added with Scene::AddModifierProperty().
 // - Values that never change, added with Scene::AddConstProperty().
 // - Properties added with Scene::AddUserProperty().
+// - Fields of references, built in (in state:) and added with
+//   Scene::AddTrackReference() (in user:).
 inline constexpr std::string_view kCmdNamespace = "cmd:";
 inline constexpr std::string_view kStateNamespace = "state:";
 inline constexpr std::string_view kModNamespace = "mod:";
@@ -37,7 +46,8 @@ inline constexpr std::string_view kUserNamespace = "user:";
 
 // Properties of the view a mapping is in, which the view looks up:
 // - The view's track (see TrackProperties).
-// - The view's route (see RouteProperties).
+// - The view's route (see RouteProperties), including its other track's
+//   fields.
 // - The view itself: its child context, and navigation (see View).
 inline constexpr std::string_view kTrackNamespace = "track:";
 inline constexpr std::string_view kRouteNamespace = "route:";
@@ -225,6 +235,9 @@ class ViewProperty {
   // The flag pointer must remain valid until it is unregistered.
   void RegisterFlag(bool* flag);
   void UnregisterFlag(bool* flag);
+
+  // Returns true if any flag is registered.
+  bool IsWatched() const { return !flags_.empty(); }
 
  protected:
   // Derived classes should override these to read and write the value that is

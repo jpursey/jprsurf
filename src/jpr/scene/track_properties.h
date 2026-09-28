@@ -123,6 +123,15 @@ class TrackProperties final : public TrackListener {
   // such property exists.
   ViewProperty* GetProperty(std::string_view name) const;
 
+  // Returns true if any of the properties is watched: it has a flag registered
+  // (see ViewProperty::RegisterFlag()), such as by an active mapping.
+  bool IsWatched() const;
+
+  // Returns true if the meter property is watched.
+  bool IsMeterWatched() const {
+    return meter_property_ != nullptr && meter_property_->IsWatched();
+  }
+
   // TrackListener implementation.
   void OnTrackChanged(Track* track) override;
   void OnTrackMeterChanged(Track* track, double peak) override;

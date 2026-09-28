@@ -5,6 +5,11 @@
 
 #include "jpr/scene/route_properties.h"
 
+#include <string_view>
+#include <utility>
+
+#include "absl/strings/str_split.h"
+
 namespace jpr {
 
 namespace {
@@ -73,9 +78,14 @@ class RouteExistsProperty final : public RouteProperty {
 
 }  // namespace
 
-RouteProperties::RouteProperties(Track* track, TrackRouteType type, int index)
-    : track_(track->GetShared()), type_(type), index_(index) {
+RouteProperties::RouteProperties(TrackActions* actions, Track* track,
+                                 TrackRouteType type, int index)
+    : track_(track->GetShared()),
+      type_(type),
+      index_(index),
+      other_track_(kOtherTrack, actions) {
   track_->Subscribe(this);
+  OnRouteChanged();
 }
 
 RouteProperties::~RouteProperties() { track_->Unsubscribe(this); }
@@ -99,23 +109,31 @@ void RouteProperties::SetRoute(Track* track, TrackRouteType type, int index) {
   }
   type_ = type;
   index_ = index;
-  NotifyChanged();
+  OnRouteChanged();
 }
 
 void RouteProperties::OnTrackChanged(Track* track) {
   // The track may have been removed or restored, which changes its routes.
-  NotifyChanged();
+  OnRouteChanged();
 }
 
-void RouteProperties::OnTrackRoutesChanged(Track* track) { NotifyChanged(); }
+void RouteProperties::OnTrackRoutesChanged(Track* track) { OnRouteChanged(); }
 
-void RouteProperties::NotifyChanged() {
+void RouteProperties::OnRouteChanged() {
+  const TrackRoute* route = GetRoute();
+  other_track_.Set(route != nullptr ? route->other_track : nullptr);
   for (auto& [name, property] : properties_) {
     property->NotifyChanged();
   }
 }
 
 ViewProperty* RouteProperties::GetProperty(std::string_view name) const {
+  // A name with a '.' is a field of the other track.
+  const auto [owner, field] = std::pair<std::string_view, std::string_view>(
+      absl::StrSplit(name, absl::MaxSplits('.', 1)));
+  if (!field.empty()) {
+    return owner == kOtherTrack ? other_track_.GetField(field) : nullptr;
+  }
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }

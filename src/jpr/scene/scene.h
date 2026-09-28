@@ -6,6 +6,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -18,7 +19,10 @@
 #include "jpr/common/track.h"
 #include "jpr/device/device.h"
 #include "jpr/scene/track_actions.h"
+#include "jpr/scene/track_reference.h"
 #include "jpr/scene/view.h"
+#include "jpr/scene/view_property.h"
+#include "jpr/scene/view_reference.h"
 
 namespace jpr {
 
@@ -54,14 +58,16 @@ class Scene final {
   Control* GetControl(std::string_view name) const;
 
   // Returns the global property with the name, or null if there is none (see
-  // the property namespaces in view_property.h).
+  // the property namespaces in view_property.h). This includes the fields of
+  // references, named <reference>.<field>, such as "state:master_track.volume".
   ViewProperty* GetProperty(std::string_view name);
 
   // Adds a property created outside the scene (for instance, by the plugin), so
   // it can be mapped by name like any built-in property.
   //
   // This returns the added property, or null if the name is not in the user:
-  // namespace, or is already used. On failure the property is destroyed.
+  // namespace, contains a '.', or is already used by a property or reference.
+  // On failure the property is destroyed.
   template <typename PropertyType>
     requires std::derived_from<PropertyType, ViewProperty>
   PropertyType* AddUserProperty(std::unique_ptr<PropertyType> property) {
@@ -87,6 +93,35 @@ class Scene final {
   // to be added for mapping to custom properties.
   Modifiers AddModifierProperty(std::string_view name);
 
+  // References
+
+  // Built in references, which the scene keeps current:
+  // - The master track.
+  // - The last touched track (see TrackCache::GetLastTouchedTrack()), which may
+  //   be the master track, or a track that isn't on the surface.
+  // - The selected track, if exactly one track is selected, and it is on the
+  //   surface.
+  static constexpr std::string_view kMasterTrack = kStateName<"master_track">;
+  static constexpr std::string_view kLastTouchedTrack =
+      kStateName<"last_touched_track">;
+  static constexpr std::string_view kSelectedTrack =
+      kStateName<"selected_track">;
+
+  // Returns the reference with the name, built in or added, or null if there is
+  // none. Only the scene, and whoever added the reference, can change what it
+  // refers to.
+  const ViewReference* GetReference(std::string_view name) const;
+
+  // Adds a track reference, which anything given the returned pointer may set
+  // (see TrackReference::Set()). The scene updates it at the start of each run,
+  // in the order references were added (see TrackReference::Update()).
+  //
+  // This returns null if the name is not in the user: namespace, contains a
+  // '.', or is already used by a property or reference, or if the fallback or
+  // follow is not the name of a track reference.
+  TrackReference* AddTrackReference(std::string_view name,
+                                    TrackReference::Config config = {});
+
   // Activation and deactivation
   bool IsActive() const { return run_handle_.IsRegistered(); }
   void Activate(RunRegistry& registry);
@@ -97,6 +132,24 @@ class Scene final {
   friend class SceneStateProperty;
 
   void OnRun(const RunTime& time);
+
+  // Returns the track reference with the name, or null if there is none.
+  const TrackReference* GetTrackReference(std::string_view name) const;
+
+  // Creates a track reference, and adds it to the references by name. The name
+  // must be unused, and the fallback and follow are null if there are none.
+  TrackReference* CreateTrackReference(std::string_view name,
+                                       const TrackReference* fallback = nullptr,
+                                       const TrackReference* follow = nullptr);
+
+  // Sets the built in references, then updates every reference in the order
+  // they were added. This is called at the start of each run, so everything
+  // in the run sees the same references.
+  void UpdateReferences();
+
+  // Returns true if the name can be given to a new property or reference added
+  // by the user: it is in the user: namespace, has no '.', and is unused.
+  bool IsNewUserName(std::string_view name) const;
 
   // Called when a view with a condition is added, so the scene applies changes
   // to its condition (see ApplyViewConditions()).
@@ -121,6 +174,22 @@ class Scene final {
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
   absl::flat_hash_set<SceneStateProperty*> state_properties_;
   TrackActions track_actions_;
+
+  // References, in the order they were added, which is the order they are
+  // updated in: a reference is added after the references its rules refer to.
+  // Views may point at references and their fields, so these are declared
+  // before the root view, which is destroyed first.
+  std::vector<std::unique_ptr<TrackReference>> track_references_;
+  absl::flat_hash_map<std::string, TrackReference*> track_references_by_name_;
+  TrackReference* master_track_reference_ = nullptr;
+  TrackReference* last_touched_track_reference_ = nullptr;
+  TrackReference* selected_track_reference_ = nullptr;
+
+  // The versions of the track list and selection the built in references were
+  // last set for.
+  int64_t track_list_version_ = -1;
+  int64_t selection_version_ = -1;
+
   std::unique_ptr<View> root_view_;
   std::vector<View*> conditional_views_;
   RunHandle run_handle_;

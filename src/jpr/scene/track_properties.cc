@@ -5,6 +5,7 @@
 
 #include "jpr/scene/track_properties.h"
 
+#include "absl/algorithm/container.h"
 #include "absl/log/check.h"
 #include "sdk/reaper_plugin_functions.h"
 
@@ -283,6 +284,11 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
     return property.get();
   }
   return nullptr;
+}
+
+bool TrackProperties::IsWatched() const {
+  return absl::c_any_of(
+      properties_, [](const auto& entry) { return entry.second->IsWatched(); });
 }
 
 }  // namespace jpr

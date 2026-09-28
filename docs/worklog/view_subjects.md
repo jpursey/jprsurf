@@ -97,12 +97,14 @@ These are the same, but move from the plugin to the scene:
 - **`ViewReference`**: a reference to a subject, or nothing, whose fields are
   properties. **`TrackReference`** is one whose subject is a track, and
   **`RouteReference`** one whose subject is a route.
-- **`WritableTrackReference`**: a `TrackReference` that holds a track, which
-  anything may set (navigation, revealing, and entering Send/Receive mode),
-  with optional rules for changing by itself (a fallback and a reference to
-  follow). Every other reference is read-only: computed from REAPER (the built
-  in ones), or from what owns it (a route's other track, and list items). The
-  config model calls these declared references, which are in `user:`.
+- **Writable reference**: a `user:` track reference, added with
+  `Scene::AddTrackReference()`, which anything given it may set (navigation,
+  revealing, and entering Send/Receive mode), with optional rules for it to
+  change by itself (a fallback and a reference to follow). Any
+  `TrackReference` may have rules, but only these do.
+  Every other reference is read-only to everything but its owner: computed
+  from REAPER (the built in ones), or from what owns it (a route's other track,
+  and list items). The config model calls these declared references.
 - **Built in references**: `state:master_track`, `state:last_touched_track`,
   and `state:selected_track`.
 - **`route:other_track`**: a field of a route reference that is itself a
@@ -232,46 +234,15 @@ class ViewReference {
   virtual ViewProperty* GetField(std::string_view name) const = 0;
 };
 
-class TrackReference : public ViewReference {
+// Only its owner changes what it refers to: the owner keeps it, and gives out
+// only const access to anything else. Fields may still be written through
+// const access, as that changes REAPER, not the reference.
+class TrackReference final : public ViewReference {
  public:
-  // The track it refers to, or null.
-  Track* GetTrack() const;
-
-  ViewProperty* GetField(std::string_view name) const override;
-
-  // Refreshes its track (and meter) from REAPER, while any field is watched.
-  // Its owner calls this once per run.
-  void RefreshTrack();
-
- protected:
-  TrackReference(std::string_view name, TrackActions* actions);
-  void SetTrack(Track* track);
-};
-
-class RouteReference : public ViewReference {
- public:
-  // The route it refers to (see RouteProperties), and the reference to the
-  // track at its other end, which is its other_track field.
-  const TrackRoute* GetRoute() const;
-  const TrackReference& GetOtherTrack() const;
-
-  // Handles other_track, and other_track.<name> as the other track's fields.
-  ViewProperty* GetField(std::string_view name) const override;
-
-  // Refreshes its other track, as TrackReference::RefreshTrack().
-  void RefreshTrack();
-
- protected:
-  RouteReference(std::string_view name, TrackActions* actions);
-  void SetRoute(Track* track, TrackRouteType type, int index);
-};
-
-// A track reference that holds a track, which anything may set.
-class WritableTrackReference final : public TrackReference {
- public:
+  // Rules for changing by itself, by the names of other track references.
   struct Config {
-    // A reference whose track this one starts as, and returns to if its own
-    // track is deleted, or it is set to null. Without one, it starts as, and
+    // A reference whose track this one starts as, and returns to if it refers
+    // to nothing or its track is deleted. Without one, it starts as, and
     // returns to, nothing.
     std::string fallback;
 
@@ -281,29 +252,56 @@ class WritableTrackReference final : public TrackReference {
     std::string follow;
   };
 
-  // Refers to the track, or if it is null, to the fallback's track. For
-  // changes from outside the reference's own rules: navigation, revealing,
-  // and entering Send/Receive mode (later, picks).
+  TrackReference(std::string_view name, TrackActions* actions,
+                 const TrackReference* fallback = nullptr,
+                 const TrackReference* follow = nullptr);
+
+  // The track it refers to, or null. Setting null or a deleted track refers
+  // to the fallback's track.
+  Track* GetTrack() const;
   void Set(Track* track);
+
+  ViewProperty* GetField(std::string_view name) const override;
+
+  // Applies the follow, then the fallback, then refreshes its track from
+  // REAPER while any field is watched, and its meter while the meter field is.
+  // Its owner calls this once per run.
+  void Update();
+};
+
+class RouteReference final : public ViewReference {
+ public:
+  // The route it refers to (see RouteProperties), and the reference to the
+  // track at its other end, which is its other_track field.
+  const TrackRoute* GetRoute() const;
+  const TrackReference& GetOtherTrack() const;
+  void Set(Track* track, TrackRouteType type, int index);
+
+  // Handles other_track.<name> as the other track's fields.
+  ViewProperty* GetField(std::string_view name) const override;
+
+  // Updates its other track (see TrackReference::Update()).
+  void Update();
 };
 
 class Scene {
   // Adds a writable track reference. Returns null if the name isn't in user:,
   // is already used by a property or reference, or the fallback or follow
   // isn't a track reference.
-  WritableTrackReference* AddTrackReference(
-      std::string_view name, WritableTrackReference::Config config = {});
+  TrackReference* AddTrackReference(std::string_view name,
+                                    TrackReference::Config config = {});
 
   // Returns the reference with the name, built in or added, or null.
-  ViewReference* GetReference(std::string_view name) const;
+  const ViewReference* GetReference(std::string_view name) const;
 };
 ```
 
 - **Fields** are the reference's own `TrackProperties` or `RouteProperties`,
   which it points at its subject. `Scene::GetProperty()` splits a name at the
-  first `.`, looks up the reference before it, and asks it for the field after
-  it, so `state:master_track.volume` is one property object, whatever the
-  master track is. A mapping on a field follows the reference with no work of
+  first `.` (`absl::StrSplit()` with `absl::MaxSplits('.', 1)`), looks up the
+  reference before it, and asks it for the field after it, so
+  `state:master_track.volume` is one property object, whatever the master
+  track is. A mapping on a field follows the reference with no work of
   its own. `user:` names are unique across properties and references.
 - **Built in references** are created with the scene:
   - `state:master_track`: `TrackCache::GetMasterTrack()`, updated when the
@@ -314,18 +312,21 @@ class Scene {
     and is on the surface (the scene's filter), updated when the selection or
     track list version changes. That is two REAPER calls per change, however
     many tracks REAPER reports.
-- **Writable references**:
-  - When the track list version changes, a reference whose track no longer
-    exists returns to its fallback's track, or nothing. A hidden track is kept,
-    as the track list keeps a hidden folder today.
+- **Rules** (only writable references have them), applied by `Update()`:
+  - A reference that refers to nothing, or to a track that no longer exists,
+    returns to its fallback's track, or nothing. This is checked every run,
+    which is as cheap as checking the track list version. A hidden track is
+    kept, as the track list keeps a hidden folder today.
   - Following compares the followed reference's track with the one it last
     saw, every run.
-  - `Set()` takes effect at once, so a change from a mapping (navigation, and
-    later picks) is seen by every other mapping in the same run.
+  - `Set()` takes effect at once, fallback included, so a change from a
+    mapping (navigation, and later picks) is seen by every other mapping in
+    the same run.
 - **Updating**: at the start of `Scene::OnRun()`, before view conditions, the
-  scene updates the built in references, then the writable ones in the order
-  they were added. A fallback or followed reference must exist when the
-  reference is added, so it is always updated first.
+  scene sets the built in references, then updates every reference, built in
+  ones first, then writable ones in the order they were added. A fallback or
+  followed reference must exist when the reference is added, so it is always
+  updated first.
 - **Route references**: a `RouteReference` owns its `RouteProperties` (the
   route, by track, type, and index, and its lazily created properties), as a
   `TrackReference` owns its `TrackProperties`. The other track is a property of
@@ -334,7 +335,7 @@ class Scene {
   route listeners). That lets route views use `route:other_track` (CL2) before
   their subject becomes a `RouteReference` (CL5).
 - **Refreshing**: a reference refreshes its track while any of its fields is
-  watched. Its owner calls `RefreshTrack()` each run: the scene for its own
+  watched. Its owner calls `Update()` each run: the scene for its own
   references, and a list item view for its reference, while it is active. That
   covers every view that shows a reference's track, so views bound to a
   reference don't refresh it themselves, and a field that is only used in a
@@ -348,11 +349,12 @@ class Scene {
 their view), updated by their owner in a fixed order, and nothing subscribes to
 them. Everything that needs a reference looks one up as a reference, so it
 can't be given a property by mistake. A reference can refer to a track that
-exists but is hidden, which is deliberate (see above). `SetTrack()` and
-`SetRoute()` are protected, so each owner changes its references through its
-own subclass: the scene's built in ones, `WritableTrackReference::Set()`, a
-route's other track, and a list's item references (private to the
-list).
+exists but is hidden, which is deliberate (see above). Changing a reference
+takes non-const access, which only its owner has, and gives to others only on
+purpose: `Scene::GetReference()` returns const, and only
+`Scene::AddTrackReference()` returns a reference anything else may set. The
+built in ones, a route's other track, and a list's item references are never
+given out non-const.
 
 ### scene: View config and subjects
 
@@ -537,6 +539,8 @@ checks whether the reference's track exists rather than whether it has one.
   they wouldn't. CL2 checks this with temporary logging. If REAPER does
   re-report, decide before CL7 whether to keep today's behavior, with a last
   touched version counted on every report and followed as a change.
+  **Answer (CL2):** it does. Clicking an already selected track in REAPER
+  reports it again (10 of 18 reports in the test were the same track).
 - **Watched references stay current.** A field or bound view that is only
   shown through a reference (the master fader, the Info strip's meter and
   name, a route strip's other track) updates when the value changes in REAPER.
@@ -557,20 +561,22 @@ Depends on: nothing.
 - Standard checks (Release build, clang-format, extension loads, log has no new
   errors, smoke test).
 
-### CL2 [ ] scene: References
+### CL2 [x] scene: References
 
 Depends on: CL1.
 
-- `view_reference.h/.cc`: `SubjectKind`, `ViewReference`, `TrackReference`,
-  and `WritableTrackReference`.
-- `TrackProperties::IsWatched()`, counted by `TrackProperty` when its first
-  flag registers and its last unregisters.
-- `Scene`: the built in references, `AddTrackReference()`,
-  `GetReference()`, field names in `GetProperty()`, `user:` names unique
-  across properties and references, and updating and refreshing references at
-  the start of `OnRun()`.
+- `view_reference.h`: `SubjectKind` and `ViewReference`.
+  `track_reference.h/.cc`: `TrackReference`, with its optional fallback and
+  follow rules. `RouteReference` gets its own file in CL5, as it includes
+  `RouteProperties`, which includes `TrackReference`.
+- `ViewProperty::IsWatched()`, and `TrackProperties::IsWatched()` (any of its
+  properties is) and `IsMeterWatched()`, so a reference only reads the meter
+  while it is shown.
+- `Scene`: the built in references, `AddTrackReference()`, `GetReference()`,
+  field names in `GetProperty()`, `user:` names unique across properties and
+  references, and updating references at the start of `OnRun()`.
 - `RouteProperties`: the `route:other_track` reference and its fields, and a
-  method to refresh it. `RouteProperties` takes the scene's `TrackActions` for
+  method to update it. `RouteProperties` takes the scene's `TrackActions` for
   the reference's fields. `RouteReference` waits for CL5, which is the first to
   need it.
 - Unused, so no visible change.

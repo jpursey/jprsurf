@@ -15,11 +15,13 @@ set(jpr_scene_SOURCE
   timeline_property.cc timeline_property.h
   track_actions.cc track_actions.h
   track_properties.cc track_properties.h
+  track_reference.cc track_reference.h
   value_property.h
   view.cc view.h
   view_condition.cc view_condition.h
   view_mapping.cc view_mapping.h
   view_property.cc view_property.h
+  view_reference.h
 )
 
 set(jpr_scene_DEPS
