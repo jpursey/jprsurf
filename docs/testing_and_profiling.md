@@ -146,9 +146,13 @@ class FunctionHook;
 - Hooks stack: a hook installed over another calls it as its original. The
   profiler hooks whatever loaded, whether REAPER or the fake, and a trace can
   hook over the profiler.
+- A hook over a function that was never loaded leaves its pointer null, so
+  every function on the list can be hooked safely, and code that checks
+  whether a function exists still finds it missing.
 - A hook doesn't have to call its original, so one can stand in for a function
-  that was never loaded. The fake uses one for every function it doesn't
-  implement, which fails the test naming the function.
+  that was never loaded, by opting in with `kHookNotLoaded`. The fake uses one
+  for every function it doesn't implement, which fails the test naming the
+  function.
 - JPRSurf only calls REAPER from REAPER's UI thread, so hooks can be installed
   or removed between runs.
 
