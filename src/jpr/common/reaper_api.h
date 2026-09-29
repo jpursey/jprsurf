@@ -77,6 +77,7 @@
 #define REAPERAPI_WANT_Undo_CanRedo2
 #define REAPERAPI_WANT_Undo_OnStateChangeEx
 
+#include "gb/base/function_hook.h"
 #include "sdk/reaper_plugin_functions.h"
 
 // Every REAPER API function JPRSurf calls. X(name) is expanded for each one.
@@ -148,5 +149,15 @@ namespace jpr {
 // Returns false, and logs the names, if any function is missing from
 // `get_func`, or has a REAPERAPI_WANT_ line but isn't in JPR_REAPER_API.
 bool LoadReaperApi(void* (*get_func)(const char* name));
+
+// Hooks every function on the list for as long as it exists, each with a Hook
+// constructed from the function's name (see gb::FunctionHook).
+template <typename Hook>
+struct ReaperApiHooks {
+#define JPR_REAPER_API_HOOK(name) \
+  gb::FunctionHook<&::name, Hook> name##_hook{#name};
+  JPR_REAPER_API(JPR_REAPER_API_HOOK)
+#undef JPR_REAPER_API_HOOK
+};
 
 }  // namespace jpr

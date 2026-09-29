@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <string_view>
 
 #include "absl/base/log_severity.h"
 #include "absl/log/log_sink.h"
@@ -33,5 +34,10 @@ class LogFile final {
  private:
   std::unique_ptr<absl::LogSink> sink_;
 };
+
+// Returns the path of `file_name` in the folder JPRSurf writes its log to, for
+// the log and any other file JPRSurf writes beside it. The folder is the user's
+// AppData folder. Returns an empty path if the folder isn't known.
+std::filesystem::path GetLogPath(std::string_view file_name);
 
 }  // namespace jpr

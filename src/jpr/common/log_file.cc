@@ -7,8 +7,11 @@
 
 #include <windows.h>
 
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 #include "absl/base/call_once.h"
 #include "absl/log/globals.h"
@@ -79,5 +82,16 @@ LogFile::LogFile(const std::filesystem::path& path,
 }
 
 LogFile::~LogFile() { absl::RemoveLogSink(sink_.get()); }
+
+std::filesystem::path GetLogPath(std::string_view file_name) {
+  char* appdata = nullptr;
+  size_t length = 0;
+  if (_dupenv_s(&appdata, &length, "APPDATA") != 0 || appdata == nullptr) {
+    return {};
+  }
+  std::filesystem::path path = std::filesystem::path(appdata) / file_name;
+  free(appdata);
+  return path;
+}
 
 }  // namespace jpr

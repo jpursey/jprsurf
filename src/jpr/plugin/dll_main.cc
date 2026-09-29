@@ -5,9 +5,8 @@
 
 #include <windows.h>
 
-#include <cstdlib>
+#include <filesystem>
 #include <memory>
-#include <string>
 
 #include "jpr/common/log_file.h"
 
@@ -17,11 +16,8 @@ namespace {
 std::unique_ptr<LogFile> g_log_file;
 
 void Initialize() {
-  char* appdata = nullptr;
-  size_t len = 0;
-  if (_dupenv_s(&appdata, &len, "APPDATA") == 0 && appdata != nullptr) {
-    std::string log_path = std::string(appdata) + "\\jprsurf.log";
-    free(appdata);
+  const std::filesystem::path log_path = GetLogPath("jprsurf.log");
+  if (!log_path.empty()) {
     g_log_file =
         std::make_unique<LogFile>(log_path, absl::LogSeverityAtLeast::kInfo);
   }

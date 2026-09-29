@@ -5,11 +5,46 @@
 
 #include "jpr/plugin/plugin.h"
 
+#include <cstdlib>
+#include <filesystem>
+#include <memory>
+#include <string_view>
+#include <utility>
+
 #include "absl/log/log.h"
+#include "jpr/common/log_file.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/reaper_trace.h"
 #include "jpr/plugin/plugin_surface.h"
 
 namespace jpr {
+
+namespace {
+
+// Starts a trace of every call between JPRSurf and REAPER, if the JPRSURF_TRACE
+// environment variable is set to anything but 0.
+std::unique_ptr<ReaperTrace> StartTrace() {
+  char* value = nullptr;
+  size_t length = 0;
+  if (_dupenv_s(&value, &length, "JPRSURF_TRACE") != 0 || value == nullptr) {
+    return nullptr;
+  }
+  const std::string_view text(value);
+  const bool trace = !text.empty() && text != "0";
+  free(value);
+  if (!trace) {
+    return nullptr;
+  }
+  const std::filesystem::path path = GetLogPath("jprsurf_trace.txt");
+  if (path.empty()) {
+    LOG(ERROR)
+        << "JPRSURF_TRACE is set, but there is nowhere to write the trace.";
+    return nullptr;
+  }
+  return std::make_unique<ReaperTrace>(path);
+}
+
+}  // namespace
 
 Plugin* Plugin::s_instance_ = nullptr;
 
@@ -32,11 +67,15 @@ bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& plugin_info) {
     return false;
   }
 
+  // The trace starts before the surface is registered, so it traces the
+  // surface.
+  std::unique_ptr<ReaperTrace> trace = StartTrace();
+
   if (!PluginSurface::Register(plugin_info)) {
     return false;
   }
 
-  s_instance_ = new Plugin(hinstance);
+  s_instance_ = new Plugin(hinstance, std::move(trace));
 
   LOG(INFO) << "Plugin loaded.";
   return true;

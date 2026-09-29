@@ -331,8 +331,8 @@ A trace hooks every function on the list, and every surface callback, and logs
 each call in order with its arguments and result, to `jprsurf_trace.txt`.
 Output parameters (a non-const pointer to a number) are logged with their
 values after the call, and tracks by their index and name rather than their
-pointer. It is off unless an environment variable turns it on when the plugin
-loads, and costs nothing while off.
+pointer. It is off unless the `JPRSURF_TRACE` environment variable turns it on
+when the plugin loads, and costs nothing while off.
 
 It is how the fake learns what REAPER does. Setting a track's mute in REAPER
 and on the surface, with a trace running, shows which callbacks REAPER sends,

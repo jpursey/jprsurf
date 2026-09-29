@@ -20,6 +20,7 @@
 #include "absl/time/clock.h"
 #include "absl/types/span.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/reaper_trace.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
 
@@ -60,7 +61,8 @@ bool ControlSurface::Register(reaper_plugin_info_t& plugin_info,
   s_type_ = type;
   s_reg_ = {s_type_.type_string, s_type_.description, ControlSurface::Create,
             ControlSurface::ShowConfig};
-  if (plugin_info.Register("csurf", &s_reg_) == 0) {
+  if (plugin_info.Register(
+          "csurf", ReaperTrace::TraceSurfaceRegistration(&s_reg_)) == 0) {
     LOG(ERROR) << "Failed to register control surface type "
                << s_type_.type_string << ".";
     s_reg_ = {};

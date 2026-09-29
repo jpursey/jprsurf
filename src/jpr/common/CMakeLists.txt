@@ -18,6 +18,7 @@ set(jpr_common_SOURCE
   numbered_name.h
   prefixed_name.h
   reaper_api.cc reaper_api.h
+  reaper_trace.cc reaper_trace.h
   runner.cc runner.h
   timeline.cc timeline.h
   track.cc track.h
@@ -31,6 +32,7 @@ set(jpr_common_DEPS
   absl::log
   absl::log_initialize
   absl::time
+  gb_base
   gb_config
   reaper_sdk
 )
@@ -41,6 +43,7 @@ set(jpr_common_TEST_SOURCE
   numbered_name_test.cc
   prefixed_name_test.cc
   reaper_api_test.cc
+  reaper_trace_test.cc
 )
 
 gb_add_library(jpr_common)

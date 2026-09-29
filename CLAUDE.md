@@ -71,6 +71,8 @@ Code that depends on the REAPER SDK, directly or indirectly, can't be unit teste
 
 Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events may be retained as is helpful for persistent understanding of code flow (continuous controller and UI events generally do *not* fall into this category).
 
+To see exactly what REAPER does, set the `JPRSURF_TRACE` environment variable (to anything but 0) for REAPER's process. Every call between JPRSurf and REAPER, in both directions, is then written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_trace.txt", replaced on each load, except runs that only read state (see `ReaperTrace` in `src/jpr/common/reaper_trace.h`). It is far too slow to leave on.
+
 Every change is checked as follows:
 - It builds cleanly in Release (`out/build/x64-Release`).
 - Touched files pass `clang-format --dry-run -Werror`.

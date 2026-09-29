@@ -5,6 +5,10 @@
 
 #pragma once
 
+#include <memory>
+#include <utility>
+
+#include "jpr/common/reaper_trace.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -26,11 +30,13 @@ class Plugin final {
   HINSTANCE GetHInstance() const { return hinstance_; }
 
  private:
-  Plugin(HINSTANCE hinstance) : hinstance_(hinstance) {}
+  Plugin(HINSTANCE hinstance, std::unique_ptr<ReaperTrace> trace)
+      : hinstance_(hinstance), trace_(std::move(trace)) {}
 
   static Plugin* s_instance_;
 
   HINSTANCE hinstance_ = nullptr;
+  std::unique_ptr<ReaperTrace> trace_;
 };
 
 }  // namespace jpr
