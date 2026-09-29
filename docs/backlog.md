@@ -57,26 +57,6 @@ against the budget. If the budget can't be met, the fallback is a build option
 that turns profiling off. CLAUDE.md's Performance section moves to the
 snapshot.
 
-## Trace REAPER calls
-
-- **Layers:** common
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** *REAPER API list*, and Game Bits *Function hooks*
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Trace,
-  To confirm)
-
-A hook on every function on the API list, and on every surface callback, that
-logs each call in order with its arguments, output parameters, and result, to
-`jprsurf_trace.txt`. Tracks are logged by index and name. An environment
-variable turns it on when the plugin loads, and it costs nothing otherwise.
-
-It settles what the fake REAPER models, before the fake is written: which
-setters notify surfaces and when, what `Main_OnCommand()` and
-`PreventUIRefresh()` call back, what a new surface is called with, and how
-REAPER formats volume, pan, time, and command names. The findings go in the
-design doc's To confirm table.
-
 ## Fake REAPER
 
 - **Layers:** common

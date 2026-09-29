@@ -334,6 +334,11 @@ values after the call, and tracks by their index and name rather than their
 pointer. It is off unless the `JPRSURF_TRACE` environment variable turns it on
 when the plugin loads, and costs nothing while off.
 
+Top level calls that only read state, such as most runs, are left out and
+counted, so a trace shows the events and the whole call each happened in. On
+an 81-track project, a run takes about 90us with the trace on, against 45us
+without it.
+
 It is how the fake learns what REAPER does. Setting a track's mute in REAPER
 and on the surface, with a trace running, shows which callbacks REAPER sends,
 in what order, and whether they come during the call or later. Each behavior
@@ -412,19 +417,68 @@ each with a comment on how it was seen (usually a trace):
   as `SetSurfaceMute()` after `SetTrackUIMute()`), whether the surface that
   made the change is called too, and whether the call comes during the setter
   or later. A surface that relies on the notification to update its own state
-  shows stale lights under a fake that gets this wrong, so it is the first thing
-  traces settle.
+  shows stale lights under a fake that gets this wrong.
 - **Text** REAPER formats: `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and
   command names, in the formats traces showed.
 - **Changes made as the user**, through `FakeReaper`'s own methods, notify the
   surface as REAPER does: `SetTrackListChange()` when tracks are added or
   removed, and the matching callback for each property.
 
+What traces have shown so far is in [Seen in traces](#seen-in-traces).
+
 Tests are then of two kinds, which need little of REAPER's own behavior:
 - **Output:** given REAPER's state and some input, what JPRSurf asked REAPER to
   do, and what it sent to the hardware.
 - **Input and response:** REAPER's state, or a notification, set up before the
   next run, and what JPRSurf does in response.
+
+### Seen in traces
+
+A trace of an 81-track project with one JPRSurf surface (2026-09-28) showed the
+following. The fake models these, and anything not listed here stays literal
+until a trace shows it.
+
+- **Surface setters notify at the end of the batch.** JPRSurf muting a track
+  calls `SetTrackUIMute()` inside `PreventUIRefresh(1)` and
+  `PreventUIRefresh(-1)`. During the setter, REAPER only called
+  `SetSurfaceSolo(master)`. The track's `SetSurfaceMute()` and
+  `SetSurfaceSolo()` came during `PreventUIRefresh(-1)`. The surface that made
+  the change is notified too.
+- **`SetSurfaceSolo(master, on)`** reports whether any track is soloed, as the
+  SDK says.
+- **Faders and pans don't notify.** `CSurf_OnVolumeChangeEx()` and
+  `CSurf_OnPanChangeEx()` call neither `SetSurfaceVolume()` nor
+  `SetSurfacePan()`. During each call, REAPER calls `IsKeyDown(VK_SHIFT)`, then
+  `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)` with the track.
+- **Changes in REAPER's own UI** arrive between runs. Muting a track with its
+  button called `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)`, then the track's
+  `SetSurfaceMute()` and `SetSurfaceSolo()`.
+- **Undo resends everything, during the call.** Inside `Main_OnCommand()` for
+  Edit: Undo, REAPER called the master's `SetSurfaceMute()`,
+  `SetSurfaceVolume()`, and `SetSurfacePan()`, `SetRepeatState()`,
+  `Extended(CSURF_EXT_SETBPMANDPLAYRATE)`, `Extended(CSURF_EXT_SETMIXERSCROLL)`,
+  and `SetTrackListChange()`, then every track's state (below), then the
+  master's solo, mute, volume, and pan again. The ruler's time unit actions
+  (40365, 40369, 40370) called nothing back.
+- **Every track's state** is sent master first, then each track in order:
+  `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`
+  (mode 3), `SetSurfaceMute()`, `SetSurfaceSolo()` (not for the master),
+  `SetTrackTitle()`, `SetSurfaceRecArm()`, `Extended(CSURF_EXT_SETINPUTMONITOR)`,
+  and `SetSurfaceSelected()`.
+- **Creating the surface:** at startup, REAPER calls `create` with the saved
+  config string before the project loads, and the surface opens its MIDI ports
+  inside it. Then come `Extended(CSURF_EXT_SETBPMANDPLAYRATE)`, and on loading
+  the project, `Extended(CSURF_EXT_SETPROJECTMARKERCHANGE)`,
+  `Extended(CSURF_EXT_SETMIXERSCROLL)`, three rounds of `SetTrackListChange()`
+  each followed by every track's state, and `SetRepeatState()` and
+  `SetPlayState()`. `GetTypeString()`, `GetDescString()`, and
+  `GetConfigString()` weren't called during the session.
+- **Exiting:** REAPER destroys the surface, then unloads the plugin, so the
+  profiler's snapshot can be written when the surface is destroyed.
+- **Text:** `mkvolstr` writes `-14.2dB`, `-5.10dB`, `+4.23dB`, and `-inf dB`
+  (three significant digits). `kbd_getTextFromCmd` names commands with their
+  section, such as `Edit: Undo`. `format_timestr_pos` in beats mode (2) writes
+  3.5 seconds as `2.4.00`.
 
 ### Checks
 
@@ -543,15 +597,13 @@ REAPER's own UI shows, and times. The hand smoke test shrinks to those.
 Facts the design depends on that nobody has checked yet, with the item that
 checks each:
 
-| Fact                                                                                                                   | Checked by                  |
-| ---------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| How many REAPER calls and runnables a steady state run makes with a large project                                      | *Profiler*, counting first  |
-| What a timed point costs with `__rdtsc`, and that the timestamp counter is invariant on this machine                   | Game Bits *Profiler module* |
-| That REAPER destroys the surface before unloading the plugin at exit, so the snapshot is written                       | *Profiler*                  |
-| Which setters notify surfaces, whether the surface making the change is notified, and whether during the call or later | *Trace REAPER calls*        |
-| What calls back into the surface during `Main_OnCommand()` and `PreventUIRefresh()`                                    | *Trace REAPER calls*        |
-| What REAPER calls on a surface as it is created, and in what order                                                     | *Trace REAPER calls*        |
-| The formats of `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and `kbd_getTextFromCmd`                                  | *Trace REAPER calls*        |
+| Fact                                                                                                                                 | Checked by                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| How many REAPER calls and runnables a steady state run makes with a large project                                                    | *Profiler*, counting first                      |
+| What a timed point costs with `__rdtsc`, and that the timestamp counter is invariant on this machine                                 | Game Bits *Profiler module*                     |
+| Whether the other setters (solo, rec arm, selection, and sends) notify as `SetTrackUIMute()` does                                    | *Fake REAPER*, with a trace when it models them |
+| Whether volume and pan changes made in REAPER's UI notify the surface                                                                | *Fake REAPER*, with a trace when it models them |
+| The formats of `mkpanstr`, and of `format_timestr_pos` outside beats mode. They are only called in runs a trace leaves out as quiet. | *Fake REAPER*, with a trace when it models them |
 
 ## Getting there
 
