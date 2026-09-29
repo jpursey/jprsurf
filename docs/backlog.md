@@ -15,16 +15,189 @@ Each item carries:
   `plugin`), in dependency order. More than one usually means more than one CL.
 - **Size**: a guess. *Small* is a single CL. *Medium* is a few. *Large* is
   many, usually after a design.
-- **Feature workflow**: whether the item follows the Feature workflow in
-  CLAUDE.md, with a design and a `docs/worklog/` plan of CLs. Anything that
-  comes down to one or two simple CLs doesn't, and is done as an ordinary
-  change.
-- **Depends on**: other items that should come first, or "nothing".
+- **Feature workflow**: whether the item follows the feature workflow, with a
+  design and a `docs/worklog/` plan of CLs. Anything that comes down to one or
+  two simple CLs doesn't, and is done as an ordinary change.
+- **Depends on**: other items that should come first, or "nothing". Items in
+  another project's backlog are named with the project, such as Game Bits
+  *Function hooks*.
 - **Background**: the worklog holding the context, where there is one.
 
 When an item that follows the feature workflow is picked up, it moves into its
 own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
-comes out of this list in the commit that does it.
+comes out of this list in the commit that does it. The workflow (imported by
+CLAUDE.md) has the rest.
+
+## REAPER API list
+
+- **Layers:** common
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (The
+  REAPER boundary)
+
+The base for both the profiler and the fake REAPER, with no change in behavior:
+- **The API list**, in `jpr/common/reaper_api.h`: `REAPERAPI_MINIMAL`, a
+  `REAPERAPI_WANT_` line for each of the 59 functions JPRSurf calls, and the
+  same list as `JPR_REAPER_API(X)`. Every file includes it instead of the SDK
+  header, so calling a function that isn't listed doesn't compile.
+- **`LoadReaperApi(get_func)`** replaces the `REAPERAPI_LoadAPI()` call in
+  `Plugin::Load()`, and logs any function the SDK asks for that isn't in
+  `JPR_REAPER_API`. `REAPERAPI_IMPLEMENT` moves from `src/reaper_sdk.cc` into
+  `jpr/common/reaper_api.cc`.
+
+CLAUDE.md gains the rule to include `reaper_api.h` rather than the SDK header.
+
+## Profiler
+
+- **Layers:** common, device, scene
+- **Size:** large
+- **Feature workflow:** yes
+- **Depends on:** *REAPER API list*, and Game Bits *Profiler module*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
+  (Profiler)
+
+An always-on profile of where each run's time goes, built on Game Bits'
+`gb/profile`, within a budget of 20us a run or 1% of its total time, whichever
+is more:
+- **In `common`**: every function on the API list is counted, then timed, and
+  the MIDI objects are wrapped. Every `IReaperControlSurface` callback is an
+  entry point, and `Run()` is the frame. Runnables are registered, and timed,
+  by name. Scopes and counters go on `TrackCache`'s refreshes and the MIDI
+  ports.
+- **In `device` and `scene`**: named runnables, counters for the work controls
+  and `Scene::OnRun()` do, and the workload values (views, mappings, and
+  properties).
+- **Output**: the `Run()` log line computed from the profile, a warning for
+  slow runs, and `jprsurf_profile.txt`, written when the surface is destroyed,
+  with the build and workload in its header.
+
+Counting comes before timing, to check how many points a run would time
+against the budget. If the budget can't be met, the fallback is a build option
+that turns profiling off. CLAUDE.md's Performance section moves to the
+snapshot.
+
+## Trace REAPER calls
+
+- **Layers:** common
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *REAPER API list*, and Game Bits *Function hooks*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Trace,
+  To confirm)
+
+A hook on every function on the API list, and on every surface callback, that
+logs each call in order with its arguments, output parameters, and result, to
+`jprsurf_trace.txt`. Tracks are logged by index and name. An environment
+variable turns it on when the plugin loads, and it costs nothing otherwise.
+
+It settles what the fake REAPER models, before the fake is written: which
+setters notify surfaces and when, what `Main_OnCommand()` and
+`PreventUIRefresh()` call back, what a new surface is called with, and how
+REAPER formats volume, pan, time, and command names. The findings go in the
+design doc's To confirm table.
+
+## Fake REAPER
+
+- **Layers:** common
+- **Size:** large
+- **Feature workflow:** yes
+- **Depends on:** *REAPER API list*, Game Bits *Function hooks*, and *Trace
+  REAPER calls* for the behaviors it models
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Time,
+  Fake REAPER)
+
+A test-only library, `jpr/common/testing`, that implements the API list over
+REAPER's state held in memory, so code that depends on REAPER can be unit
+tested. Two changes come first:
+- **One clock:** `ControlSurface::Run()` reads `time_precise()` once, and the
+  runners and `ContinuousUndo` use that time, so `absl::Now()` is only used for
+  measurement.
+- **Resettable process state:** `TrackCache`, `ContinuousUndo`, the surface
+  registration, and the other globals can be reset, with a key only the fake
+  can create.
+
+The fake holds tracks, selection, routes, transport, commands, automation,
+undo, MIDI ports, and the clock. It is literal, apart from behaviors traces
+have shown. It fails a test on a call it doesn't implement, on unbatched
+changes to several tracks (the `TrackBatch` rule), on an unbalanced
+`PreventUIRefresh()`, on a deleted track's pointer, and on anything left open
+at teardown. Tests of `common` come with it: `Track`, `TrackCache`,
+`TrackBatch`, `Timeline`, the MIDI ports, `ContinuousUndo`, and
+`ControlSurface`. CLAUDE.md's testing rules change with it, as code that
+depends on REAPER can then be verified in a side session.
+
+## Fake X-Touch and device tests
+
+- **Layers:** device
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** *Fake REAPER*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Fake
+  X-Touch)
+
+A test-only `FakeXTouch`, in `jpr/device/testing`, on a pair of the fake's MIDI
+ports. It decodes what JPRSurf sends into the hardware's state (lights,
+faders, encoder rings, meters, scribble strips, and the timecode display), and
+sends presses, touches, moves, and turns as the hardware does. It is written
+from the Mackie Control protocol and the X-Touch's sysex, as tables, rather
+than from `DeviceXTouch`. Tests of every `DeviceXTouch` control's inputs and
+outputs come with it, which check the raw messages too.
+
+Once devices can be created in tests, this updates *Device types and catalogs*
+(its catalog check can be a unit test) and *Build the scene from a
+SurfaceSpec* (building can be unit tested), as the design doc's "With the
+config work" describes.
+
+## Surface tests
+
+- **Layers:** plugin
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** *Fake X-Touch and device tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
+  (Running the plugin, Tests)
+
+The smoke test as unit tests. The plugin splits into `jpr_plugin`, a static
+library that tests link, and the `reaper_jprsurf` DLL, which is just
+`dll_main.cc` with `DllMain` and the exported entry point. A harness in
+`jpr/plugin/testing` loads the plugin through the fake's
+`reaper_plugin_info_t`, adds the surface, and connects a fake X-Touch and
+extender. The tests cover the smoke test list: faders, pots, pot buttons, mute,
+solo, rec arm, select (press, double press, long press), folder navigation,
+bank and channel navigation, Global, the master fader, transport, timecode,
+meters, scribble names and colors, and mode buttons. CLAUDE.md's smoke test
+shrinks to what the fakes can't show.
+
+## Scene tests
+
+- **Layers:** scene
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** *Fake X-Touch and device tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
+
+Tests of `scene` against the fake and fake X-Touches, for the detail surface
+tests don't reach: properties against REAPER's state (track, route, state,
+command, and timeline properties), views (conditions, subjects, lists,
+references, and repeated views), mappings (modifiers, taps, and picks), and
+`TrackActions` (ranges, anchors, grouping, and batching).
+
+## REAPER call count tests
+
+- **Layers:** plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *Profiler*, *Surface tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
+
+Performance checks that are deterministic. A generated project (100+ tracks,
+with sends and receives) runs in the surface harness, with the profiler over
+the fake. Tests bound the REAPER calls in a steady state run, and in a track
+list refresh, a bank change, and a mode change. Each bound starts at the count
+when the test is written, so a regression fails, and an improvement lowers it
+in the same change.
 
 ## Widgets
 
@@ -490,3 +663,32 @@ always showed sends (or receives, if the track only has receives) from the
 first route. Entering the mode could reset the list explicitly, such as with a
 `view:` action on a routes list that re-applies its route type rule and scrolls
 to the start.
+
+## Profile snapshots on demand
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *Profiler*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
+  (Output)
+
+Only worth doing if a whole session's snapshot mixes too much together
+(startup, idle, and activity). REAPER actions to reset the profile and to save
+a snapshot would measure one scenario on its own: reset, do the thing, save.
+These would be the plugin's first REAPER actions.
+
+## Tests inside REAPER
+
+- **Layers:** common, plugin
+- **Size:** large
+- **Feature workflow:** yes
+- **Depends on:** *Surface tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
+
+Only worth doing if the fake turns out to disagree with REAPER in ways traces
+don't catch. The surface tests' scenarios would run inside REAPER, against its
+real API but with the fake's MIDI ports and fake X-Touches, from a test DLL
+that registers its own surface (`csurf_inst`). Each scenario would run as steps
+across runs, as REAPER may act in between, and they need REAPER running, so
+they can't run in a side session.

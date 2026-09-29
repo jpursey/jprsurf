@@ -4,6 +4,12 @@ This is a C++ control surface extension for the REAPER DAW. It handles bi-direct
 
 This extension depends only on the Reaper SDK (location defined by the REAPER_EXTENSION_SDK environment variable) and the Game Bits shared C++ library (location defined by the GB_DIR environment variable) which must be present in the environment and on the machine. It currently only works on Windows, and is built with Visual Studio 2022 Community and CMake.
 
+## Workflow
+
+@E:/Projects/game-bits/docs/workflow.md
+
+The workflow above is shared with Game Bits and every project built on it, and lives in Game Bits as `docs/workflow.md`. Imports can't read environment variables, so it is imported by absolute path. Game Bits is always checked out beside this project, so the path is the directory holding both repositories (`E:/Projects` today), followed by `game-bits/docs/workflow.md`, which is also `$GB_DIR/docs/workflow.md`. If the drive or machine changes, update the path to match. Everything below is specific to JPRSurf.
+
 ## Directory Structure
 
 This is a CMake project, starting at the root. The directory structure is as follows:
@@ -58,7 +64,7 @@ Release (`RelWithDebInfo`) is the default build. REAPER is very latency sensitiv
 
 The build also will copy the binary to the REAPER plugin directory so it can be run immediately. This is controlled by the `JPR_DEPLOY_TO_REAPER` CMake option, which defaults to ON in the main checkout and OFF in a git worktree (see Parallel sessions below).
 
-A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Ask the user to close REAPER before building, and treat a copy or permission failure at the end of a build as "REAPER is open" rather than debugging the build.
+A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Assume REAPER is closed and build without asking. Treat a copy or permission failure at the end of a build as "REAPER is open": ask the user to close it and build again, rather than debugging the build.
 
 ### Testing and Logging
 
@@ -103,21 +109,14 @@ Style comes from `src/.clang-format` (Google style); clang-format finds it autom
 
 ## Conventions
 
-- Coding guidelines: Generally follows the Google C++ style guide (https://google.github.io/styleguide/cppguide.html).
+These add to the C++ style in the workflow.
 - Formatting strictly driven by clang-format in Google style via src/.clang-format
 - All extension code is in the "jpr" namespace, except for required C extension points of the REAPER SDK.
 - Every file starts with the four line MIT copyright comment used everywhere in the tree, with the year the file was created.
 - Headers use `#pragma once` include guards (not `#ifndef` include guards).
 - Include order: the file's own header first, then C/C++ standard headers in angle brackets, then third-party, Game Bits, and JPRSurf headers in quotes (`"absl/..."`, `"gb/..."`, `"jpr/..."`), with blank lines between groups.
-- Sections in a file are separated by //===== blocks (extending to column 80) surrounding descriptive text: One line section description, and if necessary further description in additional paragraphs.
-- Sections within a class or between groups of related functions are separated by //---- blocks (otherwise the same as above).
-- All comments are // style (not /// or /*...*/)
-- Comments on a public API say what it does and what a caller needs to know to use it correctly, not how it works. Implementation comments only explain what isn't obvious from the code itself.
-- A comment that follows code at the same indent level has a blank line above it. A comment that opens a block (right after a `{`) doesn't need one.
-- Always use a brace block for the body of `if`, `else`, `for`, `while`, `do`, and similar statements, even when the body is a single statement. This forces clang-format to put the body on its own line, which keeps crash callstacks accurate to the line and lets breakpoints be set on the body separately from the condition.
-- Prefer existing libraries over hand-rolled utilities: Game Bits itself (`$GB_DIR/src/gb/`, such as `gb/base` and `gb/container`), and Abseil and the other Google open source libraries vendored in `$GB_DIR/third_party/`.
+- Game Bits' libraries are in `$GB_DIR/src/gb/` (such as `gb/base` and `gb/container`), and the third-party libraries it vendors are in `$GB_DIR/third_party/`.
 - C++20, built with both MSVC and clang-cl.
-- Files in the working tree use CRLF line endings (git `core.autocrlf` is true); leave them that way. In Git Bash, `sed -i` rewrites files as LF-only, so prefer the Edit tool; if sed is used, restore CRLF afterwards (watch for files without a trailing newline) and check `git diff --stat`.
 
 ## Feature workflow
 
@@ -125,33 +124,16 @@ JPRSurf is moving toward a surface that is entirely driven by a config file, des
 
 The `scene` layer aims to be flexible and composable, not just simple: few concepts, each as small as it can be, so that a new feature in a new config comes from composing existing pieces rather than adding new ones. Before adding a runtime concept or option, check whether existing pieces already combine to do the job. If they do, use the combination and document it, and leave any friendlier shorthand to the config file (or SurfaceSpec), which can expand it to the runtime form. Performance is the trade-off: when a composition would put the realtime budget at risk (see Performance), a dedicated piece is justified.
 
-New features are designed first, then built and reviewed as a series of small changes (CLs):
-- Break the feature into CLs that are each limited to one library where possible, built in dependency order: `common`, then `device`, then `scene`, then `plugin`.
-- Track the plan in `docs/worklog/<feature>.md`, starting from a copy of `docs/worklog/template.md`: a design summary, then each CL with its dependencies, a status (`[ ]` not started, `[~]` in progress, `[x]` submitted), and **Verify** steps. The steps are the checks every change gets (see Testing and Logging), plus feature-specific tests and any performance measurements.
-- The first edit for a CL flips its status to `[~]`, and it becomes `[x]` in the CL's own commit.
-- After writing each CL, self-review it before handing it to the user. Check that it is correct, clean, simple, and not wasteful, and look for brittle design: ask "what does a caller have to remember to get this right?" (paired Add/Remove or Register/Unregister calls, state that must be manually kept in sync, ordering assumptions). Prefer designs that enforce it, such as RAII handles, private internals, and types that make misuse impossible, and call out any remaining brittleness.
-- Build, then the user tests in REAPER. Once the user approves, mark the CL complete in the plan and commit it.
-- When the feature is complete, replace the per-CL plan with a summary of the final implementation (behavior, structure, and reusable building blocks), so the doc stays a useful reference. Move anything left undone (ideas set aside, known limitations worth fixing, follow-ups the user asked for) into the backlog as part of the same change, rather than into the summary.
-
-### Backlog
-
-`docs/backlog.md` is the one home for work that isn't being done yet, so ideas don't scatter across the worklogs. It is a flat list in rough stack rank order, each item a heading with **Layers**, **Size**, **Feature workflow**, **Depends on**, and **Background** fields, then a short description. Worklog docs have no "Future ideas" section of their own.
-- Anything noticed that is worth doing but out of scope belongs there, rather than in a comment or a worklog.
-- **Feature workflow** says whether the item follows the workflow above. Anything that comes down to one or two simple CLs doesn't: it is done as an ordinary change, reviewed and committed without a worklog plan.
-- When an item that follows the feature workflow is picked up, it moves into its own `docs/worklog/<feature>.md` plan and comes out of the backlog. Any other item comes out of the backlog in the commit that does it.
+A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `plugin`. Their **Verify** steps start from the checks in Testing and Logging, and the user tests each CL in REAPER before approving it.
 
 ## Parallel sessions
 
-REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs testing in REAPER happens one change at a time in the main session, in the main checkout.
+These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs testing in REAPER happens one change at a time in the main session, in the main checkout.
 
 Side sessions run in their own git worktree, for work that can be verified without REAPER: unit-testable code (such as `jpr_common_test`), documentation and comment cleanup, research, and reviews.
 - A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.
-- Build and run any unit tests in the worktree, then get the user's review and commit on the worktree's branch as usual. Never merge or push to `main`.
-- Once the user approves and the change is committed, send a message to the main session with the commit hash, the branch, and a short summary of the change and how it was verified. The main session cherry-picks it onto `main`, builds, and hands anything that needs a REAPER check to the user.
-- Message exactly the main session named in the side task's prompt (such as `XTouch utility buttons [0eff92]`). If the prompt names none, or that session isn't reachable, tell the user instead of picking another session.
+- A side session never merges or pushes to `main`. The main session cherry-picks its commit onto `main`, builds, and hands anything that needs a REAPER check to the user.
 - If a change turns out to need testing in REAPER, say so and hand it back to the main session rather than deploying it.
-
-When the main session starts a side task, whether by spawning it directly or by suggesting one the user can start later, **call ListAgents first**, before writing the prompt. Its first line ("This session is `<name> [<hash>]`") is the only way to learn this session's name and reference, which differ in every session. The prompt must be self-contained and include these Parallel sessions rules along with that name and reference; without it, the side session is stranded and has to ask the user who to message.
 
 ## Resources
 
@@ -165,10 +147,6 @@ REAPER is notoriously underdocumented. The best resources are as follows:
   - DrivenByMOSS: https://github.com/git-moss/DrivenByMoss4Reaper This was feature rich, but quite flaky in practice, and also was written in Java.
 
 ## Don't
-- Don't add new dependencies without asking.
-- Don't add or modify code outside src/jpr/ without asking.
+- Don't add or modify code outside `src/` without asking. Game Bits code is changed only in Game Bits sessions (see the workflow).
 - Don't generate or build Visual Studio solutions (`-G "Visual Studio 17 2022"`); build with Ninja as described above.
-- Don't reformat files you aren't otherwise changing.
-- Don't commit a change to a branch without a human review from the user first.
-- Don't `git push`, or suggest pushing. The user pushes after each feature.
 - Don't add entries to the README's "Development log", or plan steps for it. The user writes those.
