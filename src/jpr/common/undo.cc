@@ -6,7 +6,7 @@
 #include "jpr/common/undo.h"
 
 #include "absl/time/clock.h"
-#include "sdk/reaper_plugin_functions.h"
+#include "jpr/common/reaper_api.h"
 
 namespace jpr {
 

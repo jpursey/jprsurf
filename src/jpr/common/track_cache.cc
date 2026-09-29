@@ -7,7 +7,7 @@
 
 #include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
-#include "sdk/reaper_plugin_functions.h"
+#include "jpr/common/reaper_api.h"
 
 namespace jpr {
 

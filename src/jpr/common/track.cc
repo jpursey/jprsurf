@@ -9,9 +9,9 @@
 #include <optional>
 
 #include "absl/log/log.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
-#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 

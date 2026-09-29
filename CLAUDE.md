@@ -16,7 +16,6 @@ This is a CMake project, starting at the root. The directory structure is as fol
 ```
   src/             -- All source code in this project
     jpr/           -- All source code for the extension itself, separated into different libraries (see below)
-    reaper_sdk.cc  -- Implementation of the header-only REAPER SDK library
   docs/            -- User guide, surface config model, feature plans (worklog/),
                       and the backlog
   bin/             -- Compiled binary files used by compilation or execution
@@ -115,6 +114,7 @@ These add to the C++ style in the workflow.
 - Every file starts with the four line MIT copyright comment used everywhere in the tree, with the year the file was created.
 - Headers use `#pragma once` include guards (not `#ifndef` include guards).
 - Include order: the file's own header first, then C/C++ standard headers in angle brackets, then third-party, Game Bits, and JPRSurf headers in quotes (`"absl/..."`, `"gb/..."`, `"jpr/..."`), with blank lines between groups.
+- REAPER API functions come from `jpr/common/reaper_api.h`, never from the SDK's `reaper_plugin_functions.h` directly (`sdk/reaper_plugin.h`, which has only types, is fine). It declares only the functions JPRSurf calls, so calling a new one means adding it to both of its lists: a `REAPERAPI_WANT_` line and an entry in `JPR_REAPER_API`.
 - Game Bits' libraries are in `$GB_DIR/src/gb/` (such as `gb/base` and `gb/container`), and the third-party libraries it vendors are in `$GB_DIR/third_party/`.
 - C++20, built with both MSVC and clang-cl.
 

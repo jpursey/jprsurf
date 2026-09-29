@@ -28,27 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## REAPER API list
-
-- **Layers:** common
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (The
-  REAPER boundary)
-
-The base for both the profiler and the fake REAPER, with no change in behavior:
-- **The API list**, in `jpr/common/reaper_api.h`: `REAPERAPI_MINIMAL`, a
-  `REAPERAPI_WANT_` line for each of the 59 functions JPRSurf calls, and the
-  same list as `JPR_REAPER_API(X)`. Every file includes it instead of the SDK
-  header, so calling a function that isn't listed doesn't compile.
-- **`LoadReaperApi(get_func)`** replaces the `REAPERAPI_LoadAPI()` call in
-  `Plugin::Load()`, and logs any function the SDK asks for that isn't in
-  `JPR_REAPER_API`. `REAPERAPI_IMPLEMENT` moves from `src/reaper_sdk.cc` into
-  `jpr/common/reaper_api.cc`.
-
-CLAUDE.md gains the rule to include `reaper_api.h` rather than the SDK header.
-
 ## Profiler
 
 - **Layers:** common, device, scene

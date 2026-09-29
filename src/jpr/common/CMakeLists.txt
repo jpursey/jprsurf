@@ -17,6 +17,7 @@ set(jpr_common_SOURCE
   modifiers.cc modifiers.h
   numbered_name.h
   prefixed_name.h
+  reaper_api.cc reaper_api.h
   runner.cc runner.h
   timeline.cc timeline.h
   track.cc track.h
@@ -39,6 +40,7 @@ set(jpr_common_TEST_SOURCE
   color_test.cc
   numbered_name_test.cc
   prefixed_name_test.cc
+  reaper_api_test.cc
 )
 
 gb_add_library(jpr_common)

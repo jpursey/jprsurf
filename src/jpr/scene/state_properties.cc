@@ -10,11 +10,11 @@
 #include <memory>
 
 #include "jpr/common/automation.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/common/timeline.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/scene/polled_toggle_property.h"
 #include "jpr/scene/timeline_property.h"
-#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 

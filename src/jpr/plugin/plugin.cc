@@ -6,8 +6,8 @@
 #include "jpr/plugin/plugin.h"
 
 #include "absl/log/log.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/plugin/plugin_surface.h"
-#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 
@@ -27,7 +27,7 @@ bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& plugin_info) {
     LOG(ERROR) << "Plugin info GetFunc is null.";
     return false;
   }
-  if (REAPERAPI_LoadAPI(plugin_info.GetFunc) != 0) {
+  if (!LoadReaperApi(plugin_info.GetFunc)) {
     LOG(ERROR) << "Failed to load REAPER API.";
     return false;
   }

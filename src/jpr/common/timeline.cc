@@ -9,7 +9,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
-#include "sdk/reaper_plugin_functions.h"
+#include "jpr/common/reaper_api.h"
 
 namespace jpr {
 

@@ -19,6 +19,7 @@
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/prefixed_name.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
@@ -31,7 +32,6 @@
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
-#include "sdk/reaper_plugin_functions.h"
 
 namespace jpr {
 

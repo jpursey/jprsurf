@@ -103,7 +103,8 @@ over all of them:
   ...
 
 // Loads the REAPER API from `get_func`, which is REAPER's GetFunc or a fake's.
-// Returns false, and logs the names, if any function is missing.
+// Returns false, and logs the names, if any function is missing from
+// `get_func`, or has a REAPERAPI_WANT_ line but isn't in JPR_REAPER_API.
 bool LoadReaperApi(void* (*get_func)(const char* name));
 ```
 
@@ -113,8 +114,8 @@ bool LoadReaperApi(void* (*get_func)(const char* name));
   A name in `JPR_REAPER_API` without its `REAPERAPI_WANT_` line doesn't
   compile. A `REAPERAPI_WANT_` line without its `JPR_REAPER_API` entry is found
   when the API loads: `LoadReaperApi()` wraps `get_func` and sees every name
-  the SDK asks for, so it logs an error in REAPER, and fails the test under the
-  fake.
+  the SDK asks for. An unlisted one is logged as an error and fails the load,
+  in REAPER or under the fake, and `reaper_api_test` catches it before either.
 - **Only the listed functions are loaded**, so JPRSurf no longer fails to load
   in a REAPER that lacks one of the 800 functions it never calls.
 - `REAPERAPI_IMPLEMENT` moves from `src/reaper_sdk.cc` into
@@ -122,8 +123,9 @@ bool LoadReaperApi(void* (*get_func)(const char* name));
   list.
 
 **Brittleness:** every file must include `reaper_api.h` rather than the SDK
-header, or it silently sees every function. The SDK header's name appearing
-anywhere else is easy to find in review.
+header. One that includes the SDK header sees every function, though calling
+an unlisted one still fails to link, as only the listed functions are defined.
+The SDK header's name appearing anywhere else is easy to find in review.
 
 ### Function hooks
 
