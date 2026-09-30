@@ -30,20 +30,28 @@ Alternatives to `ReaperProfiler`: `SurfaceProfiler` (reads as belonging to
 `ControlSurface`'s listener), `RunProfile` (it covers callbacks between runs
 too). `ReaperProfiler` matches `ReaperTrace`, which hooks the same boundary.
 
-Points are named by where they are, with a prefix for each kind of place:
+A point that times one function is named for it, as C++ names it:
 
-| Prefix      | Kind        | Example                                      |
-| ----------- | ----------- | -------------------------------------------- |
-| `csurf/`    | frame/scope | `csurf/Run` (the frame), `csurf/Create`      |
-| `reaper/`   | call        | `reaper/GetTrack`                            |
-| `midi_in/`  | call        | `midi_in/SwapBufsPrecise`                    |
-| `midi_out/` | call        | `midi_out/Send`                              |
-| `runner/`   | scope       | `runner/Control`                             |
-| `Class::`   | scope       | `TrackCache::Refresh`, `Scene::SyncMappings` |
-| (none)      | value       | `tracks`, `routes`, `views`, `mappings`      |
+| Point                  | Kind    | Examples                                           |
+| ---------------------- | ------- | -------------------------------------------------- |
+| JPRSurf's own code     | frame   | `ControlSurface::Run`                              |
+| JPRSurf's own code     | scope   | `ControlSurface::Create`, `TrackCache::Refresh`    |
+| REAPER API functions   | call    | `GetTrack`, `Main_OnCommand`                       |
+| Methods on a MIDI port | call    | `midi_Input::SwapBufsPrecise`, `midi_Output::Send` |
+| A group of runnables   | scope   | `Runner: Control`                                  |
+| Work done              | counter | `MIDI messages in`, `Control runnables`            |
+| Workload               | value   | `tracks`, `routes`                                 |
+
+REAPER's functions are global, and JPRSurf's points are all qualified by a
+class, so the bare name doesn't collide. If one ever did with another kind,
+Game Bits CHECK-fails when the second is registered, so it can't go unnoticed.
+The report groups points by kind, so REAPER's calls still sit together.
 
 A call point's count is its call count, so the MIDI messages sent are
-`midi_out/Send` and `midi_out/SendMsg`, with no counter of their own.
+`midi_Output::Send` and `midi_Output::SendMsg`, with no counter of their own.
+Messages received are the counter `MIDI messages in`, as an input's read buffer
+isn't wrapped: reading it is a walk over memory that a timer would cost more
+than.
 
 ### ReaperProfiler (common)
 
@@ -64,15 +72,15 @@ class ReaperProfiler final {
 - It lives in `common`, as `ControlSurface` owns it. `ControlSurface::Create()`
   makes it after the single instance check and before the listener, so
   creating the listener (opening MIDI ports, building the scene) is profiled as
-  `csurf/Create`. The surface destroys its listener first, then the profiler.
+  `ControlSurface::Create`. The surface destroys its listener first, then the
+  profiler.
 - It is per surface, not per process: a surface removed and added again starts
   a new profile, and the snapshot is always one surface's whole life. The
   design doc's process state table changes to say so (the fake needs no reset
   for it).
-- The hooks are `ReaperApiHooks<CallHook>`, where `CallHook` (private to
-  `ReaperProfiler`) is a `gb::ProfileCallHook` named `reaper/<name>`, plus
-  hooks on
-  `CreateMIDIInput()` and `CreateMIDIOutput()` that wrap the port they return.
+- The hooks are `ReaperApiHooks<gb::ProfileCallHook>`, each named for its
+  function, plus hooks on `CreateMIDIInput()` and `CreateMIDIOutput()` that wrap
+  the port they return.
   They are installed over whatever is loaded, so over a trace when one runs
   (the trace's own cost then shows as REAPER's, which is fine for a debugging
   aid that is far too slow to leave on).
@@ -89,12 +97,13 @@ or if the profiler is destroyed inside one. Every point is a scoped object, and
 the profiler is destroyed by the surface's destructor, which REAPER never calls
 from inside one of the surface's own callbacks. A new REAPER function is
 profiled automatically, as the hooks come from the API list. A new call on a
-MIDI object needs a method on the wrapper, but the wrappers implement every
+MIDI port needs a method on the wrapper, but the wrappers implement every
 virtual method of `midi_Input` and `midi_Output`, so there is none to miss.
 
 ### Entry points (common)
 
-Only `Run()` (the frame) and creating the surface (`csurf/Create`) are timed.
+Only `Run()` (the frame) and creating the surface (`ControlSurface::Create`)
+are timed.
 Every other callback only sets a flag or a version (such as
 `SetTrackListChange()` and `SetSurfaceSelected()`), and the work waits for the
 next run, so timing them would show nothing worth knowing. A callback REAPER
@@ -106,7 +115,7 @@ cost. A callback that starts doing real work gets a scope then.
 
 ```
 // `name` groups runnables: those with the same name run together, and are
-// timed together as the scope point runner/<name>.
+// timed together as the scope point "Runner: <name>".
 RunHandle AddRunnable(std::string_view name, Runnable runnable);
 ```
 
@@ -114,8 +123,8 @@ RunHandle AddRunnable(std::string_view name, Runnable runnable);
   callers are `MidiIn` and `MidiOut` (`common`), `Control` (`device`), and
   `Scene` (`scene`).
 - A hundred `Control` runnables cost one pair of timer reads. A counter,
-  `runner/<name>/runnables`, counts how many ran, so the snapshot shows time
-  per runnable.
+  `<name> runnables`, counts how many ran, so the snapshot shows time per
+  runnable.
 - The order runnables run in is arbitrary today, so grouping them changes
   nothing a caller can rely on. A runnable removed during a run still doesn't
   run later in that run.
@@ -123,7 +132,7 @@ RunHandle AddRunnable(std::string_view name, Runnable runnable);
 ### Device and scene
 
 - **Device:** counters for what controls do, which their time scales with:
-  inputs handled (`control/inputs`) and outputs sent (`control/outputs`).
+  inputs handled (`control inputs`) and outputs sent (`control outputs`).
 - **Scene:** scopes on the parts of `Scene::OnRun()`
   (`Scene::UpdateReferences`, `Scene::UpdateState`,
   `Scene::ApplyViewConditions`, `Scene::SyncMappings`), counters for the views
@@ -200,6 +209,16 @@ Findings so far:
   profiler's hooks stack over the trace's and both come off cleanly; the
   trace's cost shows as REAPER's (`GetTrackState` 932ns a call, p50 run
   79.7us).
+- **CL3 (2026-09-29, 81 tracks, 8 routes, 125s):** the profiler costs 1.36us a
+  run; the MIDI points add about 0.07us. Polling the two inputs costs 1.2us a
+  run (`midi_Input::SwapBufsPrecise`, 606ns a call). A message sent costs 831ns
+  (`midi_Output::Send`), and sysex 201ns (`SendMsg`). Closing an input takes
+  52ms, so about 100ms on exit. `TrackCache::Refresh` is 92us of JPRSurf's own
+  time. Idle sessions of CL2 and CL3 two minutes apart were within noise (p50
+  37.3us and 39.8us, average 40.4us and 42.9us, p99 79.7us for both), so CL3
+  costs nothing measurable. CL2's earlier session (p50 29.6us) was faster for
+  both builds, as REAPER's own calls were too: the machine varies by that much
+  between sessions, so only snapshots taken close together are comparable.
 
 **Counting first.** The backlog asks for calls to be counted before they are
 timed, to see how many points a run would time against the budget. Game Bits'
@@ -254,26 +273,32 @@ Depends on: CL1.
   its budget under To confirm, with a large project. If it is over budget, stop
   and apply the fallback (see Counting first).
 
-### CL3 [ ] common: MIDI ports and TrackCache
+### CL3 [x] common: MIDI ports and TrackCache
 
 Depends on: CL2.
 
 - `ProfiledMidiInput` and `ProfiledMidiOutput`, and the hooks on
   `CreateMIDIInput()` and `CreateMIDIOutput()` that wrap what they return.
+- The counter `MIDI messages in`, in `MidiIn::Poll()`.
 - Scopes on `TrackCache::Refresh()` and `RefreshVisibility()`, and the values
   `tracks` and `routes`.
+- Points are named for the function they time (see Names): the REAPER API
+  functions by their own names, with `ReaperApiHooks<gb::ProfileCallHook>`
+  in place of `CallHook`, and `ControlSurface::Run` and
+  `ControlSurface::Create`.
 
 **Verify**
 - Standard checks.
-- The snapshot: `midi_in/` and `midi_out/` calls that move with pressing
-  buttons and moving faders, and the workload values matching the project.
+- The snapshot: `midi_Input::` and `midi_Output::` calls that move with
+  pressing buttons and moving faders, and the workload values matching the
+  project.
 
 ### CL4 [ ] common: Named runnables
 
 Depends on: CL3.
 
 - `RunRegistry::AddRunnable()` takes a name, groups runnables by it, and times
-  each group as `runner/<name>`, counting its runnables.
+  each group as `Runner: <name>`, counting its runnables.
 - The callers pass names: `MidiIn`, `MidiOut`, `Control`, and `Scene`. The
   `device` and `scene` changes are one line each, so they come with the API
   change rather than in their own CLs.
@@ -281,14 +306,14 @@ Depends on: CL3.
 **Verify**
 - Standard checks, especially the smoke test, since every control and the
   scene run through the changed registry.
-- The snapshot has the four `runner/` scopes with runnables per run. Record the
+- The snapshot has the four `Runner:` scopes with runnables per run. Record the
   steady state runnables per run and the profiler's cost under To confirm.
 
 ### CL5 [ ] device: Control counters
 
 Depends on: CL4.
 
-- `control/inputs` and `control/outputs` counters in `Control`.
+- `control inputs` and `control outputs` counters in `Control`.
 
 **Verify**
 - Standard checks.
@@ -305,7 +330,7 @@ Depends on: CL5.
 **Verify**
 - Standard checks.
 - The snapshot's workload values match the scene, and the `Scene::` scopes add
-  up to about `runner/Scene`.
+  up to about `Runner: Scene`.
 
 ### CL7 [ ] common: A quiet log, slow runs, and the build
 

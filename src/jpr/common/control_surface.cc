@@ -112,7 +112,7 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
 
 std::unique_ptr<ControlSurfaceListener> ControlSurface::CreateListener(
     std::string_view config) {
-  gb::ProfileScope<"csurf/Create"> scope;
+  gb::ProfileScope<"ControlSurface::Create"> scope;
   return s_type_.create_listener(config);
 }
 
@@ -149,7 +149,7 @@ const char* ControlSurface::GetConfigString() {
 }
 
 void ControlSurface::Run() {
-  gb::ProfileFrame<"csurf/Run"> frame;
+  gb::ProfileFrame<"ControlSurface::Run"> frame;
   const absl::Time start = absl::Now();
 
   if (track_list_changed_) {

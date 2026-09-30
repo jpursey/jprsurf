@@ -10,6 +10,7 @@
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
+#include "gb/profile/profile_point.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -110,11 +111,13 @@ void MidiIn::Poll(const RunTime& time) {
 
   auto* event_list = port_->GetReadBuf();
   int bpos = 0;
+  int event_count = 0;
   while (true) {
     MIDI_event_t* event = event_list->EnumItems(&bpos);
     if (event == nullptr) {
       break;
     }
+    ++event_count;
 
     // Ignore sysex messages for now, since they can't be subscribed to.
     if (event->midi_message[0] == 0xF0) {
@@ -148,6 +151,7 @@ void MidiIn::Poll(const RunTime& time) {
       }
     }
   }
+  gb::ProfileCount<"MIDI messages in">(event_count);
 }
 
 //==============================================================================

@@ -7,6 +7,8 @@
 
 #include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
+#include "gb/profile/profile_point.h"
+#include "gb/profile/profile_timer.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -26,6 +28,8 @@ TrackCache::TrackCache() {
 }
 
 void TrackCache::Refresh() {
+  gb::ProfileScope<"TrackCache::Refresh"> scope;
+
   // Clear the cache and retain the old_track_map to find changes and notify
   // listeners.
   TrackMap old_track_map;
@@ -136,14 +140,18 @@ void TrackCache::Refresh() {
   // per-filter indices. The track list itself changed, so this is done
   // unconditionally. Routes are read here, after every track has been added to
   // the track ID map, so the other end of every route can be looked up.
+  int route_count = 0;
   for (Track* track : all_tracks_) {
     track->UpdateVisibility();
     if (track->UpdateRoutes()) {
       routes_changed.push_back(track);
     }
+    route_count += static_cast<int>(track->GetSends().size());
   }
   RebuildTrackIndices();
   ++track_list_version_;
+  gb::ProfileSetValue<"tracks">(static_cast<int>(all_tracks_.size()));
+  gb::ProfileSetValue<"routes">(route_count);
 
   // Any track may have changed, including by switching projects.
   selected_auto_modes_valid_ = false;
@@ -172,6 +180,8 @@ void TrackCache::Refresh() {
 }
 
 bool TrackCache::RefreshVisibility() {
+  gb::ProfileScope<"TrackCache::RefreshVisibility"> scope;
+
   // A track changing visibility changes the filtered child list of its parent,
   // which is what hierarchy listeners care about. There is no need to diff
   // anything: the visibility scan already knows exactly which tracks moved.
