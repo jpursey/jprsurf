@@ -19,6 +19,7 @@ set(jpr_device_DEPS
   absl::log
   absl::log_initialize
   gb_config
+  gb_profile
   jpr_common
   reaper_sdk
 )

@@ -229,6 +229,10 @@ Findings so far:
   session (p50 39.8us and p99 79.7us for both, average 41.9us against
   42.9us). An idle run is about 30us of JPRSurf (scene 14.6us, 145 controls
   11.6us) and 11us of REAPER reads.
+- **CL5 (2026-09-29, 61s):** 226 control inputs from 238 MIDI messages in
+  (the rest are messages no control handles), and 290 control outputs sent
+  as 1,057 MIDI messages (765 `Send`, 292 `SendMsg`), so an output averages
+  3 to 4 messages.
 
 **Counting first.** The backlog asks for calls to be counted before they are
 timed, to see how many points a run would time against the budget. Game Bits'
@@ -319,7 +323,7 @@ Depends on: CL3.
 - The snapshot has the four `Runner:` scopes with runnables per run. Record the
   steady state runnables per run and the profiler's cost under To confirm.
 
-### CL5 [ ] device: Control counters
+### CL5 [x] device: Control counters
 
 Depends on: CL4.
 

@@ -6,6 +6,7 @@
 #include "jpr/device/control.h"
 
 #include "absl/log/log.h"
+#include "gb/profile/profile_point.h"
 
 namespace jpr {
 
@@ -433,6 +434,7 @@ void Control::OnValueInputChanged() {
   if (value_input_ == nullptr) {
     return;
   }
+  gb::ProfileCount<"control inputs">(1);
   last_input_time_ = last_run_time_;
   double physical_value = value_input_->GetValue();
 
@@ -452,6 +454,7 @@ void Control::OnDeltaInputChanged() {
   if (delta_input_ == nullptr) {
     return;
   }
+  gb::ProfileCount<"control inputs">(1);
   last_input_time_ = last_run_time_;
   double physical_delta = delta_input_->ReadDelta();
 
@@ -471,6 +474,7 @@ void Control::OnPressInputChanged() {
   if (press_input_ == nullptr) {
     return;
   }
+  gb::ProfileCount<"control inputs">(1);
   last_input_time_ = last_run_time_;
 
   if (press_input_->HasRelease()) {
@@ -708,6 +712,7 @@ void Control::SendPendingOutput() {
   }
 
   // Send the pending output and clear it.
+  gb::ProfileCount<"control outputs">(1);
   const auto& pending = pending_output_.value();
   int mode = pending.mode;
   std::visit(
