@@ -173,6 +173,15 @@ class Scene final {
   // the views are running, as it enables and disables them.
   void ApplyViewConditions();
 
+  // Sets the profile's values for the scene's workload: its devices, controls,
+  // views, mappings, and properties.
+  //
+  // This is called when the scene is activated, so the values are there while
+  // it runs, and again when it is destroyed, so the profile (written after the
+  // surface, and so the scene, is destroyed) has everything ever added to it,
+  // however it was built.
+  void SetWorkloadValues() const;
+
   // Implements AddUserProperty() for any property type.
   ViewProperty* DoAddUserProperty(std::unique_ptr<ViewProperty> property);
 

@@ -9,6 +9,7 @@
 #include <stack>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
@@ -17,6 +18,8 @@
 #include "absl/strings/str_split.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "gb/profile/profile_point.h"
+#include "gb/profile/profile_timer.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/const_property.h"
@@ -47,7 +50,7 @@ Scene::Scene(std::string_view name, TrackFilter track_filter)
       std::make_unique<ModifierProperty>(ModifierProperty::kOpt, kModOpt));
 }
 
-Scene::~Scene() = default;
+Scene::~Scene() { SetWorkloadValues(); }
 
 void Scene::AddDevice(std::string_view device_name,
                       std::unique_ptr<Device> device) {
@@ -190,6 +193,7 @@ void Scene::Activate(RunRegistry& registry) {
   run_handle_ =
       registry.AddRunnable([this](const RunTime& time) { OnRun(time); });
   root_view_->RefreshActive();
+  SetWorkloadValues();
 }
 
 void Scene::Deactivate() {
@@ -199,19 +203,47 @@ void Scene::Deactivate() {
 
 void Scene::OnRun(const RunTime& time) {
   UpdateReferences();
-  for (const auto& property : state_properties_) {
-    property->UpdateState();
+  {
+    gb::ProfileScope<"SceneStateProperty::UpdateState"> scope;
+    for (const auto& property : state_properties_) {
+      property->UpdateState();
+    }
   }
 
   // A view's condition can change at any time, but the view is only enabled or
   // disabled here, before its mappings run.
   ApplyViewConditions();
   if (root_view_->IsActive()) {
+    gb::ProfileScope<"View::SyncMappings"> scope;
     root_view_->SyncMappings();
   }
 }
 
+void Scene::SetWorkloadValues() const {
+  int view_count = 0;
+  int mapping_count = 0;
+  int property_count = static_cast<int>(properties_.size());
+  std::vector<const View*> views = {root_view_.get()};
+  while (!views.empty()) {
+    const View* view = views.back();
+    views.pop_back();
+    ++view_count;
+    mapping_count += static_cast<int>(view->mappings_.size());
+    property_count += static_cast<int>(view->properties_.size() +
+                                       view->user_properties_.size());
+    for (const auto& child_view : view->child_views_) {
+      views.push_back(child_view.get());
+    }
+  }
+  gb::ProfileSetValue<"devices">(static_cast<int>(devices_.size()));
+  gb::ProfileSetValue<"controls">(static_cast<int>(controls_.size()));
+  gb::ProfileSetValue<"views">(view_count);
+  gb::ProfileSetValue<"mappings">(mapping_count);
+  gb::ProfileSetValue<"properties">(property_count);
+}
+
 void Scene::UpdateReferences() {
+  gb::ProfileScope<"Scene::UpdateReferences"> scope;
   TrackCache& cache = TrackCache::Get();
   const int64_t track_list_version = cache.GetTrackListVersion();
   const int64_t selection_version = cache.GetSelectionVersion();
@@ -245,6 +277,7 @@ void Scene::AddConditionalView(View* view) {
 }
 
 void Scene::ApplyViewConditions() {
+  gb::ProfileScope<"Scene::ApplyViewConditions"> scope;
   for (View* view : conditional_views_) {
     // Refreshing a view also refreshes its child views, which clears their
     // conditions' changes, so they aren't refreshed twice.

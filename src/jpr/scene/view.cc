@@ -10,6 +10,7 @@
 
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
+#include "gb/profile/profile_point.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/track_reference.h"
@@ -307,6 +308,8 @@ void View::SyncMappings() {
   if (!active_) {
     return;
   }
+  gb::ProfileCount<"views synced">(1);
+  gb::ProfileCount<"mappings synced">(static_cast<int>(mappings_.size()));
 
   // A change to the subject or the track list from outside the view (a
   // reference's rules, another view's mapping, or REAPER) is noticed here, or

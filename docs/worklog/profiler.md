@@ -134,11 +134,13 @@ explicit Runner(std::string_view name);
 - **Device:** counters for what controls do, which their time scales with:
   inputs handled (`control inputs`) and outputs sent (`control outputs`).
 - **Scene:** scopes on the parts of `Scene::OnRun()`
-  (`Scene::UpdateReferences`, `Scene::UpdateState`,
-  `Scene::ApplyViewConditions`, `Scene::SyncMappings`), counters for the views
-  and mappings synced each run, and the workload as values (`devices`,
-  `controls`, `views`, `mappings`, `properties`), set when the scene is
-  activated.
+  (`Scene::UpdateReferences`, `SceneStateProperty::UpdateState` for all of
+  them together, `Scene::ApplyViewConditions`, and `View::SyncMappings` around
+  the root view's, which syncs the rest), the counters `views synced` and
+  `mappings synced`, and the workload as values (`devices`, `controls`,
+  `views`, `mappings`, `properties`), set when the scene is activated, and
+  again when it is destroyed. The snapshot is written after that, and the
+  scene then holds everything ever added to it, however it was built.
 - **Common workload:** `tracks` and `routes`, set by `TrackCache::Refresh()`,
   which is a scope, as is `TrackCache::RefreshVisibility()`.
 
@@ -233,6 +235,14 @@ Findings so far:
   (the rest are messages no control handles), and 290 control outputs sent
   as 1,057 MIDI messages (765 `Send`, 292 `SendMsg`), so an output averages
   3 to 4 messages.
+- **CL6 (2026-09-29, 150s):** the workload is 2 devices, 243 controls, 36
+  views, 595 mappings, and 215 properties. The scene's 16.7us a run is
+  `View::SyncMappings` 10.2us (446 mappings in 20 active views, about 23ns a
+  mapping), `SceneStateProperty::UpdateState` 2.8us,
+  `Scene::UpdateReferences` 2.5us, and `Scene::ApplyViewConditions` 0.5us.
+  The view counters left the profiler's cost at 1.42us a run. 145 of the 243
+  controls run each run; a control only runs while it has registered inputs
+  or output to send.
 
 **Counting first.** The backlog asks for calls to be counted before they are
 timed, to see how many points a run would time against the budget. Game Bits'
@@ -334,12 +344,12 @@ Depends on: CL4.
 - The counters move with pressing buttons and moving faders, and outputs with
   changes in REAPER.
 
-### CL6 [ ] scene: Scene scopes, counters, and workload
+### CL6 [x] scene: Scene scopes, counters, and workload
 
 Depends on: CL5.
 
 - Scopes on the parts of `Scene::OnRun()`, counters for views and mappings
-  synced, and the workload values, set in `Scene::Activate()`.
+  synced, and the workload values, set in `Scene::Activate()` and `~Scene()`.
 
 **Verify**
 - Standard checks.

@@ -608,6 +608,12 @@ Only worth doing if a whole session's snapshot mixes too much together
 a snapshot would measure one scenario on its own: reset, do the thing, save.
 These would be the plugin's first REAPER actions.
 
+The workload values need setting before such a snapshot: a reset clears them,
+and the scene sets its own only when it is activated or destroyed
+(`Scene::SetWorkloadValues()`), and `TrackCache` on its next refresh. The
+snapshot would have them set when it is taken, which adds `scene` to the
+layers.
+
 ## Tests inside REAPER
 
 - **Layers:** common, plugin
