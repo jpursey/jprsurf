@@ -28,35 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Profiler
-
-- **Layers:** common, device, scene
-- **Size:** large
-- **Feature workflow:** yes
-- **Depends on:** *REAPER API list*, and Game Bits *Profiler module*
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
-  (Profiler)
-
-An always-on profile of where each run's time goes, built on Game Bits'
-`gb/profile`, within a budget of 20us a run or 1% of its total time, whichever
-is more:
-- **In `common`**: every function on the API list is counted, then timed, and
-  the MIDI objects are wrapped. Every `IReaperControlSurface` callback is an
-  entry point, and `Run()` is the frame. Runnables are registered, and timed,
-  by name. Scopes and counters go on `TrackCache`'s refreshes and the MIDI
-  ports.
-- **In `device` and `scene`**: named runnables, counters for the work controls
-  and `Scene::OnRun()` do, and the workload values (views, mappings, and
-  properties).
-- **Output**: the `Run()` log line computed from the profile, a warning for
-  slow runs, and `jprsurf_profile.txt`, written when the surface is destroyed,
-  with the build and workload in its header.
-
-Counting comes before timing, to check how many points a run would time
-against the budget. If the budget can't be met, the fallback is a build option
-that turns profiling off. CLAUDE.md's Performance section moves to the
-snapshot.
-
 ## Fake REAPER
 
 - **Layers:** common
