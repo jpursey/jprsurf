@@ -35,7 +35,7 @@ A point that times one function is named for it, as C++ names it:
 | Point                  | Kind    | Examples                                           |
 | ---------------------- | ------- | -------------------------------------------------- |
 | JPRSurf's own code     | frame   | `ControlSurface::Run`                              |
-| JPRSurf's own code     | scope   | `ControlSurface::Create`, `TrackCache::Refresh`    |
+| JPRSurf's own code     | scope   | `TrackCache::Refresh`, `Scene::UpdateReferences`   |
 | REAPER API functions   | call    | `GetTrack`, `Main_OnCommand`                       |
 | Methods on a MIDI port | call    | `midi_Input::SwapBufsPrecise`, `midi_Output::Send` |
 | A runner's run         | scope   | `Runner: Device`                                   |
@@ -69,11 +69,11 @@ class ReaperProfiler final {
 };
 ```
 
-- It lives in `common`, as `ControlSurface` owns it. `ControlSurface::Create()`
-  makes it after the single instance check and before the listener, so
-  creating the listener (opening MIDI ports, building the scene) is profiled as
-  `ControlSurface::Create`. The surface destroys its listener first, then the
-  profiler.
+- It lives in `common`, as `ControlSurface` owns it. It is made before the
+  listener, so its hooks wrap the MIDI ports the listener opens, and it is
+  reset once the listener is made, so the profile is only of runs: one time
+  costs of starting up (opening MIDI ports, building the scene) aren't the
+  point. The surface destroys its listener first, then the profiler.
 - It is per surface, not per process: a surface removed and added again starts
   a new profile, and the snapshot is always one surface's whole life. The
   design doc's process state table changes to say so (the fake needs no reset
@@ -85,7 +85,8 @@ class ReaperProfiler final {
   (the trace's own cost then shows as REAPER's, which is fine for a debugging
   aid that is far too slow to leave on).
 - `gb::Profiler` options: `budget_per_frame` 20us, `budget_fraction` 0.01,
-  `slow_frame` 5ms.
+  `slow_frame` 8ms (5ms caught a single mute, whose batched UI refresh alone
+  is 2.5ms).
 
 **Performance:** each timed point is about 12ns (measured by Game Bits), and
 about 1ns with no profiler. The profiler measures its own cost per run, and the
@@ -102,9 +103,7 @@ virtual method of `midi_Input` and `midi_Output`, so there is none to miss.
 
 ### Entry points (common)
 
-Only `Run()` (the frame) and creating the surface (`ControlSurface::Create`)
-are timed.
-Every other callback only sets a flag or a version (such as
+Only `Run()` (the frame) is timed. Every other callback only sets a flag or a version (such as
 `SetTrackListChange()` and `SetSurfaceSelected()`), and the work waits for the
 next run, so timing them would show nothing worth knowing. A callback REAPER
 makes from inside a REAPER call (such as `SetSurfaceMute()` during
@@ -151,26 +150,36 @@ explicit Runner(std::string_view name);
   JPRSurf profile
   Build:    40f0906 (modified)
   Date:     2026-09-28 14:32, 612s
-  Per run:  JPRSurf 15us, REAPER 12us
+  Per run:  JPRSurf 30.1us, REAPER 11.2us
   ```
   The report already has the values (the workload), the run summary with the
-  profiler's cost against its budget, and every point. The per run split sums
-  the self time of every call point (REAPER) and every other timed point
-  (JPRSurf), including any timed between runs. The build is the git commit,
-  and whether the tree was modified, generated at build time by CMake. It is
-  written with `std::fopen`, as one string written once needs no abstraction
-  (and no iostreams).
+  profiler's cost against its budget, and every point. The build is the git
+  commit, and whether its tracked files have changes, from a header
+  (`jpr/common/build_info.h`) that CMake regenerates on every build and only
+  rewrites when it changes. It is written with `std::fopen`, as one string
+  written once needs no abstraction (and no iostreams).
+- **The JPRSurf and REAPER split** sums the self time of every call point
+  (REAPER) and every other timed point (JPRSurf), per run. Game Bits' totals
+  include time outside any frame, so the profile leaves out what isn't a run:
+  the profiler is reset once the surface is created, and opening and closing a
+  MIDI port (`start()`, `stop()`, and `Destroy()`, about 180ms together)
+  aren't timed. What is left outside runs is small: the devices' and MIDI
+  outputs' last run as the surface is destroyed, and REAPER's callbacks
+  between runs, which only set flags.
+- **No timing log lines.** The track list refresh and view activation durations
+  are no longer logged, as the profile has them (`TrackCache::Refresh`,
+  `Scene::ApplyViewConditions`), and a slow one logs a slow run.
 - **No periodic log line.** Today's `Run()` line every 5 seconds goes, with
   `ControlSurface`'s own run timing. The snapshot has everything it showed, and
   more. If a view of a session in progress turns out to be needed, that is the
   backlog's *Profile snapshots on demand*, rather than a periodic line.
-- **Slow runs:** a run over 5ms logs a warning with Game Bits' report of that
+- **Slow runs:** a run over 8ms logs a warning with Game Bits' report of that
   run, limited to one every 5 seconds, so a burst of slow runs doesn't flood
   the log.
 - **The summary line**, logged when the snapshot is written, with a warning
   instead if the profiler was over its budget:
   ```
-  Profile: 18360 runs, p50 24us, p99 180us, max 3.1ms, avg 27us (JPRSurf 15us, REAPER 12us), profiler 1.9us/run (budget 20us)
+  Profile: 18360 runs, p50 24.1us, p99 180.3us, max 3.1ms, avg 27.0us (JPRSurf 15.2us, REAPER 11.8us), profiler 1.9us/run (budget 20.0us)
   ```
 
 ### To confirm
@@ -356,15 +365,19 @@ Depends on: CL5.
 - The snapshot's workload values match the scene, and the `Scene::` scopes add
   up to about `Runner: Scene`.
 
-### CL7 [ ] common: A quiet log, slow runs, and the build
+### CL7 [x] common: A quiet log, slow runs, and the build
 
 Depends on: CL6.
 
-- `ControlSurface` loses its own run timing and the `Run()` log line.
+- `ControlSurface` loses its own run timing and the `Run()` log line, and the
+  track list refresh and view activation (`scene`) lose their timing lines.
 - The slow run warning, limited to one every 5 seconds.
 - The summary line when the snapshot is written, or a warning if over budget.
-- The build in the snapshot's header, generated by CMake at build time, and the
-  per run JPRSurf and REAPER split.
+- The profile is only of runs: the profiler is reset once the surface is
+  created (so `ControlSurface::Create` goes), and opening and closing MIDI
+  ports isn't timed.
+- The build and the per run JPRSurf and REAPER split in the snapshot's header,
+  the build generated by CMake at build time.
 - CLAUDE.md's Performance section reads performance from the snapshot, the
   summary line, and slow run warnings.
 

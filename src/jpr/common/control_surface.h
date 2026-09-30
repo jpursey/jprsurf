@@ -55,8 +55,8 @@ class ControlSurfaceListener {
 // - TrackCache follows selection, automation mode, and last touched track
 //   changes.
 // - ContinuousUndo is updated after every run.
-// - A ReaperProfiler profiles it from creation, before the listener is created,
-//   until it is destroyed, after the listener is.
+// - A ReaperProfiler profiles its runs, from once the listener is created
+//   until the surface is destroyed.
 //
 // Only one instance may exist at a time. If the user adds the surface again,
 // the new one is refused with an error, and the first is left untouched.
@@ -98,10 +98,6 @@ class ControlSurface final : private IReaperControlSurface {
                          const char* init_config_string);
 
   explicit ControlSurface(std::string_view config);
-
-  // Creates the listener from the config string REAPER saved.
-  static std::unique_ptr<ControlSurfaceListener> CreateListener(
-      std::string_view config);
 
   // IReaperControlSurface overrides
   const char* GetTypeString() override;
@@ -158,9 +154,6 @@ class ControlSurface final : private IReaperControlSurface {
   bool OnSupportsExtendedTouch();
   void OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx);
 
-  // Logs a performance summary of Run() every few seconds.
-  void LogRunTime(absl::Time start, absl::Time end);
-
   // The registered type, which every instance is, and its registration with
   // REAPER.
   static Type s_type_;
@@ -169,8 +162,8 @@ class ControlSurface final : private IReaperControlSurface {
   // The one instance that exists, if any.
   static ControlSurface* s_instance_;
 
-  // The profiler is declared first, so it profiles the listener's creation, and
-  // outlives it.
+  // The profiler is declared first, so its hooks are in place for the MIDI
+  // ports the listener opens, and it outlives the listener.
   ReaperProfiler profiler_;
   std::unique_ptr<ControlSurfaceListener> listener_;
   std::string config_string_;  // Holds the result of GetConfigString().
@@ -182,12 +175,6 @@ class ControlSurface final : private IReaperControlSurface {
   // When track visibility was last polled. This defaults to the epoch so that
   // the first run always polls.
   absl::Time last_visibility_time_;
-
-  // Performance monitoring
-  absl::Time last_log_time_;
-  absl::Duration elapsed_run_time_;
-  absl::Duration max_run_time_;
-  int run_count_ = 0;
 };
 
 }  // namespace jpr

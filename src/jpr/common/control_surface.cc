@@ -5,8 +5,6 @@
 
 #include "jpr/common/control_surface.h"
 
-#include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -29,9 +27,6 @@
 namespace jpr {
 
 namespace {
-
-// How often the performance summary of Run() is logged.
-constexpr absl::Duration kLogInterval = absl::Seconds(5);
 
 // How often track visibility is polled. REAPER gives control surfaces no
 // notification when a track is shown or hidden, so the only way to see it is to
@@ -110,19 +105,17 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
   return nullptr;
 }
 
-std::unique_ptr<ControlSurfaceListener> ControlSurface::CreateListener(
-    std::string_view config) {
-  gb::ProfileScope<"ControlSurface::Create"> scope;
-  return s_type_.create_listener(config);
-}
-
 ControlSurface::ControlSurface(std::string_view config)
     : profiler_(GetLogPath("jprsurf_profile.txt")),
-      listener_(CreateListener(config)) {
+      listener_(s_type_.create_listener(config)) {
   CHECK(listener_ != nullptr)
       << "No listener created for control surface type " << s_type_.type_string;
   CHECK(s_instance_ == nullptr) << "Only one ControlSurface may exist";
   s_instance_ = this;
+
+  // Creating the listener is a one time cost (opening MIDI ports and the like),
+  // which the profile leaves out, so it covers only the runs.
+  profiler_.Reset();
   LOG(INFO) << "ControlSurface created";
 }
 
@@ -158,11 +151,6 @@ void ControlSurface::Run() {
 
     // Refresh() re-read visibility for every track, so the poll can wait.
     last_visibility_time_ = start;
-
-    // The refresh is the first work done this run, so this is its duration.
-    LOG(INFO) << "Refreshed TrackCache with "
-              << TrackCache::Get().GetTrackCount() << " tracks in "
-              << absl::ToInt64Microseconds(absl::Now() - start) << "us";
   } else if (last_visibility_time_ + kVisibilityInterval < start) {
     last_visibility_time_ = start;
     TrackCache::Get().RefreshVisibility();
@@ -173,8 +161,6 @@ void ControlSurface::Run() {
   // Create undo points for continuous changes made this run, or earlier, once
   // they have stopped.
   ContinuousUndo::Get().Update(start);
-
-  LogRunTime(start, absl::Now());
 }
 
 void ControlSurface::SetTrackListChange() {
@@ -595,32 +581,6 @@ bool ControlSurface::OnSupportsExtendedTouch() {
 void ControlSurface::OnMidiDeviceRemap(bool is_out, int old_idx, int new_idx) {
   VLOG_REAPER() << "OnMidiDeviceRemap(is_out=" << is_out
                 << ", old_idx=" << old_idx << ", new_idx=" << new_idx << ")";
-}
-
-//------------------------------------------------------------------------------
-// Implementation
-//------------------------------------------------------------------------------
-
-void ControlSurface::LogRunTime(absl::Time start, absl::Time end) {
-  absl::Duration run_time = end - start;
-  max_run_time_ = std::max(max_run_time_, run_time);
-  elapsed_run_time_ += run_time;
-  ++run_count_;
-  if (last_log_time_ + kLogInterval < end) {
-    LOG(INFO) << "Run() " << run_count_
-              << " times, max: " << absl::ToInt64Microseconds(max_run_time_)
-              << "us, avg: "
-              << std::ceil(absl::ToDoubleMicroseconds(elapsed_run_time_) /
-                           run_count_)
-              << "us, avg/sec: "
-              << std::ceil(absl::ToDoubleMicroseconds(elapsed_run_time_) /
-                           absl::ToDoubleSeconds(kLogInterval))
-              << "us";
-    last_log_time_ = end;
-    elapsed_run_time_ = absl::ZeroDuration();
-    max_run_time_ = absl::ZeroDuration();
-    run_count_ = 0;
-  }
 }
 
 #undef JPR_GET_PARAM_VALUE

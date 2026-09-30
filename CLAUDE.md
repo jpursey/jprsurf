@@ -84,9 +84,12 @@ Many changes have no user-visible effect until a later change uses them. These c
 
 #### Performance
 
-REAPER is realtime and the extension runs on its UI thread, so performance is checked by running REAPER and reading `jprsurf.log`:
-- **Steady state:** the periodic `Run()` log line stays in the low hundreds of microseconds (avg), and doesn't regress from before the change.
-- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. These events log their own duration, and the `max` value in the `Run()` log line also catches spikes. Test with a large project (100+ tracks, with sends and receives).
+REAPER is realtime and the extension runs on its UI thread, so performance is checked by running REAPER and reading the profile it writes on exit, "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_profile.txt" (see `ReaperProfiler` in `src/jpr/common/reaper_profiler.h`). It times every run, every REAPER call, and the scopes and counters JPRSurf defines with Game Bits' `gb/profile`, and is replaced each time REAPER exits or the surface is removed.
+- **Steady state:** the p50 and p99 run times, and the time per run of the points the change touches, don't regress from before the change. Run times vary by about 30% between sessions on the same machine, so compare a session with the change against one without it, run back to back with the same activity (an idle minute is simplest), and with other programs such as web browsers closed.
+- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. A run over 8ms logs a "Slow run" warning with its breakdown by point. Test with a large project (100+ tracks, with sends and receives).
+- **The profiler's own cost** stays within its budget, the larger of 3us a run (about twice what it costs) and 1% of the run. The "Profile:" line logged on exit shows it, and is a warning if it is over.
+
+New work whose cost matters gets a scope (`gb::ProfileScope`), and work that scales gets a counter (`gb::ProfileCount`), named for the function it times (see Names in `docs/worklog/profiler.md`).
 
 Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
 

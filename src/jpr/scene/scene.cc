@@ -16,8 +16,6 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
-#include "absl/time/clock.h"
-#include "absl/time/time.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
 #include "jpr/common/track_cache.h"
@@ -284,14 +282,7 @@ void Scene::ApplyViewConditions() {
     if (!view->condition_->HasChanged()) {
       continue;
     }
-    const absl::Time start = absl::Now();
-    const bool was_active = view->IsActive();
     view->RefreshActive();
-    if (view->IsActive() != was_active) {
-      LOG(INFO) << "View '" << view->GetName() << "' "
-                << (was_active ? "deactivated" : "activated") << " in "
-                << absl::ToInt64Microseconds(absl::Now() - start) << "us";
-    }
   }
 }
 

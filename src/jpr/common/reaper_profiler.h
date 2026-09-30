@@ -36,14 +36,28 @@ namespace jpr {
 
 class ReaperProfiler final {
  public:
-  // Starts profiling. When the profiler is destroyed, it writes the profile to
-  // the file at `path`, replacing it, or logs an error if `path` is empty.
+  // Starts profiling. A run over 8ms logs a warning with its breakdown. When
+  // the profiler is destroyed, it writes the profile to the file at `path`,
+  // replacing it (or logs an error if `path` is empty), and logs a summary.
   explicit ReaperProfiler(std::filesystem::path path);
   ReaperProfiler(const ReaperProfiler&) = delete;
   ReaperProfiler& operator=(const ReaperProfiler&) = delete;
   ~ReaperProfiler();
 
+  // Clears everything recorded so far, such as one time costs of starting up,
+  // including values, which must then be set again. It must not be called
+  // inside a timed point.
+  void Reset() { profiler_.Reset(); }
+
  private:
+  // JPRSurf's and REAPER's self time per run: every call point is REAPER's,
+  // and every other timed point is JPRSurf's.
+  struct RunSplit {
+    absl::Duration jprsurf;
+    absl::Duration reaper;
+  };
+  RunSplit GetRunSplit() const;
+
   // Hooks CreateMIDIInput() or CreateMIDIOutput(), returning a port that times
   // every call on the port REAPER created, or null if REAPER returned null.
   class MidiPortHook final {
@@ -66,7 +80,11 @@ class ReaperProfiler final {
   };
 
   // Writes the profile to path_.
-  void WriteSnapshot() const;
+  void WriteSnapshot(const RunSplit& split) const;
+
+  // Logs a summary of the profile, as a warning if the profiler was over its
+  // budget.
+  void LogSummary(const RunSplit& split) const;
 
   const std::filesystem::path path_;
   const absl::Time start_time_;
