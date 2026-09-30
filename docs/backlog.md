@@ -614,6 +614,22 @@ and the scene sets its own only when it is activated or destroyed
 snapshot would have them set when it is taken, which adds `scene` to the
 layers.
 
+## Verbose logging
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [profiler.md](worklog/profiler.md)
+
+The log is quiet unless something is wrong: errors, slow runs, and the
+profile's summary on exit. A `JPRSURF_VERBOSE` environment variable, set for
+REAPER's process as `JPRSURF_TRACE` is, would log events that help while
+debugging, such as track list refreshes and view activations (the profiler
+replaced their timing lines). `ControlSurface` already logs every REAPER
+callback with Abseil's `VLOG(1)`, so the variable could set the `VLOG` level.
+Only worth doing once a debugging session needs it.
+
 ## Tests inside REAPER
 
 - **Layers:** common, plugin

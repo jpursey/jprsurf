@@ -58,8 +58,9 @@ Depends on: nothing.
   errors, smoke test).
 - *Unit tests, for code that can have them.*
 - *Each feature specific check in REAPER, with what should happen.*
-- *Performance: the `Run()` log line's avg and max against before the change,
-  and the duration of any infrequent event it adds, with a large project.*
+- *Performance: the profile's p50 and p99 runs, and the points the change
+  touches, against a session without the change run just before it, and the
+  cost of any infrequent event it adds, with a large project.*
 - *Temporary, removed before commit: extra logging or a test mapping, and what
   it should show. Record the findings under To confirm.*
 

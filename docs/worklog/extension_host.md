@@ -78,10 +78,12 @@ The plumbing, and when it runs relative to the listener:
 1. If the track list changed, `TrackCache::Refresh()`, which also restarts the
    visibility poll. Otherwise, once a second, `TrackCache::RefreshVisibility()`
    (REAPER reports no visibility changes).
-2. After a refresh, the "Refreshed TrackCache" log line gives its duration.
-3. `OnRun(now)`.
-4. `ContinuousUndo::Update(now)`.
-5. The `Run()` performance log line every 5 seconds, covering the whole run.
+2. `OnRun(now)`.
+3. `ContinuousUndo::Update(now)`.
+
+Each run is profiled by the surface's `ReaperProfiler` (see
+[profiler.md](profiler.md)), which replaced the "Refreshed TrackCache" and
+`Run()` performance log lines this first had.
 
 **One instance.** `TrackCache`, `ContinuousUndo`, and the modifier state hold
 REAPER state for the whole extension, so two instances would drive them (and

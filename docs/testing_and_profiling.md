@@ -11,8 +11,8 @@ when it loads. Replacing those pointers gives the profiler its timing and gives
 tests a fake REAPER, without changing any code that calls REAPER.
 
 It ties together the backlog items that build toward this. Until they land,
-code that depends on REAPER is tested by hand in REAPER, and performance is
-read from the `Run()` log line.
+code that depends on REAPER is tested by hand in REAPER. Performance is read
+from the profile the profiler writes.
 
 ## Principles
 
@@ -32,7 +32,7 @@ read from the `Run()` log line.
 - **Behavior time comes from REAPER.** Timers and timeouts read the run's time,
   which comes from REAPER's clock, so tests control it and never wait. Only
   measurement reads a real clock.
-- **Profiling is always on, within a budget.** It costs no more than 20us a
+- **Profiling is always on, within a budget.** It costs no more than 3us a
   run or 1% of the run's total time, whichever is more, and it measures its own
   cost to show that it does.
 - **Counts in tests, times on the machine.** Call counts are deterministic, so
@@ -44,16 +44,16 @@ read from the `Run()` log line.
 
 ## The pieces at a glance
 
-| Piece            | What it is                                                                    | Where                     |
-| ---------------- | ----------------------------------------------------------------------------- | ------------------------- |
-| API list         | Every REAPER function JPRSurf calls, and loading them                         | `jpr/common/reaper_api.h` |
-| Function hooks   | Replace a function pointer with a wrapper of the same signature               | `gb/base/function_hook.h` |
-| Profiler         | Timed points, frames, counters, and the report                                | `gb/profile`              |
-| REAPER profiling | The profiler on the API list, the surface's entry points, runnables, and MIDI | `jpr/common`              |
-| Trace            | Every REAPER call and callback with its arguments, to see what REAPER does    | `jpr/common`              |
-| Fake REAPER      | REAPER's state, MIDI ports, surfaces, and clock, behind the API list          | `jpr/common/testing`      |
-| Fake X-Touch     | The hardware end of an X-Touch's MIDI ports                                   | `jpr/device/testing`      |
-| Surface harness  | The plugin loaded into the fake, with fake X-Touches                          | `jpr/plugin/testing`      |
+| Piece            | What it is                                                                 | Where                     |
+| ---------------- | -------------------------------------------------------------------------- | ------------------------- |
+| API list         | Every REAPER function JPRSurf calls, and loading them                      | `jpr/common/reaper_api.h` |
+| Function hooks   | Replace a function pointer with a wrapper of the same signature            | `gb/base/function_hook.h` |
+| Profiler         | Timed points, frames, counters, and the report                             | `gb/profile`              |
+| REAPER profiling | The profiler on the API list, MIDI ports, the surface's runs, and runners  | `jpr/common`              |
+| Trace            | Every REAPER call and callback with its arguments, to see what REAPER does | `jpr/common`              |
+| Fake REAPER      | REAPER's state, MIDI ports, surfaces, and clock, behind the API list       | `jpr/common/testing`      |
+| Fake X-Touch     | The hardware end of an X-Touch's MIDI ports                                | `jpr/device/testing`      |
+| Surface harness  | The plugin loaded into the fake, with fake X-Touches                       | `jpr/plugin/testing`      |
 
 The `testing` directories are test-only libraries, linked by unit tests and
 never by the plugin.
@@ -196,138 +196,34 @@ they add a second way to fake the same clock, and need a `Clock*` that undo and
 
 ## Profiler
 
-### What it measures
+The profiler is built: [profiler.md](worklog/profiler.md) describes it, and
+CLAUDE.md's Performance section how to read it. In brief:
+- **What it records:** each run as a frame (`ControlSurface::Run`), every call
+  to a function on the API list and on a MIDI port as a call point, each
+  runner's run and known heavy work in JPRSurf as scopes, the work their time
+  scales with as counters, and the workload as values. Points are named for
+  the function they time (`GetTrack`, `TrackCache::Refresh`).
+- **Nesting:** every timed point records its self time, its time less that of
+  the points inside it, so a callback REAPER makes from inside one of its calls
+  is charged to JPRSurf. Summing self times splits each run into JPRSurf's time
+  and REAPER's. Time REAPER spends outside JPRSurf's calls, such as a redraw it
+  defers to its own loop, isn't seen.
+- **Cost:** a timed point is about 12ns, and a run times about 120, for about
+  1.5us a run. The budget is the larger of 3us a run and 1% of the run, so a
+  doubling warns.
+- **Output:** a profile is of one surface's runs, leaving out its startup. It
+  is written to `jprsurf_profile.txt` beside the log when the surface is
+  destroyed, replacing the last one. It is plain text, one line per point in a stable order, so two
+  snapshots diff cleanly. The log only has a warning for a run over 8ms, and a
+  summary when the profile is written.
 
-| Kind         | What                                                                                                                       | Named                  |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| Frame        | Each `ControlSurface::Run()`                                                                                               | `Run`                  |
-| Entry points | Every call REAPER makes into JPRSurf: each `IReaperControlSurface` callback, including each `Extended()` call, and loading | `csurf/SetSurfaceMute` |
-| REAPER calls | Every function on the API list, and every call on a MIDI object                                                            | `reaper/GetTrack`      |
-| Scopes       | Known heavy work in JPRSurf, such as `TrackCache::Refresh()` and `RefreshVisibility()`                                     | `TrackCache::Refresh`  |
-| Runnables    | Each runner's runnables, by the name they were registered under                                                            | `runner/Control`       |
-| Counters     | Work done, which the time scales with: MIDI messages in and out, mappings and properties updated, track setters            | `midi_out/messages`    |
-| Values       | The workload, recorded in the snapshot: tracks, routes, devices, views, mappings, properties                               | `tracks`               |
+Where it differs from what this doc first planned: each runner is named,
+rather than each runnable (a runner only ever holds one kind); `Run()` is the
+only one of the surface's callbacks that is timed (the others only set flags);
+and there is no periodic `Run()` log line.
 
-- **Runnables** are registered with a name (`AddRunnable("Control", ...)`),
-  which is required, so a runnable can't be added without one. Runnables with
-  the same name are run and timed together, so a hundred `Control` runnables
-  cost one pair of timer reads. The order runnables run in is arbitrary today,
-  so grouping them changes nothing a caller can rely on.
-- **Counters** go on the work whose cost grows with it. `Scene::OnRun()` scales
-  with its views, mappings, and properties, and `MidiIn` and `MidiOut` with the
-  messages they handle, so the snapshot can show time per item as well as
-  totals.
-- **Values** are set when they change, such as when `TrackCache` is refreshed
-  or a scene is built, and cost nothing per run.
-
-### Nesting
-
-Every timed point records its **self time**: its time less the time of the
-points inside it. This matters because REAPER calls back into JPRSurf from
-inside some calls. `SetTrackUIMute()` can call `SetSurfaceMute()` on the
-surface, and `Main_OnCommand()` can run anything. The callback is an entry
-point inside a REAPER call, so its time is JPRSurf's, not REAPER's. Summing
-self times splits every run into JPRSurf's time and REAPER's, and the profiler
-estimates its own share (see [Cost and budget](#cost-and-budget)).
-
-Time REAPER spends outside JPRSurf's calls, such as a redraw it defers to its
-own loop, isn't seen.
-
-### Cost and budget
-
-The budget is the larger of 20us a run and 1% of the run's total time, JPRSurf
-and REAPER together. The floor keeps steady state cheap, and the percentage
-takes over for heavy runs, crossing at 2ms.
-
-- A timed point is two reads of the CPU's timestamp counter (`__rdtsc`), and
-  adding the difference into a fixed slot, with no lookups: an estimated
-  20-25ns. The 20us floor allows about 800 a run.
-- The profiler measures the cost of a timed point when it starts, counts the
-  points each run times, and reports its own cost per run against the budget.
-  It logs a warning if its average over the log interval goes over.
-- Counting alone costs almost nothing, so the first profiler CL counts every
-  call before any timing is added. That shows how many timed points a run
-  would have before committing to timing them all.
-- If profiling can't meet the budget, the fallback is a build option that
-  leaves the hooks uninstalled and compiles scopes out.
-
-### Output
-
-- **The `Run()` log line** stays, every 5 seconds, computed from the profile,
-  with the profiler's own cost added.
-- **Slow runs:** a run over a threshold of a few milliseconds logs a warning
-  with its biggest points by self time. The warning is limited to one per log
-  interval.
-- **The snapshot:** when the surface is destroyed (REAPER exiting, or the
-  surface being removed in preferences), the profile is written to
-  `jprsurf_profile.txt` next to `jprsurf.log`, replacing the last one, just as
-  the log is replaced. Keeping one means copying it somewhere outside the repo
-  (`out/` is transient). It is plain text, one line per point in a stable
-  order, so two snapshots diff cleanly:
-
-```
-JPRSurf profile
-Build:    40f0906 (modified)
-Date:     2026-09-28 14:32, 612s, 18360 runs
-Workload: 142 tracks, 310 routes, 2 devices, 97 views, 1204 mappings, 880 properties
-Profiler: 1.9us/run (budget 20us)
-
-Run          avg    p50    p90    p99    max    JPRSurf  REAPER
-             27us   24us   41us   180us  3.1ms  15us     12us
-
-Point                    kind    calls/run  self/call  self/run  max
-csurf/Run                entry   1          ...
-reaper/GetTrackUIVolPan  call    32         ...
-runner/Control           scope   1          ...
-...
-
-Slowest run (3.1ms)
-TrackCache::Refresh      scope   ...
-...
-```
-
-(The numbers are only illustrative.)
-
-Percentiles come from a histogram of each frame's time, with a few buckets for
-each power of two, which is cheap to add to. The slowest run's breakdown is
-kept by copying that run's points when it beats the slowest so far, which is
-rare.
-
-### Game Bits and JPRSurf
-
-The Game Bits side is two items in Game Bits' own backlog, *Function hooks* and
-*Profiler module*, which state it in Game Bits' terms. This is how the work
-divides, and what JPRSurf needs from them.
-
-| `gb/profile`                                                                 | `jpr/common`                                                                                     |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| The timestamp counter, and converting it to time                             | Hooks on every function in `JPR_REAPER_API`, and the MIDI object wrappers                        |
-| Named points of each kind, registered once, in a fixed array                 | Entry points in `ControlSurface`, and `Run()` as the frame                                       |
-| Self time through nesting, frames, counters, values, and the frame histogram | Named runnables in `RunRegistry`, and the scopes and counters in `common`, `device`, and `scene` |
-| The slowest frame's breakdown, the profiler's own cost, and the budget check | The snapshot's build, workload, and file, and the `Run()` log line                               |
-| The text report                                                              |                                                                                                  |
-
-```
-// A sketch of gb/profile. Macros define each point once, where it is used.
-#define GB_PROFILE_SCOPE(name) ...        // Times the enclosing scope.
-#define GB_PROFILE_COUNT(name, count) ... // Adds to a counter.
-
-class Profiler {
- public:
-  void BeginFrame();
-  void EndFrame();
-  void SetValue(std::string_view name, int64_t value);
-
-  // What has been counted, for tests.
-  int64_t GetCount(std::string_view name) const;
-
-  void WriteReport(std::ostream& out) const;
-  void Reset();
-};
-```
-
-Tests use the same profiler: installed over the fake, its call counts are what
-call count tests check.
+Tests use the same profiler: loaded with the plugin into the fake, its call
+counts are what call count tests check.
 
 ## Trace
 
@@ -603,8 +499,6 @@ checks each:
 
 | Fact                                                                                                                                 | Checked by                                      |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| How many REAPER calls and runnables a steady state run makes with a large project                                                    | *Profiler*, counting first                      |
-| What a timed point costs with `__rdtsc`, and that the timestamp counter is invariant on this machine                                 | Game Bits *Profiler module*                     |
 | Whether the other setters (solo, rec arm, selection, and sends) notify as `SetTrackUIMute()` does                                    | *Fake REAPER*, with a trace when it models them |
 | Whether volume and pan changes made in REAPER's UI notify the surface                                                                | *Fake REAPER*, with a trace when it models them |
 | The formats of `mkpanstr`, and of `format_timestr_pos` outside beats mode. They are only called in runs a trace leaves out as quiet. | *Fake REAPER*, with a trace when it models them |

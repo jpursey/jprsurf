@@ -1,390 +1,182 @@
 # Profiler
 
-An always-on profile of where each run's time goes: to JPRSurf's own code, or
-to REAPER's. It is built on Game Bits' `gb/profile`, and costs no more than 20us
-a run or 1% of the run's total time, whichever is more. The design is in
-[testing_and_profiling.md](../testing_and_profiling.md) (Profiler); this is the
-plan to build it.
+An always-on profile of where each of JPRSurf's runs spends its time: in
+JPRSurf's own code, or in REAPER's. It is built on Game Bits' `gb/profile`,
+and costs about 1.5us a run, against a budget of 3us or 1% of the run,
+whichever is more. The design it came from is in
+[testing_and_profiling.md](../testing_and_profiling.md) (Profiler).
+
+## Behavior
 
 Nothing changes on the surface. What changes is what JPRSurf writes:
-- **`jprsurf_profile.txt`**, next to `jprsurf.log`, written when the surface is
-  destroyed (REAPER exiting, or the surface being removed in preferences),
-  replacing the last one: the build, the workload, the run summary, and one
-  line per point.
-- **A quiet log.** The `Run()` line every 5 seconds goes. The log only has a
-  warning when a run is out of spec (a slow run, with its biggest points, at
-  most one every 5 seconds), and one summary line when the surface is
-  destroyed, with the profiler's own cost against its budget.
+- **`jprsurf_profile.txt`**, beside `jprsurf.log`, replaced each time the
+  surface is destroyed (REAPER exiting, or the surface removed in
+  preferences). It covers that surface's runs, from once it was created:
+  ```
+  JPRSurf profile
+  Build:    8afe455 (modified)
+  Date:     2026-09-29 22:55, 157s
+  Per run:  JPRSurf 37.3us, REAPER 92.2us
+  ```
+  then Game Bits' report: the workload values, the run summary (count, total,
+  average, p50, p90, p99, max, and the profiler's cost against its budget), one
+  line per point with its count and self time (in total, per run, and per
+  call), and the slowest run's breakdown.
+- **A quiet log.** The `Run()` line every 5 seconds is gone, and so are the
+  track list refresh and view activation timing lines. What is left:
+  - "Slow run (N so far)", for a run over 8ms, with Game Bits' breakdown of
+    that run by point, at most one every 5 seconds (`LOG_EVERY_N_SEC`).
+  - "Profile: …" when the snapshot is written: runs, p50, p99, max, and the
+    average with its JPRSurf and REAPER split, and the profiler's cost against
+    its budget. It is a warning, "Profile over budget: …", if the profiler went
+    over.
 
-## Design
+CLAUDE.md's Performance section says how to read these to check a change.
 
-### Names
+## Names
 
-| Name                                      | What                                                                                | Might be confused with                                                                   |
-| ----------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `ReaperProfiler`                          | Owns the `gb::Profiler` and the hooks, and writes the snapshot and warnings         | `ReaperTrace`, its sibling for every call; `gb::Profiler`, which it owns                 |
-| `ProfiledMidiInput`, `ProfiledMidiOutput` | A `midi_Input` or `midi_Output` that times every call on the REAPER object it wraps | `MidiIn` and `MidiOut`, JPRSurf's ports, which own one of these                          |
-| snapshot                                  | `jprsurf_profile.txt`                                                               | The design doc's word for it; "report" is `gb::Profiler::GetReport()`, which it contains |
+A point that times one function is named for it, as C++ names it. Counters and
+workload values have plain names.
 
-Alternatives to `ReaperProfiler`: `SurfaceProfiler` (reads as belonging to
-`ControlSurface`'s listener), `RunProfile` (it covers callbacks between runs
-too). `ReaperProfiler` matches `ReaperTrace`, which hooks the same boundary.
-
-A point that times one function is named for it, as C++ names it:
-
-| Point                  | Kind    | Examples                                           |
-| ---------------------- | ------- | -------------------------------------------------- |
-| JPRSurf's own code     | frame   | `ControlSurface::Run`                              |
-| JPRSurf's own code     | scope   | `TrackCache::Refresh`, `Scene::UpdateReferences`   |
-| REAPER API functions   | call    | `GetTrack`, `Main_OnCommand`                       |
-| Methods on a MIDI port | call    | `midi_Input::SwapBufsPrecise`, `midi_Output::Send` |
-| A runner's run         | scope   | `Runner: Device`                                   |
-| Work done              | counter | `MIDI messages in`, `Device runnables`             |
-| Workload               | value   | `tracks`, `routes`                                 |
+| Point                  | Kind    | Examples                                                                     |
+| ---------------------- | ------- | ---------------------------------------------------------------------------- |
+| A run                  | frame   | `ControlSurface::Run`                                                        |
+| JPRSurf's own code     | scope   | `TrackCache::Refresh`, `Scene::UpdateReferences`, `View::SyncMappings`       |
+| A runner's run         | scope   | `Runner: Device`, `Runner: Scene`, `Runner: MidiIn`, `Runner: MidiOut`       |
+| REAPER API functions   | call    | `GetTrack`, `Main_OnCommand`                                                 |
+| Methods on a MIDI port | call    | `midi_Input::SwapBufsPrecise`, `midi_Output::Send`                           |
+| Work done              | counter | `MIDI messages in`, `Device runnables`, `control inputs`, `mappings synced`  |
+| Workload               | value   | `tracks`, `routes`, `devices`, `controls`, `views`, `mappings`, `properties` |
 
 REAPER's functions are global, and JPRSurf's points are all qualified by a
-class, so the bare name doesn't collide. If one ever did with another kind,
-Game Bits CHECK-fails when the second is registered, so it can't go unnoticed.
-The report groups points by kind, so REAPER's calls still sit together.
+class, so the bare names don't collide. If one ever did with another kind,
+Game Bits CHECK-fails when the second is registered. Game Bits' report groups
+points by kind, so REAPER's calls sit together.
 
 A call point's count is its call count, so the MIDI messages sent are
 `midi_Output::Send` and `midi_Output::SendMsg`, with no counter of their own.
-Messages received are the counter `MIDI messages in`, as an input's read buffer
-isn't wrapped: reading it is a walk over memory that a timer would cost more
-than.
 
-### ReaperProfiler (common)
+## Structure
 
-```
-// Profiles JPRSurf's runs for as long as it exists: every function on the
-// REAPER API list, every call on a MIDI port REAPER creates, and every point
-// JPRSurf defines with gb/profile. It is created with the control surface,
-// before its listener, and destroyed after it.
-class ReaperProfiler final {
- public:
-  ReaperProfiler();
+### common: ReaperProfiler (reaper_profiler.h/.cc)
 
-  // Writes the snapshot, and logs a summary of it.
-  ~ReaperProfiler();
-};
-```
-
-- It lives in `common`, as `ControlSurface` owns it. It is made before the
-  listener, so its hooks wrap the MIDI ports the listener opens, and it is
-  reset once the listener is made, so the profile is only of runs: one time
-  costs of starting up (opening MIDI ports, building the scene) aren't the
-  point. The surface destroys its listener first, then the profiler.
-- It is per surface, not per process: a surface removed and added again starts
-  a new profile, and the snapshot is always one surface's whole life. The
-  design doc's process state table changes to say so (the fake needs no reset
-  for it).
-- The hooks are `ReaperApiHooks<gb::ProfileCallHook>`, each named for its
-  function, plus hooks on `CreateMIDIInput()` and `CreateMIDIOutput()` that wrap
-  the port they return.
-  They are installed over whatever is loaded, so over a trace when one runs
-  (the trace's own cost then shows as REAPER's, which is fine for a debugging
-  aid that is far too slow to leave on).
-- `gb::Profiler` options: `budget_per_frame` 20us, `budget_fraction` 0.01,
-  `slow_frame` 8ms (5ms caught a single mute, whose batched UI refresh alone
-  is 2.5ms).
-
-**Performance:** each timed point is about 12ns (measured by Game Bits), and
-about 1ns with no profiler. The profiler measures its own cost per run, and the
-snapshot and the summary line report it against the budget. Nothing runs per
-run beyond the timed points themselves.
-
-**Brittleness:** `gb::Profiler` CHECK-fails if a timed point ends out of order,
-or if the profiler is destroyed inside one. Every point is a scoped object, and
-the profiler is destroyed by the surface's destructor, which REAPER never calls
-from inside one of the surface's own callbacks. A new REAPER function is
-profiled automatically, as the hooks come from the API list. A new call on a
-MIDI port needs a method on the wrapper, but the wrappers implement every
-virtual method of `midi_Input` and `midi_Output`, so there is none to miss.
-
-### Entry points (common)
-
-Only `Run()` (the frame) is timed. Every other callback only sets a flag or a version (such as
-`SetTrackListChange()` and `SetSurfaceSelected()`), and the work waits for the
-next run, so timing them would show nothing worth knowing. A callback REAPER
-makes from inside a REAPER call (such as `SetSurfaceMute()` during
-`PreventUIRefresh(-1)`) is then charged to that call, which is noise at their
-cost. A callback that starts doing real work gets a scope then.
-
-### Named runners (common)
-
-```
-// `name` says what the runnables are, for profiling: each run is timed as the
-// scope point "Runner: <name>", and the counter "<name> runnables" counts the
-// runnables it ran.
-explicit Runner(std::string_view name);
-```
-
-- Each runner holds one kind of runnable: `MidiIn` and `MidiOut` in
-  `MidiPorts`, and `Device` (the controls) and `Scene` in `PluginSurface`. So a
-  name per runner says as much as a name per runnable would, with no grouping
-  inside a runner. The design had `AddRunnable(name, ...)`, but grouping by it
-  was machinery nothing used.
-- The name is a constructor argument, so a runner can't be made without one.
-- A hundred controls cost one pair of timer reads, and the counter
-  shows time per runnable.
-
-### Device and scene
-
-- **Device:** counters for what controls do, which their time scales with:
-  inputs handled (`control inputs`) and outputs sent (`control outputs`).
-- **Scene:** scopes on the parts of `Scene::OnRun()`
-  (`Scene::UpdateReferences`, `SceneStateProperty::UpdateState` for all of
-  them together, `Scene::ApplyViewConditions`, and `View::SyncMappings` around
-  the root view's, which syncs the rest), the counters `views synced` and
-  `mappings synced`, and the workload as values (`devices`, `controls`,
-  `views`, `mappings`, `properties`), set when the scene is activated, and
-  again when it is destroyed. The snapshot is written after that, and the
-  scene then holds everything ever added to it, however it was built.
-- **Common workload:** `tracks` and `routes`, set by `TrackCache::Refresh()`,
-  which is a scope, as is `TrackCache::RefreshVisibility()`.
-
-### Output (common)
-
-- **The snapshot** is the Game Bits report after JPRSurf's header:
-  ```
-  JPRSurf profile
-  Build:    40f0906 (modified)
-  Date:     2026-09-28 14:32, 612s
-  Per run:  JPRSurf 30.1us, REAPER 11.2us
-  ```
-  The report already has the values (the workload), the run summary with the
-  profiler's cost against its budget, and every point. The build is the git
-  commit, and whether its tracked files have changes, from a header
-  (`jpr/common/build_info.h`) that CMake regenerates on every build and only
-  rewrites when it changes. It is written with `std::fopen`, as one string
-  written once needs no abstraction (and no iostreams).
-- **The JPRSurf and REAPER split** sums the self time of every call point
-  (REAPER) and every other timed point (JPRSurf), per run. Game Bits' totals
-  include time outside any frame, so the profile leaves out what isn't a run:
-  the profiler is reset once the surface is created, and opening and closing a
-  MIDI port (`start()`, `stop()`, and `Destroy()`, about 180ms together)
-  aren't timed. What is left outside runs is small: the devices' and MIDI
+`ReaperProfiler` owns the `gb::Profiler`, and the hooks that time REAPER:
+- **REAPER's API:** `ReaperApiHooks<gb::ProfileCallHook>` hooks every function
+  on the API list (`reaper_api.h`), each named for its function, so a newly
+  listed function is timed with no more work. The hooks go over whatever is
+  loaded, including a trace's hooks when `JPRSURF_TRACE` is set; the trace's
+  cost then shows as REAPER's.
+- **MIDI ports:** hooks on `CreateMIDIInput()` and `CreateMIDIOutput()` wrap
+  each port REAPER returns in a `ProfiledMidiInput` or `ProfiledMidiOutput`
+  (private to the `.cc`). These implement every virtual method of the SDK
+  class, so no call is missed, and time each call except opening and closing
+  the port (`start()`, `stop()`, and `Destroy()`), which happen once. An
+  input's read buffer isn't wrapped: reading it is a walk over memory that a
+  timer would cost more than, so `MidiIn::Poll()` counts `MIDI messages in`
+  instead.
+- **Its life:** `ControlSurface` holds it as a member declared before the
+  listener, so its hooks wrap the ports the listener opens, and it outlives
+  the listener. The surface calls `Reset()` once the listener is created, so
+  one time costs of starting up (opening ports, building the scene) are left
+  out. It is destroyed with the surface, and writes the snapshot and logs the
+  summary then. So a profile is per surface, not per process: a surface removed
+  and added again starts a new one.
+- **The split:** the self time of every call point is REAPER's, and of every
+  other timed point JPRSurf's, per run. Game Bits' totals include time outside
+  any run, which is why the profile leaves out starting up and opening and
+  closing ports. What is left outside runs is small: the devices' and MIDI
   outputs' last run as the surface is destroyed, and REAPER's callbacks
   between runs, which only set flags.
-- **No timing log lines.** The track list refresh and view activation durations
-  are no longer logged, as the profile has them (`TrackCache::Refresh`,
-  `Scene::ApplyViewConditions`), and a slow one logs a slow run.
-- **No periodic log line.** Today's `Run()` line every 5 seconds goes, with
-  `ControlSurface`'s own run timing. The snapshot has everything it showed, and
-  more. If a view of a session in progress turns out to be needed, that is the
-  backlog's *Profile snapshots on demand*, rather than a periodic line.
-- **Slow runs:** a run over 8ms logs a warning with Game Bits' report of that
-  run, limited to one every 5 seconds, so a burst of slow runs doesn't flood
-  the log.
-- **The summary line**, logged when the snapshot is written, with a warning
-  instead if the profiler was over its budget:
-  ```
-  Profile: 18360 runs, p50 24.1us, p99 180.3us, max 3.1ms, avg 27.0us (JPRSurf 15.2us, REAPER 11.8us), profiler 1.9us/run (budget 20.0us)
-  ```
+- **The build:** `build_info.cmake` writes `jpr/common/build_info.h` on every
+  build, with the git commit and whether tracked files have changes. It only
+  rewrites the header when it changes, so a build with no change recompiles
+  nothing.
+- **The file** is written with `std::fopen`, as one string written once needs
+  no abstraction (and no iostreams). Its date uses `GetLocalTimeZone()`
+  (`local_time.h`), as `absl::LocalTimeZone()` is UTC inside REAPER.
 
-### To confirm
+**Brittleness:** `gb::Profiler` CHECK-fails if a timed point ends out of order,
+or if it is reset or destroyed inside one. Every point is a scoped object; the
+reset is in the surface's constructor and the destruction in its destructor,
+neither of which REAPER calls from inside a timed point.
 
-| Fact                                                                                           | Checked by |
-| ---------------------------------------------------------------------------------------------- | ---------- |
-| REAPER creates the surface and calls `Run()` on the same thread, so runs are recorded          | CL1        |
-| What a timed point costs inside REAPER's process, against Game Bits' 12ns                      | CL1        |
-| Whether `Run()` is re-entered during a modal dialog an action opens (nested frames CHECK-fail) | CL1        |
-| How many REAPER calls a steady state run makes with a large project, and the profiler's cost   | CL2        |
-| How many runnables a steady state run makes, and the cost with every point in place            | CL4        |
+### common: what is timed
 
-Findings so far:
-- **CL1 (2026-09-29, 81 tracks, 161s):** runs are recorded (5012 frames), so
-  REAPER creates the surface and runs it on the same thread. A timed point
-  costs 11.8ns inside REAPER, matching Game Bits' measurement. Runs averaged
-  69.6us (p50 27us, p99 514us, max 19.7ms). Creating the surface took 108ms,
-  about 100ms of it opening the four MIDI ports. `absl::LocalTimeZone()` is UTC
-  inside REAPER, so the snapshot uses `GetLocalTimeZone()` (`local_time.h`).
-  Against a baseline session without the profiler (5048 runs, avg 75.3us,
-  32.9us in quiet intervals, max 22.8ms), CL1's `Run()` log line (30.5us in
-  quiet intervals) shows no regression; the difference is noise.
-- **CL1, modal dialogs:** pressing Save in an unsaved project opens the Save As
-  dialog from inside `Run()` (in `Main_OnCommand()`). REAPER doesn't call
-  `Run()` again while it is open, so frames don't nest. That run lasts until
-  the dialog closes (26.5s and 10.8s in the test), and surface input waits in
-  REAPER's MIDI buffer until the next runs read it. Such a run skews the
-  average, and so the budget's fraction of it (370us in that session), but
-  not p50 or p99, so the summary line (CL7) leads with those.
-- **CL2 (2026-09-29, 81 tracks, 276s):** a steady state run makes about 113
-  REAPER calls, and the profiler costs 1.33us a run against its 20us budget,
-  so every call stays timed. The reads every run makes cost about 8us, led by
-  `GetTrackState` (17 a run, 165ns each), `GetToggleCommandState` (14, 90ns),
-  and `CountSelectedMediaItems` (1, 472ns). Events are REAPER's time:
-  `Main_OnCommand` 4.4ms a call (all of the slowest run, 25.2ms),
-  `PreventUIRefresh` 2.9ms (the batched UI refresh), `Undo_OnStateChangeEx`
-  1.4ms, and opening the MIDI ports 78ms. With `JPRSURF_TRACE` set, the
-  profiler's hooks stack over the trace's and both come off cleanly; the
-  trace's cost shows as REAPER's (`GetTrackState` 932ns a call, p50 run
-  79.7us).
-- **CL3 (2026-09-29, 81 tracks, 8 routes, 125s):** the profiler costs 1.36us a
-  run; the MIDI points add about 0.07us. Polling the two inputs costs 1.2us a
-  run (`midi_Input::SwapBufsPrecise`, 606ns a call). A message sent costs 831ns
-  (`midi_Output::Send`), and sysex 201ns (`SendMsg`). Closing an input takes
-  52ms, so about 100ms on exit. `TrackCache::Refresh` is 92us of JPRSurf's own
-  time. Idle sessions of CL2 and CL3 two minutes apart were within noise (p50
-  37.3us and 39.8us, average 40.4us and 42.9us, p99 79.7us for both), so CL3
-  costs nothing measurable. CL2's earlier session (p50 29.6us) was faster for
-  both builds, as REAPER's own calls were too: the machine varies by that much
-  between sessions, so only snapshots taken close together are comparable.
-- **CL4 (2026-09-29, 81 tracks, 94s):** about 120 timed points a run, for a
-  profiler cost of 1.42us. JPRSurf's own time a run is mostly the scene
-  (17.7us, one runnable) and the controls (14.8us for 144 runnables, about
-  100ns each); the MIDI runners are 1.2us (inputs) and 0.7us (outputs), and
-  `ControlSurface::Run` itself 3us. Every control runs every run. The device
-  and MIDI output runners run once more than there are frames, when the
-  surface is destroyed and clears the hardware. Idle, it matched CL3's idle
-  session (p50 39.8us and p99 79.7us for both, average 41.9us against
-  42.9us). An idle run is about 30us of JPRSurf (scene 14.6us, 145 controls
-  11.6us) and 11us of REAPER reads.
-- **CL5 (2026-09-29, 61s):** 226 control inputs from 238 MIDI messages in
-  (the rest are messages no control handles), and 290 control outputs sent
-  as 1,057 MIDI messages (765 `Send`, 292 `SendMsg`), so an output averages
-  3 to 4 messages.
-- **CL6 (2026-09-29, 150s):** the workload is 2 devices, 243 controls, 36
-  views, 595 mappings, and 215 properties. The scene's 16.7us a run is
-  `View::SyncMappings` 10.2us (446 mappings in 20 active views, about 23ns a
-  mapping), `SceneStateProperty::UpdateState` 2.8us,
-  `Scene::UpdateReferences` 2.5us, and `Scene::ApplyViewConditions` 0.5us.
-  The view counters left the profiler's cost at 1.42us a run. 145 of the 243
-  controls run each run; a control only runs while it has registered inputs
-  or output to send.
+- **The run:** `ControlSurface::Run()` is the frame. The other
+  `IReaperControlSurface` callbacks aren't timed, as each only sets a flag or a
+  version for the next run to act on. A callback REAPER makes from inside a
+  REAPER call is charged to that call. A callback that starts doing real work
+  gets a scope then.
+- **Runners:** `Runner` takes a name, times each run as `Runner: <name>`, and
+  counts `<name> runnables`. Each runner holds one kind of runnable (`MidiIn`
+  and `MidiOut` in `MidiPorts`, `Device` and `Scene` in `PluginSurface`), so a
+  name per runner says as much as one per runnable, and a hundred controls cost
+  one pair of timer reads.
+- **TrackCache:** `Refresh()` and `RefreshVisibility()` are scopes, and
+  `Refresh()` sets `tracks` and `routes` (counting each send once).
 
-**Counting first.** The backlog asks for calls to be counted before they are
-timed, to see how many points a run would time against the budget. Game Bits'
-profiler now measures its own cost per run, so CL2 times the calls and reads
-both the count and the cost from the snapshot.
+### device: Control
 
-**If it is over budget,** most of the calls are likely queries that are always
-cheap (such as `GetTrack()` and `GetMediaTrackInfo_Value()`), so the first
-fallback is to stop timing those, chosen by their time per call in the
-snapshot. They can still be counted, for a few adds and no timer reads, so call
-counts stay complete, and their time is charged to the JPRSurf point that makes
-them. Only if that isn't enough is there a CMake option that turns profiling
-off.
+`Control` counts `control inputs` (each input handled, in its value, delta,
+and press handlers) and `control outputs` (each output sent, in
+`SendPendingOutput()`, which clearing a control goes through too).
 
-## CLs
+### scene: Scene and View
 
-### CL1 [x] common: ReaperProfiler, the frame, and the snapshot
+- `Scene::OnRun()` times its parts: `Scene::UpdateReferences`,
+  `SceneStateProperty::UpdateState` (all of them together),
+  `Scene::ApplyViewConditions`, and `View::SyncMappings` (around the root
+  view's, which syncs the rest).
+- `View::SyncMappings()` counts `views synced` and `mappings synced`, for each
+  active view.
+- `Scene::SetWorkloadValues()` walks the scene for `devices`, `controls`,
+  `views`, `mappings`, and `properties`. It is called when the scene is
+  activated, and again when it is destroyed, before the snapshot is written,
+  so the snapshot has everything ever added to the scene however it was built
+  (and after the profiler's reset).
 
-Depends on: nothing.
+## REAPER facts
 
-- `jpr_common` links `gb_profile`.
-- `reaper_profiler.h/.cc`: `ReaperProfiler`, owning the `gb::Profiler`, and
-  writing the snapshot (the report, with a header of the date and duration;
-  the report has the runs, as frames) when destroyed.
-- `ControlSurface` creates it in `Create()` and owns it. `Run()` is the frame
-  `csurf/Run`, and `Create()` is timed as `csurf/Create`.
-- The design doc's process state table: the profiler is per surface.
+Found while building this, on an 81-track project:
+- REAPER creates the surface and calls `Run()` on the same thread, which is
+  the thread the profiler records.
+- An action that opens a modal dialog from inside `Run()` (Save As from the
+  surface's Save button, in an unsaved project) blocks that run until the
+  dialog closes. REAPER doesn't call `Run()` again meanwhile, so runs don't
+  nest. Surface input waits in REAPER's MIDI buffer until the next runs read
+  it.
+- Opening the four X-Touch MIDI ports takes about 80ms, and closing the two
+  inputs about 50ms each.
+- A single mute from the surface costs about 2.5ms in `PreventUIRefresh(-1)`,
+  REAPER's batched UI refresh.
 
-**Verify**
-- Standard checks.
-- Close REAPER: `jprsurf_profile.txt` has the runs, and `csurf/Run` and
-  `csurf/Create` with plausible times. The point cost is recorded under To
-  confirm.
-- Run an action that opens a modal dialog from a surface button (such as a
-  command mapping for File: Save project as, or Preferences), leave it open a
-  few seconds, and close it. REAPER must not crash. If it does, `Run()` is
-  re-entered, and CL1 times only the outer run as the frame.
-- Performance: the `Run()` log line's avg and max against before the change,
-  with a large project.
+## Building blocks
 
-### CL2 [x] common: Time every REAPER call
+- **`ReaperProfiler` (common/reaper_profiler.h)**: profiles a surface's runs.
+  Declare it before anything that opens MIDI ports, and `Reset()` it once
+  startup is done.
+- **`Runner(name)` (common/runner.h)**: a runner times its own runs, so a new
+  kind of runnable only needs its own runner.
+- **`GetLocalTimeZone()` (common/local_time.h)**: the local time zone, for any
+  time JPRSurf writes, as `absl::LocalTimeZone()` is UTC inside REAPER.
+- **`build_info.h` (generated in `jpr_common`)**: the build's commit, and
+  whether it was modified.
 
-Depends on: CL1.
+## Performance
 
-- `CallHook`, and `ReaperApiHooks<CallHook>` in `ReaperProfiler`.
-
-**Verify**
-- Standard checks, including with `JPRSURF_TRACE` set (hooks stack over the
-  trace).
-- The snapshot has a `reaper/` line for each function called, with calls per
-  run. Record the steady state calls per run and the profiler's cost against
-  its budget under To confirm, with a large project. If it is over budget, stop
-  and apply the fallback (see Counting first).
-
-### CL3 [x] common: MIDI ports and TrackCache
-
-Depends on: CL2.
-
-- `ProfiledMidiInput` and `ProfiledMidiOutput`, and the hooks on
-  `CreateMIDIInput()` and `CreateMIDIOutput()` that wrap what they return.
-- The counter `MIDI messages in`, in `MidiIn::Poll()`.
-- Scopes on `TrackCache::Refresh()` and `RefreshVisibility()`, and the values
-  `tracks` and `routes`.
-- Points are named for the function they time (see Names): the REAPER API
-  functions by their own names, with `ReaperApiHooks<gb::ProfileCallHook>`
-  in place of `CallHook`, and `ControlSurface::Run` and
-  `ControlSurface::Create`.
-
-**Verify**
-- Standard checks.
-- The snapshot: `midi_Input::` and `midi_Output::` calls that move with
-  pressing buttons and moving faders, and the workload values matching the
-  project.
-
-### CL4 [x] common: Named runners
-
-Depends on: CL3.
-
-- `Runner` takes a name, and times each run as `Runner: <name>`, counting the
-  runnables it ran.
-- The four runners are named where they are declared: `MidiIn` and `MidiOut`
-  in `MidiPorts`, and `Device` and `Scene` in `PluginSurface` (`plugin`).
-  The `plugin` change is two lines, so it comes with the API change.
-
-**Verify**
-- Standard checks, especially the smoke test, since every control and the
-  scene run through the changed runner.
-- The snapshot has the four `Runner:` scopes with runnables per run. Record the
-  steady state runnables per run and the profiler's cost under To confirm.
-
-### CL5 [x] device: Control counters
-
-Depends on: CL4.
-
-- `control inputs` and `control outputs` counters in `Control`.
-
-**Verify**
-- Standard checks.
-- The counters move with pressing buttons and moving faders, and outputs with
-  changes in REAPER.
-
-### CL6 [x] scene: Scene scopes, counters, and workload
-
-Depends on: CL5.
-
-- Scopes on the parts of `Scene::OnRun()`, counters for views and mappings
-  synced, and the workload values, set in `Scene::Activate()` and `~Scene()`.
-
-**Verify**
-- Standard checks.
-- The snapshot's workload values match the scene, and the `Scene::` scopes add
-  up to about `Runner: Scene`.
-
-### CL7 [x] common: A quiet log, slow runs, and the build
-
-Depends on: CL6.
-
-- `ControlSurface` loses its own run timing and the `Run()` log line, and the
-  track list refresh and view activation (`scene`) lose their timing lines.
-- The slow run warning, limited to one every 5 seconds.
-- The summary line when the snapshot is written, or a warning if over budget.
-- The profile is only of runs: the profiler is reset once the surface is
-  created (so `ControlSurface::Create` goes), and opening and closing MIDI
-  ports isn't timed.
-- The build and the per run JPRSurf and REAPER split in the snapshot's header,
-  the build generated by CMake at build time.
-- CLAUDE.md's Performance section reads performance from the snapshot, the
-  summary line, and slow run warnings.
-
-**Verify**
-- Standard checks.
-- The log has no line per interval, and the summary line on closing REAPER,
-  with the profiler's cost under its budget.
-- A slow run (a track list refresh on a large project, or a temporary 10ms
-  sleep in a test mapping) logs one warning with its breakdown.
-- The snapshot's header has the commit, and "(modified)" with local changes.
+On an 81-track project (2 devices, 243 controls, 36 views, 595 mappings):
+- **The profiler** times about 120 points a run, at about 12ns each, for about
+  1.5us a run. Idle sessions with and without each CL, minutes apart, were
+  within noise.
+- **An idle run** is about 40us: 30us of JPRSurf and 11us of REAPER's reads.
+  JPRSurf's time is mostly the scene (about 15us, 10us of it syncing 446
+  mappings at about 23ns each) and the controls (about 12us for the 145
+  controls that run, about 80ns each). REAPER's reads are led by
+  `GetTrackState` (17 a run, about 165–250ns each) and
+  `GetToggleCommandState` (14 a run, about 100ns each).
+- **Events** are REAPER's time: `Main_OnCommand` from about 4ms to over 100ms,
+  `PreventUIRefresh` about 3ms, and `Undo_OnStateChangeEx` about 1.5ms. A
+  track list refresh is about 90us of JPRSurf's own time.
+- **Between sessions**, the same build's run times vary by about 30%, so only
+  sessions taken close together, with the same activity and other programs
+  closed, are comparable.

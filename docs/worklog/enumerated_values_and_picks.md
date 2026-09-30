@@ -46,8 +46,9 @@ Nothing changed, apart from:
   showing nothing until another track is touched, rather than returning to
   Track mode. This is rare, and harmless: the mode follows the next track
   touched, and the Track button leaves it.
-- The plugin's "Surface mode changed" log line is gone. The scene logs each
-  mode view's activation and deactivation.
+- The plugin's "Surface mode changed" log line is gone. The scene logged each
+  mode view's activation and deactivation, until the profiler replaced it (see
+  [profiler.md](profiler.md)).
 
 ## Design decisions
 
