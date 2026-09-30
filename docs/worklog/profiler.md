@@ -38,8 +38,8 @@ A point that times one function is named for it, as C++ names it:
 | JPRSurf's own code     | scope   | `ControlSurface::Create`, `TrackCache::Refresh`    |
 | REAPER API functions   | call    | `GetTrack`, `Main_OnCommand`                       |
 | Methods on a MIDI port | call    | `midi_Input::SwapBufsPrecise`, `midi_Output::Send` |
-| A group of runnables   | scope   | `Runner: Control`                                  |
-| Work done              | counter | `MIDI messages in`, `Control runnables`            |
+| A runner's run         | scope   | `Runner: Device`                                   |
+| Work done              | counter | `MIDI messages in`, `Device runnables`             |
 | Workload               | value   | `tracks`, `routes`                                 |
 
 REAPER's functions are global, and JPRSurf's points are all qualified by a
@@ -111,23 +111,23 @@ makes from inside a REAPER call (such as `SetSurfaceMute()` during
 `PreventUIRefresh(-1)`) is then charged to that call, which is noise at their
 cost. A callback that starts doing real work gets a scope then.
 
-### Named runnables (common)
+### Named runners (common)
 
 ```
-// `name` groups runnables: those with the same name run together, and are
-// timed together as the scope point "Runner: <name>".
-RunHandle AddRunnable(std::string_view name, Runnable runnable);
+// `name` says what the runnables are, for profiling: each run is timed as the
+// scope point "Runner: <name>", and the counter "<name> runnables" counts the
+// runnables it ran.
+explicit Runner(std::string_view name);
 ```
 
-- A name is required, so a runnable can't be added without one. Today's
-  callers are `MidiIn` and `MidiOut` (`common`), `Control` (`device`), and
-  `Scene` (`scene`).
-- A hundred `Control` runnables cost one pair of timer reads. A counter,
-  `<name> runnables`, counts how many ran, so the snapshot shows time per
-  runnable.
-- The order runnables run in is arbitrary today, so grouping them changes
-  nothing a caller can rely on. A runnable removed during a run still doesn't
-  run later in that run.
+- Each runner holds one kind of runnable: `MidiIn` and `MidiOut` in
+  `MidiPorts`, and `Device` (the controls) and `Scene` in `PluginSurface`. So a
+  name per runner says as much as a name per runnable would, with no grouping
+  inside a runner. The design had `AddRunnable(name, ...)`, but grouping by it
+  was machinery nothing used.
+- The name is a constructor argument, so a runner can't be made without one.
+- A hundred controls cost one pair of timer reads, and the counter
+  shows time per runnable.
 
 ### Device and scene
 
@@ -219,6 +219,16 @@ Findings so far:
   costs nothing measurable. CL2's earlier session (p50 29.6us) was faster for
   both builds, as REAPER's own calls were too: the machine varies by that much
   between sessions, so only snapshots taken close together are comparable.
+- **CL4 (2026-09-29, 81 tracks, 94s):** about 120 timed points a run, for a
+  profiler cost of 1.42us. JPRSurf's own time a run is mostly the scene
+  (17.7us, one runnable) and the controls (14.8us for 144 runnables, about
+  100ns each); the MIDI runners are 1.2us (inputs) and 0.7us (outputs), and
+  `ControlSurface::Run` itself 3us. Every control runs every run. The device
+  and MIDI output runners run once more than there are frames, when the
+  surface is destroyed and clears the hardware. Idle, it matched CL3's idle
+  session (p50 39.8us and p99 79.7us for both, average 41.9us against
+  42.9us). An idle run is about 30us of JPRSurf (scene 14.6us, 145 controls
+  11.6us) and 11us of REAPER reads.
 
 **Counting first.** The backlog asks for calls to be counted before they are
 timed, to see how many points a run would time against the budget. Game Bits'
@@ -293,19 +303,19 @@ Depends on: CL2.
   pressing buttons and moving faders, and the workload values matching the
   project.
 
-### CL4 [ ] common: Named runnables
+### CL4 [x] common: Named runners
 
 Depends on: CL3.
 
-- `RunRegistry::AddRunnable()` takes a name, groups runnables by it, and times
-  each group as `Runner: <name>`, counting its runnables.
-- The callers pass names: `MidiIn`, `MidiOut`, `Control`, and `Scene`. The
-  `device` and `scene` changes are one line each, so they come with the API
-  change rather than in their own CLs.
+- `Runner` takes a name, and times each run as `Runner: <name>`, counting the
+  runnables it ran.
+- The four runners are named where they are declared: `MidiIn` and `MidiOut`
+  in `MidiPorts`, and `Device` and `Scene` in `PluginSurface` (`plugin`).
+  The `plugin` change is two lines, so it comes with the API change.
 
 **Verify**
 - Standard checks, especially the smoke test, since every control and the
-  scene run through the changed registry.
+  scene run through the changed runner.
 - The snapshot has the four `Runner:` scopes with runnables per run. Record the
   steady state runnables per run and the profiler's cost under To confirm.
 

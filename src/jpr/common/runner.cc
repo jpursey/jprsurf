@@ -5,6 +5,11 @@
 
 #include "jpr/common/runner.h"
 
+#include <string_view>
+
+#include "absl/strings/str_cat.h"
+#include "gb/profile/profile_point.h"
+#include "gb/profile/profile_timer.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -29,6 +34,11 @@ RunHandle::~RunHandle() {
   }
 }
 
+RunRegistry::RunRegistry(std::string_view name)
+    : scope_(gb::ProfilePoint::Kind::kScope, absl::StrCat("Runner: ", name)),
+      counter_(gb::ProfilePoint::Kind::kCounter,
+               absl::StrCat(name, " runnables")) {}
+
 RunHandle RunRegistry::AddRunnable(Runnable runnable) {
   int id = next_id_++;
   runnables_[id] = std::move(runnable);
@@ -43,11 +53,15 @@ void RunRegistry::DoRun() {
     runnables_.erase(id);
   }
   cleared_runnables_.clear();
+  gb::ProfileTimer timer(scope_);
+  int run_count = 0;
   for (auto& [id, runnable] : runnables_) {
     if (!cleared_runnables_.contains(id)) {
       runnable(time);
+      ++run_count;
     }
   }
+  counter_.Count(run_count);
 }
 
 }  // namespace jpr

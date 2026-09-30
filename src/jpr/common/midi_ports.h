@@ -55,8 +55,8 @@ class MidiPorts final {
                     const std::vector<std::unique_ptr<Port>>& ports);
 
   // The runners must outlive the ports, which are registered with them.
-  Runner input_runner_;
-  Runner output_runner_;
+  Runner input_runner_{"MidiIn"};
+  Runner output_runner_{"MidiOut"};
 
   // Every port in REAPER, whether or not it is open.
   std::vector<std::unique_ptr<MidiIn>> inputs_;

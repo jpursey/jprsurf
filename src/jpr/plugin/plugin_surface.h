@@ -47,8 +47,8 @@ class PluginSurface final : private ControlSurfaceListener {
 
   // State
   gb::Config config_;
-  Runner device_runner_;  // Resets device state, sends pending messages.
-  Runner scene_runner_;   // Updates the scene.
+  Runner device_runner_{"Device"};  // Resets device state, sends output.
+  Runner scene_runner_{"Scene"};    // Updates the scene.
   MidiPorts midi_ports_;  // Outlives the scene, whose devices use the ports.
   std::unique_ptr<Scene> scene_;
 };

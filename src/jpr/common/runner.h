@@ -5,9 +5,12 @@
 
 #pragma once
 
+#include <string_view>
+
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/functional/any_invocable.h"
+#include "gb/profile/profile_point.h"
 
 namespace jpr {
 
@@ -62,7 +65,10 @@ class RunRegistry {
   RunHandle AddRunnable(Runnable runnable);
 
  protected:
-  RunRegistry() = default;
+  // `name` says what the runnables are, for profiling: each run is timed as
+  // the scope point "Runner: <name>", and the counter "<name> runnables" counts
+  // the runnables it ran.
+  explicit RunRegistry(std::string_view name);
   ~RunRegistry() = default;
 
   // Runs all registered runnables. Should be called from Runner::Run().
@@ -71,6 +77,8 @@ class RunRegistry {
  private:
   friend class RunHandle;
 
+  const gb::ProfilePoint scope_;
+  const gb::ProfilePoint counter_;
   absl::flat_hash_set<int> cleared_runnables_;
   absl::flat_hash_map<int, Runnable> runnables_;
   int next_id_ = 1;
@@ -80,7 +88,8 @@ class RunRegistry {
 // Run() is called. Runnables are registered by calling AddRunnable().
 class Runner final : public RunRegistry {
  public:
-  Runner() = default;
+  // See RunRegistry for `name`.
+  explicit Runner(std::string_view name) : RunRegistry(name) {}
   Runner(const Runner&) = delete;
   Runner& operator=(const Runner&) = delete;
   ~Runner() = default;
