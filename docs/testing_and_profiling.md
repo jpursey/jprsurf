@@ -511,7 +511,7 @@ between tests:
 | `g_modifiers`, and `timeline.cc`'s `g_last_ruler_*` caches | The fake                                                         |
 | The run's time                                             | The fake                                                         |
 | The API table                                              | The fake: back to functions that fail the test                   |
-| The profiler's counts                                      | The fake                                                         |
+| The profiler                                               | Destroying the surface, which owns it                            |
 
 - Only the fake can reset anything. Each reset takes a key type that only
   `FakeReaper` can create, so no other code can call it.

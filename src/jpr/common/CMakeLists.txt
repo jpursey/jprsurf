@@ -19,6 +19,7 @@ set(jpr_common_SOURCE
   numbered_name.h
   prefixed_name.h
   reaper_api.cc reaper_api.h
+  reaper_profiler.cc reaper_profiler.h
   reaper_trace.cc reaper_trace.h
   runner.cc runner.h
   timeline.cc timeline.h
@@ -35,6 +36,7 @@ set(jpr_common_DEPS
   absl::time
   gb_base
   gb_config
+  gb_profile
   reaper_sdk
 )
 

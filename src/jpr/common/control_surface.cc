@@ -19,6 +19,8 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/types/span.h"
+#include "gb/profile/profile_timer.h"
+#include "jpr/common/log_file.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/reaper_trace.h"
 #include "jpr/common/track_cache.h"
@@ -96,8 +98,7 @@ IReaperControlSurface* ControlSurface::Create(const char* type_string,
     return nullptr;
   }
 
-  return new ControlSurface(
-      s_type_.create_listener(absl::NullSafeStringView(config_string)));
+  return new ControlSurface(absl::NullSafeStringView(config_string));
 }
 
 HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
@@ -109,8 +110,15 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
   return nullptr;
 }
 
-ControlSurface::ControlSurface(std::unique_ptr<ControlSurfaceListener> listener)
-    : listener_(std::move(listener)) {
+std::unique_ptr<ControlSurfaceListener> ControlSurface::CreateListener(
+    std::string_view config) {
+  gb::ProfileScope<"csurf/Create"> scope;
+  return s_type_.create_listener(config);
+}
+
+ControlSurface::ControlSurface(std::string_view config)
+    : profiler_(GetLogPath("jprsurf_profile.txt")),
+      listener_(CreateListener(config)) {
   CHECK(listener_ != nullptr)
       << "No listener created for control surface type " << s_type_.type_string;
   CHECK(s_instance_ == nullptr) << "Only one ControlSurface may exist";
@@ -141,6 +149,7 @@ const char* ControlSurface::GetConfigString() {
 }
 
 void ControlSurface::Run() {
+  gb::ProfileFrame<"csurf/Run"> frame;
   const absl::Time start = absl::Now();
 
   if (track_list_changed_) {

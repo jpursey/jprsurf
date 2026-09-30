@@ -12,6 +12,7 @@
 
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "jpr/common/reaper_profiler.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -54,6 +55,8 @@ class ControlSurfaceListener {
 // - TrackCache follows selection, automation mode, and last touched track
 //   changes.
 // - ContinuousUndo is updated after every run.
+// - A ReaperProfiler profiles it from creation, before the listener is created,
+//   until it is destroyed, after the listener is.
 //
 // Only one instance may exist at a time. If the user adds the surface again,
 // the new one is refused with an error, and the first is left untouched.
@@ -94,7 +97,11 @@ class ControlSurface final : private IReaperControlSurface {
   static HWND ShowConfig(const char* type_string, HWND parent,
                          const char* init_config_string);
 
-  explicit ControlSurface(std::unique_ptr<ControlSurfaceListener> listener);
+  explicit ControlSurface(std::string_view config);
+
+  // Creates the listener from the config string REAPER saved.
+  static std::unique_ptr<ControlSurfaceListener> CreateListener(
+      std::string_view config);
 
   // IReaperControlSurface overrides
   const char* GetTypeString() override;
@@ -162,6 +169,9 @@ class ControlSurface final : private IReaperControlSurface {
   // The one instance that exists, if any.
   static ControlSurface* s_instance_;
 
+  // The profiler is declared first, so it profiles the listener's creation, and
+  // outlives it.
+  ReaperProfiler profiler_;
   std::unique_ptr<ControlSurfaceListener> listener_;
   std::string config_string_;  // Holds the result of GetConfigString().
 

@@ -159,7 +159,7 @@ RunHandle AddRunnable(std::string_view name, Runnable runnable);
 - **The summary line**, logged when the snapshot is written, with a warning
   instead if the profiler was over its budget:
   ```
-  Profile: 18360 runs, avg 27us (JPRSurf 15us, REAPER 12us), p99 180us, max 3.1ms, profiler 1.9us/run (budget 20us)
+  Profile: 18360 runs, p50 24us, p99 180us, max 3.1ms, avg 27us (JPRSurf 15us, REAPER 12us), profiler 1.9us/run (budget 20us)
   ```
 
 ### To confirm
@@ -171,6 +171,24 @@ RunHandle AddRunnable(std::string_view name, Runnable runnable);
 | Whether `Run()` is re-entered during a modal dialog an action opens (nested frames CHECK-fail) | CL1        |
 | How many REAPER calls a steady state run makes with a large project, and the profiler's cost   | CL2        |
 | How many runnables a steady state run makes, and the cost with every point in place            | CL4        |
+
+Findings so far:
+- **CL1 (2026-09-29, 81 tracks, 161s):** runs are recorded (5012 frames), so
+  REAPER creates the surface and runs it on the same thread. A timed point
+  costs 11.8ns inside REAPER, matching Game Bits' measurement. Runs averaged
+  69.6us (p50 27us, p99 514us, max 19.7ms). Creating the surface took 108ms,
+  about 100ms of it opening the four MIDI ports. `absl::LocalTimeZone()` is UTC
+  inside REAPER, so the snapshot uses `GetLocalTimeZone()` (`local_time.h`).
+  Against a baseline session without the profiler (5048 runs, avg 75.3us,
+  32.9us in quiet intervals, max 22.8ms), CL1's `Run()` log line (30.5us in
+  quiet intervals) shows no regression; the difference is noise.
+- **CL1, modal dialogs:** pressing Save in an unsaved project opens the Save As
+  dialog from inside `Run()` (in `Main_OnCommand()`). REAPER doesn't call
+  `Run()` again while it is open, so frames don't nest. That run lasts until
+  the dialog closes (26.5s and 10.8s in the test), and surface input waits in
+  REAPER's MIDI buffer until the next runs read it. Such a run skews the
+  average, and so the budget's fraction of it (370us in that session), but
+  not p50 or p99, so the summary line (CL7) leads with those.
 
 **Counting first.** The backlog asks for calls to be counted before they are
 timed, to see how many points a run would time against the budget. Game Bits'
@@ -187,7 +205,7 @@ off.
 
 ## CLs
 
-### CL1 [ ] common: ReaperProfiler, the frame, and the snapshot
+### CL1 [x] common: ReaperProfiler, the frame, and the snapshot
 
 Depends on: nothing.
 
