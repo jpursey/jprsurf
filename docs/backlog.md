@@ -28,36 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Fake REAPER
-
-- **Layers:** common
-- **Size:** large
-- **Feature workflow:** yes
-- **Depends on:** *REAPER API list*, Game Bits *Function hooks*, and *Trace
-  REAPER calls* for the behaviors it models
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Time,
-  Fake REAPER)
-
-A test-only library, `jpr/common/testing`, that implements the API list over
-REAPER's state held in memory, so code that depends on REAPER can be unit
-tested. Two changes come first:
-- **One clock:** `ControlSurface::Run()` reads `time_precise()` once, and the
-  runners and `ContinuousUndo` use that time, so `absl::Now()` is only used for
-  measurement.
-- **Resettable process state:** `TrackCache`, `ContinuousUndo`, the surface
-  registration, and the other globals can be reset, with a key only the fake
-  can create.
-
-The fake holds tracks, selection, routes, transport, commands, automation,
-undo, MIDI ports, and the clock. It is literal, apart from behaviors traces
-have shown. It fails a test on a call it doesn't implement, on unbatched
-changes to several tracks (the `TrackBatch` rule), on an unbalanced
-`PreventUIRefresh()`, on a deleted track's pointer, and on anything left open
-at teardown. Tests of `common` come with it: `Track`, `TrackCache`,
-`TrackBatch`, `Timeline`, the MIDI ports, `ContinuousUndo`, and
-`ControlSurface`. CLAUDE.md's testing rules change with it, as code that
-depends on REAPER can then be verified in a side session.
-
 ## Fake X-Touch and device tests
 
 - **Layers:** device
@@ -98,7 +68,9 @@ extender. The tests cover the smoke test list: faders, pots, pot buttons, mute,
 solo, rec arm, select (press, double press, long press), folder navigation,
 bank and channel navigation, Global, the master fader, transport, timecode,
 meters, scribble names and colors, and mode buttons. CLAUDE.md's smoke test
-shrinks to what the fakes can't show.
+shrinks to what the fakes can't show. The fake's reset of process state (see
+[fake_reaper.md](worklog/fake_reaper.md)) extends to `Plugin`'s instance and
+trace, and the harness keeps tracing off whatever `JPRSURF_TRACE` is set to.
 
 ## Scene tests
 
@@ -112,7 +84,9 @@ Tests of `scene` against the fake and fake X-Touches, for the detail surface
 tests don't reach: properties against REAPER's state (track, route, state,
 command, and timeline properties), views (conditions, subjects, lists,
 references, and repeated views), mappings (modifiers, taps, and picks), and
-`TrackActions` (ranges, anchors, grouping, and batching).
+`TrackActions` (ranges, anchors, grouping, and batching). The fake's reset of
+process state extends to `scene`'s globals, such as `g_last_auto_override` in
+`state_properties.cc`.
 
 ## REAPER call count tests
 
@@ -128,6 +102,25 @@ the fake. Tests bound the REAPER calls in a steady state run, and in a track
 list refresh, a bank change, and a mode change. Each bound starts at the count
 when the test is written, so a regression fails, and an improvement lowers it
 in the same change.
+
+## Keep common free of the plugin's name
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [fake_reaper.md](worklog/fake_reaper.md) (The profile is
+  the plugin's)
+
+`common`, `device`, and `scene` shouldn't know which plugin they are in. After
+*Fake REAPER* moves the profile path into the plugin, `common` still names
+JPRSurf in the profile's header (`JPRSurf profile`) and run split (`JPRSurf
+15us, REAPER 12us`), the trace's header, and some comments (`log_file.h`,
+`reaper_api.h`, `reaper_profiler.h`, `reaper_trace.h`), and generates the
+build info (the plugin's git commit) itself. The split's label becomes the
+extension's, or a neutral word, the headers take a name the plugin gives, and
+the build info moves to `plugin`, which passes it in. `device` and `scene`
+already don't name it.
 
 ## Widgets
 

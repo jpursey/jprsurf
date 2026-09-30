@@ -25,10 +25,11 @@ from the profile the profiler writes.
 - **A fake, not mocks.** Tests check what JPRSurf asked REAPER to do and what
   it sent to the hardware, against a fake that holds REAPER's state. They don't
   script the calls JPRSurf makes, so they don't break when its caching changes.
-- **The fake says how it knows.** It stores what is set and returns what is
-  stored. Anything more, such as what REAPER notifies or how it formats text,
-  is modeled only once it has been seen in REAPER, and says so where it is
-  modeled.
+- **The fake holds REAPER's state, not its behavior.** It is a model of the
+  project and REAPER's state, as far as JPRSurf queries it: what is set reads
+  back, and a test builds the project it needs. It never calls the surface by
+  itself: a test that needs a callback REAPER would make, makes it. What REAPER
+  actually sends is recorded from traces, for writing those tests.
 - **Behavior time comes from REAPER.** Timers and timeouts read the run's time,
   which comes from REAPER's clock, so tests control it and never wait. Only
   measurement reads a real clock.
@@ -239,10 +240,10 @@ counted, so a trace shows the events and the whole call each happened in. On
 an 81-track project, a run takes about 90us with the trace on, against 45us
 without it.
 
-It is how the fake learns what REAPER does. Setting a track's mute in REAPER
-and on the surface, with a trace running, shows which callbacks REAPER sends,
-in what order, and whether they come during the call or later. Each behavior
-the fake models points to the trace that showed it.
+It is how tests learn what REAPER does. Setting a track's mute in REAPER and on
+the surface, with a trace running, shows which callbacks REAPER sends, in what
+order, and whether they come during the call or later. A test that makes
+REAPER's calls on the surface follows what a trace showed.
 
 Traces are not replayed as tests. A replay fails whenever JPRSurf changes the
 order or number of its calls, which is exactly what caching work changes.
@@ -265,8 +266,7 @@ class FakeReaper final {
   // What REAPER passes the plugin's entry point.
   reaper_plugin_info_t* GetPluginInfo();
 
-  // The project, changed as the user would change it in REAPER. Changes
-  // notify the surfaces as REAPER does.
+  // The project.
   FakeTrack* AddTrack(std::string_view name, FakeTrack* parent = nullptr);
   void DeleteTrack(FakeTrack* track);
   FakeTrack* GetMasterTrack();
@@ -280,7 +280,11 @@ class FakeReaper final {
   void AddSurface(std::string_view config = {});
   void RemoveSurface();
 
-  // Advances the clock by one frame (1/30s), and runs the surface.
+  // The surface, so a test can make the calls REAPER would make on it.
+  IReaperControlSurface* GetSurface();
+
+  // Advances the clock by one frame (1/30s), and runs the surface if one is
+  // added.
   void Run();
 
   // Runs frames until `duration` has passed.
@@ -310,21 +314,24 @@ own tracks.
 
 ### Behavior
 
-The fake is literal by default: a setter stores the value, and a getter returns
-it. Anything REAPER does beyond that is modeled only where it has been seen,
-each with a comment on how it was seen (usually a trace):
-- **Notifications** are the main one: which setters call the surface back (such
-  as `SetSurfaceMute()` after `SetTrackUIMute()`), whether the surface that
-  made the change is called too, and whether the call comes during the setter
-  or later. A surface that relies on the notification to update its own state
-  shows stale lights under a fake that gets this wrong.
-- **Text** REAPER formats: `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and
-  command names, in the formats traces showed.
-- **Changes made as the user**, through `FakeReaper`'s own methods, notify the
-  surface as REAPER does: `SetTrackListChange()` when tracks are added or
-  removed, and the matching callback for each property.
-
-What traces have shown so far is in [Seen in traces](#seen-in-traces).
+The fake holds REAPER's state, not its behavior. Every function on the list is
+a C function pointer, stubbed as the trace and profiler hook them, and the MIDI
+ports are the SDK's C++ interfaces, implemented by the fake's own classes. Both
+work on the fake's model of the project: a setter stores the value, and a
+getter returns it. A test that needs one function to behave otherwise, such as
+to check an assumption about REAPER, hooks it over the fake with
+`gb::FunctionHook`, and every other function still reads the model.
+- **No callbacks of its own.** The fake never calls the surface by itself.
+  `device`, `scene`, and most of `common` never see `IReaperControlSurface`, so
+  their tests need none. A test of `ControlSurface`, or of the plugin, makes
+  the calls REAPER would make itself, such as `SetTrackListChange()` after
+  adding tracks, or `SetSurfaceMute()` after a mute. [Seen in
+  traces](#seen-in-traces) records what REAPER sends, and when, for writing
+  those tests.
+- **Text** from `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and
+  `kbd_getTextFromCmd` is a plain format of the fake's own. JPRSurf only passes
+  it through to the display, so a test checks that it does.
+- **Commands** are recorded, and run a handler if the test gave one.
 
 Tests are then of two kinds, which need little of REAPER's own behavior:
 - **Output:** given REAPER's state and some input, what JPRSurf asked REAPER to
@@ -335,8 +342,7 @@ Tests are then of two kinds, which need little of REAPER's own behavior:
 ### Seen in traces
 
 A trace of an 81-track project with one JPRSurf surface (2026-09-28) showed the
-following. The fake models these, and anything not listed here stays literal
-until a trace shows it.
+following. Tests that make REAPER's calls on the surface follow these.
 
 - **Surface setters notify at the end of the batch.** JPRSurf muting a track
   calls `SetTrackUIMute()` inside `PreventUIRefresh(1)` and
@@ -389,9 +395,11 @@ fails the test when one is broken:
   the `TrackBatch` rule in CLAUDE.md, enforced.
 - `PreventUIRefresh()` must be balanced by the end of each entry point.
 - A call with a deleted track's pointer fails, where REAPER might crash.
-- A call to a function the fake doesn't implement fails, naming it, so the fake
-  can grow with the tests that need it.
 - At teardown, a surface, plugin, or MIDI port still open fails.
+
+The fake implements every function on the API list, and only those: a function
+the SDK declares but JPRSurf doesn't load isn't the fake's concern. Adding a
+function to the list without a fake for it doesn't compile.
 
 ### Process state
 
@@ -406,8 +414,11 @@ between tests:
 | `ControlSurface`'s instance, and `Plugin`'s                | Destroying the surface, unloading the plugin, and the leak check |
 | `g_modifiers`, and `timeline.cc`'s `g_last_ruler_*` caches | The fake                                                         |
 | The run's time                                             | The fake                                                         |
-| The API table                                              | The fake: back to functions that fail the test                   |
+| The API table                                              | The fake: unloaded at teardown                                   |
 | The profiler                                               | Destroying the surface, which owns it                            |
+
+The profile file isn't process state: the plugin gives its path when it
+registers the surface type, and a test registers a type with none.
 
 - Only the fake can reset anything. Each reset takes a key type that only
   `FakeReaper` can create, so no other code can call it.
@@ -488,20 +499,20 @@ the count when the test is written, so a regression fails, and an improvement
 lowers it in the same change. Weighting the counts by each call's time in a
 local snapshot estimates the time they cost on that machine.
 
-**What still needs REAPER:** `dll_main.cc`, whether the fake agrees with REAPER
-(settled by traces), whether the fake X-Touch agrees with the hardware, what
-REAPER's own UI shows, and times. The hand smoke test shrinks to those.
+**What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
+surface that REAPER does (settled by traces), whether the fake X-Touch agrees
+with the hardware, what REAPER's own UI shows, and times. The hand smoke test
+shrinks to those.
 
 ## To confirm
 
 Facts the design depends on that nobody has checked yet, with the item that
 checks each:
 
-| Fact                                                                                                                                 | Checked by                                      |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Whether the other setters (solo, rec arm, selection, and sends) notify as `SetTrackUIMute()` does                                    | *Fake REAPER*, with a trace when it models them |
-| Whether volume and pan changes made in REAPER's UI notify the surface                                                                | *Fake REAPER*, with a trace when it models them |
-| The formats of `mkpanstr`, and of `format_timestr_pos` outside beats mode. They are only called in runs a trace leaves out as quiet. | *Fake REAPER*, with a trace when it models them |
+| Fact                                                                                              | Checked by                                      |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Whether the other setters (solo, rec arm, selection, and sends) notify as `SetTrackUIMute()` does | *Surface tests*, with a trace when one needs it |
+| Whether volume and pan changes made in REAPER's UI notify the surface                             | *Surface tests*, with a trace when one needs it |
 
 ## Getting there
 
@@ -512,7 +523,8 @@ depend on them.
 JPRSurf's backlog items build the rest in order:
 1. *REAPER API list*: the list, and loading through it.
 2. *Profiler*: JPRSurf's use of `gb/profile`, ending with the snapshot.
-3. *Trace REAPER calls*: settles what the fake models before it is written.
+3. *Trace REAPER calls*: records what REAPER calls on the surface, for tests
+   that make those calls.
 4. *Fake REAPER*: one clock, resettable process state, the fake, and tests of
    `common`.
 5. *Fake X-Touch and device tests*.
