@@ -9,6 +9,7 @@ set(jpr_common_SOURCE
   color.cc color.h
   control_surface.cc control_surface.h
   guid.cc guid.h
+  local_time.cc local_time.h
   log_file.cc log_file.h
   midi_message.h
   midi_port.cc midi_port.h

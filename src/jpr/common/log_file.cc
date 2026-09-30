@@ -5,8 +5,6 @@
 
 #include "jpr/common/log_file.h"
 
-#include <windows.h>
-
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -19,34 +17,12 @@
 #include "absl/log/log_entry.h"
 #include "absl/log/log_sink_registry.h"
 #include "absl/time/time.h"
+#include "jpr/common/local_time.h"
 
 namespace jpr {
 namespace {
 
 absl::once_flag g_initialize_log_once;
-
-absl::TimeZone GetLocalTimeZone() {
-  TIME_ZONE_INFORMATION tzi;
-  DWORD result = GetTimeZoneInformation(&tzi);
-  if (result == TIME_ZONE_ID_INVALID) {
-    return absl::UTCTimeZone();
-  }
-
-  char tz_name[128];
-  WideCharToMultiByte(CP_UTF8, 0, tzi.StandardName, -1, tz_name,
-                      sizeof(tz_name), nullptr, nullptr);
-  absl::TimeZone tz;
-  if (absl::LoadTimeZone(tz_name, &tz)) {
-    return tz;
-  }
-
-  // Windows biases are minutes to add to local time to get UTC, the opposite
-  // of an offset from UTC.
-  int bias_minutes =
-      tzi.Bias +
-      (result == TIME_ZONE_ID_DAYLIGHT ? tzi.DaylightBias : tzi.StandardBias);
-  return absl::FixedTimeZone(-bias_minutes * 60);
-}
 
 class FileSink final : public absl::LogSink {
  public:
