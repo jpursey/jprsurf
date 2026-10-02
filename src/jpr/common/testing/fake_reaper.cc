@@ -21,6 +21,7 @@
 #include "jpr/common/midi_ports.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/test_reset.h"
+#include "jpr/common/testing/fake_midi.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/test_control_surface.h"
@@ -330,6 +331,39 @@ class FakeReaper::Api final {
   }
 
   //----------------------------------------------------------------------------
+  // MIDI ports
+  //----------------------------------------------------------------------------
+
+  static int GetNumMIDIInputs() {
+    return static_cast<int>(s_instance_->midi_inputs_.size());
+  }
+
+  static int GetNumMIDIOutputs() {
+    return static_cast<int>(s_instance_->midi_outputs_.size());
+  }
+
+  static bool GetMIDIInputName(int index, char* name, int name_size) {
+    return GetMidiPortName(s_instance_->midi_inputs_, index, name, name_size);
+  }
+
+  static bool GetMIDIOutputName(int index, char* name, int name_size) {
+    return GetMidiPortName(s_instance_->midi_outputs_, index, name, name_size);
+  }
+
+  static midi_Input* CreateMIDIInput(int index) {
+    return OpenMidiPort(s_instance_->midi_inputs_, index, "input");
+  }
+
+  static midi_Output* CreateMIDIOutput(int index, bool stream_mode,
+                                       int* ms_offset) {
+    if (stream_mode) {
+      ADD_FAILURE() << "CreateMIDIOutput() with stream mode isn't faked yet";
+      return nullptr;
+    }
+    return OpenMidiPort(s_instance_->midi_outputs_, index, "output");
+  }
+
+  //----------------------------------------------------------------------------
   // Text and time
   //----------------------------------------------------------------------------
 
@@ -349,15 +383,9 @@ class FakeReaper::Api final {
 
   JPR_NOT_FAKED(AnyTrackSolo)
   JPR_NOT_FAKED(CountSelectedMediaItems)
-  JPR_NOT_FAKED(CreateMIDIInput)
-  JPR_NOT_FAKED(CreateMIDIOutput)
   JPR_NOT_FAKED(format_timestr_pos)
   JPR_NOT_FAKED(GetCursorPosition)
   JPR_NOT_FAKED(GetGlobalAutomationOverride)
-  JPR_NOT_FAKED(GetMIDIInputName)
-  JPR_NOT_FAKED(GetMIDIOutputName)
-  JPR_NOT_FAKED(GetNumMIDIInputs)
-  JPR_NOT_FAKED(GetNumMIDIOutputs)
   JPR_NOT_FAKED(GetPlayPosition)
   JPR_NOT_FAKED(GetPlayState)
   JPR_NOT_FAKED(GetToggleCommandState)
@@ -499,6 +527,38 @@ class FakeReaper::Api final {
     return true;
   }
 
+  // Copies the name of the MIDI port at `index` in `ports` to `name`, as
+  // GetMIDIInputName() and GetMIDIOutputName() do, returning false if there is
+  // none.
+  template <typename Port>
+  static bool GetMidiPortName(const std::vector<std::unique_ptr<Port>>& ports,
+                              int index, char* name, int name_size) {
+    if (index < 0 || index >= static_cast<int>(ports.size())) {
+      return false;
+    }
+    absl::SNPrintF(name, name_size, "%s", ports[index]->GetName());
+    return true;
+  }
+
+  // Opens the MIDI port at `index` in `ports`, as CreateMIDIInput() and
+  // CreateMIDIOutput() do, returning null if there is none. A port that is
+  // already open fails the test.
+  template <typename Port>
+  static Port* OpenMidiPort(const std::vector<std::unique_ptr<Port>>& ports,
+                            int index, const char* kind) {
+    if (index < 0 || index >= static_cast<int>(ports.size())) {
+      return nullptr;
+    }
+    Port* port = ports[index].get();
+    if (port->open_) {
+      ADD_FAILURE() << "MIDI " << kind << " \"" << port->GetName()
+                    << "\" was created while it is open";
+      return nullptr;
+    }
+    port->open_ = true;
+    return port;
+  }
+
   // Returns the selected tracks in `project`, in order, with the master first
   // if `want_master` is true and it is selected.
   static std::vector<FakeTrack*> GetSelectedTracks(ReaProject* project,
@@ -594,6 +654,20 @@ void FakeReaper::RemoveSurface(TestControlSurface* surface) {
   if (surface == surface_) {
     surface_ = nullptr;
   }
+}
+
+//------------------------------------------------------------------------------
+// MIDI ports
+//------------------------------------------------------------------------------
+
+FakeMidiInput* FakeReaper::AddMidiInput(std::string_view name) {
+  return midi_inputs_.emplace_back(absl::WrapUnique(new FakeMidiInput(name)))
+      .get();
+}
+
+FakeMidiOutput* FakeReaper::AddMidiOutput(std::string_view name) {
+  return midi_outputs_.emplace_back(absl::WrapUnique(new FakeMidiOutput(name)))
+      .get();
 }
 
 //------------------------------------------------------------------------------

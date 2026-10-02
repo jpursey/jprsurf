@@ -45,6 +45,8 @@ set(jpr_common_TEST_SOURCE
   anchor_test.cc
   color_test.cc
   control_surface_test.cc
+  midi_port_test.cc
+  midi_ports_test.cc
   numbered_name_test.cc
   prefixed_name_test.cc
   reaper_api_test.cc

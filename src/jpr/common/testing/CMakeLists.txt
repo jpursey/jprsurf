@@ -6,6 +6,7 @@
 # A fake REAPER for unit tests. Only tests link this, never the plugin.
 
 set(jpr_common_testing_SOURCE
+  fake_midi.cc fake_midi.h
   fake_project.cc fake_project.h
   fake_reaper.cc fake_reaper.h
   fake_track.h
@@ -25,6 +26,7 @@ set(jpr_common_testing_DEPS
 )
 
 set(jpr_common_testing_TEST_SOURCE
+  fake_midi_test.cc
   fake_reaper_test.cc
 )
 

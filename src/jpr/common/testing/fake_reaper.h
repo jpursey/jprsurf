@@ -13,6 +13,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/time/time.h"
+#include "jpr/common/testing/fake_midi.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/test_control_surface.h"
@@ -44,7 +45,8 @@ namespace jpr {
 // - A track or project pointer that isn't in an open project.
 // - A second control surface created while one is open: JPRSurf has one
 //   surface, with a ControlSurfaceListener for each use.
-// - A control surface still open when the fake is destroyed.
+// - A MIDI port created while it is open, or used after it is destroyed.
+// - A control surface or MIDI port still open when the fake is destroyed.
 // - The end of an entry point that broke a rule for using REAPER. An entry
 //   point is each call on a TestControlSurface, and the test's own calls, which
 //   are checked when the fake is destroyed. Each must leave PreventUIRefresh()
@@ -67,8 +69,9 @@ class FakeReaper final {
   FakeReaper& operator=(const FakeReaper&) = delete;
 
   // Checks the test's own calls (see Checks), and fails the test if a control
-  // surface is still open, destroying it. Then resets the process state, and
-  // unloads the API.
+  // surface is still open, closing it. Then resets the process state, and
+  // unloads the API. A MIDI port still open fails the test as it is destroyed
+  // with the fake.
   ~FakeReaper();
 
   //----------------------------------------------------------------------------
@@ -124,6 +127,15 @@ class FakeReaper final {
   // returns it, as File: New project does. The old project is closed: a call
   // with one of its tracks fails the test.
   FakeProject& NewProject();
+
+  //----------------------------------------------------------------------------
+  // MIDI ports
+  //----------------------------------------------------------------------------
+
+  // Lists a MIDI input or output port called `name` after those already
+  // listed, as REAPER lists the ports on the machine, and returns it.
+  FakeMidiInput* AddMidiInput(std::string_view name);
+  FakeMidiOutput* AddMidiOutput(std::string_view name);
 
   //----------------------------------------------------------------------------
   // What the code under test did
@@ -199,6 +211,10 @@ class FakeReaper final {
   // The open projects, in tab order, and the index of the current one.
   std::vector<FakeProject*> open_projects_;
   int current_project_ = 0;
+
+  // The MIDI ports, in the order they are listed.
+  std::vector<std::unique_ptr<FakeMidiInput>> midi_inputs_;
+  std::vector<std::unique_ptr<FakeMidiOutput>> midi_outputs_;
 
   FakeTrack unknown_track_;  // See GetTrack().
   GUID unknown_guid_ = {};   // The unknown track's GUID (see GetTrackGUID()).

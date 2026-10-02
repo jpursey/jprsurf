@@ -498,18 +498,30 @@ Depends on: CL5.
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes.
 
-### CL7 [ ] common/testing: MIDI ports
+### CL7 [x] common/testing: MIDI ports
 
 Depends on: CL3.
 
-- `FakeMidiInput` (queues events with their time, and delivers them in a
-  `MIDI_eventlist` on the next `SwapBufsPrecise()`) and `FakeMidiOutput`
-  (records every `Send()` and `SendMsg()`), listed by `AddMidiInput(name)` and
-  `AddMidiOutput(name)`.
-- `GetNumMIDIInputs`/`Outputs`, the names, and `CreateMIDIInput`/`Output`.
-- Tests: `midi_ports_test.cc` (listing, opening by name, reopening, and final
+- `FakeMidiInput` and `FakeMidiOutput` (`fake_midi.h/.cc`), the SDK's
+  `midi_Input` and `midi_Output`, listed by `FakeReaper::AddMidiInput(name)`
+  and `AddMidiOutput(name)`, which own them. `CreateMIDIInput`/`Output` open
+  one, and its `Destroy()` closes it rather than deleting it.
+- A test sends messages (or sysex bytes) into a `FakeMidiInput`, as the
+  hardware does, at the fake's current time. They are delivered on the next
+  `SwapBufsPrecise()`, in a `FakeMidiEventList`, with their frame offsets from
+  the swap's time, so `MidiIn` gets back the time each was sent. A port that
+  isn't open and started drops them.
+- A `FakeMidiOutput` records the bytes of each `Send()` and `SendMsg()`, which a
+  test takes with `TakeReceived()`.
+- `GetNumMIDIInputs`/`Outputs`, and `GetMIDIInputName`/`OutputName`.
+- Checks: a port created while it is open, used after `Destroy()`, or still
+  open when the fake is destroyed. Stream mode for an output isn't faked.
+- Tests: `fake_midi_test.cc` (the fakes themselves), `midi_ports_test.cc`
+  (opening by name, reopening, running the ports, closing them, and final
   output sent on destruction) and `midi_port_test.cc` (listeners by status and
-  data, event times, state messages sent only on change, and sysex).
+  data, unsubscribing, event times, sysex input ignored, queued messages,
+  state sent only on change, the latest state, resets, and sysex output and
+  state).
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
