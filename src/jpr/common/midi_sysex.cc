@@ -40,7 +40,7 @@ absl::flat_hash_map<SysexPrefix, SysexMessageType*>& GetSysexTypeRegistry() {
 }  // namespace
 
 SysexMessageType* SysexMessageType::Get(const SysexPrefix& prefix) {
-  auto registry = GetSysexTypeRegistry();
+  const auto& registry = GetSysexTypeRegistry();
   if (auto it = registry.find(prefix); it != registry.end()) {
     return it->second;
   }
