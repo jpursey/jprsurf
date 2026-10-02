@@ -73,7 +73,7 @@ TEST_F(TrackCacheTest, FiltersHiddenTracks) {
 
 TEST_F(TrackCacheTest, KeepsATrackByGuidWhileItIsDeleted) {
   FakeTrack* drums = project_.AddTrack("Drums");
-  const Guid guid(drums->guid);
+  const Guid guid(project_.GetGuid(drums));
   Cache().Refresh();
   Track* track = Cache().GetTrack(guid);
   ASSERT_NE(track, nullptr);
@@ -85,8 +85,7 @@ TEST_F(TrackCacheTest, KeepsATrackByGuidWhileItIsDeleted) {
   EXPECT_THAT(Cache().GetTracks(), IsEmpty());
 
   // Undo brings the track back with the same GUID.
-  FakeTrack* restored = project_.AddTrack("Drums");
-  restored->guid = drums->guid;
+  FakeTrack* restored = project_.RestoreTrack(drums);
   Cache().Refresh();
   EXPECT_EQ(Cache().GetTrack(guid), track);
   EXPECT_TRUE(track->Exists());

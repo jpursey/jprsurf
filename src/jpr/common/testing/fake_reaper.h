@@ -201,6 +201,7 @@ class FakeReaper final {
   int current_project_ = 0;
 
   FakeTrack unknown_track_;  // See GetTrack().
+  GUID unknown_guid_ = {};   // The unknown track's GUID (see GetTrackGUID()).
   std::string console_text_;
 
   // The current entry point's changes, for the TrackBatch rule.

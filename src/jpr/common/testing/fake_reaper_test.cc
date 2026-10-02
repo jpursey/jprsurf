@@ -184,13 +184,15 @@ TEST(FakeReaperTest, UnknownTrackFailsTheTest) {
 
 TEST(FakeReaperTest, NewProjectReplacesTheProject) {
   FakeReaper reaper;
-  FakeTrack* old_master = reaper.GetProject().GetMasterTrack();
+  FakeProject& old_project = reaper.GetProject();
+  FakeTrack* old_master = old_project.GetMasterTrack();
 
   FakeProject& project = reaper.NewProject();
   EXPECT_EQ(&reaper.GetProject(), &project);
   EXPECT_EQ(::GetMasterTrack(nullptr), ToMediaTrack(project.GetMasterTrack()));
   EXPECT_NE(project.GetMasterTrack(), old_master);
-  EXPECT_FALSE(project.GetMasterTrack()->guid == old_master->guid);
+  EXPECT_FALSE(project.GetGuid(project.GetMasterTrack()) ==
+               old_project.GetGuid(old_master));
 
   EXPECT_NONFATAL_FAILURE(::GetTrackColor(ToMediaTrack(old_master)),
                           "no longer open");
@@ -263,6 +265,19 @@ TEST(FakeReaperTest, AddsTracksToTheEndOfTheirFolder) {
   EXPECT_EQ(::GetParentTrack(ToMediaTrack(drums)), nullptr);
 }
 
+TEST(FakeReaperTest, AddingATrackToAMissingFolderFailsTheTest) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  project.DeleteTrack(drums);
+
+  FakeTrack* kick = nullptr;
+  EXPECT_NONFATAL_FAILURE(kick = project.AddTrack("Kick", drums),
+                          "isn't a track in the project");
+  EXPECT_EQ(kick, nullptr);
+  EXPECT_EQ(project.GetTrackCount(), 0);
+}
+
 TEST(FakeReaperTest, DeletedTrackFailsTheTest) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
@@ -274,6 +289,79 @@ TEST(FakeReaperTest, DeletedTrackFailsTheTest) {
   EXPECT_EQ(::GetParentTrack(ToMediaTrack(kick)), nullptr);
   EXPECT_NONFATAL_FAILURE(::GetTrackColor(ToMediaTrack(drums)),
                           "is a deleted track");
+}
+
+TEST(FakeReaperTest, TrackGuidsStayPut) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  const GUID* guid = ::GetTrackGUID(ToMediaTrack(drums));
+
+  // Enough tracks to grow the project's records many times over.
+  for (int i = 0; i < 100; ++i) {
+    project.AddTrack("Track");
+  }
+  EXPECT_EQ(::GetTrackGUID(ToMediaTrack(drums)), guid);
+  EXPECT_TRUE(*guid == project.GetGuid(drums));
+  EXPECT_FALSE(*guid == project.GetGuid(project.GetTrack(1)));
+}
+
+TEST(FakeReaperTest, RestoringATrackKeepsItsGuidAndValues) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick", drums);
+  project.AddTrack("Bass");
+  kick->mute = true;
+  project.AddSend(kick, drums);
+  const GUID guid = project.GetGuid(kick);
+
+  project.DeleteTrack(kick);
+  FakeTrack* restored = project.RestoreTrack(kick);
+  ASSERT_NE(restored, nullptr);
+  EXPECT_NE(restored, kick);
+  EXPECT_TRUE(project.HasTrack(restored));
+  EXPECT_TRUE(project.GetGuid(restored) == guid);
+  EXPECT_EQ(restored->name, "Kick");
+  EXPECT_TRUE(restored->mute);
+  EXPECT_EQ(project.GetParentTrack(restored), drums);
+  EXPECT_EQ(project.GetTrack(1), restored);
+  EXPECT_THAT(project.GetSends(restored), IsEmpty());
+
+  // Its GUID can only be in the project once.
+  EXPECT_NONFATAL_FAILURE(project.RestoreTrack(kick), "already restored");
+  EXPECT_NONFATAL_FAILURE(project.RestoreTrack(drums), "isn't a deleted track");
+}
+
+TEST(FakeReaperTest, RestoringATrackFindsItsRestoredFolder) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick", drums);
+  project.AddTrack("Bass");
+
+  // Undo restores them in the reverse order they were deleted.
+  project.DeleteTrack(kick);
+  project.DeleteTrack(drums);
+  FakeTrack* restored_drums = project.RestoreTrack(drums);
+  FakeTrack* restored_kick = project.RestoreTrack(kick);
+  EXPECT_EQ(project.GetParentTrack(restored_kick), restored_drums);
+  EXPECT_EQ(project.GetTrack(2), restored_kick);
+}
+
+TEST(FakeReaperTest, RestoringATrackWhoseFolderIsGoneAddsItAtTheEnd) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick", drums);
+  FakeTrack* bass = project.AddTrack("Bass");
+
+  project.DeleteTrack(kick);
+  project.DeleteTrack(drums);
+  FakeTrack* restored = project.RestoreTrack(kick);
+  EXPECT_EQ(project.GetParentTrack(restored), nullptr);
+  EXPECT_EQ(project.GetTrack(0), bass);
+  EXPECT_EQ(project.GetTrack(1), restored);
 }
 
 TEST(FakeReaperTest, TrackSetters) {

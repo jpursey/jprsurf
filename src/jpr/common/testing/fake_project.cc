@@ -7,43 +7,31 @@
 
 #include <algorithm>
 #include <memory>
-#include <string>
 #include <string_view>
 #include <vector>
 
-#include "absl/base/no_destructor.h"
 #include "gtest/gtest.h"
 
 namespace jpr {
 
 FakeProject::FakeProject(int number) : number_(number) {
-  master_track_.guid = MakeGuid();
-  master_track_.name = "MASTER";
+  master_track_ = CreateTrack(MakeGuid(), nullptr);
+  master_track_->name = "MASTER";
 }
 
+//------------------------------------------------------------------------------
+// Tracks
+//------------------------------------------------------------------------------
+
 FakeTrack* FakeProject::AddTrack(std::string_view name, FakeTrack* parent) {
-  int index = GetTrackCount();
-  if (parent != nullptr) {
-    const int parent_index = FindTrack(parent);
-    if (parent_index < 0) {
-      ADD_FAILURE() << "AddTrack() was given a parent that isn't a track in "
-                       "the project";
-      parent = nullptr;
-    } else {
-      index = parent_index + 1;
-      while (index < GetTrackCount() &&
-             IsInFolder(tracks_[index].get(), parent)) {
-        ++index;
-      }
-    }
+  if (parent != nullptr && FindTrack(parent) < 0) {
+    ADD_FAILURE() << "AddTrack() was given a parent that isn't a track in the "
+                     "project";
+    return nullptr;
   }
-  auto track = std::make_unique<FakeTrack>();
-  track->guid = MakeGuid();
+  FakeTrack* track = InsertTrack(MakeGuid(), parent);
   track->name = name;
-  FakeTrack* added = track.get();
-  tracks_.insert(tracks_.begin() + index, std::move(track));
-  parents_[added] = parent;
-  return added;
+  return track;
 }
 
 void FakeProject::DeleteTrack(FakeTrack* track) {
@@ -53,41 +41,138 @@ void FakeProject::DeleteTrack(FakeTrack* track) {
                      "project";
     return;
   }
-  FakeTrack* const parent = parents_[track];
-  for (auto& [child, child_parent] : parents_) {
-    if (child_parent == track) {
-      child_parent = parent;
+  // Every track in the order has a record.
+  TrackRecord* record = FindRecord(track);
+  for (FakeTrack* other : tracks_) {
+    TrackRecord* other_record = FindRecord(other);
+    if (other_record->parent == track) {
+      other_record->parent = record->parent;
     }
   }
-  parents_.erase(track);
-  if (auto it = track_routes_.find(track); it != track_routes_.end()) {
-    // Copied, as removing each route changes the track's routes.
-    const TrackRoutes routes = it->second;
-    for (const std::vector<FakeRoute*>* list :
-         {&routes.sends, &routes.receives, &routes.hardware_outputs}) {
-      for (FakeRoute* route : *list) {
-        RemoveRoute(route);
-      }
-    }
-    track_routes_.erase(track);
+  while (!record->sends.empty()) {
+    RemoveRoute(record->sends.back());
   }
-  deleted_tracks_.insert(track);
-  deleted_track_storage_.push_back(std::move(tracks_[index]));
+  while (!record->receives.empty()) {
+    RemoveRoute(record->receives.back());
+  }
+  while (!record->hardware_outputs.empty()) {
+    RemoveRoute(record->hardware_outputs.back());
+  }
+  record->deleted = true;
   tracks_.erase(tracks_.begin() + index);
 }
 
+FakeTrack* FakeProject::RestoreTrack(const FakeTrack* deleted) {
+  const TrackRecord* record = FindRecord(deleted);
+  if (record == nullptr || !record->deleted) {
+    ADD_FAILURE() << "RestoreTrack() was given a track that isn't a deleted "
+                     "track in the project";
+    return nullptr;
+  }
+  if (FindTrackByGuid(record->guid) != nullptr) {
+    ADD_FAILURE() << "RestoreTrack() was given a deleted track that was "
+                     "already restored";
+    return nullptr;
+  }
+  // The folder may have been deleted and restored too, as a new track.
+  FakeTrack* parent = record->parent != nullptr
+                          ? FindTrackByGuid(GetGuid(record->parent))
+                          : nullptr;
+  FakeTrack* track = InsertTrack(record->guid, parent);
+  *track = *deleted;
+  return track;
+}
+
 FakeTrack* FakeProject::GetParentTrack(const FakeTrack* track) const {
-  auto it = parents_.find(track);
-  return it != parents_.end() ? it->second : nullptr;
+  const TrackRecord* record = FindRecord(track);
+  return record != nullptr ? record->parent : nullptr;
+}
+
+const GUID& FakeProject::GetGuid(const FakeTrack* track) const {
+  static constexpr GUID kNoGuid = {};
+  const TrackRecord* record = FindRecord(track);
+  return record != nullptr ? record->guid : kNoGuid;
 }
 
 bool FakeProject::HasTrack(const FakeTrack* track) const {
-  return track == &master_track_ || parents_.contains(track);
+  const TrackRecord* record = FindRecord(track);
+  return record != nullptr && !record->deleted;
 }
 
 bool FakeProject::HadTrack(const FakeTrack* track) const {
-  return deleted_tracks_.contains(track);
+  const TrackRecord* record = FindRecord(track);
+  return record != nullptr && record->deleted;
 }
+
+GUID FakeProject::MakeGuid() {
+  GUID guid = {};
+  guid.Data1 = next_guid_++;
+  guid.Data2 = static_cast<unsigned short>(number_);
+  return guid;
+}
+
+FakeProject::TrackRecord* FakeProject::FindRecord(const FakeTrack* track) {
+  auto it = records_.find(track);
+  return it != records_.end() ? &it->second : nullptr;
+}
+
+const FakeProject::TrackRecord* FakeProject::FindRecord(
+    const FakeTrack* track) const {
+  auto it = records_.find(track);
+  return it != records_.end() ? &it->second : nullptr;
+}
+
+FakeTrack* FakeProject::FindTrackByGuid(const GUID& guid) const {
+  for (const auto& [track, record] : records_) {
+    if (!record.deleted && record.guid == guid) {
+      return record.track.get();
+    }
+  }
+  return nullptr;
+}
+
+FakeTrack* FakeProject::CreateTrack(const GUID& guid, FakeTrack* parent) {
+  auto track = std::make_unique<FakeTrack>();
+  FakeTrack* created = track.get();
+  TrackRecord& record = records_[created];
+  record.track = std::move(track);
+  record.guid = guid;
+  record.parent = parent;
+  return created;
+}
+
+FakeTrack* FakeProject::InsertTrack(const GUID& guid, FakeTrack* parent) {
+  int index = GetTrackCount();
+  if (parent != nullptr) {
+    index = FindTrack(parent) + 1;
+    while (index < GetTrackCount() && IsInFolder(tracks_[index], parent)) {
+      ++index;
+    }
+  }
+  FakeTrack* track = CreateTrack(guid, parent);
+  tracks_.insert(tracks_.begin() + index, track);
+  return track;
+}
+
+int FakeProject::FindTrack(const FakeTrack* track) const {
+  auto it = std::ranges::find(tracks_, track);
+  return it != tracks_.end() ? static_cast<int>(it - tracks_.begin()) : -1;
+}
+
+bool FakeProject::IsInFolder(const FakeTrack* track,
+                             const FakeTrack* folder) const {
+  for (const FakeTrack* parent = GetParentTrack(track); parent != nullptr;
+       parent = GetParentTrack(parent)) {
+    if (parent == folder) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//------------------------------------------------------------------------------
+// Routes
+//------------------------------------------------------------------------------
 
 FakeRoute* FakeProject::AddSend(FakeTrack* source, FakeTrack* destination) {
   if (FindTrack(source) < 0 || FindTrack(destination) < 0) {
@@ -111,20 +196,6 @@ FakeRoute* FakeProject::AddHardwareOutput(FakeTrack* source) {
   return AddRoute(source, nullptr);
 }
 
-FakeRoute* FakeProject::AddRoute(FakeTrack* source, FakeTrack* destination) {
-  FakeRoute* route = routes_
-                         .emplace_back(std::make_unique<FakeRoute>(FakeRoute{
-                             .source = source, .destination = destination}))
-                         .get();
-  if (destination == nullptr) {
-    track_routes_[source].hardware_outputs.push_back(route);
-  } else {
-    track_routes_[source].sends.push_back(route);
-    track_routes_[destination].receives.push_back(route);
-  }
-  return route;
-}
-
 void FakeProject::DeleteRoute(FakeRoute* route) {
   if (std::ranges::none_of(routes_, [route](const auto& entry) {
         return entry.get() == route;
@@ -136,46 +207,64 @@ void FakeProject::DeleteRoute(FakeRoute* route) {
   RemoveRoute(route);
 }
 
-void FakeProject::RemoveRoute(FakeRoute* route) {
-  if (route->destination == nullptr) {
-    std::erase(track_routes_[route->source].hardware_outputs, route);
+FakeRoute* FakeProject::AddRoute(FakeTrack* source, FakeTrack* destination) {
+  FakeRoute* route = routes_
+                         .emplace_back(std::make_unique<FakeRoute>(FakeRoute{
+                             .source = source, .destination = destination}))
+                         .get();
+  // AddSend() and AddHardwareOutput() checked the ends are tracks in the
+  // project, so each has a record.
+  TrackRecord* source_record = FindRecord(source);
+  if (destination == nullptr) {
+    source_record->hardware_outputs.push_back(route);
   } else {
-    std::erase(track_routes_[route->source].sends, route);
-    std::erase(track_routes_[route->destination].receives, route);
+    TrackRecord* destination_record = FindRecord(destination);
+    source_record->sends.push_back(route);
+    destination_record->receives.push_back(route);
+  }
+  return route;
+}
+
+void FakeProject::RemoveRoute(FakeRoute* route) {
+  // A route's ends always have records, as AddRoute() checked them, and a
+  // record is never removed.
+  TrackRecord* source_record = FindRecord(route->source);
+  if (route->destination == nullptr) {
+    std::erase(source_record->hardware_outputs, route);
+  } else {
+    TrackRecord* destination_record = FindRecord(route->destination);
+    std::erase(source_record->sends, route);
+    std::erase(destination_record->receives, route);
   }
   std::erase_if(routes_,
                 [route](const auto& entry) { return entry.get() == route; });
 }
 
-const FakeProject::TrackRoutes& FakeProject::GetTrackRoutes(
+absl::Span<FakeRoute* const> FakeProject::GetSends(
     const FakeTrack* track) const {
-  static const absl::NoDestructor<TrackRoutes> kNoRoutes;
-  auto it = track_routes_.find(track);
-  return it != track_routes_.end() ? it->second : *kNoRoutes;
-}
-
-GUID FakeProject::MakeGuid() {
-  GUID guid = {};
-  guid.Data1 = next_guid_++;
-  guid.Data2 = static_cast<unsigned short>(number_);
-  return guid;
-}
-
-int FakeProject::FindTrack(const FakeTrack* track) const {
-  auto it = std::ranges::find_if(
-      tracks_, [track](const auto& entry) { return entry.get() == track; });
-  return it != tracks_.end() ? static_cast<int>(it - tracks_.begin()) : -1;
-}
-
-bool FakeProject::IsInFolder(const FakeTrack* track,
-                             const FakeTrack* folder) const {
-  for (const FakeTrack* parent = GetParentTrack(track); parent != nullptr;
-       parent = GetParentTrack(parent)) {
-    if (parent == folder) {
-      return true;
-    }
+  const TrackRecord* record = FindRecord(track);
+  if (record == nullptr) {
+    return {};
   }
-  return false;
+  return record->sends;
+}
+
+absl::Span<FakeRoute* const> FakeProject::GetReceives(
+    const FakeTrack* track) const {
+  const TrackRecord* record = FindRecord(track);
+  if (record == nullptr) {
+    return {};
+  }
+  return record->receives;
+}
+
+absl::Span<FakeRoute* const> FakeProject::GetHardwareOutputs(
+    const FakeTrack* track) const {
+  const TrackRecord* record = FindRecord(track);
+  if (record == nullptr) {
+    return {};
+  }
+  return record->hardware_outputs;
 }
 
 }  // namespace jpr

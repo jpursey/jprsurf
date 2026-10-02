@@ -10,8 +10,7 @@
 #include <string_view>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/node_hash_map.h"
 #include "absl/types/span.h"
 #include "jpr/common/testing/fake_track.h"
 #include "sdk/reaper_plugin.h"
@@ -40,8 +39,13 @@ struct FakeUndoPoint {
 //
 // A project in the fake REAPER (see FakeReaper): its tracks, and the rest of
 // the state REAPER keeps for each project. FakeReaper creates them, and a test
-// builds one up with its methods, and reads and sets its tracks' fields
-// directly.
+// builds one up with its methods.
+//
+// A track's own values are on its FakeTrack, which a test sets directly. What
+// relates tracks to each other, or must stay unique, is the project's: the
+// order of the tracks, their folders, their routes, and their GUIDs. A test
+// changes those only through the project's methods, which keep them
+// consistent, so it can't build a state REAPER couldn't be in.
 //
 // GUIDs are made from the project's number and a counter, so they are unique
 // across projects, and the same on every run of a test.
@@ -58,14 +62,15 @@ class FakeProject final {
   //----------------------------------------------------------------------------
 
   // The master track, which every project has.
-  FakeTrack* GetMasterTrack() { return &master_track_; }
+  FakeTrack* GetMasterTrack() { return master_track_; }
 
   // The project's tracks, in order, not including the master.
   int GetTrackCount() const { return static_cast<int>(tracks_.size()); }
-  FakeTrack* GetTrack(int index) { return tracks_[index].get(); }
+  FakeTrack* GetTrack(int index) { return tracks_[index]; }
 
   // Adds a track called `name` after the last track in `parent`'s folder, or
-  // at the end of the project if `parent` is null, and returns it.
+  // at the end of the project if `parent` is null, and returns it. If `parent`
+  // isn't a track in the project, this fails the test, and returns null.
   FakeTrack* AddTrack(std::string_view name, FakeTrack* parent = nullptr);
 
   // Deletes `track`, and its routes, as the user does in REAPER. Its child
@@ -73,9 +78,21 @@ class FakeProject final {
   // it fails the test.
   void DeleteTrack(FakeTrack* track);
 
+  // Brings back the deleted track `deleted`, as undoing its deletion does, and
+  // returns it. It is a new track, with a new pointer, but has the deleted
+  // track's GUID and values. It is added as AddTrack() adds a track, in its old
+  // folder if that is in the project, even if it was itself restored. Its
+  // routes aren't restored.
+  FakeTrack* RestoreTrack(const FakeTrack* deleted);
+
   // Returns the folder `track` is in, or null for a top level track and the
   // master, as GetParentTrack() does.
   FakeTrack* GetParentTrack(const FakeTrack* track) const;
+
+  // Returns `track`'s GUID, which a deleted track keeps, or a zero GUID if it
+  // was never one of the project's tracks. It stays put for as long as the
+  // project exists.
+  const GUID& GetGuid(const FakeTrack* track) const;
 
   // Returns true if `track` is the master, or one of the project's tracks.
   bool HasTrack(const FakeTrack* track) const;
@@ -104,16 +121,9 @@ class FakeProject final {
 
   // Returns the sends from `track`, the receives into it, or its hardware
   // outputs.
-  absl::Span<FakeRoute* const> GetSends(const FakeTrack* track) const {
-    return GetTrackRoutes(track).sends;
-  }
-  absl::Span<FakeRoute* const> GetReceives(const FakeTrack* track) const {
-    return GetTrackRoutes(track).receives;
-  }
-  absl::Span<FakeRoute* const> GetHardwareOutputs(
-      const FakeTrack* track) const {
-    return GetTrackRoutes(track).hardware_outputs;
-  }
+  absl::Span<FakeRoute* const> GetSends(const FakeTrack* track) const;
+  absl::Span<FakeRoute* const> GetReceives(const FakeTrack* track) const;
+  absl::Span<FakeRoute* const> GetHardwareOutputs(const FakeTrack* track) const;
 
   //----------------------------------------------------------------------------
   // Undo
@@ -125,11 +135,16 @@ class FakeProject final {
  private:
   friend class FakeReaper;
 
-  // A track's routes, each in the order they were added.
-  struct TrackRoutes {
-    std::vector<FakeRoute*> sends;
+  // What the project keeps for each track, the master included, apart from
+  // the values a test sets on the track itself.
+  struct TrackRecord {
+    std::unique_ptr<FakeTrack> track;  // Kept when the track is deleted.
+    GUID guid = {};
+    FakeTrack* parent = nullptr;  // Null at the top level, and for the master.
+    std::vector<FakeRoute*> sends;  // Each in the order they were added.
     std::vector<FakeRoute*> receives;
     std::vector<FakeRoute*> hardware_outputs;
+    bool deleted = false;
   };
 
   // `number` is the project's number in FakeReaper, starting from 1.
@@ -137,6 +152,22 @@ class FakeProject final {
 
   // Returns a new GUID for something in the project.
   GUID MakeGuid();
+
+  // Returns `track`'s record, or null if it was never one of the project's
+  // tracks.
+  TrackRecord* FindRecord(const FakeTrack* track);
+  const TrackRecord* FindRecord(const FakeTrack* track) const;
+
+  // Returns the track in the project with `guid`, or null if there is none.
+  FakeTrack* FindTrackByGuid(const GUID& guid) const;
+
+  // Creates a track with `guid` in `parent`, and its record, but doesn't add
+  // it to the order.
+  FakeTrack* CreateTrack(const GUID& guid, FakeTrack* parent);
+
+  // Adds a track with `guid` after the last track in `parent`'s folder, or at
+  // the end of the project if `parent` is null, and returns it.
+  FakeTrack* InsertTrack(const GUID& guid, FakeTrack* parent);
 
   // Returns the index of `track` in tracks_, or -1 if it isn't there.
   int FindTrack(const FakeTrack* track) const;
@@ -148,29 +179,22 @@ class FakeProject final {
   // AddHardwareOutput() have checked.
   FakeRoute* AddRoute(FakeTrack* source, FakeTrack* destination);
 
-  // Removes `route` from the routes of the tracks at each end, and deletes it.
+  // Removes `route` from the records of the tracks at each end, and deletes
+  // it.
   void RemoveRoute(FakeRoute* route);
-
-  // Returns `track`'s routes, which are empty if it has none.
-  const TrackRoutes& GetTrackRoutes(const FakeTrack* track) const;
 
   const int number_;
   unsigned long next_guid_ = 1;
-  FakeTrack master_track_;
 
-  // The tracks, in order, and the folder each is in (null at the top level).
-  std::vector<std::unique_ptr<FakeTrack>> tracks_;
-  absl::flat_hash_map<const FakeTrack*, FakeTrack*> parents_;
+  // Every track the project has had, deleted or not, by its pointer. A
+  // node_hash_map, so a record (and the GUID GetTrackGUID() returns) never
+  // moves.
+  absl::node_hash_map<const FakeTrack*, TrackRecord> records_;
 
-  // Deleted tracks, which are kept so their pointers are never reused.
-  absl::flat_hash_set<const FakeTrack*> deleted_tracks_;
-  std::vector<std::unique_ptr<FakeTrack>> deleted_track_storage_;
+  FakeTrack* master_track_ = nullptr;
+  std::vector<FakeTrack*> tracks_;  // In order, not including the master.
 
-  // The routes, and each track's routes, which only AddRoute() and
-  // RemoveRoute() change.
   std::vector<std::unique_ptr<FakeRoute>> routes_;
-  absl::flat_hash_map<const FakeTrack*, TrackRoutes> track_routes_;
-
   std::vector<FakeUndoPoint> undo_points_;
 };
 

@@ -18,14 +18,14 @@ namespace jpr {
 // A track in the fake REAPER (see FakeReaper). Each MediaTrack* the fake hands
 // out points to one.
 //
-// A test reads and sets its fields directly. Setting one is a change REAPER
-// doesn't report to the surface; a test that needs the report makes the call
-// REAPER would make itself. The order and parents of a project's tracks are
-// FakeProject's, which keeps them consistent.
+// It holds the track's own values, which a test reads and sets directly.
+// Setting one is a change REAPER doesn't report to the surface; a test that
+// needs the report makes the call REAPER would make itself. What relates
+// tracks to each other, or must stay unique, is FakeProject's (see its class
+// comment).
 //==============================================================================
 
 struct FakeTrack {
-  GUID guid = {};
   std::string name;
   int color = 0;        // As GetTrackColor(): 0 for none, or 0x01BBGGRR.
   double volume = 1.0;  // As a gain: 1.0 is 0dB.

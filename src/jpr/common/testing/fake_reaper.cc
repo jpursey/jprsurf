@@ -95,7 +95,16 @@ class FakeReaper::Api final {
   }
 
   static GUID* GetTrackGUID(MediaTrack* track_id) {
-    return &s_instance_->GetTrack(track_id).guid;
+    const FakeTrack& track = s_instance_->GetTrack(track_id);
+    FakeProject::TrackRecord* record =
+        s_instance_->GetProjectOf(track).FindRecord(&track);
+    if (record == nullptr) {
+      // The scratch track GetTrack() returned has a zero GUID.
+      s_instance_->unknown_guid_ = {};
+      return &s_instance_->unknown_guid_;
+    }
+    // A record never moves, so its GUID stays put, as REAPER's does.
+    return &record->guid;
   }
 
   static double GetMediaTrackInfo_Value(MediaTrack* track_id,

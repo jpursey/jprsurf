@@ -13,10 +13,9 @@ set(jpr_common_testing_SOURCE
 )
 
 set(jpr_common_testing_DEPS
-  absl::flat_hash_map
   absl::flat_hash_set
   absl::log
-  absl::no_destructor
+  absl::node_hash_map
   absl::span
   absl::str_format
   absl::time

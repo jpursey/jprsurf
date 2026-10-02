@@ -466,7 +466,7 @@ Depends on: CL4.
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes.
 
-### CL6 [ ] common/testing: Track records
+### CL6 [x] common/testing: Track records
 
 Depends on: CL5.
 
@@ -480,15 +480,19 @@ Depends on: CL5.
   which a test reads with `FakeProject::GetGuid()`. `GetTrackGUID()` returns
   the record's, which stays put for the track's life, as REAPER's does, and a
   zero GUID for an unknown track, so the scratch track needs none. The rule
-  (see What a test sets, and what the project keeps) goes in `FakeTrack`'s and
-  `FakeProject`'s class comments.
+  (see What a test sets, and what the project keeps) goes in `FakeProject`'s
+  class comment, which `FakeTrack`'s points to.
 - `FakeProject::RestoreTrack(deleted)`, as undo brings back a deleted track: a
   new track (so a new pointer) with the deleted one's GUID and values, added
-  as `AddTrack()` adds one, under its old parent if that is still in the
-  project. Its routes aren't restored; a test adds them again.
-- Tests: `fake_reaper_test.cc` (records across adding, deleting, and
-  restoring, and GUIDs staying put), and `track_cache_test.cc` restoring a
-  track with `RestoreTrack()` in place of copying its GUID.
+  as `AddTrack()` adds one, in its old folder if that is in the project. The
+  folder is found by its GUID, as undo restores tracks in the reverse order
+  they were deleted, so the folder may itself be a restored track. Its routes
+  aren't restored; a test adds them again. A GUID is only ever on one track in
+  the project, so restoring a track twice fails the test.
+- Tests: `fake_reaper_test.cc` (GUIDs staying put, restoring a track's GUID,
+  values, and folder, a restored folder, and a folder that's gone), and
+  `track_cache_test.cc` restoring a track with `RestoreTrack()` in place of
+  copying its GUID.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
