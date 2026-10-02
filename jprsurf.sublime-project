@@ -23,6 +23,9 @@
 			"path": "docs",
 		},
 		{
+			"path": "profiles",
+		},
+		{
 			"path": "src",
 		},
 		{
