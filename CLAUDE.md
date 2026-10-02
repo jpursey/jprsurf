@@ -18,6 +18,8 @@ This is a CMake project, starting at the root. The directory structure is as fol
     jpr/           -- All source code for the extension itself, separated into different libraries (see below)
   docs/            -- User guide, surface config model, feature plans (worklog/),
                       and the backlog
+  profiles/        -- Profile snapshots to compare performance against (see
+                      Performance)
   bin/             -- Compiled binary files used by compilation or execution
   out/             -- Generated output from building locally. This is transient
                       and can get deleted at any time.
@@ -85,7 +87,7 @@ Many changes have no user-visible effect until a later change uses them. These c
 #### Performance
 
 REAPER is realtime and the extension runs on its UI thread, so performance is checked by running REAPER and reading the profile it writes on exit, "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_profile.txt" (see `ReaperProfiler` in `src/jpr/common/reaper_profiler.h`). It times every run, every REAPER call, and the scopes and counters JPRSurf defines with Game Bits' `gb/profile`, and is replaced each time REAPER exits or the surface is removed.
-- **Steady state:** the p50 and p99 run times, and the time per run of the points the change touches, don't regress from before the change. Run times vary by about 30% between sessions on the same machine, so compare a session with the change against one without it, run back to back with the same activity (an idle minute is simplest), and with other programs such as web browsers closed.
+- **Steady state and actions:** the p50 and p99 run times, and the counts and times of the points the change touches, don't regress. `profiles/` holds snapshots to compare against, of REAPER idle and of a scripted smoke test (see `profiles/README.md` for the scenarios, and when the snapshots are replaced). A CL records a short idle run (10 seconds is enough), and compares it against the feature's last snapshot and the bar. The smoke test is only profiled at the end of a feature. Counts compare directly. Run times vary by about 30% between sessions on the same machine, so a back to back run (without the change, then with it) is only needed when a time moves by more than that, or when the change is meant to make something faster.
 - **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. A run over 8ms logs a "Slow run" warning with its breakdown by point. Test with a large project (100+ tracks, with sends and receives).
 - **The profiler's own cost** stays within its budget, the larger of 3us a run (about twice what it costs) and 1% of the run. The "Profile:" line logged on exit shows it, and is a warning if it is over.
 
