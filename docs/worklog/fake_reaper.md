@@ -1,616 +1,255 @@
 # Fake REAPER
 
 A test-only library, `jpr/common/testing`, that holds REAPER's state in memory
-and implements the REAPER API list over it, so code that depends on REAPER can
-be unit tested, and verified in a side session. The design is in
-[testing_and_profiling.md](../testing_and_profiling.md) (Time, Fake REAPER);
-this is the plan to build it, with the tests of `common` that come with it.
+and loads it as the REAPER API, so code that depends on REAPER is unit tested,
+and verified without running REAPER. With it came the tests of `common`, and
+the testing rules in CLAUDE.md: a change is verified by its tests, and REAPER
+is run only to check behavior nobody has checked, for performance, and at the
+end of a feature (see Checking in REAPER in CLAUDE.md). The design it came from
+is in [testing_and_profiling.md](../testing_and_profiling.md) (Time, Fake
+REAPER).
 
-There is no change in behavior. Two changes come first, and are tested by hand
-in REAPER like any other change: every run has one time, read from REAPER's
-clock, and the process state in `common` can be reset by the fake. With the
-second, the plugin, rather than `common`, says where the profile is written.
+## Behavior
 
-## Design
+Nothing changes on the surface. Two changes to the plugin made it testable:
+every run has one time, read from REAPER's clock once, and the process state in
+`common` can be reset by the fake. With the second, the plugin, rather than
+`common`, says where the profile is written.
 
-### Names
+## Names
 
-| Name                              | What                                                                         | Might be confused with                                                                               |
-| --------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `FakeReaper`                      | REAPER's state in memory, loaded as the API. One at a time.                  | `ReaperTrace` and `ReaperProfiler`, which hook the API rather than implement it                      |
-| `FakeTrack`                       | A track the fake holds. A `MediaTrack*` points to one.                       | `Track`, `common`'s cached view of a track; the file-local `FakeTrack` in `reaper_trace_test.cc`     |
-| `FakeMidiInput`, `FakeMidiOutput` | The fake's `midi_Input` and `midi_Output`                                    | `MidiIn`, `MidiOut`, `common`'s ports; the profiler's `ProfiledMidiInput` and `ProfiledMidiOutput`   |
-| `TestReset`                       | Registers a reset of process state, which only `FakeReaper` runs             | `MidiOut::ResetAllState()`, which resets a port's sent state                                         |
-| `RunTime::Now()`                  | Reads REAPER's clock as a `RunTime`                                          | `absl::Now()`, which is real time, for measurement only                                              |
+| Name                              | What                                                                       | Might be confused with                                                                             |
+| --------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `FakeReaper`                      | REAPER's state in memory, loaded as the API. One at a time.                | `ReaperTrace` and `ReaperProfiler`, which hook the API rather than implement it                    |
+| `FakeProject`                     | One open project tab: its tracks, routes, transport, and undo              | REAPER's `ReaProject*`, which points to one (`ToReaProject()`)                                     |
+| `FakeTrack`                       | A track's own values, which a test sets. A `MediaTrack*` points to one.    | `Track`, `common`'s cached view of a track; the file-local `FakeTrack` in `reaper_trace_test.cc`   |
+| `FakeRoute`                       | A send (and the receive at its other end), or a hardware output            | `TrackRoute`, `common`'s cached view of one                                                        |
+| `FakeCommand`                     | An action a test adds: its ID, text, name, toggle state, and handler       |                                                                                                    |
+| `FakeMidiInput`, `FakeMidiOutput` | The fake's `midi_Input` and `midi_Output`                                  | `MidiIn`, `MidiOut`, `common`'s ports; the profiler's `ProfiledMidiInput` and `ProfiledMidiOutput` |
+| `TestControlSurface`              | The surface a test drives, making the calls REAPER would                   | `ControlSurface`, which it wraps                                                                   |
+| `TestReset`                       | Registers a reset of process state, which only `FakeReaper` runs           | `MidiOut::ResetAllState()`, which resets a port's sent state                                       |
+| `RunTime::Now()`                  | Reads REAPER's clock as a `RunTime`                                        | `absl::Now()`, which is real time, for measurement only                                            |
 
-`TestReset` says it is a reset, and for tests. Alternatives were
-`ResetRegistration` (wordier) and `RegisteredReset` (reads as the function, not
-its registration). CL2 first gated public reset methods with a `ResetTestKey`;
-once each reset registered itself, the resets could be private, and the key
-went.
+## Structure
 
-### One clock (common)
+### common: One clock (runner.h, control_surface.cc)
 
-```
-struct RunTime {
-  // Reads REAPER's clock, time_precise().
-  static RunTime Now();
-
-  double precise;       // Time in seconds, with high precision.
-  unsigned int coarse;  // Time in milliseconds, with lower precision.
-};
-
-class ControlSurfaceListener {
-  // `time` is when the run started, which every runner in the run is given.
-  virtual void OnRun(const RunTime& time) {}
-};
-
-class Runner final : public RunRegistry {
-  void Run(const RunTime& time);
-};
-```
-
-- `ControlSurface::Run()` reads `RunTime::Now()` once. It uses it for the
-  visibility poll, and passes it to `ContinuousUndo::Update()` and the
-  listener's `OnRun()`, which passes it to each `Runner::Run()` (and
-  `MidiPorts::RunInput()` and `RunOutput()`). The runners no longer read the
-  clock themselves.
-- `ContinuousUndo::Update(time)` moves to the start of the run, before the
-  listener. It creates the pending undo point if the changes stopped `kDelay`
-  ago, as before, and keeps `time` as the time `OnChange()` records for changes
-  until the next run. Why the move is safe is written where `Run()` calls it,
-  and in `ContinuousUndo::Update()`'s comment (see below).
+- `ControlSurface::Run()` reads `RunTime::Now()` (REAPER's `time_precise()`)
+  once. It uses it for the visibility poll, and passes it to
+  `ContinuousUndo::Update()` and the listener's `OnRun(const RunTime&)`, which
+  passes it to each `Runner::Run()` (and `MidiPorts::RunInput()` and
+  `RunOutput()`). Runners never read the clock, so a test controls time by
+  controlling REAPER's clock.
 - The runs outside `Run()`, when `PluginSurface` and `MidiPorts` are destroyed,
-  read `RunTime::Now()`.
-- `absl::Now()` is then only used for measurement: the profiler, the trace,
-  and the log.
-
-**Why moving `Update()` is safe.** Today it runs after the listener, but with
-the run's start time, so it can never flush a change the listener made in the
-same run: that change's time is later than the start. It only ever flushes
-changes from earlier runs. Moved, it flushes on the same run as before (the
-first whose time is `kDelay` past the last change), just before the listener
-rather than after it. What that run's listener does then comes out the same, or
-better:
-- **Another continuous change:** today `OnChange()` flushes the stale changes
-  first itself, so the undo points and their order are the same.
-- **An action with its own undo point** (mute, solo, rec arm, a route's mute):
-  these call `Flush()` first, so the same. One that didn't would today get its
-  undo point before the continuous one; now it comes after, in the order they
-  happened.
-- **A change with no undo point** (such as selection): today it is folded into
-  the continuous undo point, though it came after those changes stopped; now it
-  isn't.
+  read `RunTime::Now()`. `absl::Now()` is only used for measurement: the
+  profiler, the trace, and the log.
+- `ContinuousUndo::Update()` runs at the start of the run, before the listener.
+  It is given the run's start time, so it never flushed a change the listener
+  made in the same run, and still flushes on the same run as before: the first
+  `kDelay` past the last change. Its comment, and the call in `Run()`, say why
+  that is safe.
 
 **Brittleness:** a runner could still be run with a time read separately. There
 is one `Run()`, and every runner is run from it, so this is easy to see in
 review.
 
-### The profile is the plugin's (common, plugin)
-
-`common` shouldn't know which plugin it is in, but `ControlSurface` names the
-profile file itself (`GetLogPath("jprsurf_profile.txt")`). The path moves into
-the surface's type, which the plugin registers:
-
-```
-struct Type {
-  ...
-  // Where each surface writes its profile when it is destroyed, or empty for
-  // no profiling (see ReaperProfiler).
-  std::filesystem::path profile_path;
-};
-```
-
-- `ControlSurface` holds its `ReaperProfiler` in a `std::optional`, still
-  declared before the listener, and creates it only when there is a path.
-- `PluginSurface::Register()` gives `GetLogPath("jprsurf_profile.txt")`, and
-  logs the error `ReaperProfiler` logs today if there is nowhere to write it.
-- Tests register a type with no path, so they write nothing. A test that wants
-  the profiler's counts (*REAPER call count tests*) gives a path in its temp
-  directory.
-- Tracing needs nothing: only `Plugin` starts it, from `JPRSURF_TRACE`.
-
-The rest of `common`'s references to JPRSurf (the profile's header and run
-split, the trace's header, the build info, and some comments) are the backlog's
-*Keep common free of the plugin's name*.
-
-### Process state (common)
+### common: Process state (test_reset.h)
 
 ```
 // For tests only: registers a function that resets process state, which
 // FakeReaper calls when it is created and destroyed, and nothing else can.
-// Defined in the .cc file that holds the state: at namespace scope for a
-// file-local global, or as a private static member for a class's own state.
 //   const TestReset kResetRulerModes([] { g_last_ruler_modes = {}; });
 //   const TestReset TrackCache::s_test_reset_([] { ... });
 class TestReset final {
  public:
   explicit TestReset(void (*reset)());
- private:
-  friend class FakeReaper;
-  static void ResetAll();
 };
 ```
 
-| State                                           | Reset                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------- |
-| `TrackCache`, `ContinuousUndo`                  | Their `s_test_reset_` deletes the instance. They move off `absl::NoDestructor`  |
-| `ControlSurface`'s registered type              | Its `s_test_reset_` forgets it, and CHECKs no instance exists                   |
-| `timeline.cc`'s `g_last_ruler_modes`            | `kResetRulerModes`                                                              |
-| `g_modifiers`                                   | `kResetModifiers`                                                               |
-| `MidiPorts`' flush wait (100ms, on destruction) | `MidiPorts::SetFlushWait(duration)`, a plain setting, zero under the fake       |
+| State                                           | Reset                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `TrackCache`, `ContinuousUndo`                  | Their `s_test_reset_` deletes the instance                                     |
+| `ControlSurface`'s registered type              | Its `s_test_reset_` forgets it, and CHECKs no instance exists                  |
+| `timeline.cc`'s `g_last_ruler_modes`            | `kResetRulerModes`                                                             |
+| `g_modifiers`                                   | `kResetModifiers`                                                              |
+| `MidiPorts`' flush wait (100ms, on destruction) | `MidiPorts::SetFlushWait(duration)`, a plain setting, zero under the fake      |
 
-- **Each reset registers itself**, with a `TestReset` beside the state it
-  resets, and the fake calls every registered one. So every library is treated
-  the same: `scene` and `device` register theirs the same way, and there is no
+- **Each reset registers itself**, beside the state it resets, and the fake
+  calls every registered one, so every library is treated the same, with no
   list to keep. A class's reset is the initializer of a private static member,
   which can reach its private state, so no reset is public. A registration is
-  linked into a binary exactly when its state is: a binary only links the
-  files of a library it uses, and a dynamic initializer is never stripped. A
-  file holding nothing but registrations would be left out, so they go beside
-  the state. The flush wait isn't registered, as it is a setting, not state:
-  the fake sets it.
+  linked into a binary exactly when its state is.
 - `TrackCache::Get()` and `ContinuousUndo::Get()` create their instance on
-  first use, as today, from a file-local `g_` pointer rather than a function
-  static, so a reset can replace it. The cost of `Get()` is the same null check
-  a function static makes.
-- `~Track()` no longer calls back into `TrackCache` to clear the last touched
-  track. The cache never drops a track while it exists (a deleted track clears
-  it as it is removed), so it only mattered as the cache was destroyed, and a
-  track `scene` still holds after a reset would have created a new cache.
-- The fake resets everything when it is created and when it is destroyed. It
-  fails the test first if a surface is still open, as a reset under a live
-  surface would leave it holding tracks that no longer exist.
-- The flush wait is real time, which a test must never wait on. It is only
-  there for REAPER's own ports, so it is test only, unlike the profile.
-- **Not reset here:** `scene`'s own globals (`g_last_auto_override` in
-  `state_properties.cc`), and `Plugin`'s instance and trace. *Scene tests* and
-  *Surface tests* register their resets.
+  first use from a file-local `g_` pointer, rather than a function static, so a
+  reset can replace it, for the same null check.
+- `~Track()` no longer calls back into `TrackCache`. The cache never drops a
+  track while it exists, so it only mattered as the cache was destroyed.
+- **Not reset yet:** `scene`'s globals (`g_last_auto_override`), and
+  `Plugin`'s instance and trace. *Scene tests* and *Surface tests* register
+  theirs.
 
 **Brittleness:** a new global needs a `TestReset` beside it. The `g_` and `s_`
 prefixes make them easy to find in review, and anything with an instance is
 caught by the fake's teardown check, but a missed global is otherwise silent.
 
-### FakeReaper (common/testing)
+### common, plugin: The profile is the plugin's
 
-```
-// REAPER's state in memory, loaded as the REAPER API for as long as it exists.
-// Only one may exist at a time.
-class FakeReaper final {
- public:
-  // Loads the fake as the REAPER API, and resets the process state in common.
-  FakeReaper();
+`ControlSurface::Type::profile_path` says where each surface writes its
+profile, or is empty for none. `ControlSurface` holds its `ReaperProfiler` in a
+`std::optional`, declared before the listener, and creates it only when there
+is a path. `PluginSurface::Register()` gives `GetLogPath("jprsurf_profile.txt")`.
+Tests register a type with no path, so they write nothing. The rest of
+`common`'s references to JPRSurf are the backlog's *Keep common free of the
+plugin's name*.
 
-  // Fails the test if a surface or MIDI port is still open, or a
-  // PreventUIRefresh() is unbalanced, then resets the process state, and
-  // unloads the API.
-  ~FakeReaper();
+### common/testing: FakeReaper (fake_reaper.h)
 
-  // What REAPER passes the plugin's entry point. Register("csurf") records the
-  // surface type.
-  reaper_plugin_info_t& GetPluginInfo();
+`jpr_common_testing` links `jpr_common` and gtest, and `jpr_common_test` links
+it; the plugin never does.
 
-  // Creates a control surface of the registered type, as REAPER does when the
-  // user adds one in preferences, and returns it (null if the type refused).
-  // A test makes the calls REAPER would make on it, and destroying it removes
-  // the surface.
-  std::unique_ptr<TestControlSurface> AddSurface(std::string_view config = {});
+- **Exactly the API list.** `FakeReaper::Api` has a static function for each
+  function in `JPR_REAPER_API`, and `GetFunc` returns
+  `static_cast<decltype(::name)>(Api::name)` for each, so a listed function
+  without a fake, or with the wrong signature, doesn't compile. The constructor
+  loads the API through `LoadReaperApi()`, as REAPER's entry point does, and
+  the destructor unloads it. `Api` is nested in `FakeReaper`, a friend of the
+  fake's other classes, so it reaches their private state, which tests can't.
+- **State, not behavior.** A setter stores the value, and a getter returns it.
+  The fake never calls the surface by itself: a test makes the calls REAPER
+  would on the `TestControlSurface` `AddSurface()` returns (such as
+  `SetTrackListChange()` after adding tracks, and `Run()`), using what REAPER
+  sends from "Seen in traces" in the design doc. A test that needs one function
+  to behave otherwise hooks it over the fake with `gb::FunctionHook`.
+- **The clock** moves only when a surface runs (`Run()` and `RunFor()`, a
+  thirtieth of a second each), or the test calls `AdvanceTime()`. No test
+  waits on real time.
+- **Projects:** one `FakeProject` per open tab (`AddProject()`,
+  `SwitchProjectTo()`, `NewProject()`), with the API working on the current
+  one when given no project, as JPRSurf always does. A track keeps its pointer
+  across tab switches; a closed project's tracks fail the test.
+- **Actions:** `AddCommand(FakeCommand)` adds one, with an `absl::AnyInvocable`
+  handler for what it would change, and `SetToggleState()` changes its state.
+  `Main_OnCommand` records every action it runs (`GetCommandsRun()`), added or
+  not, and runs the handler. The fake models no action's effects itself.
+- **MIDI ports:** `AddMidiInput(name)` and `AddMidiOutput(name)` list one.
+- **Text** is in REAPER's formats, as JPRSurf reads it: `mkvolstr`, `mkpanstr`,
+  and `format_timestr_pos` (time, beats, samples, and frames), for a project at
+  REAPER's defaults of 120 BPM in 4/4, with 30 frames and 44100 samples a
+  second. `ShowConsoleMsg` is recorded (`GetConsoleText()`).
+- **Track groups** are modeled simply: a grouped change to a track's mute,
+  solo, rec arm, volume, or pan changes every track with the same `group`.
+  REAPER's leaders and followers for each property aren't modeled.
+- **Not modeled**, and failing the test if used: a MIDI output's stream mode,
+  `MIDI_eventlist`'s `AddItem`, `DeleteItem`, and `GetSize`, `SwapBufs` without
+  a time, a section for `kbd_getTextFromCmd`, a `Main_OnCommand` flag, and a
+  `format_timestr_pos` mode JPRSurf doesn't read. REAPER's own undo point for
+  `ToggleTrackSendUIMute` isn't modeled, like those for track volume and pan.
 
-  // Advances the clock, for a test with no surface to run.
-  void AdvanceTime(absl::Duration duration);
+### common/testing: FakeProject and FakeTrack (fake_project.h, fake_track.h)
 
-  // What time_precise() returns.
-  double GetTime() const;
+The rule for what a test sets: a track's own values (name, color, volume, pan,
+selection, mute, solo, rec arm, automation mode, group, visibility, and peak)
+are fields on `FakeTrack`, which a test sets directly (`track->mute = true`).
+What relates tracks to each other, or must stay unique, is the project's, which
+keeps it consistent, so a test can't build a state REAPER couldn't be in:
+- **Order and folders:** `AddTrack(name, parent)`, `DeleteTrack()` (children
+  move up to its parent), and `RestoreTrack(deleted)`, which brings a deleted
+  track back as undo does: a new pointer, with the old GUID and values, in its
+  old folder (found by GUID, so a restored folder works).
+- **GUIDs:** `GetGuid()`, made from the project's number and a counter, so the
+  same on every run of a test, and stable for the project's life.
+- **Routes:** `AddSend()`, `AddHardwareOutput()`, and `DeleteRoute()`. The
+  project owns each `FakeRoute`, so a send and its receive are one route and
+  can't disagree, and its ends are `const`. The fake's API uses REAPER's
+  indexing: receives as `-1 - index`, and sends after hardware outputs.
+- **The rest of a project:** the transport (`SetPlayState()`,
+  `SetPlayPosition()`, `SetCursorPosition()`), the automation override, undo
+  points (`GetUndoPoints()`, `SetRedo()`), `SetDirty()`, and
+  `SetSelectedItemCount()`.
 
-  // The open projects, one per project tab, and the current one.
-  int GetProjectCount() const;
-  FakeProject& GetProjectAt(int index);
-  FakeProject& GetProject();
+Each track has one `TrackRecord` (its owned track, GUID, parent, routes, and
+whether it is deleted) in an `absl::node_hash_map`, so a record never moves.
+Deleted tracks are kept, so their pointers are never reused, and a call with
+one is caught.
 
-  // Opens a new tab, switches tabs, or replaces the current tab's project (as
-  // File: New project tab, clicking a tab, and File: New project do). Only a
-  // replaced project is closed, so only its tracks no longer exist.
-  FakeProject& AddProject();
-  void SwitchProjectTo(int index);
-  FakeProject& NewProject();
-  ...
-};
+### common/testing: MIDI ports (fake_midi.h)
 
-// A project: its tracks, and the rest of the state REAPER keeps per project.
-class FakeProject final {
- public:
-  FakeTrack* GetMasterTrack();
-  FakeTrack* AddTrack(std::string_view name, FakeTrack* parent = nullptr);
-  void DeleteTrack(FakeTrack* track);
-  ...
-};
-```
-
-- **Projects:** the state REAPER keeps per project (tracks, selection, routes,
-  and later the transport and undo) is in a `FakeProject`, one for each open
-  project tab, so a test can see what switching tabs, or opening another
-  project, does. A track in any open project is valid, and keeps its pointer
-  across tab switches, as in REAPER, which is how `TrackCache` gets its tracks
-  back on switching back. The API works on the current project when it is
-  given no `ReaProject*`, as JPRSurf always does. Standard test projects, such
-  as a folder hierarchy or a large project with routes, are functions that fill
-  in a `FakeProject`, added as tests need them.
-
-- **Which functions:** exactly those in `JPR_REAPER_API`, the functions JPRSurf
-  loads, and nothing else the SDK declares. The fake's table is generated from
-  that list, so it grows with it rather than with REAPER's versions.
-- **Loading:** `GetPluginInfo().GetFunc` returns the fake's function for every
-  name on the list, so `LoadReaperApi()` succeeds as it does in REAPER, and
-  returns null for anything else. The constructor loads the API through
-  `LoadReaperApi()` itself, so a test of `common` needs no plugin.
-- **Every listed function is faked.** While CL3 to CL8 build the fake up by
-  area, a function without its fake yet gets a stub of the same signature that
-  fails the test, naming it. CL8 fakes the last of them and removes the stub,
-  so from then on, adding a function to the list without a fake doesn't
-  compile.
-- **REAPER's state, not its behavior.** Every function on the list is a C
-  function pointer, stubbed as the trace and profiler hook them, and the MIDI
-  ports are the SDK's C++ interfaces, implemented by the fake's own classes.
-  Both work on the fake's model of the project, as far as the libraries query
-  it: a setter stores the value, a getter returns it, and a test builds the
-  project with `AddTrack()` and the like, and reads and sets a `FakeTrack`'s
-  fields directly (`track->mute`). A test that needs one function to behave
-  otherwise hooks it over the fake with `gb::FunctionHook`.
-- **The fake never calls the surface by itself.** Most code under test
-  (`device`, `scene`, and most of `common`) never sees `IReaperControlSurface`,
-  so it needs none of it. A test of `ControlSurface` (or later, of the plugin)
-  makes the calls REAPER would make on the `TestControlSurface` `AddSurface()`
-  returns, such as `SetTrackListChange()` after adding tracks, and `Run()`,
-  which advances the clock by one run. `TestControlSurface` passes each call on
-  to the surface, and the fake checks it when it returns. JPRSurf only ever has
-  one surface (more surfaces would be more listeners on one `ControlSurface`),
-  so the fake holds one at a time: a type that creates a second while one is
-  open fails the test. What REAPER actually
-  sends, and when, is in the design doc's Seen in traces, for writing those
-  tests.
-- **Track groups** are modeled simply: a `FakeTrack` has a `group`, and a
-  grouped change to its mute, solo, rec arm, volume, or pan changes every track
-  in the group. REAPER's groups have leaders and followers for each property,
-  which aren't modeled. It lets a test check the grouping JPRSurf asks for
-  through the tracks' state.
-- **Text** from `mkvolstr`, `mkpanstr`, and `format_timestr_pos` is in
-  REAPER's formats (see Seen in traces in the design doc), as `Timeline` parses
-  positions. Positions are for a project at REAPER's defaults: 120 BPM in 4/4,
-  30 frames a second, and 44100 samples a second. `kbd_getTextFromCmd` returns
-  the text the test gave the action.
-- **Commands:** `Main_OnCommand()` records the command, and runs its handler if
-  the test gave it one. A handler for the ruler modes or undo sets what those
-  commands would.
-- **Tracks** are owned by the fake, and a deleted track is kept until the fake
-  is destroyed, so its pointer is never reused, and a call with it is caught.
-  GUIDs are made from a counter, so they are the same on every run of a test.
-- **What a test sets, and what the project keeps:** a track's own values are on
-  `FakeTrack`, for a test to set directly. What relates tracks to each other,
-  or must stay unique (order, folders, routes, and GUIDs), is the project's,
-  which keeps it consistent, so a test can't build a state REAPER couldn't be
-  in. The project keeps it in one record per track (from CL6). A field fixed
-  when the project creates an object is `const`, such as a `FakeRoute`'s ends.
-- **Where it lives:** `src/jpr/common/testing`, the `jpr_common_testing`
-  library, which links `jpr_common` and gtest (it reports failures with
-  `ADD_FAILURE()`), and which `jpr_common_test` links through
-  `jpr_common_TEST_DEPS`. The plugin never links it. Files by area:
-  `fake_reaper.h/.cc` (loading, surfaces, clock, checks, and the API
-  functions, in `FakeReaper::Api`), `fake_project.h/.cc` and `fake_track.h`
-  (the state a test reads and writes directly), and `fake_midi.h/.cc` (MIDI
-  ports).
-
-**Performance:** none in REAPER; the plugin never links it.
+- A test sends messages or sysex into a `FakeMidiInput`, as the hardware does,
+  at the fake's current time. The next `SwapBufsPrecise()` delivers them with
+  their frame offsets from the swap's time, so `MidiIn` sees when each was
+  sent. A port that isn't open and started drops them, as REAPER's does.
+- A `FakeMidiOutput` records the bytes of each `Send()` and `SendMsg()`, which a
+  test takes with `TakeReceived()`.
+- `CreateMIDIInput`/`Output` open a listed port, and `Destroy()` closes it,
+  rather than deleting it, so a test can check it afterwards.
 
 ### Checks
 
-Each fails the test where it happens, with `ADD_FAILURE()`, naming what broke:
-- **The `TrackBatch` rule:** an entry point that changes the mute, solo, rec
-  arm, or selection of more than one track makes them one change: one
-  `PreventUIRefresh()` scope, or one call outside of any. Each change costs a
-  refresh of REAPER's UI (2–17ms), and JPRSurf adds an undo point for each, so
-  a batch is one of each. Volume and pan aren't included: REAPER makes their
-  undo points itself, and `CSurf_OnVolumeChangeEx()` measured about 10us a
-  call, so there is no refresh to save.
+The fake fails the test where a rule breaks, with `ADD_FAILURE()`, naming it:
+- **The `TrackBatch` rule:** an entry point (each call on a
+  `TestControlSurface`, and the test's own calls, checked at teardown) that
+  changes the mute, solo, rec arm, or selection of several tracks makes them
+  one change, in one `PreventUIRefresh()` scope, or one call outside of any.
 - **`PreventUIRefresh()` unbalanced** at the end of an entry point.
-- An **entry point** is each call on a `TestControlSurface`, and the test's
-  own calls, which are checked when the fake is destroyed.
-- **A deleted or unknown track pointer** passed to any function.
-- **At teardown:** a surface or MIDI port still open. The fake then closes it,
-  so the next test starts clean.
+- **A deleted or unknown track**, or a closed project, passed to any function.
+- **A second control surface** while one is open, or a MIDI port created while
+  open, or used after `Destroy()`.
+- **At teardown:** a surface or MIDI port still open.
 
-The checks have their own tests (`fake_reaper_test.cc`), each broken on
-purpose, with gtest's `EXPECT_NONFATAL_FAILURE`.
+The checks, and the fake itself, have their own tests (`fake_reaper_test.cc`,
+`fake_midi_test.cc`), the checks broken on purpose with gtest's
+`EXPECT_NONFATAL_FAILURE`.
 
-### To confirm
+## Tests
 
-Nothing. The fake doesn't model REAPER's own behavior, so it depends on no
-facts about it.
+`jpr_common_test` now covers, against the fake: `ControlSurface` (registering,
+the single instance rule, runs and their time, track list changes), `Track`
+(values, setters, grouping, undo points, routes and their indexing),
+`TrackCache` (refresh, folders, filters, visibility, GUIDs across delete and
+restore, selection, the last touched track), `TrackBatch`, `MidiPorts`, `MidiIn`
+and `MidiOut` (listeners, event times, sysex, queued and changed state),
+`Timeline` (ruler modes, positions in each mode), `ContinuousUndo`, automation
+modes, and GUIDs.
 
-## CLs
+## REAPER facts
 
-### CL1 [x] common, plugin: One clock
+Found while building this:
+- Undo and redo, the transport, and the automation override (despite
+  `GetGlobalAutomationOverride()`'s name) are each per project (2026-10-02).
+  `ContinuousUndo` doesn't yet keep the project it was changed in: see the
+  backlog's *Undo points in the project the changes were made in*.
 
-Depends on: nothing.
+## Building blocks
 
-- `RunTime::Now()`, and `Runner::Run(const RunTime&)`; `RunRegistry` no
-  longer reads the clock.
-- `ControlSurface::Run()` reads the time once, and passes it to
-  `ContinuousUndo::Update()` (moved to the start of the run), and to
-  `OnRun(const RunTime&)`. The visibility poll uses it.
-- `ContinuousUndo::OnChange()` records the time `Update()` was last given.
-  `Update()`'s comment, and the call in `Run()`, say why it is safe before the
-  listener (see Why moving `Update()` is safe).
-- `MidiPorts::RunInput()` and `RunOutput()` take the time.
-- `PluginSurface::OnRun()` passes the time to its runners, and its destructor
-  reads `RunTime::Now()`.
-- The design doc's Time section: "Today" becomes what was built.
+- **`FakeReaper` (common/testing/fake_reaper.h)**: a test creates one, builds
+  the project it needs on `GetProject()`, and calls the code under test, or
+  adds a surface and runs it.
+- **A radio group of actions:** each action's handler turns itself on and the
+  others off with `SetToggleState()`, as REAPER's ruler modes do (see
+  `TimelineTest::AddModes()`).
+- **`TestReset` (common/test_reset.h)**: any process state in any library
+  registers its reset beside it, and every fake resets it.
+- **`RunTime::Now()` (common/runner.h)**: the one way to read the
+  time a run works with.
 
-**Verify**
-- Standard checks.
-- Double and long press on select still work, with the same timing.
-- Move a send fader for a few seconds, stop, and move it again after a second:
-  two undo points, each named for the send. Moving a track fader then a send
-  fader quickly: one undo point, as before (REAPER folds its open track volume
-  undo point into the next one it is given; see the backlog's *Separate undo
-  points for track faders*).
-- Hide a track in the Track Manager: the surface follows within a second.
-- Performance: a short idle run, committed as `profiles/fake_reaper/idle.txt`,
-  against `profiles/idle.txt`: p50 and p99, and one `time_precise` call per
-  run instead of one per runner.
+## Performance
 
-### CL2 [x] common, plugin: Resettable process state, and the plugin's profile
-
-Depends on: CL1.
-
-- `reset_test_key.h`: `ResetTestKey`.
-- `TrackCache` and `ContinuousUndo` move to a file-local instance with
-  `Reset(ResetTestKey)`, and `~Track()` no longer reaches the cache.
-- `ControlSurface::Reset(ResetTestKey)`, `ResetRulerModes(ResetTestKey)`, and
-  `MidiPorts::SetFlushWait(ResetTestKey, absl::Duration)`.
-- `ControlSurface::Type::profile_path`, the optional `ReaperProfiler`, and
-  `PluginSurface::Register()` giving the path.
-- The resets are unused until CL3, so no visible change.
-
-**Verify**
-- Standard checks, including `jprsurf_profile.txt` still written on exit.
-- Performance: a short idle run, replacing `profiles/fake_reaper/idle.txt`,
-  against CL1's and `profiles/idle.txt`: p50 and p99 (`TrackCache::Get()` is
-  on every path).
-
-### CL3 [x] common/testing: FakeReaper, surfaces, clock, and checks
-
-Depends on: CL2.
-
-- The `jpr_common_testing` library, and `jpr_common_test` linking it.
-- `FakeReaper`: loading (functions not faked yet fail the test), the plugin
-  info and `Register("csurf")`, `AddSurface()` and `RemoveSurface()`, the
-  clock (`time_precise`, `Run()`, `RunFor()`), `ShowConsoleMsg` (recorded),
-  the process state reset, and the teardown and unknown track checks. The
-  entry point checks come with `PreventUIRefresh()`, in CL4.
-- `TestReset`, registered beside each piece of `common`'s process state,
-  replacing CL2's `ResetTestKey`, its public resets, and `ResetCommonState()`.
-- `FakeProject`, and project tabs (`AddProject()`, `SwitchProjectTo()`, and
-  `NewProject()`), with just enough of a project for `ControlSurface` to run:
-  an empty project with a master track
-  (`CountTracks`, `GetMasterTrack`, `GetTrackGUID`, `GetTrackState`,
-  `GetTrackUIVolPan`, `GetTrackColor`, and `guidToString`), which CL4 fills
-  out.
-- Tests: `fake_reaper_test.cc` (the checks), and `control_surface_test.cc`:
-  registering once, the single instance rule (a second surface is refused and
-  shows a console message), `OnRun()` getting the fake's time, the listener
-  destroyed with the surface, and `SetTrackListChange()` refreshing
-  `TrackCache` on the next run.
-
-**Verify**
-- Standard checks. The plugin changes only in the resets' registrations and
-  `FormatGuid()`, so REAPER loading it with a clean log is enough.
-- `ctest` passes in Release, and leaves `jprsurf_profile.txt` untouched.
-
-### CL4 [x] common/testing: Tracks and selection
-
-Depends on: CL3.
-
-- Tracks: order and folders (`FakeProject` keeps them consistent), name,
-  color, volume, pan, mute, solo, rec arm, `GetTrackState` flags, automation
-  mode, TCP and mixer visibility, and peak. `GetTrackNumSends` returns 0 until
-  CL5, as a track list refresh reads every track's routes.
-- Selection: `SetTrackSelected`, `SetOnlyTrackSelected`, and the
-  `CountSelectedTracks`/`GetSelectedTrack` pairs, with and without the master.
-- `Undo_OnStateChangeEx` (moved up from CL8), recorded in the project, as
-  `TrackBatch` adds undo points.
-- `TestControlSurface`, which `AddSurface()` returns in place of the surface,
-  and which runs it (`Run()` and `RunFor()`, moved from `FakeReaper`, which
-  keeps `AdvanceTime()`), and checks each call. `RemoveSurface()` goes:
-  destroying it removes the surface.
-- `PreventUIRefresh`, entry points, and the unbalanced `PreventUIRefresh`,
-  `TrackBatch` rule, and deleted track checks.
-- `FakeProject::AddTrack()` and `DeleteTrack()`.
-- Track groups, simply (see Track groups above), so the grouping `Track` asks
-  for is tested through the tracks' state.
-- Tests: `track_test.cc` (values, setters, undo points, `SelectOnly()`,
-  deleted tracks, and the meter), `track_cache_test.cc` (refresh, folders and
-  filters, visibility, GUID lookup across delete and re-add, selection,
-  automation modes, the last touched track), and `TrackBatch` (one undo point,
-  and the check failing without it).
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-- `ctest` passes.
-
-### CL5 [x] common/testing: Routes
-
-Depends on: CL4.
-
-- Sends, receives, and hardware outputs: `GetTrackNumSends`,
-  `GetSetTrackSendInfo` (`P_DESTTRACK`, `P_SRCTRACK`), the `UI` getters and
-  setters, and `ToggleTrackSendUIMute`, with REAPER's indexing (receives as
-  `-1 - index` in the send functions, sends after hardware outputs). REAPER
-  only documents receives in the setters; the fake's getters take them the
-  same way. Route changes aren't grouped, and add no undo point (REAPER's own
-  for `ToggleTrackSendUIMute` isn't modeled, like those for track volume and
-  pan).
-- `FakeProject::AddSend(from, to)`, `AddHardwareOutput(from)`, and
-  `DeleteRoute()`. The project owns its routes (each a source, destination,
-  volume, pan, and mute, with no destination for a hardware output, and its
-  ends `const`), so a send and its receive are one route, and can't disagree.
-  It also keeps each track's sends, receives, and hardware outputs, which only
-  adding and removing a route change, so a lookup is a span, with no scan.
-  Deleting a track removes its routes. A send to or from the master, or to
-  itself, fails the test, as REAPER can't make one.
-- Tests: the fake's indexing, and each end listing a route, in
-  `fake_reaper_test.cc`, and routes in `track_test.cc`: building them on
-  refresh, notifying when they change, deleting a track, `RefreshRoutes()`,
-  each setter by send and receive index, and route mute following REAPER and
-  flushing pending undo.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-- `ctest` passes.
-
-### CL6 [x] common/testing: Track records
-
-Depends on: CL5.
-
-- One `TrackRecord` per track in `FakeProject`, the master's included, in an
-  `absl::node_hash_map` keyed by the track, so a record never moves: the
-  track, which it owns whether or not it is deleted, its GUID, its parent, its
-  sends, receives, and hardware outputs, and whether it is deleted. It
-  replaces `parents_`, `track_routes_`, `deleted_tracks_`, and
-  `deleted_track_storage_`, and `tracks_` keeps only the order.
-- `FakeTrack` keeps only the values a test sets: `guid` moves to the record,
-  which a test reads with `FakeProject::GetGuid()`. `GetTrackGUID()` returns
-  the record's, which stays put for the track's life, as REAPER's does, and a
-  zero GUID for an unknown track, so the scratch track needs none. The rule
-  (see What a test sets, and what the project keeps) goes in `FakeProject`'s
-  class comment, which `FakeTrack`'s points to.
-- `FakeProject::RestoreTrack(deleted)`, as undo brings back a deleted track: a
-  new track (so a new pointer) with the deleted one's GUID and values, added
-  as `AddTrack()` adds one, in its old folder if that is in the project. The
-  folder is found by its GUID, as undo restores tracks in the reverse order
-  they were deleted, so the folder may itself be a restored track. Its routes
-  aren't restored; a test adds them again. A GUID is only ever on one track in
-  the project, so restoring a track twice fails the test.
-- Tests: `fake_reaper_test.cc` (GUIDs staying put, restoring a track's GUID,
-  values, and folder, a restored folder, and a folder that's gone), and
-  `track_cache_test.cc` restoring a track with `RestoreTrack()` in place of
-  copying its GUID.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-- `ctest` passes.
-
-### CL7 [x] common/testing: MIDI ports
-
-Depends on: CL3.
-
-- `FakeMidiInput` and `FakeMidiOutput` (`fake_midi.h/.cc`), the SDK's
-  `midi_Input` and `midi_Output`, listed by `FakeReaper::AddMidiInput(name)`
-  and `AddMidiOutput(name)`, which own them. `CreateMIDIInput`/`Output` open
-  one, and its `Destroy()` closes it rather than deleting it.
-- A test sends messages (or sysex bytes) into a `FakeMidiInput`, as the
-  hardware does, at the fake's current time. They are delivered on the next
-  `SwapBufsPrecise()`, in a `FakeMidiEventList`, with their frame offsets from
-  the swap's time, so `MidiIn` gets back the time each was sent. A port that
-  isn't open and started drops them.
-- A `FakeMidiOutput` records the bytes of each `Send()` and `SendMsg()`, which a
-  test takes with `TakeReceived()`.
-- `GetNumMIDIInputs`/`Outputs`, and `GetMIDIInputName`/`OutputName`.
-- Checks: a port created while it is open, used after `Destroy()`, or still
-  open when the fake is destroyed. Stream mode for an output isn't faked.
-- Tests: `fake_midi_test.cc` (the fakes themselves), `midi_ports_test.cc`
-  (opening by name, reopening, running the ports, closing them, and final
-  output sent on destruction) and `midi_port_test.cc` (listeners by status and
-  data, unsubscribing, event times, sysex input ignored, queued messages,
-  state sent only on change, the latest state, resets, and sysex output and
-  state).
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-- `ctest` passes, with no real wait (the flush wait is zero).
-
-### CL8 [x] common/testing: Transport, commands, automation, and undo
-
-Depends on: CL4 to CL7 (the last of the list).
-
-- Transport and timeline: play state, play and cursor positions (each
-  project's, set with `FakeProject::SetPlayState()` and the like), and
-  `format_timestr_pos` in the modes JPRSurf reads (time, beats, samples, and
-  frames).
-- Actions: `FakeReaper::AddCommand(FakeCommand)` adds one, once (its ID, its
-  text, the name `NamedCommandLookup` finds it by, its toggle state, and an
-  `absl::AnyInvocable` handler), and `SetToggleState(id, state)` changes its
-  toggle state. `Main_OnCommand` records every action it runs, added or not, and
-  runs the handler; the fake models no action's effects. `GetToggleCommandState`
-  and `kbd_getTextFromCmd` read the action.
-- Automation and undo: each project's automation override
-  (`FakeProject::SetAutomationOverride()`), redo, and dirty state (`SetRedo()`,
-  `SetDirty()`). Undo and redo, the automation override despite its "global"
-  name, and everything about the transport, are per project in REAPER
-  (confirmed 2026-10-02).
-- The rest of the list: `AnyTrackSolo` (from the tracks),
-  `CountSelectedMediaItems` (`SetSelectedItemCount()`), `mkvolstr`, `mkpanstr`,
-  and `stringToGuid`.
-- The stub for functions not faked yet goes, so a listed function without a
-  fake doesn't compile.
-- Tests: the new functions in `fake_reaper_test.cc`, `timeline_test.cc` (ruler
-  modes, remembering the last one of each, the secondary mode, positions while
-  playing, and reading positions in each mode), `undo_test.cc` (merging,
-  `kDelay` on the fake's clock, `Flush()`, a different description or flags),
-  `automation_test.cc`, and `guid_test.cc`.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-- `ctest` passes.
-
-### CL9 [x] docs: Testing rules
-
-Depends on: CL8.
-
-With the fake, a CL is verified by its unit tests, not in REAPER. The user runs
-REAPER only for three things, agreed 2026-10-02:
-1. **Behavior nobody has checked.** What REAPER, or the hardware, does that
-   the code will rely on is checked first, with throwaway code (temporary
-   logging, a test mapping, or a trace), before code that relies on it is
-   written. As much as possible, this is a step at the start of a feature,
-   from the plan's To confirm. A fact that turns up partway through stops the
-   work until it is checked. Each finding goes in the plan's To confirm, and
-   into the fake as a tested fact (with "Seen in traces" for the calls REAPER
-   makes), so it is never checked twice. When REAPER shows the fake is wrong,
-   the fake is fixed first, with a test, then the code.
-2. **Performance.** A short idle profile only for a CL that changes per-run
-   work (`Run()`, what is polled, cached reads), and the large project check
-   only for one that changes an infrequent event. A test-only or docs CL, or
-   one away from the realtime path, needs neither. The idle and smoke profiles
-   of the finished feature are taken at its end, as now.
-3. **The end of a feature.** Before a feature is done, the user tests it in
-   REAPER: its own checks, the smoke test, how it feels on the hardware, and
-   that the extension loads with no new errors in the log. A bug found then is
-   fixed by a follow-up CL, after fixing the gap in the fake that let it
-   through.
-
-Changes:
-- CLAUDE.md, Testing and Logging: code that depends on REAPER is unit tested
-  against the fake (`jpr/common/testing`), in place of "can't be unit tested".
-  The checks every change gets become the Release build, clang-format, and
-  `ctest`, and the three reasons above say when REAPER is needed. The smoke
-  test is for the end of a feature, and says it shrinks as *Surface tests*
-  and later items make it tests.
-- CLAUDE.md, Performance: the per-CL idle profile and the large project check
-  follow item 2.
-- CLAUDE.md, Feature workflow: a plan starts with checking what it relies on
-  (item 1), and the user tests the feature in REAPER at its end, not each CL.
-- CLAUDE.md, Parallel sessions: most CLs can be written and verified in a side
-  session. The main session is for checking behavior in REAPER, profiles, and
-  the end of a feature.
-- `docs/worklog/template.md`: To confirm becomes the first step, with a CL for
-  checking it where needed. A CL's standard checks drop REAPER, and the plan
-  ends with the checks in REAPER.
-- `profiles/README.md`: which CLs record an idle snapshot (item 2).
-- `docs/testing_and_profiling.md`: its introduction no longer says code that
-  depends on REAPER is tested by hand.
-- `docs/backlog.md`, *Surface tests*: once the harness exists, each feature
-  adds surface tests of its own behavior, so the smoke test grows as tests
-  rather than as a list to run by hand.
-
-**Verify**
-- The docs read correctly, and the links work.
+Against the bar (aa14a5e), on the SurfaceTest project (81 tracks, 2 devices,
+243 controls, 36 views, 595 mappings):
+- **One clock** is the plugin's one change in cost: `time_precise` is called
+  once a run, not four times (6,090 calls in the smoke run, not 23,558).
+  Everything else is the same: the smoke run's actions made the same calls to
+  REAPER (31 actions, 22 `PreventUIRefresh()` scopes, 11 undo points, and 6
+  track list refreshes), with the same work done each run.
+- **Smoke:** p50 32.1us and p99 257us, against 29.6us and 236us.
+- **Idle:** p50 37.3us and p99 74.5us, against 29.6us and 64.3us, with every
+  point a little slower, REAPER's calls and `device`'s unchanged code
+  included. One session was about a third slower throughout, which was the
+  machine.
+- **The bar:** both runs replaced it, as the first started by double-clicking
+  the project, and so the first with exact per-run counts.
+- **Starting a scenario:** a profile starts with the surface, and runs before
+  a project opens poll no tracks, which lowers the per-run counts of every
+  point that does: `GetTrackState` was 13.3 a run, not 18, in a session that
+  took 6 seconds to choose the project. The scenarios now start REAPER by
+  double-clicking the project (see `profiles/README.md`).

@@ -24,14 +24,16 @@ Each snapshot's header has the build it was made from, and the date.
 
 ## Scenarios
 
-Both run on the same machine, with REAPER started fresh, other programs such as
-web browsers closed, and REAPER closed (without saving) right after, so the
-profile covers the scenario and nothing else.
+Both run on the same machine, with other programs such as web browsers closed.
+REAPER is started fresh by double-clicking the SurfaceTest project (81 tracks,
+with sends and receives), so it opens at once, and closed (without saving)
+right after, so the profile covers the scenario and nothing else. A profile
+starts with the surface, so time spent choosing a project in REAPER lowers the
+per-run counts of everything that polls tracks.
 
 ### idle
 
-Open the SurfaceTest project (81 tracks, with sends and receives), and leave
-REAPER and the surface untouched for at least 10 seconds.
+Leave REAPER and the surface untouched for at least 10 seconds.
 
 Shows the steady state: the cost of every run when nothing happens. Its figures
 are per run, so runs of different lengths compare; 10 seconds (about 300 runs)
@@ -39,7 +41,7 @@ is enough for a quick check.
 
 ### smoke
 
-Open the SurfaceTest project, then, at a steady pace:
+At a steady pace:
 
 1. Hold mute on T2, and press mute on T9: tracks 2 to 9 are muted.
 2. Hold solo on T3, and press solo on T10: tracks 3 to 10 are soloed.
