@@ -327,9 +327,10 @@ to check an assumption about REAPER, hooks it over the fake with
   adding tracks, or `SetSurfaceMute()` after a mute. [Seen in
   traces](#seen-in-traces) records what REAPER sends, and when, for writing
   those tests.
-- **Text** from `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and
-  `kbd_getTextFromCmd` is a plain format of the fake's own. JPRSurf only passes
-  it through to the display, so a test checks that it does.
+- **Text** from `mkvolstr`, `mkpanstr`, and `format_timestr_pos` is in
+  REAPER's formats ([Seen in traces](#seen-in-traces)), as `Timeline` parses
+  positions, for a project at REAPER's default tempo and rates.
+  `kbd_getTextFromCmd` returns the text a test gave the action.
 - **Commands** are recorded, and run a handler if the test gave one.
 
 Tests are then of two kinds, which need little of REAPER's own behavior:

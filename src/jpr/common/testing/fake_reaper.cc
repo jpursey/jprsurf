@@ -6,14 +6,20 @@
 #include "jpr/common/testing/fake_reaper.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/log/check.h"
 #include "absl/memory/memory.h"
+#include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_replace.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "gtest/gtest.h"
@@ -25,19 +31,11 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/volume_utils.h"
 
 namespace jpr {
 
 namespace {
-
-// The return type of a REAPER API function pointer.
-template <typename Function>
-struct ApiFunction;
-
-template <typename Return_, typename... Args>
-struct ApiFunction<Return_ (*)(Args...)> {
-  using Return = Return_;
-};
 
 // GetTrackState()'s flags.
 constexpr int kTrackStateSelected = 2;
@@ -50,15 +48,25 @@ constexpr int kReceiveCategory = -1;
 constexpr int kSendCategory = 0;
 constexpr int kHardwareOutputCategory = 1;
 
-}  // namespace
+// The sizes of the buffers guidToString(), mkvolstr(), and mkpanstr() write.
+constexpr int kTextSize = 64;
 
-// Declares a function on the API list that the fake doesn't support yet: it
-// fails the test, naming the function, and returns a zero value.
-#define JPR_NOT_FAKED(name)                                           \
-  static constexpr decltype(::name) name = [](auto...) {              \
-    ADD_FAILURE() << "REAPER API function " #name " isn't faked yet"; \
-    return ApiFunction<decltype(::name)>::Return();                   \
-  };
+// The quietest volume mkvolstr() writes, below which it writes "-inf dB".
+constexpr double kMinDecibels = -150.0;
+
+// format_timestr_pos()'s modes that the fake writes.
+constexpr int kTimeMode = 0;
+constexpr int kBeatsMode = 2;
+constexpr int kSamplesMode = 4;
+constexpr int kFramesMode = 5;
+
+// The project's tempo and rates, which are REAPER's defaults.
+constexpr double kBeatsPerMinute = 120.0;
+constexpr int kBeatsPerMeasure = 4;
+constexpr int kFramesPerSecond = 30;
+constexpr double kSamplesPerSecond = 44100.0;
+
+}  // namespace
 
 //==============================================================================
 // FakeReaper::Api
@@ -147,6 +155,16 @@ class FakeReaper::Api final {
       return 0.0;
     }
     return track.peak[channel];
+  }
+
+  static bool AnyTrackSolo(ReaProject* project) {
+    FakeProject& fake_project = s_instance_->FindProject(project);
+    for (int i = 0; i < fake_project.GetTrackCount(); ++i) {
+      if (fake_project.GetTrack(i)->solo) {
+        return true;
+      }
+    }
+    return false;
   }
 
   //----------------------------------------------------------------------------
@@ -368,7 +386,107 @@ class FakeReaper::Api final {
   //----------------------------------------------------------------------------
 
   static void guidToString(const GUID* guid, char* text) {
-    absl::SNPrintF(text, 64, "%s", FormatGuid(*guid));
+    absl::SNPrintF(text, kTextSize, "%s", FormatGuid(*guid));
+  }
+
+  // Reads a GUID in the format guidToString() writes.
+  static void stringToGuid(const char* text, GUID* guid) {
+    *guid = {};
+    const std::string hex =
+        absl::StrReplaceAll(text, {{"{", ""}, {"}", ""}, {"-", ""}});
+    if (hex.size() == 32) {
+      guid->Data1 = ParseHex(hex.substr(0, 8));
+      guid->Data2 = static_cast<unsigned short>(ParseHex(hex.substr(8, 4)));
+      guid->Data3 = static_cast<unsigned short>(ParseHex(hex.substr(12, 4)));
+      for (int i = 0; i < 8; ++i) {
+        guid->Data4[i] =
+            static_cast<unsigned char>(ParseHex(hex.substr(16 + i * 2, 2)));
+      }
+    }
+    // Anything that doesn't read back as it was written isn't a GUID.
+    if (!absl::EqualsIgnoreCase(FormatGuid(*guid), text)) {
+      ADD_FAILURE() << "stringToGuid() was given \"" << text
+                    << "\", which isn't a GUID";
+      *guid = {};
+    }
+  }
+
+  // Writes a volume in decibels to three significant digits, as REAPER does:
+  // "-14.2dB", "-5.10dB", "+4.23dB", or "-inf dB".
+  static void mkvolstr(char* text, double volume) {
+    const double decibels = VolumeToDecibels(volume);
+    if (decibels < kMinDecibels) {
+      absl::SNPrintF(text, kTextSize, "-inf dB");
+      return;
+    }
+    const double magnitude = std::abs(decibels);
+    const int decimals = magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : 2);
+    absl::SNPrintF(text, kTextSize, "%+.*fdB", decimals, decibels);
+  }
+
+  // Writes a pan as REAPER does: "center", "25%L", or "100%R".
+  static void mkpanstr(char* text, double pan) {
+    const int percent = static_cast<int>(std::lround(std::abs(pan) * 100.0));
+    if (percent == 0) {
+      absl::SNPrintF(text, kTextSize, "center");
+      return;
+    }
+    absl::SNPrintF(text, kTextSize, "%d%%%c", percent, pan < 0.0 ? 'L' : 'R');
+  }
+
+  // Writes a position in the modes JPRSurf reads, as REAPER does (see
+  // FakeReaper's class comment for the project's tempo and rates). A negative
+  // position is written as its distance from the start, after a "-".
+  static void format_timestr_pos(double position, char* text, int text_size,
+                                 int mode) {
+    const char* sign = position < 0.0 ? "-" : "";
+    const double seconds = std::abs(position);
+    switch (mode) {
+      case kTimeMode: {
+        // Minutes:seconds.milliseconds, with hours if there are any.
+        const int64_t total = std::llround(seconds * 1000.0);
+        const int64_t hours = total / 3600000;
+        const int64_t minutes = total / 60000 % 60;
+        const int64_t whole_seconds = total / 1000 % 60;
+        const int64_t milliseconds = total % 1000;
+        if (hours > 0) {
+          absl::SNPrintF(text, text_size, "%s%d:%02d:%02d.%03d", sign, hours,
+                         minutes, whole_seconds, milliseconds);
+        } else {
+          absl::SNPrintF(text, text_size, "%s%d:%02d.%03d", sign, minutes,
+                         whole_seconds, milliseconds);
+        }
+        return;
+      }
+      case kBeatsMode: {
+        // Measure.beat.hundredths of a beat, from 1.1.00.
+        const int64_t total =
+            std::llround(seconds * kBeatsPerMinute / 60.0 * 100.0);
+        const int64_t beats = total / 100;
+        absl::SNPrintF(text, text_size, "%s%d.%d.%02d", sign,
+                       beats / kBeatsPerMeasure + 1,
+                       beats % kBeatsPerMeasure + 1, total % 100);
+        return;
+      }
+      case kSamplesMode:
+        absl::SNPrintF(text, text_size, "%s%d", sign,
+                       std::llround(seconds * kSamplesPerSecond));
+        return;
+      case kFramesMode: {
+        // Hours:minutes:seconds:frames.
+        const int64_t total = std::llround(seconds * kFramesPerSecond);
+        const int64_t total_seconds = total / kFramesPerSecond;
+        absl::SNPrintF(text, text_size, "%s%02d:%02d:%02d:%02d", sign,
+                       total_seconds / 3600, total_seconds / 60 % 60,
+                       total_seconds % 60, total % kFramesPerSecond);
+        return;
+      }
+    }
+    ADD_FAILURE() << "format_timestr_pos() in mode " << mode
+                  << " isn't faked yet";
+    if (text_size > 0) {
+      text[0] = '\0';
+    }
   }
 
   static double time_precise() { return s_instance_->GetTime(); }
@@ -378,26 +496,82 @@ class FakeReaper::Api final {
   }
 
   //----------------------------------------------------------------------------
-  // Not faked yet
+  // Transport
   //----------------------------------------------------------------------------
 
-  JPR_NOT_FAKED(AnyTrackSolo)
-  JPR_NOT_FAKED(CountSelectedMediaItems)
-  JPR_NOT_FAKED(format_timestr_pos)
-  JPR_NOT_FAKED(GetCursorPosition)
-  JPR_NOT_FAKED(GetGlobalAutomationOverride)
-  JPR_NOT_FAKED(GetPlayPosition)
-  JPR_NOT_FAKED(GetPlayState)
-  JPR_NOT_FAKED(GetToggleCommandState)
-  JPR_NOT_FAKED(IsProjectDirty)
-  JPR_NOT_FAKED(kbd_getTextFromCmd)
-  JPR_NOT_FAKED(Main_OnCommand)
-  JPR_NOT_FAKED(mkpanstr)
-  JPR_NOT_FAKED(mkvolstr)
-  JPR_NOT_FAKED(NamedCommandLookup)
-  JPR_NOT_FAKED(SetGlobalAutomationOverride)
-  JPR_NOT_FAKED(stringToGuid)
-  JPR_NOT_FAKED(Undo_CanRedo2)
+  static int GetPlayState() { return s_instance_->GetProject().play_state_; }
+
+  static double GetPlayPosition() {
+    return s_instance_->GetProject().play_position_;
+  }
+
+  static double GetCursorPosition() {
+    return s_instance_->GetProject().cursor_position_;
+  }
+
+  //----------------------------------------------------------------------------
+  // Actions
+  //----------------------------------------------------------------------------
+
+  static void Main_OnCommand(int command, int flag) {
+    if (flag != 0) {
+      ADD_FAILURE() << "Main_OnCommand() with flag " << flag
+                    << " isn't faked yet";
+    }
+    s_instance_->commands_run_.push_back(command);
+    FakeCommand* fake_command = FindCommand(command);
+    if (fake_command != nullptr && fake_command->on_run) {
+      fake_command->on_run();
+    }
+  }
+
+  static int GetToggleCommandState(int command) {
+    const FakeCommand* fake_command = FindCommand(command);
+    return fake_command != nullptr ? fake_command->toggle_state : -1;
+  }
+
+  static int NamedCommandLookup(const char* name) {
+    for (const auto& [id, command] : s_instance_->commands_) {
+      if (!command.name.empty() && command.name == name) {
+        return id;
+      }
+    }
+    return 0;
+  }
+
+  // REAPER has no text for an action it doesn't have.
+  static const char* kbd_getTextFromCmd(int command, KbdSectionInfo* section) {
+    if (section != nullptr) {
+      ADD_FAILURE() << "kbd_getTextFromCmd() with a section isn't faked yet";
+    }
+    const FakeCommand* fake_command = FindCommand(command);
+    return fake_command != nullptr ? fake_command->text.c_str() : "";
+  }
+
+  //----------------------------------------------------------------------------
+  // Automation, undo, and the project
+  //----------------------------------------------------------------------------
+
+  static int GetGlobalAutomationOverride() {
+    return s_instance_->GetProject().automation_override_;
+  }
+
+  static void SetGlobalAutomationOverride(int mode) {
+    s_instance_->GetProject().automation_override_ = mode;
+  }
+
+  static const char* Undo_CanRedo2(ReaProject* project) {
+    const FakeProject& fake_project = s_instance_->FindProject(project);
+    return fake_project.redo_.empty() ? nullptr : fake_project.redo_.c_str();
+  }
+
+  static int IsProjectDirty(ReaProject* project) {
+    return s_instance_->FindProject(project).dirty_ ? 1 : 0;
+  }
+
+  static int CountSelectedMediaItems(ReaProject* project) {
+    return s_instance_->FindProject(project).selected_item_count_;
+  }
 
  private:
   // SetTrackUI*()'s group flag that keeps a change to its own track.
@@ -559,6 +733,18 @@ class FakeReaper::Api final {
     return port;
   }
 
+  // Returns the value of the hex digits `hex`, or 0 if they aren't any.
+  static uint32_t ParseHex(std::string_view hex) {
+    uint32_t value = 0;
+    return absl::SimpleHexAtoi(hex, &value) ? value : 0;
+  }
+
+  // Returns the action `command`, or null if it wasn't added.
+  static FakeCommand* FindCommand(int command) {
+    auto it = s_instance_->commands_.find(command);
+    return it != s_instance_->commands_.end() ? &it->second : nullptr;
+  }
+
   // Returns the selected tracks in `project`, in order, with the master first
   // if `want_master` is true and it is selected.
   static std::vector<FakeTrack*> GetSelectedTracks(ReaProject* project,
@@ -576,8 +762,6 @@ class FakeReaper::Api final {
     return selected;
   }
 };
-
-#undef JPR_NOT_FAKED
 
 FakeReaper* FakeReaper::s_instance_ = nullptr;
 
@@ -654,6 +838,28 @@ void FakeReaper::RemoveSurface(TestControlSurface* surface) {
   if (surface == surface_) {
     surface_ = nullptr;
   }
+}
+
+//------------------------------------------------------------------------------
+// Actions
+//------------------------------------------------------------------------------
+
+void FakeReaper::AddCommand(FakeCommand command) {
+  const int id = command.id;
+  if (!commands_.try_emplace(id, std::move(command)).second) {
+    ADD_FAILURE() << "AddCommand() was given action " << id
+                  << ", which was already added";
+  }
+}
+
+void FakeReaper::SetToggleState(int id, int toggle_state) {
+  auto it = commands_.find(id);
+  if (it == commands_.end()) {
+    ADD_FAILURE() << "SetToggleState() was given action " << id
+                  << ", which wasn't added";
+    return;
+  }
+  it->second.toggle_state = toggle_state;
 }
 
 //------------------------------------------------------------------------------

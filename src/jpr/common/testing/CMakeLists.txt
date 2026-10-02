@@ -14,11 +14,13 @@ set(jpr_common_testing_SOURCE
 )
 
 set(jpr_common_testing_DEPS
+  absl::any_invocable
   absl::flat_hash_set
   absl::log
   absl::node_hash_map
   absl::span
   absl::str_format
+  absl::strings
   absl::time
   gtest
   jpr_common

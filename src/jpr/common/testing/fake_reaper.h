@@ -12,7 +12,10 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/container/node_hash_map.h"
+#include "absl/functional/any_invocable.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "jpr/common/testing/fake_midi.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
@@ -20,6 +23,29 @@
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
+
+// An action in the fake REAPER (see FakeReaper::AddCommand()), which a test
+// describes by setting its fields.
+struct FakeCommand {
+  // The action's ID, which Main_OnCommand() runs it by.
+  int id = 0;
+
+  // As kbd_getTextFromCmd() returns it: the action's section and name, such as
+  // "Edit: Undo".
+  std::string text;
+
+  // The name NamedCommandLookup() finds it by, such as "_SWS_ABOUT", or empty
+  // for one of REAPER's own actions, which are found by their ID.
+  std::string name;
+
+  // As GetToggleCommandState(): -1 if it isn't a toggle, 0 for off, or 1 for
+  // on (see FakeReaper::SetToggleState()).
+  int toggle_state = -1;
+
+  // Called when Main_OnCommand() runs the action, to change what it would. The
+  // fake models no action's effects itself.
+  absl::AnyInvocable<void()> on_run;
+};
 
 //==============================================================================
 // FakeReaper
@@ -30,10 +56,16 @@ namespace jpr {
 // It fakes exactly the functions on the API list, over its model of the
 // project: a setter stores the value, and a getter returns it. It holds
 // REAPER's state, not its behavior, so it never calls a control surface by
-// itself. A test makes the calls REAPER would make on the surface AddSurface()
-// returns (see "Seen in traces" in docs/testing_and_profiling.md for what
-// REAPER sends). A test that needs one function to behave otherwise hooks it
-// over the fake with gb::FunctionHook.
+// itself, and runs no action's effects. A test makes the calls REAPER would
+// make on the surface AddSurface() returns (see "Seen in traces" in
+// docs/testing_and_profiling.md for what REAPER sends), and gives an action a
+// handler for what it would change. A test that needs one function to behave
+// otherwise hooks it over the fake with gb::FunctionHook.
+//
+// Text is in REAPER's formats, as far as JPRSurf reads it: volumes and pans as
+// mkvolstr() and mkpanstr() write them, and positions as format_timestr_pos()
+// writes them, for a project at REAPER's defaults of 120 BPM in 4/4, with 30
+// frames and 44100 samples a second.
 //
 // Creating the fake, and destroying it, resets the process state of every
 // library linked into the test (see TestReset). Only one may exist at a time.
@@ -41,7 +73,7 @@ namespace jpr {
 // Checks
 // ------
 // The fake fails the test, with ADD_FAILURE(), naming what broke, on:
-// - A call to a function on the list that the fake doesn't support yet.
+// - A call the fake doesn't support yet, such as a parameter it doesn't model.
 // - A track or project pointer that isn't in an open project.
 // - A second control surface created while one is open: JPRSurf has one
 //   surface, with a ControlSurfaceListener for each use.
@@ -138,8 +170,24 @@ class FakeReaper final {
   FakeMidiOutput* AddMidiOutput(std::string_view name);
 
   //----------------------------------------------------------------------------
+  // Actions
+  //----------------------------------------------------------------------------
+
+  // Adds one of REAPER's actions. An action that wasn't added still runs (see
+  // GetCommandsRun()), as REAPER has thousands, but has no text, no toggle
+  // state, and no handler. Adding an action twice fails the test.
+  void AddCommand(FakeCommand command);
+
+  // Sets the toggle state of the action `id`, which must have been added, as
+  // the user changing it in REAPER does, or its handler.
+  void SetToggleState(int id, int toggle_state);
+
+  //----------------------------------------------------------------------------
   // What the code under test did
   //----------------------------------------------------------------------------
+
+  // Every action Main_OnCommand() ran, in order.
+  absl::Span<const int> GetCommandsRun() const { return commands_run_; }
 
   // Everything written with ShowConsoleMsg(), in order.
   const std::string& GetConsoleText() const { return console_text_; }
@@ -211,6 +259,11 @@ class FakeReaper final {
   // The open projects, in tab order, and the index of the current one.
   std::vector<FakeProject*> open_projects_;
   int current_project_ = 0;
+
+  // The actions added, by ID. A node_hash_map, so an action whose handler is
+  // running stays put if the handler adds another.
+  absl::node_hash_map<int, FakeCommand> commands_;
+  std::vector<int> commands_run_;
 
   // The MIDI ports, in the order they are listed.
   std::vector<std::unique_ptr<FakeMidiInput>> midi_inputs_;

@@ -73,12 +73,6 @@ TEST(FakeReaperTest, UnloadsTheApiWhenDestroyed) {
   EXPECT_EQ(::time_precise, nullptr);
 }
 
-TEST(FakeReaperTest, FunctionNotFakedYetFailsTheTest) {
-  FakeReaper reaper;
-  EXPECT_NONFATAL_FAILURE(::AnyTrackSolo(nullptr),
-                          "AnyTrackSolo isn't faked yet");
-}
-
 TEST(FakeReaperTest, RegisteringAnythingButASurfaceFailsTheTest) {
   FakeReaper reaper;
   EXPECT_NONFATAL_FAILURE(
@@ -654,6 +648,141 @@ TEST(FakeReaperTest, RecordsConsoleText) {
   ::ShowConsoleMsg("Hello, ");
   ::ShowConsoleMsg("world\n");
   EXPECT_EQ(reaper.GetConsoleText(), "Hello, world\n");
+}
+
+TEST(FakeReaperTest, ActionsRunTheirHandlers) {
+  FakeReaper reaper;
+  reaper.AddCommand({.id = 40364,
+                     .text = "Options: Metronome",
+                     .toggle_state = 0,
+                     .on_run = [&reaper] {
+                       reaper.SetToggleState(
+                           40364, ::GetToggleCommandState(40364) ^ 1);
+                     }});
+
+  ::Main_OnCommand(40364, 0);
+  ::Main_OnCommand(40044, 0);  // Not added, but recorded.
+  EXPECT_THAT(reaper.GetCommandsRun(), ElementsAre(40364, 40044));
+  EXPECT_EQ(::GetToggleCommandState(40364), 1);
+  EXPECT_EQ(::GetToggleCommandState(40044), -1);
+  EXPECT_STREQ(::kbd_getTextFromCmd(40364, nullptr), "Options: Metronome");
+  EXPECT_STREQ(::kbd_getTextFromCmd(40044, nullptr), "");
+}
+
+TEST(FakeReaperTest, NamedActionsAreFoundByName) {
+  FakeReaper reaper;
+  reaper.AddCommand({.id = 55000, .text = "SWS: About", .name = "_SWS_ABOUT"});
+  EXPECT_EQ(::NamedCommandLookup("_SWS_ABOUT"), 55000);
+  EXPECT_EQ(::NamedCommandLookup("_SWS_MISSING"), 0);
+}
+
+TEST(FakeReaperTest, ActionsAreAddedOnce) {
+  FakeReaper reaper;
+  reaper.AddCommand({.id = 40044, .text = "Transport: Play/stop"});
+  EXPECT_NONFATAL_FAILURE(
+      reaper.AddCommand({.id = 40044, .text = "Transport: Play/stop"}),
+      "already added");
+  EXPECT_NONFATAL_FAILURE(reaper.SetToggleState(40364, 1), "wasn't added");
+}
+
+TEST(FakeReaperTest, Transport) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  project.SetPlayState(1);
+  project.SetPlayPosition(2.5);
+  project.SetCursorPosition(1.25);
+  EXPECT_EQ(::GetPlayState(), 1);
+  EXPECT_EQ(::GetPlayPosition(), 2.5);
+  EXPECT_EQ(::GetCursorPosition(), 1.25);
+
+  // Each project tab has its own.
+  reaper.AddProject();
+  EXPECT_EQ(::GetPlayState(), 0);
+}
+
+TEST(FakeReaperTest, ProjectState) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  EXPECT_EQ(::Undo_CanRedo2(nullptr), nullptr);
+  EXPECT_EQ(::IsProjectDirty(nullptr), 0);
+  EXPECT_EQ(::CountSelectedMediaItems(nullptr), 0);
+  EXPECT_FALSE(::AnyTrackSolo(nullptr));
+
+  project.SetRedo("Change volume");
+  project.SetDirty(true);
+  project.SetSelectedItemCount(2);
+  project.AddTrack("Drums")->solo = true;
+  EXPECT_STREQ(::Undo_CanRedo2(nullptr), "Change volume");
+  EXPECT_EQ(::IsProjectDirty(nullptr), 1);
+  EXPECT_EQ(::CountSelectedMediaItems(nullptr), 2);
+  EXPECT_TRUE(::AnyTrackSolo(nullptr));
+}
+
+TEST(FakeReaperTest, AutomationOverride) {
+  FakeReaper reaper;
+  EXPECT_EQ(::GetGlobalAutomationOverride(), -1);
+  ::SetGlobalAutomationOverride(3);
+  EXPECT_EQ(reaper.GetProject().GetAutomationOverride(), 3);
+
+  // Each project tab has its own.
+  reaper.AddProject();
+  EXPECT_EQ(::GetGlobalAutomationOverride(), -1);
+}
+
+TEST(FakeReaperTest, VolumeAndPanText) {
+  FakeReaper reaper;
+  std::array<char, 64> text = {};
+  ::mkvolstr(text.data(), 1.0);
+  EXPECT_STREQ(text.data(), "+0.00dB");
+  ::mkvolstr(text.data(), 0.5);
+  EXPECT_STREQ(text.data(), "-6.02dB");
+  ::mkvolstr(text.data(), 0.1);
+  EXPECT_STREQ(text.data(), "-20.0dB");
+  ::mkvolstr(text.data(), 2.0);
+  EXPECT_STREQ(text.data(), "+6.02dB");
+  ::mkvolstr(text.data(), 0.0);
+  EXPECT_STREQ(text.data(), "-inf dB");
+
+  ::mkpanstr(text.data(), 0.0);
+  EXPECT_STREQ(text.data(), "center");
+  ::mkpanstr(text.data(), -0.25);
+  EXPECT_STREQ(text.data(), "25%L");
+  ::mkpanstr(text.data(), 1.0);
+  EXPECT_STREQ(text.data(), "100%R");
+}
+
+TEST(FakeReaperTest, PositionText) {
+  FakeReaper reaper;
+  std::array<char, 64> text = {};
+  ::format_timestr_pos(3.5, text.data(), text.size(), 2);
+  EXPECT_STREQ(text.data(), "2.4.00");  // As REAPER writes it.
+  ::format_timestr_pos(3725.25, text.data(), text.size(), 0);
+  EXPECT_STREQ(text.data(), "1:02:05.250");
+  ::format_timestr_pos(-65.5, text.data(), text.size(), 0);
+  EXPECT_STREQ(text.data(), "-1:05.500");
+  ::format_timestr_pos(3.5, text.data(), text.size(), 4);
+  EXPECT_STREQ(text.data(), "154350");
+  ::format_timestr_pos(3725.5, text.data(), text.size(), 5);
+  EXPECT_STREQ(text.data(), "01:02:05:15");
+  EXPECT_NONFATAL_FAILURE(
+      ::format_timestr_pos(1.0, text.data(), text.size(), 3), "mode 3");
+}
+
+TEST(FakeReaperTest, GuidText) {
+  FakeReaper reaper;
+  GUID guid = {};
+  ::stringToGuid("{00000001-0002-0003-0405-060708090A0B}", &guid);
+  EXPECT_EQ(guid.Data1, 1);
+  EXPECT_EQ(guid.Data2, 2);
+  EXPECT_EQ(guid.Data3, 3);
+  EXPECT_EQ(guid.Data4[0], 4);
+  EXPECT_EQ(guid.Data4[7], 11);
+
+  std::array<char, 64> text = {};
+  ::guidToString(&guid, text.data());
+  EXPECT_STREQ(text.data(), "{00000001-0002-0003-0405-060708090A0B}");
+
+  EXPECT_NONFATAL_FAILURE(::stringToGuid("{1234}", &guid), "isn't a GUID");
 }
 
 // Each reset is registered beside its state (see TestReset), so this also

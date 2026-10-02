@@ -273,10 +273,11 @@ class FakeProject final {
   in the group. REAPER's groups have leaders and followers for each property,
   which aren't modeled. It lets a test check the grouping JPRSurf asks for
   through the tracks' state.
-- **Text** from `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and
-  `kbd_getTextFromCmd` is a plain format of the fake's own. The code under test
-  only passes it through to the display, so a test checks that it does, not
-  REAPER's exact format.
+- **Text** from `mkvolstr`, `mkpanstr`, and `format_timestr_pos` is in
+  REAPER's formats (see Seen in traces in the design doc), as `Timeline` parses
+  positions. Positions are for a project at REAPER's defaults: 120 BPM in 4/4,
+  30 frames a second, and 44100 samples a second. `kbd_getTextFromCmd` returns
+  the text the test gave the action.
 - **Commands:** `Main_OnCommand()` records the command, and runs its handler if
   the test gave it one. A handler for the ruler modes or undo sets what those
   commands would.
@@ -527,23 +528,35 @@ Depends on: CL3.
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes, with no real wait (the flush wait is zero).
 
-### CL8 [ ] common/testing: Transport, commands, automation, and undo
+### CL8 [x] common/testing: Transport, commands, automation, and undo
 
 Depends on: CL4 to CL7 (the last of the list).
 
-- Transport and timeline: play state, play and cursor positions, and
-  `format_timestr_pos`.
-- Commands: `Main_OnCommand` (recorded, with handlers), toggle states,
-  `NamedCommandLookup`, and `kbd_getTextFromCmd`.
-- Automation and undo: the global override, `Undo_CanRedo2`, and
-  `IsProjectDirty`.
-- The rest of the list: `AnyTrackSolo`, `CountSelectedMediaItems`,
-  `mkvolstr`, `mkpanstr`, `stringToGuid`.
+- Transport and timeline: play state, play and cursor positions (each
+  project's, set with `FakeProject::SetPlayState()` and the like), and
+  `format_timestr_pos` in the modes JPRSurf reads (time, beats, samples, and
+  frames).
+- Actions: `FakeReaper::AddCommand(FakeCommand)` adds one, once (its ID, its
+  text, the name `NamedCommandLookup` finds it by, its toggle state, and an
+  `absl::AnyInvocable` handler), and `SetToggleState(id, state)` changes its
+  toggle state. `Main_OnCommand` records every action it runs, added or not, and
+  runs the handler; the fake models no action's effects. `GetToggleCommandState`
+  and `kbd_getTextFromCmd` read the action.
+- Automation and undo: each project's automation override
+  (`FakeProject::SetAutomationOverride()`), redo, and dirty state (`SetRedo()`,
+  `SetDirty()`). Undo and redo, the automation override despite its "global"
+  name, and everything about the transport, are per project in REAPER
+  (confirmed 2026-10-02).
+- The rest of the list: `AnyTrackSolo` (from the tracks),
+  `CountSelectedMediaItems` (`SetSelectedItemCount()`), `mkvolstr`, `mkpanstr`,
+  and `stringToGuid`.
 - The stub for functions not faked yet goes, so a listed function without a
   fake doesn't compile.
-- Tests: `timeline_test.cc` (ruler modes, and remembering the last one),
-  `undo_test.cc` (merging, `kDelay` on the fake's clock, `Flush()`, a different
-  description), `automation_test.cc`, and `guid_test.cc`.
+- Tests: the new functions in `fake_reaper_test.cc`, `timeline_test.cc` (ruler
+  modes, remembering the last one of each, the secondary mode, positions while
+  playing, and reading positions in each mode), `undo_test.cc` (merging,
+  `kDelay` on the fake's clock, `Flush()`, a different description or flags),
+  `automation_test.cc`, and `guid_test.cc`.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

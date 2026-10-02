@@ -43,16 +43,20 @@ set(jpr_common_DEPS
 
 set(jpr_common_TEST_SOURCE
   anchor_test.cc
+  automation_test.cc
   color_test.cc
   control_surface_test.cc
+  guid_test.cc
   midi_port_test.cc
   midi_ports_test.cc
   numbered_name_test.cc
   prefixed_name_test.cc
   reaper_api_test.cc
   reaper_trace_test.cc
+  timeline_test.cc
   track_cache_test.cc
   track_test.cc
+  undo_test.cc
 )
 
 set(jpr_common_TEST_DEPS

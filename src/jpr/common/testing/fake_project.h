@@ -126,11 +126,48 @@ class FakeProject final {
   absl::Span<FakeRoute* const> GetHardwareOutputs(const FakeTrack* track) const;
 
   //----------------------------------------------------------------------------
-  // Undo
+  // Transport
+  //----------------------------------------------------------------------------
+
+  // Sets what GetPlayState() returns: &1 playing, &2 paused, and &4 recording.
+  void SetPlayState(int play_state) { play_state_ = play_state; }
+
+  // Sets the play position, and the edit cursor's, in seconds, as
+  // GetPlayPosition() and GetCursorPosition() return them.
+  void SetPlayPosition(double position) { play_position_ = position; }
+  void SetCursorPosition(double position) { cursor_position_ = position; }
+
+  //----------------------------------------------------------------------------
+  // Automation
+  //----------------------------------------------------------------------------
+
+  // The automation override, as GetGlobalAutomationOverride() returns it: -1
+  // for none, or an automation mode. Despite the name, each project has its
+  // own.
+  int GetAutomationOverride() const { return automation_override_; }
+  void SetAutomationOverride(int mode) { automation_override_ = mode; }
+
+  //----------------------------------------------------------------------------
+  // Undo and saving
   //----------------------------------------------------------------------------
 
   // The undo points added to the project, in order.
   absl::Span<const FakeUndoPoint> GetUndoPoints() const { return undo_points_; }
+
+  // Sets the undo point Edit: Redo would redo, as Undo_CanRedo2() returns it,
+  // or empty if there is none.
+  void SetRedo(std::string_view name) { redo_ = name; }
+
+  // Sets whether the project has changes to save, as IsProjectDirty() returns.
+  void SetDirty(bool dirty) { dirty_ = dirty; }
+
+  //----------------------------------------------------------------------------
+  // Media items
+  //----------------------------------------------------------------------------
+
+  // Sets how many media items are selected, as CountSelectedMediaItems()
+  // returns. The fake has no media items otherwise.
+  void SetSelectedItemCount(int count) { selected_item_count_ = count; }
 
  private:
   friend class FakeReaper;
@@ -195,7 +232,18 @@ class FakeProject final {
   std::vector<FakeTrack*> tracks_;  // In order, not including the master.
 
   std::vector<std::unique_ptr<FakeRoute>> routes_;
+
+  int play_state_ = 0;
+  double play_position_ = 0.0;
+  double cursor_position_ = 0.0;
+
+  int automation_override_ = -1;
+
   std::vector<FakeUndoPoint> undo_points_;
+  std::string redo_;
+  bool dirty_ = false;
+
+  int selected_item_count_ = 0;
 };
 
 // Returns the ReaProject* the fake hands out for `project`.
