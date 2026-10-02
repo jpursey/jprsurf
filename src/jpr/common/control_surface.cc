@@ -18,7 +18,6 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "gb/profile/profile_timer.h"
-#include "jpr/common/log_file.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/reaper_trace.h"
 #include "jpr/common/runner.h"
@@ -69,6 +68,13 @@ bool ControlSurface::Register(reaper_plugin_info_t& plugin_info,
   return true;
 }
 
+void ControlSurface::Reset(ResetTestKey) {
+  CHECK(s_instance_ == nullptr)
+      << "The control surface type can't be reset while a surface exists";
+  s_type_ = {};
+  s_reg_ = {};
+}
+
 IReaperControlSurface* ControlSurface::Create(const char* type_string,
                                               const char* config_string,
                                               int* err_stats) {
@@ -106,9 +112,11 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
   return nullptr;
 }
 
-ControlSurface::ControlSurface(std::string_view config)
-    : profiler_(GetLogPath("jprsurf_profile.txt")),
-      listener_(s_type_.create_listener(config)) {
+ControlSurface::ControlSurface(std::string_view config) {
+  if (!s_type_.profile_path.empty()) {
+    profiler_.emplace(s_type_.profile_path);
+  }
+  listener_ = s_type_.create_listener(config);
   CHECK(listener_ != nullptr)
       << "No listener created for control surface type " << s_type_.type_string;
   CHECK(s_instance_ == nullptr) << "Only one ControlSurface may exist";
@@ -116,7 +124,9 @@ ControlSurface::ControlSurface(std::string_view config)
 
   // Creating the listener is a one time cost (opening MIDI ports and the like),
   // which the profile leaves out, so it covers only the runs.
-  profiler_.Reset();
+  if (profiler_.has_value()) {
+    profiler_->Reset();
+  }
   LOG(INFO) << "ControlSurface created";
 }
 

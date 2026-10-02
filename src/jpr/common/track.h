@@ -141,7 +141,7 @@ class Track final : public std::enable_shared_from_this<Track> {
  public:
   Track(const Track&) = delete;
   Track& operator=(const Track&) = delete;
-  ~Track();
+  ~Track() = default;
 
   // Strong and weak pointer references to the track.
   std::shared_ptr<Track> GetShared() { return shared_from_this(); }

@@ -5,7 +5,6 @@
 
 #include "jpr/common/track_cache.h"
 
-#include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
@@ -13,9 +12,18 @@
 
 namespace jpr {
 
+TrackCache* TrackCache::s_instance_ = nullptr;
+
 TrackCache& TrackCache::Get() {
-  static absl::NoDestructor<TrackCache> instance;
-  return *instance;
+  if (s_instance_ == nullptr) {
+    s_instance_ = new TrackCache();
+  }
+  return *s_instance_;
+}
+
+void TrackCache::Reset(ResetTestKey) {
+  delete s_instance_;
+  s_instance_ = nullptr;
 }
 
 TrackCache::TrackCache() {

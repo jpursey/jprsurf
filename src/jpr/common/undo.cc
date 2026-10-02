@@ -10,9 +10,18 @@
 
 namespace jpr {
 
+ContinuousUndo* ContinuousUndo::s_instance_ = nullptr;
+
 ContinuousUndo& ContinuousUndo::Get() {
-  static absl::NoDestructor<ContinuousUndo> instance;
-  return *instance;
+  if (s_instance_ == nullptr) {
+    s_instance_ = new ContinuousUndo();
+  }
+  return *s_instance_;
+}
+
+void ContinuousUndo::Reset(ResetTestKey) {
+  delete s_instance_;
+  s_instance_ = nullptr;
 }
 
 void ContinuousUndo::OnChange(std::string_view description,

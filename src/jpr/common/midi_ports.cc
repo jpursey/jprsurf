@@ -27,6 +27,12 @@ std::string JoinNames(const std::vector<std::unique_ptr<Port>>& ports) {
 
 }  // namespace
 
+absl::Duration MidiPorts::s_flush_wait_ = absl::Milliseconds(100);
+
+void MidiPorts::SetFlushWait(ResetTestKey, absl::Duration wait) {
+  s_flush_wait_ = wait;
+}
+
 MidiPorts::MidiPorts()
     : inputs_(MidiIn::GetPorts()), outputs_(MidiOut::GetPorts()) {
   LOG(INFO) << "MIDI input ports: " << JoinNames(inputs_);
@@ -44,7 +50,7 @@ MidiPorts::~MidiPorts() {
   // Extender, whose port was destroyed first, did not clear on shutdown without
   // this). REAPER has no way to flush a port, so give them time to finish
   // sending.
-  absl::SleepFor(absl::Milliseconds(100));
+  absl::SleepFor(s_flush_wait_);
 }
 
 template <typename Port>

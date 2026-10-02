@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -13,6 +14,7 @@
 
 #include "absl/types/span.h"
 #include "jpr/common/reaper_profiler.h"
+#include "jpr/common/reset_test_key.h"
 #include "jpr/common/runner.h"
 #include "sdk/reaper_plugin.h"
 
@@ -58,8 +60,8 @@ class ControlSurfaceListener {
 // - ContinuousUndo is updated at the start of every run.
 // - Each run reads REAPER's clock once, and passes that time to everything in
 //   the run.
-// - A ReaperProfiler profiles its runs, from once the listener is created
-//   until the surface is destroyed.
+// - If its type has a profile path, a ReaperProfiler profiles its runs, from
+//   once the listener is created until the surface is destroyed.
 //
 // Only one instance may exist at a time. If the user adds the surface again,
 // the new one is refused with an error, and the first is left untouched.
@@ -82,11 +84,19 @@ class ControlSurface final : private IReaperControlSurface {
     // REAPER saved for it. This must not return null.
     std::unique_ptr<ControlSurfaceListener> (*create_listener)(
         std::string_view config);
+
+    // Where each surface writes its profile (see ReaperProfiler) when it is
+    // destroyed, replacing the last one, or empty for no profiling.
+    std::filesystem::path profile_path;
   };
 
   // Registers the control surface type with REAPER. Only one type may be
   // registered. Returns false (and logs an error) if registration fails.
   static bool Register(reaper_plugin_info_t& plugin_info, const Type& type);
+
+  // For tests only (see ResetCommonState()): forgets the registered type, so
+  // another can be registered. No surface may exist.
+  static void Reset(ResetTestKey);
 
   ControlSurface(const ControlSurface&) = delete;
   ControlSurface& operator=(const ControlSurface&) = delete;
@@ -165,9 +175,10 @@ class ControlSurface final : private IReaperControlSurface {
   // The one instance that exists, if any.
   static ControlSurface* s_instance_;
 
-  // The profiler is declared first, so its hooks are in place for the MIDI
-  // ports the listener opens, and it outlives the listener.
-  ReaperProfiler profiler_;
+  // The profiler, if the type has a profile path. It is declared first, and
+  // created before the listener, so its hooks are in place for the MIDI ports
+  // the listener opens, and it outlives the listener.
+  std::optional<ReaperProfiler> profiler_;
   std::unique_ptr<ControlSurfaceListener> listener_;
   std::string config_string_;  // Holds the result of GetConfigString().
 

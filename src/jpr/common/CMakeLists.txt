@@ -21,7 +21,9 @@ set(jpr_common_SOURCE
   reaper_api.cc reaper_api.h
   reaper_profiler.cc reaper_profiler.h
   reaper_trace.cc reaper_trace.h
+  reset_test_key.h
   runner.cc runner.h
+  test_reset_common.cc test_reset_common.h
   timeline.cc timeline.h
   track.cc track.h
   track_cache.cc track_cache.h

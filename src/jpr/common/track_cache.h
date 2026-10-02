@@ -9,11 +9,11 @@
 #include <cstdint>
 #include <memory>
 
-#include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/guid.h"
+#include "jpr/common/reset_test_key.h"
 #include "jpr/common/track.h"
 
 namespace jpr {
@@ -29,6 +29,11 @@ class TrackCache final {
  public:
   // Returns the singleton instance of the track cache.
   static TrackCache& Get();
+
+  // For tests only (see ResetCommonState()): destroys the instance, so the
+  // next Get() creates a new, empty one. Tracks held outside the cache (by
+  // shared pointer) outlive it.
+  static void Reset(ResetTestKey);
 
   TrackCache(const TrackCache&) = delete;
   TrackCache& operator=(const TrackCache&) = delete;
@@ -128,10 +133,12 @@ class TrackCache final {
   int64_t GetSelectionVersion() const { return selection_version_; }
 
  private:
-  friend class absl::NoDestructor<TrackCache>;
-
   using TrackMap = absl::flat_hash_map<Guid, std::shared_ptr<Track>>;
   using TrackIdMap = absl::flat_hash_map<MediaTrack*, Track*>;
+
+  // The instance, created by the first Get(). It is never destroyed, apart from
+  // by Reset().
+  static TrackCache* s_instance_;
 
   TrackCache();
 

@@ -132,10 +132,19 @@ class ResetTestKey final {
 | `g_modifiers`                                   | The existing `ResetModifiers()`                                                 |
 | `MidiPorts`' flush wait (100ms, on destruction) | `MidiPorts::SetFlushWait(ResetTestKey, duration)`, zero under the fake          |
 
+- `ResetCommonState(ResetTestKey)`, in `test_reset_common.h`, calls every reset
+  but the flush wait (which is a setting, not state), so the list of process
+  state lives in `common`, next to the globals, and the fake makes one call.
+  `scene` and `device` can have their own (`test_reset_scene.h`) if they need
+  one. Each reset says it is for tests only.
 - `TrackCache::Get()` and `ContinuousUndo::Get()` create their instance on
   first use, as today, from a file-local `g_` pointer rather than a function
   static, so a reset can replace it. The cost of `Get()` is the same null check
   a function static makes.
+- `~Track()` no longer calls back into `TrackCache` to clear the last touched
+  track. The cache never drops a track while it exists (a deleted track clears
+  it as it is removed), so it only mattered as the cache was destroyed, and a
+  track `scene` still holds after a reset would have created a new cache.
 - The fake resets everything when it is created and when it is destroyed. It
   fails the test first if a surface is still open, as a reset under a live
   surface would leave it holding tracks that no longer exist.
@@ -146,9 +155,10 @@ class ResetTestKey final {
   reach them. *Scene tests* and *Surface tests* reset them with the same key
   pattern.
 
-**Brittleness:** a new global has to be added to the reset. The `g_` prefix
-makes them easy to find in review, and anything with an instance is caught by
-the fake's teardown check, but a missed global is otherwise silent.
+**Brittleness:** a new global has to be added to `ResetCommonState()`. The `g_`
+and `s_` prefixes make them easy to find in review, and anything with an
+instance is caught by the fake's teardown check, but a missed global is
+otherwise silent.
 
 ### FakeReaper (common/testing)
 
@@ -295,13 +305,14 @@ Depends on: nothing.
   against `profiles/idle.txt`: p50 and p99, and one `time_precise` call per
   run instead of one per runner.
 
-### CL2 [ ] common, plugin: Resettable process state, and the plugin's profile
+### CL2 [x] common, plugin: Resettable process state, and the plugin's profile
 
 Depends on: CL1.
 
-- `reset_test_key.h`: `ResetTestKey`.
+- `reset_test_key.h`: `ResetTestKey`. `test_reset_common.h`:
+  `ResetCommonState()`.
 - `TrackCache` and `ContinuousUndo` move to a file-local instance with
-  `Reset(ResetTestKey)`.
+  `Reset(ResetTestKey)`, and `~Track()` no longer reaches the cache.
 - `ControlSurface::Reset(ResetTestKey)`, `ResetRulerModes(ResetTestKey)`, and
   `MidiPorts::SetFlushWait(ResetTestKey, absl::Duration)`.
 - `ControlSurface::Type::profile_path`, the optional `ReaperProfiler`, and

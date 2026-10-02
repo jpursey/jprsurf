@@ -90,14 +90,6 @@ Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
 }
 
-Track::~Track() {
-  // If this track is currently selected, clear the last selected track pointer
-  // to avoid leaving a dangling pointer.
-  if (TrackCache::Get().GetLastTouchedTrack() == this) {
-    TrackCache::Get().SetLastTouchedTrack(nullptr);
-  }
-}
-
 void Track::Refresh() { DoRefresh(track_id_); }
 
 void Track::DoRefresh(MediaTrack* track_id) {

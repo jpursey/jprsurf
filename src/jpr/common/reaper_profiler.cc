@@ -190,10 +190,6 @@ midi_Output* ReaperProfiler::MidiPortHook::Wrap(midi_Output* port) {
 }
 
 void ReaperProfiler::WriteSnapshot(const RunSplit& split) const {
-  if (path_.empty()) {
-    LOG(ERROR) << "There is nowhere to write the profile.";
-    return;
-  }
   const absl::Time end_time = absl::Now();
   const std::string snapshot = absl::StrCat(
       "JPRSurf profile\n", "Build:    ", kBuildCommit,

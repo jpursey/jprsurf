@@ -9,7 +9,9 @@
 #include <string_view>
 #include <vector>
 
+#include "absl/time/time.h"
 #include "jpr/common/midi_port.h"
+#include "jpr/common/reset_test_key.h"
 #include "jpr/common/runner.h"
 
 namespace jpr {
@@ -26,6 +28,11 @@ namespace jpr {
 // (for instance, clearing a surface on shutdown).
 class MidiPorts final {
  public:
+  // For tests only: sets how long destroying MidiPorts waits for its ports to
+  // finish sending (100ms by default). The fake REAPER's ports send at once,
+  // and tests never wait on real time, so it sets none.
+  static void SetFlushWait(ResetTestKey, absl::Duration wait);
+
   // Lists the MIDI ports available in REAPER, none of them open yet.
   MidiPorts();
 
@@ -53,6 +60,10 @@ class MidiPorts final {
   static Port* Open(std::string_view name, std::string_view kind,
                     RunRegistry& registry,
                     const std::vector<std::unique_ptr<Port>>& ports);
+
+  // How long destroying MidiPorts waits for its ports to finish sending (see
+  // SetFlushWait()).
+  static absl::Duration s_flush_wait_;
 
   // The runners must outlive the ports, which are registered with them.
   Runner input_runner_{"MidiIn"};

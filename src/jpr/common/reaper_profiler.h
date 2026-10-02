@@ -38,7 +38,7 @@ class ReaperProfiler final {
  public:
   // Starts profiling. A run over 8ms logs a warning with its breakdown. When
   // the profiler is destroyed, it writes the profile to the file at `path`,
-  // replacing it (or logs an error if `path` is empty), and logs a summary.
+  // replacing it, and logs a summary.
   explicit ReaperProfiler(std::filesystem::path path);
   ReaperProfiler(const ReaperProfiler&) = delete;
   ReaperProfiler& operator=(const ReaperProfiler&) = delete;

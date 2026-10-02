@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "absl/strings/str_format.h"
+#include "jpr/common/reset_test_key.h"
 
 namespace jpr {
 
@@ -71,6 +72,11 @@ TimelineMode GetRulerMode();
 // If there was no previously stored setting for the ruler, it will switch to
 // the defaults as documented above.
 void SetRulerMode(TimelineMode mode);
+
+// For tests only (see ResetCommonState()): forgets the fine grained ruler
+// settings SetRulerMode() and SetRulerSecondaryMode() remember, going back to
+// the defaults.
+void ResetRulerModes(ResetTestKey);
 
 // Returns the current secondary mode of the timeline ruler in REAPER, if there
 // is one. Otherwise will return std::nullopt.

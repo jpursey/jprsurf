@@ -51,31 +51,35 @@ constexpr int kRulerSecondaryFramesModes[] = {
 };
 constexpr int kRulerSecondarySamplesMode = 42363;  // "Samples".
 
-// Cached values for the last selected time mode for each TimelineMode.
-int g_last_ruler_beats_mode = kRulerBeatsModes[0];
-int g_last_ruler_time_mode = kRulerTimeModes[0];
-int g_last_ruler_frames_mode = kRulerFramesModes[0];
-int g_last_ruler_secondary_time_mode = kRulerSecondaryTimeModes[0];
-int g_last_ruler_secondary_frames_mode = kRulerSecondaryFramesModes[0];
+// The last selected ruler mode for each TimelineMode, which starts as the
+// first of each.
+struct RulerModes {
+  int beats = kRulerBeatsModes[0];
+  int time = kRulerTimeModes[0];
+  int frames = kRulerFramesModes[0];
+  int secondary_time = kRulerSecondaryTimeModes[0];
+  int secondary_frames = kRulerSecondaryFramesModes[0];
+};
+RulerModes g_last_ruler_modes;
 
 }  // namespace
 
 TimelineMode GetRulerMode() {
   for (int beats_mode : kRulerBeatsModes) {
     if (GetToggleCommandState(beats_mode) > 0) {
-      g_last_ruler_beats_mode = beats_mode;
+      g_last_ruler_modes.beats = beats_mode;
       return TimelineMode::kBeats;
     }
   }
   for (int time_mode : kRulerTimeModes) {
     if (GetToggleCommandState(time_mode) > 0) {
-      g_last_ruler_time_mode = time_mode;
+      g_last_ruler_modes.time = time_mode;
       return TimelineMode::kTime;
     }
   }
   for (int frames_mode : kRulerFramesModes) {
     if (GetToggleCommandState(frames_mode) > 0) {
-      g_last_ruler_frames_mode = frames_mode;
+      g_last_ruler_modes.frames = frames_mode;
       return TimelineMode::kFrames;
     }
   }
@@ -94,13 +98,13 @@ void SetRulerMode(TimelineMode mode) {
   }
   switch (mode) {
     case TimelineMode::kBeats:
-      Main_OnCommand(g_last_ruler_beats_mode, 0);
+      Main_OnCommand(g_last_ruler_modes.beats, 0);
       break;
     case TimelineMode::kTime:
-      Main_OnCommand(g_last_ruler_time_mode, 0);
+      Main_OnCommand(g_last_ruler_modes.time, 0);
       break;
     case TimelineMode::kFrames:
-      Main_OnCommand(g_last_ruler_frames_mode, 0);
+      Main_OnCommand(g_last_ruler_modes.frames, 0);
       break;
     case TimelineMode::kSamples:
       Main_OnCommand(kRulerSamplesMode, 0);
@@ -108,16 +112,18 @@ void SetRulerMode(TimelineMode mode) {
   }
 }
 
+void ResetRulerModes(ResetTestKey) { g_last_ruler_modes = {}; }
+
 std::optional<TimelineMode> GetRulerSecondaryMode() {
   for (int time_mode : kRulerSecondaryTimeModes) {
     if (GetToggleCommandState(time_mode) > 0) {
-      g_last_ruler_secondary_time_mode = time_mode;
+      g_last_ruler_modes.secondary_time = time_mode;
       return TimelineMode::kTime;
     }
   }
   for (int frames_mode : kRulerSecondaryFramesModes) {
     if (GetToggleCommandState(frames_mode) > 0) {
-      g_last_ruler_secondary_frames_mode = frames_mode;
+      g_last_ruler_modes.secondary_frames = frames_mode;
       return TimelineMode::kFrames;
     }
   }
@@ -143,10 +149,10 @@ void SetRulerSecondaryMode(TimelineMode mode) {
       ClearRulerSecondaryMode();
       break;
     case TimelineMode::kTime:
-      Main_OnCommand(g_last_ruler_secondary_time_mode, 0);
+      Main_OnCommand(g_last_ruler_modes.secondary_time, 0);
       break;
     case TimelineMode::kFrames:
-      Main_OnCommand(g_last_ruler_secondary_frames_mode, 0);
+      Main_OnCommand(g_last_ruler_modes.secondary_frames, 0);
       break;
     case TimelineMode::kSamples:
       Main_OnCommand(kRulerSecondarySamplesMode, 0);
