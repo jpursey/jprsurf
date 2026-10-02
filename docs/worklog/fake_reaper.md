@@ -243,9 +243,9 @@ class FakeProject final {
   name on the list, so `LoadReaperApi()` succeeds as it does in REAPER, and
   returns null for anything else. The constructor loads the API through
   `LoadReaperApi()` itself, so a test of `common` needs no plugin.
-- **Every listed function is faked.** While CL3 to CL7 build the fake up by
+- **Every listed function is faked.** While CL3 to CL8 build the fake up by
   area, a function without its fake yet gets a stub of the same signature that
-  fails the test, naming it. CL7 fakes the last of them and removes the stub,
+  fails the test, naming it. CL8 fakes the last of them and removes the stub,
   so from then on, adding a function to the list without a fake doesn't
   compile.
 - **REAPER's state, not its behavior.** Every function on the list is a C
@@ -283,6 +283,12 @@ class FakeProject final {
 - **Tracks** are owned by the fake, and a deleted track is kept until the fake
   is destroyed, so its pointer is never reused, and a call with it is caught.
   GUIDs are made from a counter, so they are the same on every run of a test.
+- **What a test sets, and what the project keeps:** a track's own values are on
+  `FakeTrack`, for a test to set directly. What relates tracks to each other,
+  or must stay unique (order, folders, routes, and GUIDs), is the project's,
+  which keeps it consistent, so a test can't build a state REAPER couldn't be
+  in. The project keeps it in one record per track (from CL6). A field fixed
+  when the project creates an object is `const`, such as a `FakeRoute`'s ends.
 - **Where it lives:** `src/jpr/common/testing`, the `jpr_common_testing`
   library, which links `jpr_common` and gtest (it reports failures with
   `ADD_FAILURE()`), and which `jpr_common_test` links through
@@ -409,7 +415,7 @@ Depends on: CL3.
   CL5, as a track list refresh reads every track's routes.
 - Selection: `SetTrackSelected`, `SetOnlyTrackSelected`, and the
   `CountSelectedTracks`/`GetSelectedTrack` pairs, with and without the master.
-- `Undo_OnStateChangeEx` (moved up from CL7), recorded in the project, as
+- `Undo_OnStateChangeEx` (moved up from CL8), recorded in the project, as
   `TrackBatch` adds undo points.
 - `TestControlSurface`, which `AddSurface()` returns in place of the surface,
   and which runs it (`Run()` and `RunFor()`, moved from `FakeReaper`, which
@@ -430,26 +436,65 @@ Depends on: CL3.
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes.
 
-### CL5 [ ] common/testing: Routes
+### CL5 [x] common/testing: Routes
 
 Depends on: CL4.
 
 - Sends, receives, and hardware outputs: `GetTrackNumSends`,
   `GetSetTrackSendInfo` (`P_DESTTRACK`, `P_SRCTRACK`), the `UI` getters and
   setters, and `ToggleTrackSendUIMute`, with REAPER's indexing (receives as
-  `-1 - index` in the send functions, sends after hardware outputs).
-- `FakeProject::AddSend(from, to)`. The project holds its routes as one list
-  (each a source, destination, volume, pan, and mute), beside the tracks'
-  folders, with a track's receives found from it, so a send and its receive
-  can't disagree, and deleting a track removes its routes in one place.
-- Tests: routes in `track_test.cc`: building them on refresh,
-  `RefreshRoutes()`, and each setter by send and receive index.
+  `-1 - index` in the send functions, sends after hardware outputs). REAPER
+  only documents receives in the setters; the fake's getters take them the
+  same way. Route changes aren't grouped, and add no undo point (REAPER's own
+  for `ToggleTrackSendUIMute` isn't modeled, like those for track volume and
+  pan).
+- `FakeProject::AddSend(from, to)`, `AddHardwareOutput(from)`, and
+  `DeleteRoute()`. The project owns its routes (each a source, destination,
+  volume, pan, and mute, with no destination for a hardware output, and its
+  ends `const`), so a send and its receive are one route, and can't disagree.
+  It also keeps each track's sends, receives, and hardware outputs, which only
+  adding and removing a route change, so a lookup is a span, with no scan.
+  Deleting a track removes its routes. A send to or from the master, or to
+  itself, fails the test, as REAPER can't make one.
+- Tests: the fake's indexing, and each end listing a route, in
+  `fake_reaper_test.cc`, and routes in `track_test.cc`: building them on
+  refresh, notifying when they change, deleting a track, `RefreshRoutes()`,
+  each setter by send and receive index, and route mute following REAPER and
+  flushing pending undo.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes.
 
-### CL6 [ ] common/testing: MIDI ports
+### CL6 [ ] common/testing: Track records
+
+Depends on: CL5.
+
+- One `TrackRecord` per track in `FakeProject`, the master's included, in an
+  `absl::node_hash_map` keyed by the track, so a record never moves: the
+  track, which it owns whether or not it is deleted, its GUID, its parent, its
+  sends, receives, and hardware outputs, and whether it is deleted. It
+  replaces `parents_`, `track_routes_`, `deleted_tracks_`, and
+  `deleted_track_storage_`, and `tracks_` keeps only the order.
+- `FakeTrack` keeps only the values a test sets: `guid` moves to the record,
+  which a test reads with `FakeProject::GetGuid()`. `GetTrackGUID()` returns
+  the record's, which stays put for the track's life, as REAPER's does, and a
+  zero GUID for an unknown track, so the scratch track needs none. The rule
+  (see What a test sets, and what the project keeps) goes in `FakeTrack`'s and
+  `FakeProject`'s class comments.
+- `FakeProject::RestoreTrack(deleted)`, as undo brings back a deleted track: a
+  new track (so a new pointer) with the deleted one's GUID and values, added
+  as `AddTrack()` adds one, under its old parent if that is still in the
+  project. Its routes aren't restored; a test adds them again.
+- Tests: `fake_reaper_test.cc` (records across adding, deleting, and
+  restoring, and GUIDs staying put), and `track_cache_test.cc` restoring a
+  track with `RestoreTrack()` in place of copying its GUID.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+- `ctest` passes.
+
+### CL7 [ ] common/testing: MIDI ports
 
 Depends on: CL3.
 
@@ -466,9 +511,9 @@ Depends on: CL3.
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes, with no real wait (the flush wait is zero).
 
-### CL7 [ ] common/testing: Transport, commands, automation, and undo
+### CL8 [ ] common/testing: Transport, commands, automation, and undo
 
-Depends on: CL4, CL5, CL6 (the last of the list).
+Depends on: CL4 to CL7 (the last of the list).
 
 - Transport and timeline: play state, play and cursor positions, and
   `format_timestr_pos`.
@@ -488,9 +533,9 @@ Depends on: CL4, CL5, CL6 (the last of the list).
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes.
 
-### CL8 [ ] docs: Testing rules
+### CL9 [ ] docs: Testing rules
 
-Depends on: CL7.
+Depends on: CL8.
 
 - CLAUDE.md: code that depends on REAPER can be unit tested against the fake,
   and so verified in a side session, with what still needs REAPER.

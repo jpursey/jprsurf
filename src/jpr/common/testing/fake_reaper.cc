@@ -15,6 +15,7 @@
 #include "absl/memory/memory.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "gtest/gtest.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/midi_ports.h"
@@ -42,6 +43,11 @@ constexpr int kTrackStateSelected = 2;
 constexpr int kTrackStateMute = 8;
 constexpr int kTrackStateSolo = 16;
 constexpr int kTrackStateRecArm = 64;
+
+// GetTrackNumSends() and GetSetTrackSendInfo()'s categories.
+constexpr int kReceiveCategory = -1;
+constexpr int kSendCategory = 0;
+constexpr int kHardwareOutputCategory = 1;
 
 }  // namespace
 
@@ -133,10 +139,75 @@ class FakeReaper::Api final {
     return track.peak[channel];
   }
 
-  // Tracks have no routes.
+  //----------------------------------------------------------------------------
+  // Routes
+  //
+  // GetTrackNumSends() and GetSetTrackSendInfo() take a category: negative for
+  // receives, 0 for sends, and positive for hardware outputs. The *TrackSendUI*
+  // functions index a track's hardware outputs and then its sends from 0, and
+  // its receives from -1 down, as -1 - index. REAPER only documents the
+  // setters' receives; the getters are taken to do the same.
+  //----------------------------------------------------------------------------
+
   static int GetTrackNumSends(MediaTrack* track_id, int category) {
-    s_instance_->GetTrack(track_id);
-    return 0;
+    return static_cast<int>(GetRoutes(track_id, category).size());
+  }
+
+  static void* GetSetTrackSendInfo(MediaTrack* track_id, int category,
+                                   int index, const char* name, void* value) {
+    const std::string_view parameter(name);
+    if (value != nullptr ||
+        (parameter != "P_DESTTRACK" && parameter != "P_SRCTRACK")) {
+      ADD_FAILURE() << "GetSetTrackSendInfo(\"" << parameter
+                    << "\", set=" << (value != nullptr) << ") isn't faked yet";
+      return nullptr;
+    }
+    const FakeRoute* route = GetRouteAt(GetRoutes(track_id, category), index);
+    if (route == nullptr) {
+      return nullptr;
+    }
+    return ToMediaTrack(parameter == "P_DESTTRACK" ? route->destination
+                                                   : route->source);
+  }
+
+  static bool GetTrackSendUIVolPan(MediaTrack* track_id, int index,
+                                   double* volume, double* pan) {
+    return GetRouteVolPan(GetUiRoute(track_id, index), volume, pan);
+  }
+
+  static bool GetTrackReceiveUIVolPan(MediaTrack* track_id, int index,
+                                      double* volume, double* pan) {
+    return GetRouteVolPan(GetReceive(track_id, index), volume, pan);
+  }
+
+  static bool GetTrackSendUIMute(MediaTrack* track_id, int index, bool* mute) {
+    return GetRouteMute(GetUiRoute(track_id, index), mute);
+  }
+
+  static bool GetTrackReceiveUIMute(MediaTrack* track_id, int index,
+                                    bool* mute) {
+    return GetRouteMute(GetReceive(track_id, index), mute);
+  }
+
+  // Changes to routes aren't grouped, and `end_edit` (REAPER's isend) changes
+  // nothing the fake holds.
+  static bool SetTrackSendUIVol(MediaTrack* track_id, int index, double volume,
+                                int end_edit) {
+    return SetRouteDouble(track_id, index, &FakeRoute::volume, volume);
+  }
+
+  static bool SetTrackSendUIPan(MediaTrack* track_id, int index, double pan,
+                                int end_edit) {
+    return SetRouteDouble(track_id, index, &FakeRoute::pan, pan);
+  }
+
+  static bool ToggleTrackSendUIMute(MediaTrack* track_id, int index) {
+    FakeRoute* route = GetUiRoute(track_id, index);
+    if (route == nullptr) {
+      return false;
+    }
+    route->mute = !route->mute;
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -280,12 +351,7 @@ class FakeReaper::Api final {
   JPR_NOT_FAKED(GetNumMIDIOutputs)
   JPR_NOT_FAKED(GetPlayPosition)
   JPR_NOT_FAKED(GetPlayState)
-  JPR_NOT_FAKED(GetSetTrackSendInfo)
   JPR_NOT_FAKED(GetToggleCommandState)
-  JPR_NOT_FAKED(GetTrackReceiveUIMute)
-  JPR_NOT_FAKED(GetTrackReceiveUIVolPan)
-  JPR_NOT_FAKED(GetTrackSendUIMute)
-  JPR_NOT_FAKED(GetTrackSendUIVolPan)
   JPR_NOT_FAKED(IsProjectDirty)
   JPR_NOT_FAKED(kbd_getTextFromCmd)
   JPR_NOT_FAKED(Main_OnCommand)
@@ -293,10 +359,7 @@ class FakeReaper::Api final {
   JPR_NOT_FAKED(mkvolstr)
   JPR_NOT_FAKED(NamedCommandLookup)
   JPR_NOT_FAKED(SetGlobalAutomationOverride)
-  JPR_NOT_FAKED(SetTrackSendUIPan)
-  JPR_NOT_FAKED(SetTrackSendUIVol)
   JPR_NOT_FAKED(stringToGuid)
-  JPR_NOT_FAKED(ToggleTrackSendUIMute)
   JPR_NOT_FAKED(Undo_CanRedo2)
 
  private:
@@ -350,6 +413,81 @@ class FakeReaper::Api final {
       }
     }
     return tracks;
+  }
+
+  // Returns `track_id`'s routes in `category` (see Routes).
+  static absl::Span<FakeRoute* const> GetRoutes(MediaTrack* track_id,
+                                                int category) {
+    const FakeTrack& track = s_instance_->GetTrack(track_id);
+    const FakeProject& project = s_instance_->GetProjectOf(track);
+    if (category < 0) {
+      return project.GetReceives(&track);
+    }
+    if (category == 0) {
+      return project.GetSends(&track);
+    }
+    return project.GetHardwareOutputs(&track);
+  }
+
+  // Returns the route at `index` in `routes`, or null if there is none.
+  static FakeRoute* GetRouteAt(absl::Span<FakeRoute* const> routes, int index) {
+    if (index < 0 || index >= static_cast<int>(routes.size())) {
+      return nullptr;
+    }
+    return routes[index];
+  }
+
+  // Returns `track_id`'s receive at `index`, or null if there is none.
+  static FakeRoute* GetReceive(MediaTrack* track_id, int index) {
+    return GetRouteAt(GetRoutes(track_id, kReceiveCategory), index);
+  }
+
+  // Returns `track_id`'s route at `index` as the *TrackSendUI* functions index
+  // them (see Routes), or null if there is none.
+  static FakeRoute* GetUiRoute(MediaTrack* track_id, int index) {
+    const FakeTrack& track = s_instance_->GetTrack(track_id);
+    const FakeProject& project = s_instance_->GetProjectOf(track);
+    if (index < 0) {
+      return GetRouteAt(project.GetReceives(&track), -1 - index);
+    }
+    const absl::Span<FakeRoute* const> outputs =
+        project.GetHardwareOutputs(&track);
+    if (index < static_cast<int>(outputs.size())) {
+      return outputs[index];
+    }
+    return GetRouteAt(project.GetSends(&track),
+                      index - static_cast<int>(outputs.size()));
+  }
+
+  // Reads `route`'s values, returning false if there is no route.
+  static bool GetRouteVolPan(const FakeRoute* route, double* volume,
+                             double* pan) {
+    if (route == nullptr) {
+      return false;
+    }
+    *volume = route->volume;
+    *pan = route->pan;
+    return true;
+  }
+
+  static bool GetRouteMute(const FakeRoute* route, bool* mute) {
+    if (route == nullptr) {
+      return false;
+    }
+    *mute = route->mute;
+    return true;
+  }
+
+  // Sets the volume or pan of `track_id`'s route at `index` as the
+  // *TrackSendUI* functions index them, returning false if there is none.
+  static bool SetRouteDouble(MediaTrack* track_id, int index,
+                             double FakeRoute::*property, double value) {
+    FakeRoute* route = GetUiRoute(track_id, index);
+    if (route == nullptr) {
+      return false;
+    }
+    route->*property = value;
+    return true;
   }
 
   // Returns the selected tracks in `project`, in order, with the master first

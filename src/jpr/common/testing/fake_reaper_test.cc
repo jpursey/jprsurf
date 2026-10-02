@@ -11,6 +11,7 @@
 #include <string>
 
 #include "absl/time/time.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "jpr/common/modifiers.h"
@@ -22,6 +23,9 @@
 
 namespace jpr {
 namespace {
+
+using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 
 // A control surface that counts its runs, and calls `on_run` in each.
 class TestSurface final : public IReaperControlSurface {
@@ -326,6 +330,133 @@ TEST(FakeReaperTest, Selection) {
   EXPECT_TRUE(drums->selected);
   EXPECT_FALSE(bass->selected);
   EXPECT_FALSE(master->selected);
+}
+
+TEST(FakeReaperTest, Routes) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* bus = project.AddTrack("Bus");
+  FakeTrack* reverb = project.AddTrack("Reverb");
+  MediaTrack* drums_id = ToMediaTrack(drums);
+  MediaTrack* reverb_id = ToMediaTrack(reverb);
+  FakeRoute* output = project.AddHardwareOutput(drums);
+  FakeRoute* to_bus = project.AddSend(drums, bus);
+  FakeRoute* to_reverb = project.AddSend(drums, reverb);
+  FakeRoute* from_bus = project.AddSend(bus, reverb);
+  to_reverb->volume = 0.5;
+  to_reverb->pan = -0.25;
+  from_bus->mute = true;
+
+  // By category: receives, sends, and hardware outputs.
+  EXPECT_EQ(::GetTrackNumSends(drums_id, -1), 0);
+  EXPECT_EQ(::GetTrackNumSends(drums_id, 0), 2);
+  EXPECT_EQ(::GetTrackNumSends(drums_id, 1), 1);
+  EXPECT_EQ(::GetTrackNumSends(reverb_id, -1), 2);
+  EXPECT_EQ(::GetSetTrackSendInfo(drums_id, 0, 1, "P_DESTTRACK", nullptr),
+            reverb_id);
+  EXPECT_EQ(::GetSetTrackSendInfo(drums_id, 0, 1, "P_SRCTRACK", nullptr),
+            drums_id);
+  EXPECT_EQ(::GetSetTrackSendInfo(reverb_id, -1, 1, "P_SRCTRACK", nullptr),
+            ToMediaTrack(bus));
+  EXPECT_EQ(::GetSetTrackSendInfo(drums_id, 0, 2, "P_DESTTRACK", nullptr),
+            nullptr);
+  EXPECT_NONFATAL_FAILURE(
+      ::GetSetTrackSendInfo(drums_id, 0, 0, "D_VOL", nullptr), "D_VOL");
+
+  // In the UI functions, sends come after hardware outputs, and receives are
+  // -1 - index in the send functions.
+  double volume = 0.0;
+  double pan = 0.0;
+  bool mute = false;
+  EXPECT_TRUE(::GetTrackSendUIVolPan(drums_id, 2, &volume, &pan));
+  EXPECT_EQ(volume, 0.5);
+  EXPECT_EQ(pan, -0.25);
+  EXPECT_FALSE(::GetTrackSendUIVolPan(drums_id, 3, &volume, &pan));
+  EXPECT_TRUE(::GetTrackReceiveUIMute(reverb_id, 1, &mute));
+  EXPECT_TRUE(mute);
+  EXPECT_TRUE(::GetTrackSendUIMute(reverb_id, -2, &mute));
+  EXPECT_TRUE(mute);
+
+  EXPECT_TRUE(::SetTrackSendUIVol(drums_id, 0, 0.75, 0));
+  EXPECT_EQ(output->volume, 0.75);
+  EXPECT_TRUE(::SetTrackSendUIPan(drums_id, 1, 0.5, 0));
+  EXPECT_EQ(to_bus->pan, 0.5);
+  EXPECT_TRUE(::ToggleTrackSendUIMute(reverb_id, -2));
+  EXPECT_FALSE(from_bus->mute);
+  EXPECT_FALSE(::ToggleTrackSendUIMute(reverb_id, -3));
+}
+
+TEST(FakeReaperTest, EachEndOfARouteListsIt) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* bus = project.AddTrack("Bus");
+  FakeTrack* reverb = project.AddTrack("Reverb");
+  FakeRoute* output = project.AddHardwareOutput(drums);
+  FakeRoute* to_bus = project.AddSend(drums, bus);
+  FakeRoute* to_reverb = project.AddSend(drums, reverb);
+  FakeRoute* bus_to_reverb = project.AddSend(bus, reverb);
+
+  EXPECT_THAT(project.GetSends(drums), ElementsAre(to_bus, to_reverb));
+  EXPECT_THAT(project.GetReceives(drums), IsEmpty());
+  EXPECT_THAT(project.GetHardwareOutputs(drums), ElementsAre(output));
+  EXPECT_THAT(project.GetSends(bus), ElementsAre(bus_to_reverb));
+  EXPECT_THAT(project.GetReceives(bus), ElementsAre(to_bus));
+  EXPECT_THAT(project.GetReceives(reverb),
+              ElementsAre(to_reverb, bus_to_reverb));
+  EXPECT_THAT(project.GetHardwareOutputs(reverb), IsEmpty());
+}
+
+TEST(FakeReaperTest, DeletingARouteRemovesItFromEachEnd) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* bus = project.AddTrack("Bus");
+  FakeRoute* output = project.AddHardwareOutput(drums);
+  FakeRoute* first = project.AddSend(drums, bus);
+  FakeRoute* second = project.AddSend(drums, bus);
+
+  project.DeleteRoute(first);
+  EXPECT_THAT(project.GetSends(drums), ElementsAre(second));
+  EXPECT_THAT(project.GetReceives(bus), ElementsAre(second));
+  project.DeleteRoute(output);
+  EXPECT_THAT(project.GetHardwareOutputs(drums), IsEmpty());
+
+  EXPECT_NONFATAL_FAILURE(project.DeleteRoute(first), "isn't in the project");
+}
+
+TEST(FakeReaperTest, DeletingATrackDeletesItsRoutes) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* bus = project.AddTrack("Bus");
+  FakeTrack* reverb = project.AddTrack("Reverb");
+  project.AddSend(drums, bus);
+  FakeRoute* to_reverb = project.AddSend(drums, reverb);
+  project.AddSend(bus, reverb);
+  project.AddHardwareOutput(bus);
+
+  project.DeleteTrack(bus);
+  EXPECT_THAT(project.GetSends(drums), ElementsAre(to_reverb));
+  EXPECT_THAT(project.GetReceives(reverb), ElementsAre(to_reverb));
+  EXPECT_THAT(project.GetSends(bus), IsEmpty());
+  EXPECT_THAT(project.GetReceives(bus), IsEmpty());
+  EXPECT_THAT(project.GetHardwareOutputs(bus), IsEmpty());
+}
+
+TEST(FakeReaperTest, SendsREAPERCantMakeFailTheTest) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* master = project.GetMasterTrack();
+  EXPECT_NONFATAL_FAILURE(project.AddSend(drums, master), "is the master");
+  EXPECT_NONFATAL_FAILURE(project.AddSend(master, drums), "is the master");
+  EXPECT_NONFATAL_FAILURE(project.AddSend(drums, drums), "to itself");
+  EXPECT_THAT(project.GetSends(drums), IsEmpty());
+
+  // The master may have hardware outputs.
+  EXPECT_NE(project.AddHardwareOutput(master), nullptr);
 }
 
 TEST(FakeReaperTest, RecordsUndoPoints) {

@@ -16,6 +16,8 @@ set(jpr_common_testing_DEPS
   absl::flat_hash_map
   absl::flat_hash_set
   absl::log
+  absl::no_destructor
+  absl::span
   absl::str_format
   absl::time
   gtest

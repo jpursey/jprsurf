@@ -9,7 +9,9 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "absl/base/no_destructor.h"
 #include "gtest/gtest.h"
 
 namespace jpr {
@@ -58,6 +60,17 @@ void FakeProject::DeleteTrack(FakeTrack* track) {
     }
   }
   parents_.erase(track);
+  if (auto it = track_routes_.find(track); it != track_routes_.end()) {
+    // Copied, as removing each route changes the track's routes.
+    const TrackRoutes routes = it->second;
+    for (const std::vector<FakeRoute*>* list :
+         {&routes.sends, &routes.receives, &routes.hardware_outputs}) {
+      for (FakeRoute* route : *list) {
+        RemoveRoute(route);
+      }
+    }
+    track_routes_.erase(track);
+  }
   deleted_tracks_.insert(track);
   deleted_track_storage_.push_back(std::move(tracks_[index]));
   tracks_.erase(tracks_.begin() + index);
@@ -74,6 +87,71 @@ bool FakeProject::HasTrack(const FakeTrack* track) const {
 
 bool FakeProject::HadTrack(const FakeTrack* track) const {
   return deleted_tracks_.contains(track);
+}
+
+FakeRoute* FakeProject::AddSend(FakeTrack* source, FakeTrack* destination) {
+  if (FindTrack(source) < 0 || FindTrack(destination) < 0) {
+    ADD_FAILURE() << "AddSend() was given a track that isn't in the project, "
+                     "or is the master";
+    return nullptr;
+  }
+  if (source == destination) {
+    ADD_FAILURE() << "AddSend() was given a track to send to itself";
+    return nullptr;
+  }
+  return AddRoute(source, destination);
+}
+
+FakeRoute* FakeProject::AddHardwareOutput(FakeTrack* source) {
+  if (!HasTrack(source)) {
+    ADD_FAILURE() << "AddHardwareOutput() was given a track that isn't in the "
+                     "project";
+    return nullptr;
+  }
+  return AddRoute(source, nullptr);
+}
+
+FakeRoute* FakeProject::AddRoute(FakeTrack* source, FakeTrack* destination) {
+  FakeRoute* route = routes_
+                         .emplace_back(std::make_unique<FakeRoute>(FakeRoute{
+                             .source = source, .destination = destination}))
+                         .get();
+  if (destination == nullptr) {
+    track_routes_[source].hardware_outputs.push_back(route);
+  } else {
+    track_routes_[source].sends.push_back(route);
+    track_routes_[destination].receives.push_back(route);
+  }
+  return route;
+}
+
+void FakeProject::DeleteRoute(FakeRoute* route) {
+  if (std::ranges::none_of(routes_, [route](const auto& entry) {
+        return entry.get() == route;
+      })) {
+    ADD_FAILURE() << "DeleteRoute() was given a route that isn't in the "
+                     "project";
+    return;
+  }
+  RemoveRoute(route);
+}
+
+void FakeProject::RemoveRoute(FakeRoute* route) {
+  if (route->destination == nullptr) {
+    std::erase(track_routes_[route->source].hardware_outputs, route);
+  } else {
+    std::erase(track_routes_[route->source].sends, route);
+    std::erase(track_routes_[route->destination].receives, route);
+  }
+  std::erase_if(routes_,
+                [route](const auto& entry) { return entry.get() == route; });
+}
+
+const FakeProject::TrackRoutes& FakeProject::GetTrackRoutes(
+    const FakeTrack* track) const {
+  static const absl::NoDestructor<TrackRoutes> kNoRoutes;
+  auto it = track_routes_.find(track);
+  return it != track_routes_.end() ? it->second : *kNoRoutes;
 }
 
 GUID FakeProject::MakeGuid() {

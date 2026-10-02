@@ -18,6 +18,17 @@
 
 namespace jpr {
 
+// A route in a project: a send from one track to another, or a hardware output
+// from a track. A test reads and sets its values directly. Its ends are fixed,
+// as FakeProject keeps each track's routes by them.
+struct FakeRoute {
+  FakeTrack* const source = nullptr;
+  FakeTrack* const destination = nullptr;  // Null for a hardware output.
+  double volume = 1.0;                     // As a gain: 1.0 is 0dB.
+  double pan = 0.0;                        // From -1.0 (left) to 1.0 (right).
+  bool mute = false;
+};
+
 // An undo point added with Undo_OnStateChangeEx().
 struct FakeUndoPoint {
   std::string name;
@@ -57,9 +68,9 @@ class FakeProject final {
   // at the end of the project if `parent` is null, and returns it.
   FakeTrack* AddTrack(std::string_view name, FakeTrack* parent = nullptr);
 
-  // Deletes `track`, as the user does in REAPER. Its child tracks move up to
-  // its parent. Its pointer is never reused, and a call with it fails the
-  // test.
+  // Deletes `track`, and its routes, as the user does in REAPER. Its child
+  // tracks move up to its parent. Its pointer is never reused, and a call with
+  // it fails the test.
   void DeleteTrack(FakeTrack* track);
 
   // Returns the folder `track` is in, or null for a top level track and the
@@ -73,6 +84,38 @@ class FakeProject final {
   bool HadTrack(const FakeTrack* track) const;
 
   //----------------------------------------------------------------------------
+  // Routes
+  //
+  // A send, and the receive at its other end, are the same route, so they
+  // can't disagree. Each track's sends, receives, and hardware outputs are in
+  // the order they were added.
+  //----------------------------------------------------------------------------
+
+  // Adds a send from `source` to `destination`, and returns it. They must be
+  // different tracks, and neither may be the master, which REAPER routes with
+  // its own setting instead.
+  FakeRoute* AddSend(FakeTrack* source, FakeTrack* destination);
+
+  // Adds a hardware output from `source`, and returns it.
+  FakeRoute* AddHardwareOutput(FakeTrack* source);
+
+  // Deletes `route`, as the user does in REAPER.
+  void DeleteRoute(FakeRoute* route);
+
+  // Returns the sends from `track`, the receives into it, or its hardware
+  // outputs.
+  absl::Span<FakeRoute* const> GetSends(const FakeTrack* track) const {
+    return GetTrackRoutes(track).sends;
+  }
+  absl::Span<FakeRoute* const> GetReceives(const FakeTrack* track) const {
+    return GetTrackRoutes(track).receives;
+  }
+  absl::Span<FakeRoute* const> GetHardwareOutputs(
+      const FakeTrack* track) const {
+    return GetTrackRoutes(track).hardware_outputs;
+  }
+
+  //----------------------------------------------------------------------------
   // Undo
   //----------------------------------------------------------------------------
 
@@ -81,6 +124,13 @@ class FakeProject final {
 
  private:
   friend class FakeReaper;
+
+  // A track's routes, each in the order they were added.
+  struct TrackRoutes {
+    std::vector<FakeRoute*> sends;
+    std::vector<FakeRoute*> receives;
+    std::vector<FakeRoute*> hardware_outputs;
+  };
 
   // `number` is the project's number in FakeReaper, starting from 1.
   explicit FakeProject(int number);
@@ -94,6 +144,16 @@ class FakeProject final {
   // Returns true if `track` is in `folder`, directly or in one of its folders.
   bool IsInFolder(const FakeTrack* track, const FakeTrack* folder) const;
 
+  // Adds a route from `source` to `destination`, which AddSend() and
+  // AddHardwareOutput() have checked.
+  FakeRoute* AddRoute(FakeTrack* source, FakeTrack* destination);
+
+  // Removes `route` from the routes of the tracks at each end, and deletes it.
+  void RemoveRoute(FakeRoute* route);
+
+  // Returns `track`'s routes, which are empty if it has none.
+  const TrackRoutes& GetTrackRoutes(const FakeTrack* track) const;
+
   const int number_;
   unsigned long next_guid_ = 1;
   FakeTrack master_track_;
@@ -105,6 +165,11 @@ class FakeProject final {
   // Deleted tracks, which are kept so their pointers are never reused.
   absl::flat_hash_set<const FakeTrack*> deleted_tracks_;
   std::vector<std::unique_ptr<FakeTrack>> deleted_track_storage_;
+
+  // The routes, and each track's routes, which only AddRoute() and
+  // RemoveRoute() change.
+  std::vector<std::unique_ptr<FakeRoute>> routes_;
+  absl::flat_hash_map<const FakeTrack*, TrackRoutes> track_routes_;
 
   std::vector<FakeUndoPoint> undo_points_;
 };
