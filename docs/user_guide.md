@@ -151,6 +151,10 @@ mute across a range of twenty tracks is a single undo step, not twenty. Send
 and receive volume and pan moves are collected into one undo point once you
 stop moving the control.
 
+REAPER holds a track fader or pan move open until the next undo point, so a
+change made within about half a second of one (such as a mute, or a send
+fader) joins the same undo step.
+
 ---
 
 ## Always available

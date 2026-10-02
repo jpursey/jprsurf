@@ -16,9 +16,13 @@ namespace jpr {
 
 class RunRegistry;
 
-// RunTime holds the current time that Run() was called, in both a precise and
-// coarse form, as needed by different Reaper APIs.
+// RunTime holds the time a run started, from REAPER's clock, in both a precise
+// and coarse form, as needed by different Reaper APIs. A run reads it once, and
+// everything in the run uses that time.
 struct RunTime {
+  // Reads REAPER's clock (time_precise()).
+  static RunTime Now();
+
   double precise;       // Time in seconds, with high precision.
   unsigned int coarse;  // Time in milliseconds, with lower precision.
 };
@@ -52,7 +56,7 @@ class RunHandle final {
 class RunRegistry {
  public:
   // A Runnable is a function that will be called when Run() is called on the
-  // Runner. It takes the current time as an input.
+  // Runner. It takes the run's time as an input.
   using Runnable = absl::AnyInvocable<void(const RunTime& time)>;
 
   RunRegistry(const RunRegistry&) = delete;
@@ -71,8 +75,9 @@ class RunRegistry {
   explicit RunRegistry(std::string_view name);
   ~RunRegistry() = default;
 
-  // Runs all registered runnables. Should be called from Runner::Run().
-  void DoRun();
+  // Runs all registered runnables with the run's time. Should be called from
+  // Runner::Run().
+  void DoRun(const RunTime& time);
 
  private:
   friend class RunHandle;
@@ -94,8 +99,8 @@ class Runner final : public RunRegistry {
   Runner& operator=(const Runner&) = delete;
   ~Runner() = default;
 
-  // Runs all set runnables in added handles.
-  void Run() { DoRun(); }
+  // Runs all set runnables in added handles, with the run's time.
+  void Run(const RunTime& time) { DoRun(time); }
 
  private:
   friend class RunHandle;

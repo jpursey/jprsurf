@@ -183,13 +183,17 @@ the fake decides what `time_precise()` returns, so a test of a long press
 advances the clock rather than waiting. MIDI event times are already relative
 to `time_precise()` (`MidiIn::Poll()`), so this is the clock they agree with.
 
-**Today:** behavior reads two clocks. The runners read `time_precise()` for
-`RunTime`, and `Control`'s press timers use it, but `ControlSurface::Run()`
-reads `absl::Now()` for the visibility poll and `ContinuousUndo::Update()`,
-and `ContinuousUndo::OnChange()` reads `absl::Now()` itself. Each `Runner`
-also reads the clock for itself, so the device and scene runners in one run
-see different times. After the change, a run has one time, which the runners
-are given, and `absl::Now()` is only used for measurement.
+`RunTime::Now()` reads the clock, and `ControlSurface::Run()` passes the time
+to the visibility poll, to `ContinuousUndo::Update()`, and to the listener's
+`OnRun()`, which gives it to every `Runner::Run()`. `ContinuousUndo` records
+changes at the time of the run they happen in, and `Control`'s press timers use
+the time their runner is given. Only the runs outside `Run()`, when the surface
+is being destroyed, read the clock themselves. `absl::Now()` is only used for
+measurement.
+
+`ContinuousUndo::Update()` is called at the start of the run, before the
+listener, so the changes the listener makes have the run's time.
+`ControlSurface::Run()` says why that is safe.
 
 Game Bits has `gb::Clock` and `gb::FakeClock`, which would also work, but
 they add a second way to fake the same clock, and need a `Clock*` that undo and

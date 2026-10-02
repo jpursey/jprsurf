@@ -35,11 +35,13 @@ The surface behaves as it did, except in these rare cases:
   clears them and sets them back, and REAPER adds no undo point.
 - `GetTrackState()` reflects a change made earlier in the same
   `PreventUIRefresh` scope.
-- A track fader move followed by a mute is one undo point. REAPER creates the
-  undo point for a surface volume or pan change itself, and folds the pending
-  one into the next undo point it is given. `ContinuousUndo::Flush()` doesn't
-  help, as it only covers send and receive changes. This was accepted, as it
-  only happens when working quickly.
+- A track fader move followed by a mute is one undo point, and so is one
+  followed by a send fader (seen again in *Fake REAPER*'s CL1). REAPER creates
+  the undo point for a surface volume or pan change itself, and folds the
+  pending one into the next undo point it is given. `ContinuousUndo::Flush()`
+  doesn't help, as it only covers send and receive changes. This was accepted,
+  as it only happens when working quickly (see the backlog's *Separate undo
+  points for track faders*).
 - Moving the master fader (on the surface or in REAPER) makes REAPER report the
   master as the last touched track. The master has no place in the track list,
   so Shift ranges do nothing until another track is touched. This is kept

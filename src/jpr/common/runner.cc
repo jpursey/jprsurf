@@ -14,6 +14,12 @@
 
 namespace jpr {
 
+RunTime RunTime::Now() {
+  const double precise = time_precise();
+  return {.precise = precise,
+          .coarse = static_cast<unsigned>(precise * 1000.0)};
+}
+
 RunHandle::RunHandle(RunHandle&& other)
     : registry_(std::exchange(other.registry_, nullptr)), id_(other.id_) {}
 
@@ -45,10 +51,7 @@ RunHandle RunRegistry::AddRunnable(Runnable runnable) {
   return RunHandle(this, id);
 }
 
-void RunRegistry::DoRun() {
-  RunTime time;
-  time.precise = time_precise();
-  time.coarse = static_cast<unsigned>(time.precise * 1000.0);
+void RunRegistry::DoRun(const RunTime& time) {
   for (int id : cleared_runnables_) {
     runnables_.erase(id);
   }

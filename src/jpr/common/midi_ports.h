@@ -41,11 +41,11 @@ class MidiPorts final {
   MidiOut* OpenOutput(std::string_view name);
 
   // Reads the MIDI input received since the last call, and passes it to the
-  // input ports' listeners.
-  void RunInput() { input_runner_.Run(); }
+  // input ports' listeners, with the run's time.
+  void RunInput(const RunTime& time) { input_runner_.Run(time); }
 
   // Sends the MIDI output queued on the output ports.
-  void RunOutput() { output_runner_.Run(); }
+  void RunOutput(const RunTime& time) { output_runner_.Run(time); }
 
  private:
   // Implements OpenInput() and OpenOutput() for either type of port.

@@ -38,7 +38,7 @@ MidiPorts::~MidiPorts() {
                            [](const auto& port) { return port->IsOpen(); })) {
     return;
   }
-  RunOutput();
+  RunOutput(RunTime::Now());
 
   // MIDI still being sent when a port is destroyed is lost (the X-Touch
   // Extender, whose port was destroyed first, did not clear on shutdown without

@@ -9,7 +9,6 @@
 #include <string>
 #include <string_view>
 
-#include "absl/time/time.h"
 #include "gb/config/config.h"
 #include "jpr/common/control_surface.h"
 #include "jpr/common/midi_ports.h"
@@ -39,7 +38,7 @@ class PluginSurface final : private ControlSurfaceListener {
   explicit PluginSurface(std::string_view config);
 
   // ControlSurfaceListener overrides
-  void OnRun(absl::Time now) override;
+  void OnRun(const RunTime& time) override;
   std::string GetConfig() const override;
 
   // Implementation

@@ -199,7 +199,7 @@ PluginSurface::~PluginSurface() {
   // Destroying the MIDI ports sends it.
   if (scene_ != nullptr) {
     scene_->Deactivate();
-    device_runner_.Run();
+    device_runner_.Run(RunTime::Now());
   }
   LOG(INFO) << "PluginSurface destroyed";
 }
@@ -208,11 +208,11 @@ PluginSurface::~PluginSurface() {
 // ControlSurfaceListener overrides
 //------------------------------------------------------------------------------
 
-void PluginSurface::OnRun(absl::Time now) {
-  device_runner_.Run();
-  midi_ports_.RunInput();
-  scene_runner_.Run();
-  midi_ports_.RunOutput();
+void PluginSurface::OnRun(const RunTime& time) {
+  device_runner_.Run(time);
+  midi_ports_.RunInput(time);
+  scene_runner_.Run(time);
+  midi_ports_.RunOutput(time);
 }
 
 std::string PluginSurface::GetConfig() const {

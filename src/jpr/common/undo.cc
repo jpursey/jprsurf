@@ -5,7 +5,7 @@
 
 #include "jpr/common/undo.h"
 
-#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -17,14 +17,10 @@ ContinuousUndo& ContinuousUndo::Get() {
 
 void ContinuousUndo::OnChange(std::string_view description,
                               int undo_state_flags) {
-  const absl::Time now = absl::Now();
-
-  // Checking the time here as well as in Update() ensures pending changes are
-  // never merged into a later series of changes, even if Update() is not
-  // called in between.
+  // Pending changes that stopped kDelay ago were already flushed by Update(),
+  // which is the only thing that moves the time forward.
   if (pending_ &&
-      (description != description_ || undo_state_flags != undo_state_flags_ ||
-       now - last_change_time_ >= kDelay)) {
+      (description != description_ || undo_state_flags != undo_state_flags_)) {
     Flush();
   }
   if (!pending_) {
@@ -32,11 +28,12 @@ void ContinuousUndo::OnChange(std::string_view description,
     description_ = description;
     undo_state_flags_ = undo_state_flags;
   }
-  last_change_time_ = now;
+  last_change_time_ = time_;
 }
 
-void ContinuousUndo::Update(absl::Time now) {
-  if (pending_ && now - last_change_time_ >= kDelay) {
+void ContinuousUndo::Update(const RunTime& time) {
+  time_ = time.precise;
+  if (pending_ && absl::Seconds(time_ - last_change_time_) >= kDelay) {
     Flush();
   }
 }

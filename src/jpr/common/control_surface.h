@@ -5,14 +5,15 @@
 
 #pragma once
 
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 
-#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "jpr/common/reaper_profiler.h"
+#include "jpr/common/runner.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -33,8 +34,8 @@ class ControlSurfaceListener {
   virtual ~ControlSurfaceListener() = default;
 
   // Called on every run (about 30 times a second), after TrackCache is up to
-  // date. `now` is when the run started.
-  virtual void OnRun(absl::Time now) {}
+  // date. `time` is when the run started, which everything in the run uses.
+  virtual void OnRun(const RunTime& time) {}
 
   // Returns the config string REAPER saves in its preferences for the surface.
   virtual std::string GetConfig() const { return {}; }
@@ -54,7 +55,9 @@ class ControlSurfaceListener {
 //   changes. Changes to track visibility are picked up within a second.
 // - TrackCache follows selection, automation mode, and last touched track
 //   changes.
-// - ContinuousUndo is updated after every run.
+// - ContinuousUndo is updated at the start of every run.
+// - Each run reads REAPER's clock once, and passes that time to everything in
+//   the run.
 // - A ReaperProfiler profiles its runs, from once the listener is created
 //   until the surface is destroyed.
 //
@@ -172,9 +175,9 @@ class ControlSurface final : private IReaperControlSurface {
   // refreshes TrackCache.
   bool track_list_changed_ = false;
 
-  // When track visibility was last polled. This defaults to the epoch so that
-  // the first run always polls.
-  absl::Time last_visibility_time_;
+  // When track visibility was last polled, in seconds of REAPER's clock. This
+  // defaults to the distant past so that the first run always polls.
+  double last_visibility_time_ = -std::numeric_limits<double>::infinity();
 };
 
 }  // namespace jpr

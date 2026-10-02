@@ -10,6 +10,7 @@
 
 #include "absl/base/no_destructor.h"
 #include "absl/time/time.h"
+#include "jpr/common/runner.h"
 
 namespace jpr {
 
@@ -39,16 +40,18 @@ class ContinuousUndo final {
   ~ContinuousUndo() = default;
 
   // Records a change to include in an undo point with the given description
-  // and undo state flags (see Undo_OnStateChangeEx).
+  // and undo state flags (see Undo_OnStateChangeEx). The change's time is the
+  // time last passed to Update().
   //
-  // If a change is pending with a different description or flags, or the
-  // pending changes stopped at least kDelay ago, the pending undo point is
-  // created first.
+  // If a change is pending with a different description or flags, the pending
+  // undo point is created first.
   void OnChange(std::string_view description, int undo_state_flags);
 
-  // Creates the pending undo point, if the changes have stopped for at least
-  // kDelay. This should be called regularly (every run).
-  void Update(absl::Time now);
+  // Creates the pending undo point, if the changes stopped at least kDelay
+  // before `time`, and makes `time` the time of the changes that follow. This
+  // must be called at the start of every run, before anything in the run
+  // makes a change (see ControlSurface::Run()).
+  void Update(const RunTime& time);
 
   // Creates the pending undo point immediately, if there is one.
   void Flush();
@@ -58,10 +61,13 @@ class ContinuousUndo final {
 
   ContinuousUndo() = default;
 
+  // The current run's time, in seconds (see Update()).
+  double time_ = 0.0;
+
   bool pending_ = false;
   std::string description_;
   int undo_state_flags_ = 0;
-  absl::Time last_change_time_;
+  double last_change_time_ = 0.0;
 };
 
 }  // namespace jpr

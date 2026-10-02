@@ -15,12 +15,13 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "gb/profile/profile_timer.h"
 #include "jpr/common/log_file.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/reaper_trace.h"
+#include "jpr/common/runner.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
 
@@ -143,24 +144,29 @@ const char* ControlSurface::GetConfigString() {
 
 void ControlSurface::Run() {
   gb::ProfileFrame<"ControlSurface::Run"> frame;
-  const absl::Time start = absl::Now();
+  const RunTime time = RunTime::Now();
 
   if (track_list_changed_) {
     track_list_changed_ = false;
     TrackCache::Get().Refresh();
 
     // Refresh() re-read visibility for every track, so the poll can wait.
-    last_visibility_time_ = start;
-  } else if (last_visibility_time_ + kVisibilityInterval < start) {
-    last_visibility_time_ = start;
+    last_visibility_time_ = time.precise;
+  } else if (absl::Seconds(time.precise - last_visibility_time_) >
+             kVisibilityInterval) {
+    last_visibility_time_ = time.precise;
     TrackCache::Get().RefreshVisibility();
   }
 
-  listener_->OnRun(start);
+  // Create the undo point for continuous changes that have stopped, and give
+  // the changes made in this run its time. Doing this before the listener is
+  // safe: it can't flush the listener's changes early, as none are older than
+  // this run, and flushing earlier runs' changes first only puts the listener's
+  // own undo points, and changes without one, after them, in the order they
+  // happened.
+  ContinuousUndo::Get().Update(time);
 
-  // Create undo points for continuous changes made this run, or earlier, once
-  // they have stopped.
-  ContinuousUndo::Get().Update(start);
+  listener_->OnRun(time);
 }
 
 void ControlSurface::SetTrackListChange() {

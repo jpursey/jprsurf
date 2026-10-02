@@ -587,6 +587,25 @@ first route. Entering the mode could reset the list explicitly, such as with a
 `view:` action on a routes list that re-applies its route type rule and scrolls
 to the start.
 
+## Separate undo points for track faders
+
+- **Layers:** common
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [track_actions.md](worklog/track_actions.md) (REAPER facts)
+
+Only worth doing if it gets in the way. REAPER creates the undo point for a
+track volume or pan change made from the surface itself, and holds it open,
+folding it into the next undo point it is given. So a track fader or pan move
+followed within about half a second by anything with its own undo point (a
+mute, or a send fader's undo point from `ContinuousUndo`) is one undo step.
+REAPER's `CSurf_FlushUndo(true)`, called before JPRSurf adds an undo point (in
+`ContinuousUndo::Flush()` and `TrackBatch`), might close REAPER's one first.
+That is untested: it didn't make route changes create undo points of their own
+(see [surface_modes.md](worklog/surface_modes.md), Route undo), which is a
+different question. It would be added to the API list.
+
 ## Profile snapshots on demand
 
 - **Layers:** common, plugin

@@ -265,7 +265,7 @@ facts about it.
 
 ## CLs
 
-### CL1 [ ] common, plugin: One clock
+### CL1 [x] common, plugin: One clock
 
 Depends on: nothing.
 
@@ -287,10 +287,13 @@ Depends on: nothing.
 - Double and long press on select still work, with the same timing.
 - Move a send fader for a few seconds, stop, and move it again after a second:
   two undo points, each named for the send. Moving a track fader then a send
-  fader quickly: two undo points.
+  fader quickly: one undo point, as before (REAPER folds its open track volume
+  undo point into the next one it is given; see the backlog's *Separate undo
+  points for track faders*).
 - Hide a track in the Track Manager: the surface follows within a second.
-- Performance: p50 and p99 against a session without the change, run just
-  before it. One `time_precise` call per run instead of one per runner.
+- Performance: a short idle run, committed as `profiles/fake_reaper/idle.txt`,
+  against `profiles/idle.txt`: p50 and p99, and one `time_precise` call per
+  run instead of one per runner.
 
 ### CL2 [ ] common, plugin: Resettable process state, and the plugin's profile
 
@@ -307,8 +310,9 @@ Depends on: CL1.
 
 **Verify**
 - Standard checks, including `jprsurf_profile.txt` still written on exit.
-- Performance: p50 and p99 against a session without the change, run just
-  before it (`TrackCache::Get()` is on every path).
+- Performance: a short idle run, replacing `profiles/fake_reaper/idle.txt`,
+  against CL1's and `profiles/idle.txt`: p50 and p99 (`TrackCache::Get()` is
+  on every path).
 
 ### CL3 [ ] common/testing: FakeReaper, surfaces, clock, and checks
 
