@@ -14,6 +14,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/test_control_surface.h"
 #include "jpr/common/track_cache.h"
 
 namespace jpr {
@@ -57,11 +58,11 @@ ControlSurface::Type MakeType(std::filesystem::path profile_path = {}) {
 class ControlSurfaceTest : public ::testing::Test {
  protected:
   // Registers the test type, and adds a surface of it.
-  IReaperControlSurface* AddTestSurface(
+  std::unique_ptr<TestControlSurface> AddTestSurface(
       std::filesystem::path profile_path = {}) {
     EXPECT_TRUE(ControlSurface::Register(reaper_.GetPluginInfo(),
                                          MakeType(std::move(profile_path))));
-    IReaperControlSurface* surface = reaper_.AddSurface();
+    std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface();
     EXPECT_NE(surface, nullptr);
     return surface;
   }
@@ -75,78 +76,70 @@ TEST_F(ControlSurfaceTest, RegistersOneType) {
 }
 
 TEST_F(ControlSurfaceTest, CreatesAndDestroysItsListener) {
-  IReaperControlSurface* surface = AddTestSurface();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
   EXPECT_NE(g_listener, nullptr);
 
-  reaper_.RemoveSurface(surface);
+  surface.reset();
   EXPECT_EQ(g_listener, nullptr);
 }
 
 TEST_F(ControlSurfaceTest, RefusesASecondSurface) {
-  IReaperControlSurface* surface = AddTestSurface();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
 
   EXPECT_EQ(reaper_.AddSurface(), nullptr);
   EXPECT_THAT(reaper_.GetConsoleText(), HasSubstr("is already running"));
 
   // The first surface is untouched.
   ASSERT_NE(g_listener, nullptr);
-  reaper_.Run();
+  surface->Run();
   EXPECT_EQ(g_listener->run_times.size(), 1);
-
-  reaper_.RemoveSurface(surface);
 }
 
 TEST_F(ControlSurfaceTest, RunsWithREAPERsTime) {
-  IReaperControlSurface* surface = AddTestSurface();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
   ASSERT_NE(g_listener, nullptr);
 
-  reaper_.Run();
+  surface->Run();
   const double first_time = reaper_.GetTime();
-  reaper_.Run();
+  surface->Run();
   EXPECT_THAT(g_listener->run_times,
               ElementsAre(first_time, reaper_.GetTime()));
-
-  reaper_.RemoveSurface(surface);
 }
 
 TEST_F(ControlSurfaceTest, RefreshesTrackCacheOnTheRunAfterTheTrackList) {
-  IReaperControlSurface* surface = AddTestSurface();
-  reaper_.Run();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  surface->Run();
   EXPECT_EQ(TrackCache::Get().GetMasterTrack(), nullptr);
 
   surface->SetTrackListChange();
   EXPECT_EQ(TrackCache::Get().GetMasterTrack(), nullptr);
 
-  reaper_.Run();
+  surface->Run();
   Track* master = TrackCache::Get().GetMasterTrack();
   ASSERT_NE(master, nullptr);
   EXPECT_EQ(master->GetName(), reaper_.GetProject().GetMasterTrack()->name);
-
-  reaper_.RemoveSurface(surface);
 }
 
 // TrackCache keeps a project's tracks by GUID while another project tab is
 // current, and has them again on switching back.
 TEST_F(ControlSurfaceTest, KeepsTracksAcrossProjectTabs) {
-  IReaperControlSurface* surface = AddTestSurface();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
   surface->SetTrackListChange();
-  reaper_.Run();
+  surface->Run();
   Track* first_master = TrackCache::Get().GetMasterTrack();
   ASSERT_NE(first_master, nullptr);
 
   // REAPER reports a track list change on switching tabs.
   reaper_.AddProject();
   surface->SetTrackListChange();
-  reaper_.Run();
+  surface->Run();
   EXPECT_NE(TrackCache::Get().GetMasterTrack(), first_master);
 
   reaper_.SwitchProjectTo(0);
   surface->SetTrackListChange();
-  reaper_.Run();
+  surface->Run();
   EXPECT_EQ(TrackCache::Get().GetMasterTrack(), first_master);
   EXPECT_TRUE(first_master->Exists());
-
-  reaper_.RemoveSurface(surface);
 }
 
 TEST_F(ControlSurfaceTest, WritesItsProfileWhenTheTypeHasAPath) {
@@ -154,11 +147,11 @@ TEST_F(ControlSurfaceTest, WritesItsProfileWhenTheTypeHasAPath) {
       std::filesystem::path(::testing::TempDir()) /
       "control_surface_test_profile.txt";
   std::filesystem::remove(path);
-  IReaperControlSurface* surface = AddTestSurface(path);
-  reaper_.Run();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface(path);
+  surface->Run();
   EXPECT_FALSE(std::filesystem::exists(path));
 
-  reaper_.RemoveSurface(surface);
+  surface.reset();
   EXPECT_TRUE(std::filesystem::exists(path));
 }
 

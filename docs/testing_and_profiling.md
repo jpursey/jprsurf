@@ -279,18 +279,15 @@ class FakeReaper final {
   FakeMidiInput* AddMidiInput(std::string_view name);
   FakeMidiOutput* AddMidiOutput(std::string_view name);
 
-  // Adds or removes a control surface of the registered type, as the user does
-  // in REAPER's preferences. A test makes the calls REAPER would make on the
-  // surface AddSurface() returns.
-  IReaperControlSurface* AddSurface(std::string_view config = {});
-  void RemoveSurface(IReaperControlSurface* surface);
+  // Adds a control surface of the registered type, as the user does in
+  // REAPER's preferences. A test makes the calls REAPER would make on the
+  // TestControlSurface it returns (Run() advances the clock by one run), which
+  // passes each on to the surface, and checks it. Destroying it removes the
+  // surface.
+  std::unique_ptr<TestControlSurface> AddSurface(std::string_view config = {});
 
-  // Advances the clock by one frame (1/30s), and runs the surface if one is
-  // added.
-  void Run();
-
-  // Runs frames until `duration` has passed.
-  void RunFor(absl::Duration duration);
+  // Advances the clock, for a test with no surface to run.
+  void AdvanceTime(absl::Duration duration);
 
   // What JPRSurf did: the commands it ran, and the undo points it made.
   absl::Span<const FakeCommand> GetCommands() const;
@@ -392,8 +389,9 @@ following. Tests that make REAPER's calls on the surface follow these.
 
 The fake also checks rules for using REAPER that are only prose today, and
 fails the test when one is broken:
-- **Batching:** changes to UI-visible properties of more than one track, within
-  one entry point, must all be inside one `PreventUIRefresh()` scope. This is
+- **Batching:** an entry point that changes the mute, solo, rec arm, or
+  selection of more than one track makes them one change, in one
+  `PreventUIRefresh()` scope, for one UI refresh and one undo point. This is
   the `TrackBatch` rule in CLAUDE.md, enforced.
 - `PreventUIRefresh()` must be balanced by the end of each entry point.
 - A call with a deleted track's pointer fails, where REAPER might crash.
@@ -473,10 +471,10 @@ A test through the whole surface then reads like the smoke test:
 
 ```
 TEST_F(SurfaceTest, MuteButtonMutesTrack) {
-  FakeTrack* track = reaper_.AddTrack("Drums");
-  AddSurface();
+  FakeTrack* track = reaper_.GetProject().AddTrack("Drums");
+  std::unique_ptr<TestControlSurface> surface = AddSurface();
   xtouch_.Press(FakeXTouch::kMute, /*strip=*/0);
-  reaper_.Run();
+  surface->Run();
   EXPECT_TRUE(track->mute);
   EXPECT_EQ(xtouch_.GetLight(FakeXTouch::kMute, /*strip=*/0), kLightOn);
 }

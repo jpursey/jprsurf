@@ -9,9 +9,12 @@ set(jpr_common_testing_SOURCE
   fake_project.cc fake_project.h
   fake_reaper.cc fake_reaper.h
   fake_track.h
+  test_control_surface.cc test_control_surface.h
 )
 
 set(jpr_common_testing_DEPS
+  absl::flat_hash_map
+  absl::flat_hash_set
   absl::log
   absl::str_format
   absl::time

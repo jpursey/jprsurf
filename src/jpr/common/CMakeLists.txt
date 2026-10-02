@@ -49,6 +49,8 @@ set(jpr_common_TEST_SOURCE
   prefixed_name_test.cc
   reaper_api_test.cc
   reaper_trace_test.cc
+  track_cache_test.cc
+  track_test.cc
 )
 
 set(jpr_common_TEST_DEPS

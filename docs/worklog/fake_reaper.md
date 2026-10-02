@@ -191,20 +191,13 @@ class FakeReaper final {
   reaper_plugin_info_t& GetPluginInfo();
 
   // Creates a control surface of the registered type, as REAPER does when the
-  // user adds one in preferences, and returns it (null if the type refused),
-  // so a test can make the calls REAPER would make on it.
-  IReaperControlSurface* AddSurface(std::string_view config = {});
+  // user adds one in preferences, and returns it (null if the type refused).
+  // A test makes the calls REAPER would make on it, and destroying it removes
+  // the surface.
+  std::unique_ptr<TestControlSurface> AddSurface(std::string_view config = {});
 
-  // Destroys a surface AddSurface() returned, as REAPER does when the user
-  // removes it.
-  void RemoveSurface(IReaperControlSurface* surface);
-
-  // Advances the clock by one frame (1/30s), and runs the surface if one is
-  // added.
-  void Run();
-
-  // Runs frames until `duration` has passed.
-  void RunFor(absl::Duration duration);
+  // Advances the clock, for a test with no surface to run.
+  void AdvanceTime(absl::Duration duration);
 
   // What time_precise() returns.
   double GetTime() const;
@@ -266,10 +259,20 @@ class FakeProject final {
 - **The fake never calls the surface by itself.** Most code under test
   (`device`, `scene`, and most of `common`) never sees `IReaperControlSurface`,
   so it needs none of it. A test of `ControlSurface` (or later, of the plugin)
-  makes the calls REAPER would make on the surface `AddSurface()` returns, such
-  as
-  `SetTrackListChange()` after adding tracks. What REAPER actually sends, and
-  when, is in the design doc's Seen in traces, for writing those tests.
+  makes the calls REAPER would make on the `TestControlSurface` `AddSurface()`
+  returns, such as `SetTrackListChange()` after adding tracks, and `Run()`,
+  which advances the clock by one run. `TestControlSurface` passes each call on
+  to the surface, and the fake checks it when it returns. JPRSurf only ever has
+  one surface (more surfaces would be more listeners on one `ControlSurface`),
+  so the fake holds one at a time: a type that creates a second while one is
+  open fails the test. What REAPER actually
+  sends, and when, is in the design doc's Seen in traces, for writing those
+  tests.
+- **Track groups** are modeled simply: a `FakeTrack` has a `group`, and a
+  grouped change to its mute, solo, rec arm, volume, or pan changes every track
+  in the group. REAPER's groups have leaders and followers for each property,
+  which aren't modeled. It lets a test check the grouping JPRSurf asks for
+  through the tracks' state.
 - **Text** from `mkvolstr`, `mkpanstr`, `format_timestr_pos`, and
   `kbd_getTextFromCmd` is a plain format of the fake's own. The code under test
   only passes it through to the display, so a test checks that it does, not
@@ -294,12 +297,16 @@ class FakeProject final {
 ### Checks
 
 Each fails the test where it happens, with `ADD_FAILURE()`, naming what broke:
-- **Batching:** changes to UI-visible properties (mute, solo, rec arm,
-  selection, volume, pan) of more than one track within one entry point that
-  aren't all inside one `PreventUIRefresh()` scope. An entry point is each call
-  the fake makes into the surface, and each stretch of a test's own calls
-  between calls to the fake.
+- **The `TrackBatch` rule:** an entry point that changes the mute, solo, rec
+  arm, or selection of more than one track makes them one change: one
+  `PreventUIRefresh()` scope, or one call outside of any. Each change costs a
+  refresh of REAPER's UI (2–17ms), and JPRSurf adds an undo point for each, so
+  a batch is one of each. Volume and pan aren't included: REAPER makes their
+  undo points itself, and `CSurf_OnVolumeChangeEx()` measured about 10us a
+  call, so there is no refresh to save.
 - **`PreventUIRefresh()` unbalanced** at the end of an entry point.
+- An **entry point** is each call on a `TestControlSurface`, and the test's
+  own calls, which are checked when the fake is destroyed.
 - **A deleted or unknown track pointer** passed to any function.
 - **At teardown:** a surface or MIDI port still open. The fake then closes it,
   so the next test starts clean.
@@ -392,23 +399,32 @@ Depends on: CL2.
   `FormatGuid()`, so REAPER loading it with a clean log is enough.
 - `ctest` passes in Release, and leaves `jprsurf_profile.txt` untouched.
 
-### CL4 [ ] common/testing: Tracks and selection
+### CL4 [x] common/testing: Tracks and selection
 
 Depends on: CL3.
 
-- Tracks: order, parent (a `FakeTrack` holds its parent), name, color, volume,
-  pan, mute, solo, rec arm, `GetTrackState` flags, automation mode, TCP and
-  mixer visibility, and peak.
+- Tracks: order and folders (`FakeProject` keeps them consistent), name,
+  color, volume, pan, mute, solo, rec arm, `GetTrackState` flags, automation
+  mode, TCP and mixer visibility, and peak. `GetTrackNumSends` returns 0 until
+  CL5, as a track list refresh reads every track's routes.
 - Selection: `SetTrackSelected`, `SetOnlyTrackSelected`, and the
   `CountSelectedTracks`/`GetSelectedTrack` pairs, with and without the master.
+- `Undo_OnStateChangeEx` (moved up from CL7), recorded in the project, as
+  `TrackBatch` adds undo points.
+- `TestControlSurface`, which `AddSurface()` returns in place of the surface,
+  and which runs it (`Run()` and `RunFor()`, moved from `FakeReaper`, which
+  keeps `AdvanceTime()`), and checks each call. `RemoveSurface()` goes:
+  destroying it removes the surface.
 - `PreventUIRefresh`, entry points, and the unbalanced `PreventUIRefresh`,
-  batching, and deleted track checks.
+  `TrackBatch` rule, and deleted track checks.
 - `FakeProject::AddTrack()` and `DeleteTrack()`.
-- Tests: `track_test.cc` (values, setters, grouping flags, `SelectOnly()`,
-  deleted tracks), `track_cache_test.cc` (refresh, parents and filters,
-  visibility, GUID lookup across delete and re-add, selection, automation
-  modes, last touched track), and `TrackBatch` (one undo point, and the check
-  failing without it).
+- Track groups, simply (see Track groups above), so the grouping `Track` asks
+  for is tested through the tracks' state.
+- Tests: `track_test.cc` (values, setters, undo points, `SelectOnly()`,
+  deleted tracks, and the meter), `track_cache_test.cc` (refresh, folders and
+  filters, visibility, GUID lookup across delete and re-add, selection,
+  automation modes, the last touched track), and `TrackBatch` (one undo point,
+  and the check failing without it).
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
@@ -422,7 +438,10 @@ Depends on: CL4.
   `GetSetTrackSendInfo` (`P_DESTTRACK`, `P_SRCTRACK`), the `UI` getters and
   setters, and `ToggleTrackSendUIMute`, with REAPER's indexing (receives as
   `-1 - index` in the send functions, sends after hardware outputs).
-- `FakeProject::AddSend(from, to)`.
+- `FakeProject::AddSend(from, to)`. The project holds its routes as one list
+  (each a source, destination, volume, pan, and mute), beside the tracks'
+  folders, with a track's receives found from it, so a send and its receive
+  can't disagree, and deleting a track removes its routes in one place.
 - Tests: routes in `track_test.cc`: building them on refresh,
   `RefreshRoutes()`, and each setter by send and receive index.
 
@@ -455,8 +474,8 @@ Depends on: CL4, CL5, CL6 (the last of the list).
   `format_timestr_pos`.
 - Commands: `Main_OnCommand` (recorded, with handlers), toggle states,
   `NamedCommandLookup`, and `kbd_getTextFromCmd`.
-- Automation and undo: the global override, `Undo_OnStateChangeEx` (recorded),
-  `Undo_CanRedo2`, and `IsProjectDirty`.
+- Automation and undo: the global override, `Undo_CanRedo2`, and
+  `IsProjectDirty`.
 - The rest of the list: `AnyTrackSolo`, `CountSelectedMediaItems`,
   `mkvolstr`, `mkpanstr`, `stringToGuid`.
 - The stub for functions not faked yet goes, so a listed function without a

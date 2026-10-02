@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <array>
 #include <string>
 
 #include "sdk/reaper_plugin.h"
@@ -19,7 +20,8 @@ namespace jpr {
 //
 // A test reads and sets its fields directly. Setting one is a change REAPER
 // doesn't report to the surface; a test that needs the report makes the call
-// REAPER would make itself.
+// REAPER would make itself. The order and parents of a project's tracks are
+// FakeProject's, which keeps them consistent.
 //==============================================================================
 
 struct FakeTrack {
@@ -32,6 +34,23 @@ struct FakeTrack {
   bool mute = false;
   bool solo = false;
   bool rec_arm = false;
+
+  // As I_AUTOMODE: 0 trim/read, 1 read, 2 touch, 3 write, 4 latch, and 5 latch
+  // preview.
+  int auto_mode = 0;
+
+  // The track's group, or 0 for none. A grouped change to the mute, solo, rec
+  // arm, volume, or pan of a track in a group changes every track in it. This
+  // is simpler than REAPER's groups, where each property has its own leaders
+  // and followers.
+  int group = 0;
+
+  // As B_SHOWINMIXER and B_SHOWINTCP.
+  bool show_in_mixer = true;
+  bool show_in_tcp = true;
+
+  // As Track_GetPeakInfo() for the left and right channels: 1.0 is 0dB.
+  std::array<double, 2> peak = {};
 };
 
 // Returns the MediaTrack* the fake hands out for `track`.
