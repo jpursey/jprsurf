@@ -6,14 +6,13 @@ change can be compared against them without rebuilding an older version.
 - **The bar:** `idle.txt` and `smoke.txt`, one per scenario below. They change
   only on purpose: after an optimization, or when a new cost is accepted.
 - **A feature's snapshots:** `<feature>/idle.txt`, committed with each CL of a
-  feature (see the feature workflow) that is checked for performance. Each CL
+  feature that changes per-run work (see Performance in CLAUDE.md). Each CL
   compares against the feature's last snapshot, which catches a regression in
   the CL that caused it, and against the bar.
 - **The end of a feature:** an idle and a smoke snapshot of the finished
   feature, compared against the bar. The user decides whether they replace it,
   and the feature's directory is deleted either way. The smoke test is a long
-  manual run, so it isn't recorded for each CL: a CL's own smoke test is for
-  checking behavior, not performance.
+  manual run, so it is only recorded here.
 
 **Comparing:** call counts, and counts per action, compare directly. Times vary
 by about 30% between sessions on the same machine, so they are a guide within

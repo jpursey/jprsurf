@@ -562,12 +562,55 @@ Depends on: CL4 to CL7 (the last of the list).
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - `ctest` passes.
 
-### CL9 [ ] docs: Testing rules
+### CL9 [x] docs: Testing rules
 
 Depends on: CL8.
 
-- CLAUDE.md: code that depends on REAPER can be unit tested against the fake,
-  and so verified in a side session, with what still needs REAPER.
+With the fake, a CL is verified by its unit tests, not in REAPER. The user runs
+REAPER only for three things, agreed 2026-10-02:
+1. **Behavior nobody has checked.** What REAPER, or the hardware, does that
+   the code will rely on is checked first, with throwaway code (temporary
+   logging, a test mapping, or a trace), before code that relies on it is
+   written. As much as possible, this is a step at the start of a feature,
+   from the plan's To confirm. A fact that turns up partway through stops the
+   work until it is checked. Each finding goes in the plan's To confirm, and
+   into the fake as a tested fact (with "Seen in traces" for the calls REAPER
+   makes), so it is never checked twice. When REAPER shows the fake is wrong,
+   the fake is fixed first, with a test, then the code.
+2. **Performance.** A short idle profile only for a CL that changes per-run
+   work (`Run()`, what is polled, cached reads), and the large project check
+   only for one that changes an infrequent event. A test-only or docs CL, or
+   one away from the realtime path, needs neither. The idle and smoke profiles
+   of the finished feature are taken at its end, as now.
+3. **The end of a feature.** Before a feature is done, the user tests it in
+   REAPER: its own checks, the smoke test, how it feels on the hardware, and
+   that the extension loads with no new errors in the log. A bug found then is
+   fixed by a follow-up CL, after fixing the gap in the fake that let it
+   through.
+
+Changes:
+- CLAUDE.md, Testing and Logging: code that depends on REAPER is unit tested
+  against the fake (`jpr/common/testing`), in place of "can't be unit tested".
+  The checks every change gets become the Release build, clang-format, and
+  `ctest`, and the three reasons above say when REAPER is needed. The smoke
+  test is for the end of a feature, and says it shrinks as *Surface tests*
+  and later items make it tests.
+- CLAUDE.md, Performance: the per-CL idle profile and the large project check
+  follow item 2.
+- CLAUDE.md, Feature workflow: a plan starts with checking what it relies on
+  (item 1), and the user tests the feature in REAPER at its end, not each CL.
+- CLAUDE.md, Parallel sessions: most CLs can be written and verified in a side
+  session. The main session is for checking behavior in REAPER, profiles, and
+  the end of a feature.
+- `docs/worklog/template.md`: To confirm becomes the first step, with a CL for
+  checking it where needed. A CL's standard checks drop REAPER, and the plan
+  ends with the checks in REAPER.
+- `profiles/README.md`: which CLs record an idle snapshot (item 2).
+- `docs/testing_and_profiling.md`: its introduction no longer says code that
+  depends on REAPER is tested by hand.
+- `docs/backlog.md`, *Surface tests*: once the harness exists, each feature
+  adds surface tests of its own behavior, so the smoke test grows as tests
+  rather than as a list to run by hand.
 
 **Verify**
 - The docs read correctly, and the links work.

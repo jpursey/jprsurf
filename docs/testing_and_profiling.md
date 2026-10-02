@@ -10,9 +10,10 @@ provides one: every function is a global pointer that the extension fills in
 when it loads. Replacing those pointers gives the profiler its timing and gives
 tests a fake REAPER, without changing any code that calls REAPER.
 
-It ties together the backlog items that build toward this. Until they land,
-code that depends on REAPER is tested by hand in REAPER. Performance is read
-from the profile the profiler writes.
+It ties together the backlog items that build toward this. With the fake, code
+that depends on REAPER is unit tested, and REAPER is run only for what
+CLAUDE.md's Checking in REAPER names. Performance is read from the profile the
+profiler writes.
 
 ## Principles
 

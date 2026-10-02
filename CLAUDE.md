@@ -67,9 +67,17 @@ The build also will copy the binary to the REAPER plugin directory so it can be 
 
 A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Assume REAPER is closed and build without asking. Treat a copy or permission failure at the end of a build as "REAPER is open": ask the user to close it and build again, rather than debugging the build.
 
+### Test
+
+```
+ctest --test-dir out/build/x64-Release
+```
+
+Runs every library's unit tests, after a build.
+
 ### Testing and Logging
 
-Code that depends on the REAPER SDK, directly or indirectly, can't be unit tested and must be tested manually by the user in REAPER. Code that doesn't can have unit tests (see Build system), such as the existing `jpr_common_test`, run with ctest.
+Code is unit tested (see Build system), including code that depends on REAPER, which is tested against `FakeReaper` (see `src/jpr/common/testing/fake_reaper.h`): REAPER's state in memory, loaded as the REAPER API. A change is verified by its tests, not in REAPER, so most work can be done in a side session (see Parallel sessions). The user runs REAPER only for the reasons in Checking in REAPER below.
 
 Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events may be retained as is helpful for persistent understanding of code flow (continuous controller and UI events generally do *not* fall into this category).
 
@@ -78,17 +86,26 @@ To see exactly what REAPER does, set the `JPRSURF_TRACE` environment variable (t
 Every change is checked as follows:
 - It builds cleanly in Release (`out/build/x64-Release`).
 - Touched files pass `clang-format --dry-run -Werror`.
-- REAPER loads the extension, and `jprsurf.log` has no new errors.
-- **Smoke test:** existing behavior still works: faders, pots, pot buttons, mute, solo, rec arm, select (press, double press, long press), folder navigation, bank/channel navigation, Global, master fader, transport, timecode, meters, scribble names and colors, and mode buttons.
+- `ctest` passes, with tests of what the change does.
 - Any feature specific checks for the change (see Feature workflow below).
 
-Many changes have no user-visible effect until a later change uses them. These can be verified with temporary code (extra logging, or a test mapping on a spare button) that is removed before the change is committed.
+#### Checking in REAPER
+
+The user runs REAPER, with the extension deployed to it, only for these:
+1. **Behavior nobody has checked.** What REAPER or the hardware does, where code will rely on it, is checked before that code is written, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. As much as possible, this is a step at the start of a feature, from its plan's To confirm (see Feature workflow). A fact that turns up partway through stops the work until it is checked. Each finding is recorded in the plan's To confirm, and goes into the fake as a tested fact (and the calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`), so it is never checked twice. When REAPER shows the fake is wrong, fix the fake first, with a test, then the code.
+2. **Performance**, for the changes Performance below names.
+3. **The end of a feature.** Before a feature is done, the user tests it in REAPER:
+   - REAPER loads the extension, and `jprsurf.log` has no new errors.
+   - The feature's own checks, and how it feels on the hardware.
+   - **Smoke test:** existing behavior still works: faders, pots, pot buttons, mute, solo, rec arm, select (press, double press, long press), folder navigation, bank/channel navigation, Global, master fader, transport, timecode, meters, scribble names and colors, and mode buttons. As *Surface tests* and the items after it in `docs/backlog.md` make it tests, this shrinks to what the fakes can't show.
+
+   A bug found then is fixed in a follow-up CL, after fixing the gap in the fake that let it through.
 
 #### Performance
 
 REAPER is realtime and the extension runs on its UI thread, so performance is checked by running REAPER and reading the profile it writes on exit, "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_profile.txt" (see `ReaperProfiler` in `src/jpr/common/reaper_profiler.h`). It times every run, every REAPER call, and the scopes and counters JPRSurf defines with Game Bits' `gb/profile`, and is replaced each time REAPER exits or the surface is removed.
-- **Steady state and actions:** the p50 and p99 run times, and the counts and times of the points the change touches, don't regress. `profiles/` holds snapshots to compare against, of REAPER idle and of a scripted smoke test (see `profiles/README.md` for the scenarios, and when the snapshots are replaced). A CL records a short idle run (10 seconds is enough), and compares it against the feature's last snapshot and the bar. The smoke test is only profiled at the end of a feature. Counts compare directly. Run times vary by about 30% between sessions on the same machine, so a back to back run (without the change, then with it) is only needed when a time moves by more than that, or when the change is meant to make something faster.
-- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. A run over 8ms logs a "Slow run" warning with its breakdown by point. Test with a large project (100+ tracks, with sends and receives).
+- **Steady state and actions:** the p50 and p99 run times, and the counts and times of the points the change touches, don't regress. `profiles/` holds snapshots to compare against, of REAPER idle and of a scripted smoke test (see `profiles/README.md` for the scenarios, and when the snapshots are replaced). A CL that changes per-run work (`Run()`, what is polled, or cached reads) records a short idle run (10 seconds is enough), and compares it against the feature's last snapshot and the bar; a test-only or docs CL, or one away from the realtime path, records none. The smoke test is only profiled at the end of a feature. Counts compare directly. Run times vary by about 30% between sessions on the same machine, so a back to back run (without the change, then with it) is only needed when a time moves by more than that, or when the change is meant to make something faster.
+- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. A run over 8ms logs a "Slow run" warning with its breakdown by point. A CL that changes one is checked with a large project (100+ tracks, with sends and receives).
 - **The profiler's own cost** stays within its budget, the larger of 3us a run (about twice what it costs) and 1% of the run. The "Profile:" line logged on exit shows it, and is a warning if it is over.
 
 New work whose cost matters gets a scope (`gb::ProfileScope`), and work that scales gets a counter (`gb::ProfileCount`), named for the function it times (see Names in `docs/worklog/profiler.md`).
@@ -131,16 +148,16 @@ JPRSurf is moving toward a surface that is entirely driven by a config file, des
 
 The `scene` layer aims to be flexible and composable, not just simple: few concepts, each as small as it can be, so that a new feature in a new config comes from composing existing pieces rather than adding new ones. Before adding a runtime concept or option, check whether existing pieces already combine to do the job. If they do, use the combination and document it, and leave any friendlier shorthand to the config file (or SurfaceSpec), which can expand it to the runtime form. Performance is the trade-off: when a composition would put the realtime budget at risk (see Performance), a dedicated piece is justified.
 
-A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `plugin`. Their **Verify** steps start from the checks in Testing and Logging, and the user tests each CL in REAPER before approving it.
+A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `plugin`. Its plan starts with what it relies on that nobody has checked (its To confirm), which is checked in REAPER before the CLs that rely on it (see Checking in REAPER). The CLs' **Verify** steps start from the checks in Testing and Logging, and the user reviews each CL, but tests the feature in REAPER only at its end.
 
 ## Parallel sessions
 
-These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs testing in REAPER happens one change at a time in the main session, in the main checkout.
+These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs REAPER (see Checking in REAPER) happens one change at a time in the main session, in the main checkout.
 
-Side sessions run in their own git worktree, for work that can be verified without REAPER: unit-testable code (such as `jpr_common_test`), documentation and comment cleanup, research, and reviews.
+Side sessions run in their own git worktree, for work that can be verified without REAPER: most CLs, which their unit tests verify, documentation and comment cleanup, research, and reviews.
 - A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.
 - A side session never merges or pushes to `main`. The main session cherry-picks its commit onto `main`, builds, and hands anything that needs a REAPER check to the user.
-- If a change turns out to need testing in REAPER, say so and hand it back to the main session rather than deploying it.
+- If a change turns out to need REAPER (behavior nobody has checked, or a profile), say so and hand it back to the main session rather than deploying it.
 
 ## Resources
 

@@ -68,7 +68,9 @@ extender. The tests cover the smoke test list: faders, pots, pot buttons, mute,
 solo, rec arm, select (press, double press, long press), folder navigation,
 bank and channel navigation, Global, the master fader, transport, timecode,
 meters, scribble names and colors, and mode buttons. CLAUDE.md's smoke test
-shrinks to what the fakes can't show. The fake's reset of process state (see
+shrinks to what the fakes can't show. From then on, each feature adds surface
+tests of its own behavior, so the smoke test grows as tests, rather than as a
+list to run by hand. The fake's reset of process state (see
 [fake_reaper.md](worklog/fake_reaper.md)) extends to `Plugin`'s instance and
 trace, and the harness keeps tracing off whatever `JPRSURF_TRACE` is set to.
 
