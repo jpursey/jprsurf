@@ -29,9 +29,7 @@ std::string JoinNames(const std::vector<std::unique_ptr<Port>>& ports) {
 
 absl::Duration MidiPorts::s_flush_wait_ = absl::Milliseconds(100);
 
-void MidiPorts::SetFlushWait(ResetTestKey, absl::Duration wait) {
-  s_flush_wait_ = wait;
-}
+void MidiPorts::SetFlushWait(absl::Duration wait) { s_flush_wait_ = wait; }
 
 MidiPorts::MidiPorts()
     : inputs_(MidiIn::GetPorts()), outputs_(MidiOut::GetPorts()) {

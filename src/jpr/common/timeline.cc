@@ -10,6 +10,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/test_reset.h"
 
 namespace jpr {
 
@@ -61,6 +62,7 @@ struct RulerModes {
   int secondary_frames = kRulerSecondaryFramesModes[0];
 };
 RulerModes g_last_ruler_modes;
+const TestReset kResetRulerModes([] { g_last_ruler_modes = {}; });
 
 }  // namespace
 
@@ -111,8 +113,6 @@ void SetRulerMode(TimelineMode mode) {
       break;
   }
 }
-
-void ResetRulerModes(ResetTestKey) { g_last_ruler_modes = {}; }
 
 std::optional<TimelineMode> GetRulerSecondaryMode() {
   for (int time_mode : kRulerSecondaryTimeModes) {

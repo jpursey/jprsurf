@@ -19,10 +19,10 @@ ContinuousUndo& ContinuousUndo::Get() {
   return *s_instance_;
 }
 
-void ContinuousUndo::Reset(ResetTestKey) {
+const TestReset ContinuousUndo::s_test_reset_([] {
   delete s_instance_;
   s_instance_ = nullptr;
-}
+});
 
 void ContinuousUndo::OnChange(std::string_view description,
                               int undo_state_flags) {

@@ -279,13 +279,11 @@ class FakeReaper final {
   FakeMidiInput* AddMidiInput(std::string_view name);
   FakeMidiOutput* AddMidiOutput(std::string_view name);
 
-  // Adds or removes the registered control surface, as the user does in
-  // REAPER's preferences.
-  void AddSurface(std::string_view config = {});
-  void RemoveSurface();
-
-  // The surface, so a test can make the calls REAPER would make on it.
-  IReaperControlSurface* GetSurface();
+  // Adds or removes a control surface of the registered type, as the user does
+  // in REAPER's preferences. A test makes the calls REAPER would make on the
+  // surface AddSurface() returns.
+  IReaperControlSurface* AddSurface(std::string_view config = {});
+  void RemoveSurface(IReaperControlSurface* surface);
 
   // Advances the clock by one frame (1/30s), and runs the surface if one is
   // added.

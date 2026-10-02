@@ -21,10 +21,10 @@ TrackCache& TrackCache::Get() {
   return *s_instance_;
 }
 
-void TrackCache::Reset(ResetTestKey) {
+const TestReset TrackCache::s_test_reset_([] {
   delete s_instance_;
   s_instance_ = nullptr;
-}
+});
 
 TrackCache::TrackCache() {
   // The stub track is a special track that represents no track at all. It has

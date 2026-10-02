@@ -14,8 +14,8 @@
 
 #include "absl/types/span.h"
 #include "jpr/common/reaper_profiler.h"
-#include "jpr/common/reset_test_key.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/test_reset.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -94,10 +94,6 @@ class ControlSurface final : private IReaperControlSurface {
   // registered. Returns false (and logs an error) if registration fails.
   static bool Register(reaper_plugin_info_t& plugin_info, const Type& type);
 
-  // For tests only (see ResetCommonState()): forgets the registered type, so
-  // another can be registered. No surface may exist.
-  static void Reset(ResetTestKey);
-
   ControlSurface(const ControlSurface&) = delete;
   ControlSurface& operator=(const ControlSurface&) = delete;
   ~ControlSurface() override;
@@ -174,6 +170,10 @@ class ControlSurface final : private IReaperControlSurface {
 
   // The one instance that exists, if any.
   static ControlSurface* s_instance_;
+
+  // A test's reset forgets the registered type, so another can be registered.
+  // No surface may exist.
+  static const TestReset s_test_reset_;
 
   // The profiler, if the type has a profile path. It is declared first, and
   // created before the listener, so its hooks are in place for the MIDI ports

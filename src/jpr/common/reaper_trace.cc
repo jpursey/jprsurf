@@ -24,6 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "jpr/common/guid.h"
 #include "jpr/common/local_time.h"
 #include "jpr/common/reaper_api.h"
 
@@ -494,13 +495,7 @@ std::string Tracer::FormatValue(const char* value) {
   return absl::StrCat("\"", absl::CHexEscape(value), "\"");
 }
 
-std::string Tracer::FormatValue(const GUID& value) {
-  return absl::StrFormat("{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
-                         value.Data1, value.Data2, value.Data3, value.Data4[0],
-                         value.Data4[1], value.Data4[2], value.Data4[3],
-                         value.Data4[4], value.Data4[5], value.Data4[6],
-                         value.Data4[7]);
-}
+std::string Tracer::FormatValue(const GUID& value) { return FormatGuid(value); }
 
 std::string Tracer::FormatValue(const GUID* value) {
   if (value == nullptr) {

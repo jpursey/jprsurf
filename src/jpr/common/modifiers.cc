@@ -5,11 +5,15 @@
 
 #include "jpr/common/modifiers.h"
 
+#include "jpr/common/test_reset.h"
+
 namespace jpr {
 
 namespace {
 
 Modifiers g_modifiers = 0;
+
+const TestReset kResetModifiers([] { g_modifiers = 0; });
 
 }  // namespace
 

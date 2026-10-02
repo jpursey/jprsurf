@@ -40,6 +40,12 @@ constexpr absl::Duration kVisibilityInterval = absl::Seconds(1);
 ControlSurface::Type ControlSurface::s_type_ = {};
 reaper_csurf_reg_t ControlSurface::s_reg_ = {};
 ControlSurface* ControlSurface::s_instance_ = nullptr;
+const TestReset ControlSurface::s_test_reset_([] {
+  CHECK(s_instance_ == nullptr)
+      << "The control surface type can't be reset while a surface exists";
+  s_type_ = {};
+  s_reg_ = {};
+});
 
 #define VLOG_REAPER() VLOG(1) << "REAPER: "
 
@@ -66,13 +72,6 @@ bool ControlSurface::Register(reaper_plugin_info_t& plugin_info,
     return false;
   }
   return true;
-}
-
-void ControlSurface::Reset(ResetTestKey) {
-  CHECK(s_instance_ == nullptr)
-      << "The control surface type can't be reset while a surface exists";
-  s_type_ = {};
-  s_reg_ = {};
 }
 
 IReaperControlSurface* ControlSurface::Create(const char* type_string,

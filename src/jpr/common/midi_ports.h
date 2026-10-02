@@ -11,7 +11,6 @@
 
 #include "absl/time/time.h"
 #include "jpr/common/midi_port.h"
-#include "jpr/common/reset_test_key.h"
 #include "jpr/common/runner.h"
 
 namespace jpr {
@@ -28,10 +27,10 @@ namespace jpr {
 // (for instance, clearing a surface on shutdown).
 class MidiPorts final {
  public:
-  // For tests only: sets how long destroying MidiPorts waits for its ports to
-  // finish sending (100ms by default). The fake REAPER's ports send at once,
-  // and tests never wait on real time, so it sets none.
-  static void SetFlushWait(ResetTestKey, absl::Duration wait);
+  // Sets how long destroying MidiPorts waits for its ports to finish sending
+  // (100ms by default). Ports that send at once, such as the fake REAPER's,
+  // need none.
+  static void SetFlushWait(absl::Duration wait);
 
   // Lists the MIDI ports available in REAPER, none of them open yet.
   MidiPorts();

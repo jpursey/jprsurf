@@ -21,9 +21,8 @@ set(jpr_common_SOURCE
   reaper_api.cc reaper_api.h
   reaper_profiler.cc reaper_profiler.h
   reaper_trace.cc reaper_trace.h
-  reset_test_key.h
   runner.cc runner.h
-  test_reset_common.cc test_reset_common.h
+  test_reset.cc test_reset.h
   timeline.cc timeline.h
   track.cc track.h
   track_cache.cc track_cache.h
@@ -45,14 +44,21 @@ set(jpr_common_DEPS
 set(jpr_common_TEST_SOURCE
   anchor_test.cc
   color_test.cc
+  control_surface_test.cc
   numbered_name_test.cc
   prefixed_name_test.cc
   reaper_api_test.cc
   reaper_trace_test.cc
 )
 
+set(jpr_common_TEST_DEPS
+  jpr_common_testing
+)
+
 gb_add_library(jpr_common)
 target_include_directories(jpr_common PUBLIC "../..")
+
+add_subdirectory(testing)
 
 # jpr/common/build_info.h, with the git commit and whether it was modified, for
 # the profile snapshot. It is regenerated on every build, but only rewritten

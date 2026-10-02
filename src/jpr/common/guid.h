@@ -14,6 +14,10 @@
 
 namespace jpr {
 
+// Returns `guid` as REAPER writes it (see guidToString()), such as
+// "{0A1B2C3D-4E5F-6071-8293-A4B5C6D7E8F9}".
+std::string FormatGuid(const GUID& guid);
+
 // This is a wrapper around GUID that provides hashing and string formatting
 // support.
 //

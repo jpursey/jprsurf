@@ -9,8 +9,8 @@
 #include <string_view>
 
 #include "absl/time/time.h"
-#include "jpr/common/reset_test_key.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/test_reset.h"
 
 namespace jpr {
 
@@ -35,11 +35,6 @@ class ContinuousUndo final {
   // Returns the singleton instance.
   static ContinuousUndo& Get();
 
-  // For tests only (see ResetCommonState()): destroys the instance, dropping
-  // any pending changes without creating their undo point, so the next Get()
-  // creates a new one.
-  static void Reset(ResetTestKey);
-
   ContinuousUndo(const ContinuousUndo&) = delete;
   ContinuousUndo& operator=(const ContinuousUndo&) = delete;
   ~ContinuousUndo() = default;
@@ -63,8 +58,10 @@ class ContinuousUndo final {
 
  private:
   // The instance, created by the first Get(). It is never destroyed, apart from
-  // by Reset().
+  // by a test's reset, which drops any pending changes without creating their
+  // undo point.
   static ContinuousUndo* s_instance_;
+  static const TestReset s_test_reset_;
 
   ContinuousUndo() = default;
 
