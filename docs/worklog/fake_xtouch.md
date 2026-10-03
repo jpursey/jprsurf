@@ -208,17 +208,22 @@ follows the X-Touch. Two are already known:
   does. Bit 6 lights the two end lights instead (far left and far right), as
   `DeviceXTouch`'s comment says.
 
-The other two are checked in REAPER first (CL1), and each finding goes into the
-fake's tables (CL3) and any fix into `DeviceXTouch` (CL4).
-
-| Fact                                                                                                                                                                                                                | Check                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| The master fader's touch note. `DeviceXTouch` uses 0x67; the protocol (and Klinke) use 0x70. If it is 0x70, the master fader's touch has never worked, and its motor output isn't held while it is touched.         | Log every note from the X-Touch, and touch the master fader.                  |
-| How the timecode shows letters. The protocol's codes for `@` to `_` are 0x00-0x1F, but `DeviceXTouch` sends their ASCII (0x40-0x5F), which has the dot bit set. Nothing sends letters today, but `SetText()` can. | A spare button shows `ABCDEFGHIJ`, then `KLMNOPQRST`, on the timecode display. |
+The other two were checked in REAPER (CL1). Each finding goes into the fake's
+tables (CL3), and the fixes into `DeviceXTouch` (CL4).
+- **Master fader touch is note 0x70**, as the protocol (and Klinke) have it,
+  not the 0x67 `DeviceXTouch` listens for. The master fader's touch has never
+  worked, so its motor output isn't held while it is touched. CL4 fixes it.
+- **The timecode follows the protocol's codes.** Sent as codes (0x00-0x1F),
+  `@` to `_` show without dots. Sent as their ASCII (0x40-0x5F), as
+  `DeviceXTouch` sends them, each shows its dot too, as bit 6 is the dot. CL4
+  fixes `DeviceXTouch` to send the codes. `@` shows as a blank, and `\` as a
+  squiggle, either way; the fake reports the character sent, not how the
+  segments draw it. ASCII 0x20-0x3F (digits, space, and punctuation) is the
+  same either way.
 
 ## CLs
 
-### CL1 [ ] REAPER: Check the protocol against the hardware
+### CL1 [x] REAPER: Check the protocol against the hardware
 
 Depends on: nothing.
 
@@ -272,8 +277,10 @@ Depends on: CL3.
 - `device_xtouch_test.cc`, with the fixture, and `jpr_device_TEST_SOURCE`
   linking `jpr_device_testing`.
 - Tests of every control on both models (see Device tests).
-- Fixes to `DeviceXTouch` for whatever CL1 found it gets wrong, which its tests
-  show, and the stray `#pragma once` in `device_xtouch.cc`.
+- Fixes to `DeviceXTouch` for what CL1 found, which its tests show: the master
+  fader's touch is note 0x70, and the timecode sends `@` to `_` as the
+  protocol's codes (`EncodeChar()` keeps the low 6 bits). And the stray
+  `#pragma once` in `device_xtouch.cc`.
 - `docs/backlog.md`: *Device types and catalogs* and *Build the scene from a
   SurfaceSpec* as "With the config work" describes.
 
@@ -296,10 +303,11 @@ Depends on: CL4.
 
 ## Checks in REAPER
 
-- Each fix from CL4 behaves as CL1 found the hardware does. For the master
-  fader's touch, if it changed: touch the master fader and move it while the
+- The master fader's touch: touch the master fader and move it while the
   volume changes in REAPER (play automation), and it doesn't fight the hand;
   let go, and it follows the volume again.
+- The timecode still shows each timeline mode as before, with its dots. Nothing
+  sends it letters yet, so the letter fix is only checked by its tests.
 - The extension loads with no new errors in `jprsurf.log`, and the smoke test
   passes. There is no idle or smoke profile: nothing on the realtime path
   changes.
