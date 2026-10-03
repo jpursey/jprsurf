@@ -14,6 +14,14 @@ namespace jpr {
 // ControlPressInputMidiMsg
 //==============================================================================
 
+ControlPressInputMidiMsg::Config ControlPressInputMidiMsg::McuButton(
+    uint8_t note) {
+  return Config{
+      .press = MidiNoteOn(/*channel=*/0, note, /*velocity=*/127),
+      .release = MidiNoteOn(/*channel=*/0, note, /*velocity=*/0),
+  };
+}
+
 ControlPressInputMidiMsg::ControlPressInputMidiMsg(MidiIn* midi_in,
                                                    Config config)
     : ControlPressInput(config.release.has_value()),

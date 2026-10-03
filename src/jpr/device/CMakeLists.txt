@@ -24,6 +24,14 @@ set(jpr_device_DEPS
   reaper_sdk
 )
 
+set(jpr_device_TEST_SOURCE
+  device_xtouch_test.cc
+)
+
+set(jpr_device_TEST_DEPS
+  jpr_device_testing
+)
+
 gb_add_library(jpr_device)
 target_include_directories(jpr_device PUBLIC "../..")
 

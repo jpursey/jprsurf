@@ -5,8 +5,11 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <optional>
 
+#include "jpr/common/midi_message.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/device/control_input.h"
 
@@ -32,6 +35,17 @@ class ControlPressInputMidiMsg : public ControlPressInput,
     MidiMessage press;
     std::optional<MidiMessage> release;
   };
+
+  // Returns the configuration for a button on an MCU device, which sends the
+  // note on with velocity 127 when pressed, and 0 when released.
+  static Config McuButton(uint8_t note);
+
+  // Returns the configuration for touching a fader on an MCU device, for the
+  // specified track (0-7), or the master fader.
+  static Config McuFaderTouch(uint8_t track) {
+    return McuButton(0x68 + std::clamp<uint8_t>(track, 0, 7));
+  }
+  static Config McuMasterFaderTouch() { return McuButton(0x70); }
 
   ControlPressInputMidiMsg(MidiIn* midi_in, Config config);
   ~ControlPressInputMidiMsg() override;

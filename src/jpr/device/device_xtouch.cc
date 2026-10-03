@@ -3,9 +3,9 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#pragma once
-
 #include "jpr/device/device_xtouch.h"
+
+#include <memory>
 
 #include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
@@ -195,7 +195,7 @@ uint8_t PeakToMcuMeter(double peak) {
     return 0x4;  // >= -40 dB
   }
   if (peak >= 0.00316) {
-    return 0x2;  // >= -60 dB
+    return 0x2;  // >= -50 dB
   }
   return 0;
 }
@@ -264,10 +264,12 @@ class XTouchTimecodeDisplay final : public ControlTextOutput {
   void SendCodes(const uint8_t text[kTimecodeDigitCount]);
 
   // Encodes one character for the MCU 7-segment display.
-  // Bits 5-0: character (must be in ASCII range 0x20-0x5F).
+  // Bits 5-0: the character's display code, which is the low 6 bits of its
+  // ASCII (0x20-0x5F): '@' to '_' are 0x00-0x1F, and ' ' to '?' are
+  // 0x20-0x3F. Anything else is a space.
   // Bit 6: dot (decimal point on this digit).
   static uint8_t EncodeChar(char c, bool dot) {
-    uint8_t encoded = (c >= 0x20 && c <= 0x5F) ? static_cast<uint8_t>(c)
+    uint8_t encoded = (c >= 0x20 && c <= 0x5F) ? static_cast<uint8_t>(c & 0x3F)
                                                : static_cast<uint8_t>(' ');
     return encoded | (dot ? 0x40 : 0x00);
   }
@@ -809,10 +811,7 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     }
     Control::Options options = {.name = button.name};
     options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-        midi_in,
-        ControlPressInputMidiMsg::Config{
-            .press = MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/127),
-            .release = MidiNoteOn(/*channel=*/0, button.note, /*velocity=*/0)});
+        midi_in, ControlPressInputMidiMsg::McuButton(button.note));
     if (button.has_light) {
       options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
           midi_out, ControlDValueOutputMidiNote::McuLight(button.note));
@@ -841,10 +840,7 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
             midi_in, ControlValueInputMcuFader::MasterFader());
     master_fader_options.press_input =
         std::make_unique<ControlPressInputMidiMsg>(
-            midi_in,
-            ControlPressInputMidiMsg::Config{
-                .press = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/127),
-                .release = MidiNoteOn(/*channel=*/0, 0x67, /*velocity=*/0)});
+            midi_in, ControlPressInputMidiMsg::McuMasterFaderTouch());
     master_fader_options.cvalue_output =
         std::make_unique<ControlCValueOutputMcuFader>(
             midi_out, ControlCValueOutputMcuFader::MasterFader());
@@ -870,15 +866,11 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     Control::Options fader_options = {.name = name};
     fader_options.value_input = std::make_unique<ControlValueInputMcuFader>(
         midi_in, ControlValueInputMcuFader::Track(track));
-    // My extender unit'3 third fader lost touch sensing, so disabling the press
+    // My extender unit's third fader lost touch sensing, so disabling the press
     // input for just that fader to fall back on delayed feedback.
     if (type != Type::kExtender || track != 2) {
       fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-          midi_in, ControlPressInputMidiMsg::Config{
-                       .press = MidiNoteOn(/*channel=*/0, 0x68 + track,
-                                           /*velocity=*/127),
-                       .release = MidiNoteOn(/*channel=*/0, 0x68 + track,
-                                             /*velocity=*/0)});
+          midi_in, ControlPressInputMidiMsg::McuFaderTouch(track));
     }
     fader_options.cvalue_output = std::make_unique<ControlCValueOutputMcuFader>(
         midi_out, ControlCValueOutputMcuFader::Track(track));

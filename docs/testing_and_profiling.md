@@ -555,15 +555,14 @@ API list, reading performance from the snapshot with the profiler, the testing
 rules (code that depends on REAPER can now be unit tested, so side sessions can
 verify it) with the fake, and the smoke test with surface tests.
 
-**With the config work.** Two config items assume things these fakes change.
-They are updated by *Fake X-Touch and device tests*, once devices can be
-created in tests, not before:
-- *Device types and catalogs* says a device can't be created in a unit test,
-  because it needs MIDI ports. Under the fake it can, so the check that a
-  device's controls match its catalog can be a unit test as well as a check at
-  startup.
-- *Build the scene from a SurfaceSpec* says building needs REAPER. Under the
-  fake, building is unit tested too, and surface tests check that the scene
-  built from JPRSurf's spec behaves as the C++ surface did.
+**With the config work.** Two config items assumed things these fakes change,
+and *Fake X-Touch and device tests* updated them, once devices could be
+created in tests:
+- *Device types and catalogs*: a device can be created in a unit test, on the
+  fake hardware's ports, so the check that a device's controls match its
+  catalog is a unit test as well as a check at startup.
+- *Build the scene from a SurfaceSpec*: building is unit tested against the
+  fake too, and surface tests check that the scene built from JPRSurf's spec
+  behaves as the C++ surface did.
 - Backlog items that are "only worth doing if it shows up in the `Run()`
   average" can be measured with the profiler first.

@@ -179,7 +179,9 @@ A registry of device types by name, each with:
 
 `DeviceXTouch` takes its control names from its catalog, and `Device` checks
 once, when it is created, that the controls it built match the catalog,
-logging an error if they don't.
+logging an error if they don't. A unit test checks it too, for each device
+type, creating the device on the fake hardware's ports (as
+`device_xtouch_test.cc` does).
 
 The last CL moves the plugin onto device types and widgets. It creates its
 devices through the registry, with the X-Touch required and the extender
@@ -216,9 +218,11 @@ Checking a spec and building a scene from it are separate:
   mapping that writes a fixed value holds the type and value, and building
   maps it to the name of a `const:` property added for it
   (`Scene::AddConstProperty()`).
-- **Building** needs REAPER. It creates the devices, stops if a required device
-  is absent or a command isn't installed, expands templates and repeated views,
-  and creates the scene.
+- **Building** needs REAPER, or the fake REAPER and fake hardware, so it is
+  unit tested too. It creates the devices, stops if a required device is
+  absent or a command isn't installed, expands templates and repeated views,
+  and creates the scene. Surface tests (see *Surface tests*) check that the
+  scene built from JPRSurf's spec behaves as the C++ surface did.
 
 This settles where the spec library sits: checking depends on `device` (for
 the catalogs) but not on `scene`, and building depends on `scene`. No state in

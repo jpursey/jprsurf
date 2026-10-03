@@ -168,19 +168,26 @@ A fixture in `device_xtouch_test.cc`, run as `PluginSurface` runs its devices:
 ```
 class DeviceXTouchTest : public ::testing::Test {
  protected:
-  // Runs the device, then MIDI input and output, as PluginSurface::OnRun()
-  // does, and advances the fake's clock by one run.
+  // Constructs the fake and the device as `type`.
+  explicit DeviceXTouchTest(DeviceXTouch::Type type = DeviceXTouch::Type::kFull);
+
+  // Advances the fake's clock by one run, as TestControlSurface::Run() does,
+  // then runs the device, then MIDI input and output, as
+  // PluginSurface::OnRun() does.
   void Run();
 
+  const DeviceXTouch::Type type_;
   FakeReaper reaper_;
-  FakeXTouch xtouch_{reaper_, FakeXTouch::Type::kFull, "X-Touch"};
+  FakeXTouch xtouch_;
   MidiPorts ports_;
   Runner runner_{"Device"};
-  DeviceXTouch device_{DeviceXTouch::Type::kFull, runner_,
-                       ports_.OpenInput("X-Touch"),
-                       ports_.OpenOutput("X-Touch")};
+  DeviceXTouch device_;
 };
 ```
+
+What both models have is a parameterized test (`DeviceXTouchModelTest`), run
+on each, and what only one has is a test of the full X-Touch, or of the
+extender (`DeviceXTouchExtenderTest`).
 
 - **`DeviceXTouch`:** every control, on both models, table driven where the
   controls repeat. Buttons (press, release, and lights on and blinking), faders
@@ -292,7 +299,7 @@ Depends on: CL1, CL2b.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL4 [ ] device: DeviceXTouch tests
+### CL4 [x] device: DeviceXTouch tests
 
 Depends on: CL3.
 
@@ -302,7 +309,10 @@ Depends on: CL3.
 - Fixes to `DeviceXTouch` for what CL1 found, which its tests show: the master
   fader's touch is note 0x70, and the timecode sends `@` to `_` as the
   protocol's codes (`EncodeChar()` keeps the low 6 bits). And the stray
-  `#pragma once` in `device_xtouch.cc`.
+  `#pragma once` in `device_xtouch.cc`. The MCU's button and fader touch notes
+  are configs on `ControlPressInputMidiMsg` (`McuButton()`, `McuFaderTouch()`,
+  and `McuMasterFaderTouch()`), as the MCU's lights, encoders, and faders
+  already are on their classes.
 - `docs/backlog.md`: *Device types and catalogs* and *Build the scene from a
   SurfaceSpec* as "With the config work" describes.
 
