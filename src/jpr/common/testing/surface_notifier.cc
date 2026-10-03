@@ -9,11 +9,11 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/testing/reaper_actions.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -31,13 +31,6 @@ constexpr int kBalancePanMode = 3;
 constexpr int kUndoCommand = 40029;
 constexpr int kRedoCommand = 40030;
 constexpr int kRepeatCommand = 1068;
-
-// The automation mode actions, which set the selected tracks' modes from trim
-// (40400) to latch (40404), in the order of their I_AUTOMODE values.
-constexpr int kFirstAutoModeCommand = 40400;
-constexpr int kLastAutoModeCommand = 40404;
-static_assert(kLastAutoModeCommand - kFirstAutoModeCommand ==
-              static_cast<int>(AutoMode::kLatch));
 
 }  // namespace
 
@@ -125,9 +118,9 @@ void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
   }
   if (command == kUndoCommand || command == kRedoCommand) {
     SendUndo(*surface);
-  } else if (command >= kFirstAutoModeCommand &&
-             command <= kLastAutoModeCommand) {
-    surface->SetAutoMode(command - kFirstAutoModeCommand);
+  } else if (command >= kFirstAutoModeAction &&
+             command <= kLastAutoModeAction) {
+    surface->SetAutoMode(command - kFirstAutoModeAction);
     SendAutomationChange(*surface);
   }
 }

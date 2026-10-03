@@ -55,6 +55,7 @@ profiler writes.
 | Trace            | Every REAPER call and callback with its arguments, to see what REAPER does | `jpr/common`              |
 | Fake REAPER      | REAPER's state, MIDI ports, surfaces, and clock, behind the API list       | `jpr/common/testing`      |
 | Surface notifier | REAPER's calls on the surface from inside its own functions, as traced     | `jpr/common/testing`      |
+| REAPER's actions | The actions JPRSurf uses, as traced, and the effects tests need            | `jpr/common/testing`      |
 | Fake X-Touch     | The hardware end of an X-Touch's MIDI ports                                | `jpr/device/testing`      |
 | Surface harness  | The plugin loaded into the fake, with fake X-Touches                       | `jpr/plugin/testing`      |
 

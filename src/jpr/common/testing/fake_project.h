@@ -103,6 +103,14 @@ class FakeProject final {
   // Returns true if any track is soloed, as AnyTrackSolo() does.
   bool AnyTrackSolo() const;
 
+  // Returns the selected tracks, in order, with the master first if
+  // `include_master` is true and it is selected.
+  std::vector<FakeTrack*> GetSelectedTracks(bool include_master) const;
+
+  // Returns the first track called `name`, or null if there is none. The
+  // master isn't found by name.
+  FakeTrack* FindTrackByName(std::string_view name) const;
+
   //----------------------------------------------------------------------------
   // Routes
   //

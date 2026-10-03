@@ -147,14 +147,16 @@ class SurfaceTest : public testing::Test {
   void AddSmokeProject();
   FakeTrack* GetTrack(std::string_view name);
 
-  // Presses that need the clock moved: a double press (two presses within
-  // the double press time), and a long press (held past the long press time).
-  // Each ends released, after a run.
+  // Presses that need the clock moved, each ending released, once whatever
+  // it started is done (a press held back in case it is a double press, and
+  // outputs held back after an input): a tap, a double press (two presses
+  // within the double press time), and a long press (held past the long
+  // press time). Overloads are added as tests need them.
+  void Tap(FakeXTouch& xtouch, FakeXTouch::Button button);
+  void Tap(FakeXTouch& xtouch, FakeXTouch::StripButton button, int strip);
   void DoublePress(FakeXTouch& xtouch, FakeXTouch::StripButton button,
                    int strip);
-  void LongPress(FakeXTouch& xtouch, FakeXTouch::StripButton button,
-                 int strip);
-  ...
+  void LongPress(FakeXTouch& xtouch, FakeXTouch::Button button);
 
   FakeReaper reaper_;
   SurfaceNotifier notifier_{&reaper_};
@@ -172,25 +174,33 @@ helpers that save getting the clock right.
 - **Loading:** `Plugin::Load()` with the fake's plugin info and no options, then
   `AddSurface()`. The destructor removes the surface, unloads the plugin, and
   then the X-Touches and the fake go, in that order.
-- **Errors fail the test.** A log sink records anything logged at `ERROR` or
-  above, and the fixture fails the test with it, as `jprsurf.log` with no new
-  errors is the first check in REAPER.
+- **Errors fail the test.** The fixture holds Game Bits' helper from *Fail
+  tests on logged errors*, which fails the test with anything logged at
+  `ERROR` or above, as `jprsurf.log` with no new errors is the first check in
+  REAPER. Game Bits doesn't have it yet, so it is added in its own CL once it
+  does (CL3a).
 - **REAPER's actions:** the fake records every action `Main_OnCommand()` runs
-  (`GetCommandsRun()`), which is what most tests check. A few actions must
-  also exist in the fake (`AddCommand()`), which the fixture adds:
-  - Those whose toggle state a light shows: Cycle, Click, Solo in front, and
-    the ruler modes.
-  - Those whose effect a test needs, with a handler that makes it, as REAPER
-    would: the ruler modes as a radio group (as `TimelineTest::AddModes()`
-    does), so the timecode button steps through them, and the automation mode
-    actions, which set the selected tracks' modes (the master's too).
+  (`GetCommandsRun()`), which is what most tests check. Every action the
+  surface maps must also exist in the fake (`AddCommand()`), or its mapping
+  fails, and logs an error: a command property is only made for an action
+  REAPER has text for. So the fixture adds REAPER's actions from
+  `common/testing` (`AddReaperActions()`, CL2a): every action JPRSurf uses (28,
+  with the ruler modes besides), with the text and toggle state REAPER
+  reported in the 2026-09-29 trace. Those whose effect a test needs have a
+  handler that makes it, as REAPER would: the ruler modes as radio groups, so
+  the timecode button steps through them, and the automation mode actions,
+  which set the selected tracks' modes (the master's too).
 
   These handlers model what REAPER's actions do, which the backlog's *Check the
-  fakes in REAPER* checks.
+  fakes in REAPER* checks. A test gives another action, such as Undo, a
+  handler with `FakeReaper::SetCommandHandler()`.
+- **Press timing:** the press helpers hold a button for exactly a long press,
+  and settle for exactly the double press window (and a run each), from the
+  times `Control` makes public (CL2a), so they follow any change to them.
 - Its own tests, in `jpr_plugin_testing_test`, check the fixture: the surface
   loads with both models and with the X-Touch alone, the smoke project's tracks
-  and routes, and that an error logged fails the test
-  (`EXPECT_NONFATAL_FAILURE`).
+  and routes, and that each press helper does what the gesture does on the
+  surface.
 
 ### Undo
 
@@ -315,13 +325,59 @@ Depends on: nothing.
 - The plugin still loads in REAPER (done with the end of the feature): no
   profile or trace is written by `ctest`, and REAPER still writes both.
 
+### CL2a [x] common/testing, device: What SurfaceTest shares
+
+Depends on: nothing.
+
+What a fixture of the whole surface needs that isn't about the plugin, so
+`TimelineTest`, the coming *Scene tests*, and `SurfaceTest` share it rather
+than each copying REAPER's facts:
+- **REAPER's actions** (`reaper_actions.h`): `AddReaperActions()` adds every
+  action JPRSurf uses to a fake, with the text and toggle state the 2026-09-29
+  trace reported, the automation mode actions with a handler that sets the
+  selected tracks' modes (the master's too), and the ruler's time unit
+  actions, and its secondary ones, each as a radio group (a run turns it on
+  and the rest of its group off), as the trace had them (Measure.Beats, and no
+  secondary). The automation mode actions' IDs move here from
+  `SurfaceNotifier`, checked against `AutoMode` once. `TimelineTest` uses it
+  rather than its own `AddModes()`.
+- `FakeReaper::SetCommandHandler()`, to give an action already added a handler
+  (such as Undo, which the fixture adds).
+- `FakeProject::GetSelectedTracks(include_master)`, the selected tracks, master
+  first, which the fake's API and the automation handler share, and
+  `FakeProject::FindTrackByName()`.
+- **device:** `Control`'s long press and double press times become public, so
+  the press helpers wait for exactly them, named for their unit
+  (`kLongPressDurationSecs`, `kDoublePressWindowSecs`) now that they are.
+
+The ruler's action IDs are `timeline.cc`'s. The trace read the toggle states
+of only 41916, 40367, 43205, 43204, and 40365, so the rest are taken on trust
+until *Check the fakes in REAPER*.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
 ### CL3 [ ] plugin/testing: SurfaceTest
 
-Depends on: CL1, CL2.
+Depends on: CL1, CL2, CL2a.
 
 - The `jpr_plugin_testing` library, with `SurfaceTest`, and its own tests (see
-  SurfaceTest).
+  SurfaceTest), apart from errors failing the test (CL3a).
 - `jpr_plugin_TEST_DEPS` links it.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+- The fixture's tests log no errors.
+
+### CL3a [ ] plugin/testing: Errors fail surface tests
+
+Depends on: CL3, and Game Bits *Fail tests on logged errors*.
+
+- `SurfaceTest` holds Game Bits' helper, so an error logged anywhere in a test,
+  its setup and teardown included, fails it.
+- A test in `surface_test_test.cc` that an error logged fails the test.
+- Any errors this shows in the tests already written are fixed in follow-up
+  CLs, as for CL4.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

@@ -17,13 +17,6 @@ namespace {
 constexpr double kDependentBindingDelay = 0.125;
 constexpr double kMotorizedBindingDelay = 0.375;
 
-// Duration in seconds that a button must be held to trigger a long press.
-constexpr double kLongPressDuration = 0.35;
-
-// Time window in seconds after a short press release to wait for a second
-// press to trigger a double press.
-constexpr double kDoublePressWindow = 0.15;
-
 double GetBindingDelay(Control::Binding binding) {
   switch (binding) {
     case Control::Binding::kIndependent:
@@ -518,7 +511,7 @@ void Control::OnPressInputChangedWithRelease() {
     // press, identified by is_pressed state or pending state machine state.
     for (auto& group : press_groups_) {
       if (group.tap_press_time.has_value()) {
-        if (last_run_time_ - *group.tap_press_time < kLongPressDuration) {
+        if (last_run_time_ - *group.tap_press_time < kLongPressDurationSecs) {
           DeliverPress(group.tap_ids);
         }
         group.tap_press_time.reset();
@@ -528,7 +521,7 @@ void Control::OnPressInputChangedWithRelease() {
       } else if (group.state == PressGroup::State::kPendingLong ||
                  group.state == PressGroup::State::kPendingRelease) {
         if (!group.double_press_ids.empty() &&
-            last_run_time_ - group.state_start_time < kDoublePressWindow) {
+            last_run_time_ - group.state_start_time < kDoublePressWindowSecs) {
           group.state = PressGroup::State::kPendingDouble;
           group.state_start_time = last_run_time_;
         } else {
@@ -652,14 +645,14 @@ void Control::UpdatePressTimers(double current_time) {
         break;
 
       case PressGroup::State::kPendingLong:
-        if (current_time - group.state_start_time >= kLongPressDuration) {
+        if (current_time - group.state_start_time >= kLongPressDurationSecs) {
           DeliverPress(group.long_press_ids, /*hold=*/true);
           group.state = PressGroup::State::kIdle;
         }
         break;
 
       case PressGroup::State::kPendingRelease:
-        if (current_time - group.state_start_time >= kDoublePressWindow) {
+        if (current_time - group.state_start_time >= kDoublePressWindowSecs) {
           // Held too long for a double press. Deliver as a normal press.
           DeliverPress(group.normal_ids);
           group.state = PressGroup::State::kIdle;
@@ -667,7 +660,7 @@ void Control::UpdatePressTimers(double current_time) {
         break;
 
       case PressGroup::State::kPendingDouble:
-        if (current_time - group.state_start_time >= kDoublePressWindow) {
+        if (current_time - group.state_start_time >= kDoublePressWindowSecs) {
           // Double press window expired without a second press.
           // Deliver as a normal press.
           DeliverPress(group.normal_ids);

@@ -742,17 +742,7 @@ class FakeReaper::Api final {
   // if `want_master` is true and it is selected.
   static std::vector<FakeTrack*> GetSelectedTracks(ReaProject* project,
                                                    bool want_master) {
-    FakeProject& fake_project = s_instance_->FindProject(project);
-    std::vector<FakeTrack*> selected;
-    if (want_master && fake_project.GetMasterTrack()->selected) {
-      selected.push_back(fake_project.GetMasterTrack());
-    }
-    for (int i = 0; i < fake_project.GetTrackCount(); ++i) {
-      if (fake_project.GetTrack(i)->selected) {
-        selected.push_back(fake_project.GetTrack(i));
-      }
-    }
-    return selected;
+    return s_instance_->FindProject(project).GetSelectedTracks(want_master);
   }
 };
 
@@ -862,6 +852,16 @@ void FakeReaper::SetToggleState(int id, int toggle_state) {
 int FakeReaper::GetToggleState(int id) const {
   auto it = commands_.find(id);
   return it != commands_.end() ? it->second.toggle_state : -1;
+}
+
+void FakeReaper::SetCommandHandler(int id, absl::AnyInvocable<void()> on_run) {
+  auto it = commands_.find(id);
+  if (it == commands_.end()) {
+    ADD_FAILURE() << "SetCommandHandler() was given action " << id
+                  << ", which wasn't added";
+    return;
+  }
+  it->second.on_run = std::move(on_run);
 }
 
 //------------------------------------------------------------------------------

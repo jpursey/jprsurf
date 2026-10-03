@@ -198,11 +198,28 @@ rate or the core the run was on, and fixes or reports it. Afterwards:
 *Fake REAPER* moves the profile path into the plugin, `common` still names
 JPRSurf in the profile's header (`JPRSurf profile`) and run split (`JPRSurf
 15us, REAPER 12us`), the trace's header, and some comments (`log_file.h`,
-`reaper_api.h`, `reaper_profiler.h`, `reaper_trace.h`), and generates the
+`reaper_api.h`, `reaper_profiler.h`, `reaper_trace.h`, and in `testing/`
+`fake_midi`, `fake_reaper`, and `surface_notifier.h`), and generates the
 build info (the plugin's git commit) itself. The split's label becomes the
 extension's, or a neutral word, the headers take a name the plugin gives, and
 the build info moves to `plugin`, which passes it in. `device` and `scene`
 already don't name it.
+
+## Units in the names of plain times
+
+- **Layers:** common, device, scene, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** none
+
+A time held as a plain number, rather than an `absl::Duration` or
+`absl::Time`, says its unit in its name, as `Control::kLongPressDurationSecs`
+does. Many don't yet: `kDependentBindingDelay` and `kMotorizedBindingDelay` in
+`control.cc`, and the run times kept as seconds, such as `last_run_time_`,
+`state_start_time`, `last_change_time_`, and `last_visibility_time_`. Scrub
+the code for them, and either add the unit (`Secs`, `Ms`) or, where it reads
+better and costs nothing on the realtime path, use the Abseil type.
 
 ## Undo points in the project the changes were made in
 

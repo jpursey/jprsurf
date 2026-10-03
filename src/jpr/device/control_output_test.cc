@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/timeline.h"
 #include "jpr/device/fake_control_io.h"
 
@@ -124,8 +125,8 @@ class ControlTextOutputTest : public ::testing::Test {
 
   // The ruler shows seconds.
   ControlTextOutputTest() {
-    reaper_.AddCommand(
-        {.id = kRulerSeconds, .text = "View: Time unit", .toggle_state = 1});
+    AddReaperActions(&reaper_);
+    SelectRulerMode(&reaper_, kRulerSeconds);
   }
 
   FakeReaper reaper_;

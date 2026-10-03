@@ -213,6 +213,11 @@ class FakeReaper final {
   // does, without calling it: -1 if it isn't a toggle, or wasn't added.
   int GetToggleState(int id) const;
 
+  // Sets what the action `id`, which must have been added, changes when it
+  // runs (see FakeCommand::on_run), replacing its handler. This must not be
+  // called from the action's own handler.
+  void SetCommandHandler(int id, absl::AnyInvocable<void()> on_run);
+
   //----------------------------------------------------------------------------
   // What the code under test did
   //----------------------------------------------------------------------------

@@ -54,6 +54,12 @@ class Control final {
   // Options
   //----------------------------------------------------------------------------
 
+  // How long a button must be held for a long press, and how soon after a
+  // short press is released the second press of a double press must come, in
+  // seconds (see InputConfig::PressBehavior).
+  static constexpr double kLongPressDurationSecs = 0.35;
+  static constexpr double kDoublePressWindowSecs = 0.15;
+
   // The binding for a control defines how the output(s) of the control behave
   // relative to the inputs. This is important for controls that have outputs
   // that directly affect the physical control and/or the hardware input state.

@@ -16,9 +16,11 @@
 #include "absl/strings/str_format.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/testing/test_control_surface.h"
 #include "sdk/reaper_plugin.h"
 
@@ -406,8 +408,8 @@ TEST_F(SurfaceNotifierTest, AutomationOverrideSendsVolumePanAndSelection) {
 }
 
 TEST_F(SurfaceNotifierTest, AutomationModeActionsSendTheModeFirst) {
-  for (int mode = 0; mode <= 4; ++mode) {
-    Main_OnCommand(40400 + mode, 0);
+  for (int mode = 0; mode <= static_cast<int>(AutoMode::kLatch); ++mode) {
+    Main_OnCommand(kFirstAutoModeAction + mode, 0);
     std::vector<std::string> expected = {
         absl::StrCat("SetAutoMode(", mode, ")")};
     Append(expected, AutomationChange());
@@ -494,9 +496,10 @@ TEST_F(SurfaceNotifierTest, SendsNothingWithNoSurfaceOpen) {
 
 // Only in the fake: REAPER's own actions can't be given a handler.
 TEST_F(SurfaceNotifierTest, ActionsSendAfterTheirHandler) {
+  const int write = kFirstAutoModeAction + static_cast<int>(AutoMode::kWrite);
   reaper_.AddCommand(
-      {.id = 40403, .on_run = [] { g_calls.push_back("Handler"); }});
-  Main_OnCommand(40403, 0);
+      {.id = write, .on_run = [] { g_calls.push_back("Handler"); }});
+  Main_OnCommand(write, 0);
   std::vector<std::string> expected = {"Handler", "SetAutoMode(3)"};
   Append(expected, AutomationChange());
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));

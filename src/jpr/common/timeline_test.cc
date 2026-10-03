@@ -7,10 +7,10 @@
 
 #include <optional>
 
-#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/reaper_actions.h"
 
 namespace jpr {
 namespace {
@@ -19,46 +19,13 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::Optional;
 
-// The ruler's time unit actions, and its secondary ones, by mode.
-constexpr int kRulerModes[] = {
-    41916, 40367, 43205,  // Beats.
-    43204, 40365, 40368,  // Time.
-    40370, 41973,         // Frames.
-    40369,                // Samples.
-};
-constexpr int kSecondaryModes[] = {
-    42360,                // None.
-    43705, 42361, 42362,  // Time.
-    42364, 42365,         // Frames.
-    42363,                // Samples.
-};
-
+// The ruler starts in Measure.Beats, with no secondary unit.
 class TimelineTest : public ::testing::Test {
  protected:
-  TimelineTest() {
-    AddModes(kRulerModes);
-    AddModes(kSecondaryModes);
-  }
+  TimelineTest() { AddReaperActions(&reaper_); }
 
-  // Adds each of `modes` as a toggle action, which turns itself on and the
-  // others off when it runs, as the ruler's do. The first is on.
-  void AddModes(absl::Span<const int> modes) {
-    for (int mode : modes) {
-      reaper_.AddCommand(
-          {.id = mode,
-           .text = "View: Time unit",
-           .toggle_state = (mode == modes[0] ? 1 : 0),
-           .on_run = [this, modes, mode] { Select(modes, mode); }});
-    }
-  }
-
-  // Turns `mode` on, and the rest of `modes` off, as the user picking it in
-  // REAPER does.
-  void Select(absl::Span<const int> modes, int mode) {
-    for (int other : modes) {
-      reaper_.SetToggleState(other, other == mode ? 1 : 0);
-    }
-  }
+  // Picks the ruler's time unit action `mode`, as the user does in REAPER.
+  void Select(int mode) { SelectRulerMode(&reaper_, mode); }
 
   FakeReaper reaper_;
 };
@@ -69,11 +36,11 @@ class TimelineTest : public ::testing::Test {
 
 TEST_F(TimelineTest, ReadsTheRulerMode) {
   EXPECT_EQ(GetRulerMode(), TimelineMode::kBeats);
-  Select(kRulerModes, 40368);  // Seconds.
+  Select(40368);  // Seconds.
   EXPECT_EQ(GetRulerMode(), TimelineMode::kTime);
-  Select(kRulerModes, 41973);  // Absolute frames.
+  Select(41973);  // Absolute frames.
   EXPECT_EQ(GetRulerMode(), TimelineMode::kFrames);
-  Select(kRulerModes, 40369);
+  Select(40369);
   EXPECT_EQ(GetRulerMode(), TimelineMode::kSamples);
   EXPECT_TRUE(IsCurrentRulerMode(TimelineMode::kSamples));
 }
@@ -90,7 +57,7 @@ TEST_F(TimelineTest, SetsTheRulerModeOnlyIfItChanges) {
 }
 
 TEST_F(TimelineTest, SetsTheLastRulerModeSeenOfEachKind) {
-  Select(kRulerModes, 40368);  // Seconds.
+  Select(40368);  // Seconds.
   EXPECT_EQ(GetRulerMode(), TimelineMode::kTime);
 
   SetRulerMode(TimelineMode::kBeats);

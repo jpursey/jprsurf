@@ -109,6 +109,25 @@ bool FakeProject::AnyTrackSolo() const {
       tracks_, [](const FakeTrack* track) { return track->solo; });
 }
 
+std::vector<FakeTrack*> FakeProject::GetSelectedTracks(
+    bool include_master) const {
+  std::vector<FakeTrack*> selected;
+  if (include_master && master_track_->selected) {
+    selected.push_back(master_track_);
+  }
+  for (FakeTrack* track : tracks_) {
+    if (track->selected) {
+      selected.push_back(track);
+    }
+  }
+  return selected;
+}
+
+FakeTrack* FakeProject::FindTrackByName(std::string_view name) const {
+  auto it = std::ranges::find(tracks_, name, &FakeTrack::name);
+  return it != tracks_.end() ? *it : nullptr;
+}
+
 GUID FakeProject::MakeGuid() {
   GUID guid = {};
   guid.Data1 = next_guid_++;

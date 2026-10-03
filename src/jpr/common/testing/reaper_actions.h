@@ -1,0 +1,49 @@
+// Copyright (c) 2026 John Pursey
+//
+// Use of this source code is governed by an MIT-style License that can be found
+// in the LICENSE file or at https://opensource.org/licenses/MIT.
+
+#pragma once
+
+#include "jpr/common/automation.h"
+#include "jpr/common/testing/fake_reaper.h"
+
+namespace jpr {
+
+// The automation mode actions, which set the selected tracks' automation mode:
+// Trim/Read to Latch, each setting the AutoMode of its offset from the first.
+inline constexpr int kFirstAutoModeAction = 40400;
+inline constexpr int kLastAutoModeAction = 40404;
+static_assert(kLastAutoModeAction - kFirstAutoModeAction ==
+              static_cast<int>(AutoMode::kLatch));
+
+//==============================================================================
+// REAPER's actions
+//
+// AddReaperActions() adds a set of REAPER's actions to a fake REAPER (see
+// FakeReaper::AddCommand()), each with REAPER's text and toggle state. The
+// fake holds REAPER's state, not its behavior, so this is the opt-in for tests
+// that need REAPER's actions to exist, and to do what they do, as
+// SurfaceNotifier is for REAPER's calls to a control surface. Those whose
+// effect tests need change what REAPER's do:
+// - The automation mode actions set the mode of every selected track in the
+//   current project, the master's too.
+// - The ruler's time unit actions, and its secondary ones (see timeline.cc),
+//   are each a radio group (see SelectRulerMode()), with Measure.Beats on, and
+//   no secondary unit. They have no text.
+// A test gives another action a handler with FakeReaper::SetCommandHandler().
+//
+// Brittleness: an action that isn't in the set doesn't exist in REAPER, as
+// far as a test that uses it can tell, so code that starts using another
+// action needs it added here.
+//==============================================================================
+
+// Adds the actions to `reaper`, which none of them may have been added to.
+void AddReaperActions(FakeReaper* reaper);
+
+// Turns the ruler time unit action `id` on, and the rest of its group off, as
+// running it does, or picking it from the ruler's menu in REAPER (which runs
+// nothing). AddReaperActions() must have added it.
+void SelectRulerMode(FakeReaper* reaper, int id);
+
+}  // namespace jpr

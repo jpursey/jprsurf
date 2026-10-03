@@ -278,6 +278,17 @@ TEST(FakeReaperTest, AddsTracksToTheEndOfTheirFolder) {
   EXPECT_EQ(::GetParentTrack(ToMediaTrack(drums)), nullptr);
 }
 
+TEST(FakeReaperTest, FindsTracksByName) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick", drums);
+
+  EXPECT_EQ(project.FindTrackByName("Kick"), kick);
+  EXPECT_EQ(project.FindTrackByName("Drums"), drums);
+  EXPECT_EQ(project.FindTrackByName("Snare"), nullptr);
+}
+
 TEST(FakeReaperTest, AddingATrackToAMissingFolderFailsTheTest) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
@@ -424,6 +435,10 @@ TEST(FakeReaperTest, Selection) {
   EXPECT_EQ(::GetSelectedTrack2(nullptr, 0, true), ToMediaTrack(master));
   EXPECT_EQ(::GetSelectedTrack2(nullptr, 1, true), ToMediaTrack(bass));
   EXPECT_EQ(::GetSelectedTrack2(nullptr, 2, true), nullptr);
+  EXPECT_THAT(project.GetSelectedTracks(/*include_master=*/false),
+              ElementsAre(bass));
+  EXPECT_THAT(project.GetSelectedTracks(/*include_master=*/true),
+              ElementsAre(master, bass));
 
   ::SetTrackSelected(ToMediaTrack(drums), true);
   EXPECT_TRUE(drums->selected);
@@ -686,6 +701,17 @@ TEST(FakeReaperTest, ActionsRunTheirHandlers) {
   EXPECT_EQ(::GetToggleCommandState(40044), -1);
   EXPECT_STREQ(::kbd_getTextFromCmd(40364, nullptr), "Options: Metronome");
   EXPECT_STREQ(::kbd_getTextFromCmd(40044, nullptr), "");
+}
+
+TEST(FakeReaperTest, ActionsHandlersCanBeSetAfterTheyAreAdded) {
+  FakeReaper reaper;
+  reaper.AddCommand({.id = 40029, .text = "Edit: Undo"});
+  reaper.SetCommandHandler(40029,
+                           [&reaper] { reaper.GetProject().SetDirty(true); });
+
+  ::Main_OnCommand(40029, 0);
+  EXPECT_TRUE(::IsProjectDirty(nullptr));
+  EXPECT_NONFATAL_FAILURE(reaper.SetCommandHandler(40030, [] {}), "40030");
 }
 
 TEST(FakeReaperTest, NamedActionsAreFoundByName) {
