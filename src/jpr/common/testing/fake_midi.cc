@@ -141,7 +141,18 @@ void FakeMidiOutput::Connect(
   receiver_ = std::move(receiver);
 }
 
+void FakeMidiOutput::SetRecording(bool recording) {
+  recording_ = recording;
+  if (!recording_) {
+    received_.clear();
+  }
+}
+
 std::vector<std::vector<uint8_t>> FakeMidiOutput::TakeReceived() {
+  if (!recording_) {
+    ADD_FAILURE() << "MIDI output \"" << name_
+                  << "\" isn't recording (see SetRecording())";
+  }
   return std::exchange(received_, {});
 }
 
@@ -164,10 +175,11 @@ void FakeMidiOutput::Send(unsigned char status, unsigned char data1,
 }
 
 void FakeMidiOutput::Receive(absl::Span<const uint8_t> bytes) {
+  if (recording_) {
+    received_.emplace_back(bytes.begin(), bytes.end());
+  }
   if (receiver_ != nullptr) {
     receiver_(bytes);
-  } else {
-    received_.emplace_back(bytes.begin(), bytes.end());
   }
 }
 

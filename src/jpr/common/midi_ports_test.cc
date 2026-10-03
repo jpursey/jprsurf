@@ -33,6 +33,8 @@ class TestListener final : public MidiListener {
 
 class MidiPortsTest : public ::testing::Test {
  protected:
+  MidiPortsTest() { fake_output_->SetRecording(true); }
+
   FakeReaper reaper_;
   FakeMidiInput* fake_input_ = reaper_.AddMidiInput("X-Touch");
   FakeMidiOutput* fake_output_ = reaper_.AddMidiOutput("X-Touch");

@@ -36,14 +36,15 @@ same whichever end it works on. The names are all they share (see FakeXTouch).
 ```
 class FakeMidiOutput final : public midi_Output {
   // Connects hardware to the port: each message sent from it is passed to
-  // `receiver` as it is sent, rather than kept for TakeReceived(). A port has
-  // at most one device, so connecting one while another is connected fails
-  // the test.
+  // `receiver` as it is sent. A port has at most one device, so connecting
+  // one while another is connected fails the test.
   void Connect(absl::AnyInvocable<void(absl::Span<const uint8_t> bytes)>
                    receiver);
-
-  // Disconnects the hardware, so messages are kept for TakeReceived() again.
   void Disconnect();
+
+  // Sets whether the port records each message sent from it, for
+  // TakeReceived(). It doesn't until a test asks it to.
+  void SetRecording(bool recording);
 };
 ```
 
@@ -51,8 +52,10 @@ class FakeMidiOutput final : public midi_Output {
   current, and a message it doesn't understand fails the test in the run that
   sent it. Its getters are `const`, and a test never has to remember to read
   the port first.
-- `TakeReceived()` stays for tests with no hardware on the port, such as
-  `midi_ports_test.cc`.
+- Recording is the port's alone, and independent of the hardware connected to
+  it, so a test can have either, both, or neither, and no fake device keeps a
+  raw log of its own. It is off by default, so a test that never reads it
+  keeps none, and taking from a port that isn't recording fails the test.
 
 ### FakeXTouch (device/testing)
 
@@ -249,6 +252,22 @@ Depends on: nothing.
   connecting a second device fails the test; and disconnecting goes back to
   keeping them, after which another device can connect.
 - Unused, so no visible change.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL2b [x] common/testing: Record a fake output port independently
+
+Depends on: CL2.
+
+Added after CL3's review, which found the fake X-Touch keeping a second raw
+log, because a connected port stopped recording.
+
+- `FakeMidiOutput::SetRecording()`: recording is independent of `Connect()`,
+  off by default, and `TakeReceived()` on a port that isn't recording fails the
+  test. `fake_midi_test.cc` tests each combination, and `midi_port_test.cc` and
+  `midi_ports_test.cc` turn recording on.
+- Unused by the plugin, so no visible change.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

@@ -114,8 +114,9 @@ class FakeMidiInput final : public midi_Input {
 // owns it.
 //
 // The bytes of each message sent from it, as the hardware would receive them,
-// go to the fake hardware connected to it, if there is one (see Connect()).
-// Otherwise the port records them, and a test takes them with TakeReceived().
+// go to the fake hardware connected to it, if there is one (see Connect()),
+// and are recorded for TakeReceived() if the port is recording (see
+// SetRecording()). Each is independent of the other.
 //
 // It fails the test if it is still open when FakeReaper (which owns it) is
 // destroyed.
@@ -134,20 +135,23 @@ class FakeMidiOutput final : public midi_Output {
   bool IsOpen() const { return open_; }
 
   // Connects fake hardware to the port: each message sent from it is passed to
-  // `receiver` as it is sent, rather than recorded for TakeReceived(). A port
-  // has at most one device, so connecting one while another is connected fails
-  // the test, and leaves the first connected.
+  // `receiver` as it is sent. A port has at most one device, so connecting one
+  // while another is connected fails the test, and leaves the first connected.
   //
   // The hardware stays connected whether or not the port is open, until
   // Disconnect().
   void Connect(
       absl::AnyInvocable<void(absl::Span<const uint8_t> bytes)> receiver);
-
-  // Disconnects the hardware, so the port records messages again.
   void Disconnect() { receiver_ = nullptr; }
 
-  // Returns the bytes of each message sent since the last call, in order, and
-  // forgets them. Nothing is recorded while hardware is connected.
+  // Sets whether the port records each message sent from it, for
+  // TakeReceived(). It doesn't until a test asks it to. Stopping forgets what
+  // was recorded.
+  void SetRecording(bool recording);
+
+  // Returns the bytes of each message recorded since the last call, in order,
+  // and forgets them. Taking them from a port that isn't recording fails the
+  // test.
   std::vector<std::vector<uint8_t>> TakeReceived();
 
   // midi_Output
@@ -161,12 +165,13 @@ class FakeMidiOutput final : public midi_Output {
 
   explicit FakeMidiOutput(std::string_view name) : name_(name) {}
 
-  // Passes a message sent from the port to the hardware, or records it.
+  // Passes a message sent from the port to the hardware, and records it.
   void Receive(absl::Span<const uint8_t> bytes);
 
   const std::string name_;
   bool open_ = false;
   absl::AnyInvocable<void(absl::Span<const uint8_t> bytes)> receiver_;
+  bool recording_ = false;
   std::vector<std::vector<uint8_t>> received_;
 };
 

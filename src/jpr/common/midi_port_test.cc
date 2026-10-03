@@ -100,6 +100,8 @@ SysexMessage MakeSysex(uint8_t value) {
 
 class MidiPortTest : public ::testing::Test {
  protected:
+  MidiPortTest() { fake_output_->SetRecording(true); }
+
   // Delivers what was sent into the input to its listeners.
   void RunInput() { ports_.RunInput(RunTime::Now()); }
 
