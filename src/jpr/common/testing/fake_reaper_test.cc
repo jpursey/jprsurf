@@ -11,6 +11,7 @@
 #include <string>
 
 #include "absl/time/time.h"
+#include "gb/base/function_hook.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
@@ -71,6 +72,24 @@ TEST(FakeReaperTest, LoadsEveryFunctionOnTheList) {
 TEST(FakeReaperTest, UnloadsTheApiWhenDestroyed) {
   { FakeReaper reaper; }
   EXPECT_EQ(::time_precise, nullptr);
+}
+
+// Stands in for time_precise(), returning a fixed time.
+struct FixedTimeHook {
+  static constexpr double kTime = 42.0;
+
+  template <typename Function>
+  double Call(Function original) {
+    return kTime;
+  }
+};
+
+TEST(FakeReaperTest, LoadingTheApiFromThePluginInfoKeepsHooks) {
+  FakeReaper reaper;
+  gb::FunctionHook<&time_precise, FixedTimeHook> hook;
+
+  ASSERT_TRUE(LoadReaperApi(reaper.GetPluginInfo().GetFunc));
+  EXPECT_EQ(time_precise(), FixedTimeHook::kTime);
 }
 
 TEST(FakeReaperTest, RegisteringAnythingButASurfaceFailsTheTest) {

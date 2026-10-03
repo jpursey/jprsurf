@@ -3,15 +3,15 @@
 ## Use of this source code is governed by an MIT-style License that can be found
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-set(reaper_jprsurf_SOURCE
-  dll_main.cc
+# The plugin, as a static library that tests link.
+
+set(jpr_plugin_SOURCE
   plugin.cc plugin.h
   plugin_surface.cc plugin_surface.h
 )
 
-set(reaper_jprsurf_DEPS
+set(jpr_plugin_DEPS
   absl::log
-  absl::log_initialize
   gb_config
   jpr_common
   jpr_device
@@ -19,8 +19,33 @@ set(reaper_jprsurf_DEPS
   reaper_sdk
 )
 
+set(jpr_plugin_TEST_SOURCE
+  plugin_test.cc
+)
+
+set(jpr_plugin_TEST_DEPS
+  jpr_common_testing
+  jpr_device_testing
+)
+
+gb_add_library(jpr_plugin)
+target_include_directories(jpr_plugin PUBLIC "../..")
+
+# The DLL REAPER loads: just its entry points, which read the environment.
+
+set(reaper_jprsurf_SOURCE
+  dll_main.cc
+)
+
+set(reaper_jprsurf_DEPS
+  absl::log
+  absl::log_initialize
+  jpr_common
+  jpr_plugin
+  reaper_sdk
+)
+
 gb_add_shared_library(reaper_jprsurf)
-target_include_directories(reaper_jprsurf PUBLIC "../..")
 
 if(JPR_DEPLOY_TO_REAPER)
   add_custom_command(TARGET reaper_jprsurf POST_BUILD

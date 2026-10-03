@@ -124,7 +124,10 @@ class FakeReaper final {
   //----------------------------------------------------------------------------
 
   // What REAPER passes the plugin's entry point. Register("csurf") records the
-  // control surface type; registering anything else fails the test.
+  // control surface type; registering anything else fails the test. GetFunc
+  // returns each function as it is loaded now, with any hooks over the fake
+  // (such as SurfaceNotifier's), so a plugin that loads the API from it keeps
+  // them.
   reaper_plugin_info_t& GetPluginInfo() { return plugin_info_; }
 
   // Creates a control surface of the registered type from `config`, as REAPER
@@ -225,6 +228,9 @@ class FakeReaper final {
 
   // The fake's implementation of each function on the API list.
   class Api;
+
+  // Returns Api's function `name`, which the constructor loads.
+  static void* GetFakeFunc(const char* name);
 
   // REAPER's plugin_info functions.
   static void* GetFunc(const char* name);

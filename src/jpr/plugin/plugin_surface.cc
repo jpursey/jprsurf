@@ -17,7 +17,6 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "gb/config/text_config.h"
-#include "jpr/common/log_file.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/prefixed_name.h"
@@ -165,16 +164,13 @@ void AddTrackAnchorMapping(View* view, std::string_view name,
 // Registration
 //------------------------------------------------------------------------------
 
-bool PluginSurface::Register(reaper_plugin_info_t& plugin_info) {
-  std::filesystem::path profile_path = GetLogPath("jprsurf_profile.txt");
-  if (profile_path.empty()) {
-    LOG(ERROR) << "There is nowhere to write the profile, so it is off.";
-  }
+bool PluginSurface::Register(reaper_plugin_info_t& plugin_info,
+                             const std::filesystem::path& profile_path) {
   return ControlSurface::Register(plugin_info,
                                   {.type_string = kTypeString,
                                    .description = kDescString,
                                    .create_listener = PluginSurface::Create,
-                                   .profile_path = std::move(profile_path)});
+                                   .profile_path = profile_path});
 }
 
 std::unique_ptr<ControlSurfaceListener> PluginSurface::Create(

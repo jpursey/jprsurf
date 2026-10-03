@@ -289,7 +289,7 @@ Depends on: nothing. The UI check in To confirm only before CL7.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL2 [ ] plugin: Split the plugin into a library and a DLL
+### CL2 [x] plugin: Split the plugin into a library and a DLL
 
 Depends on: nothing.
 
@@ -299,10 +299,16 @@ Depends on: nothing.
   `Plugin::Options`. `Plugin::Load()` takes them, and
   `PluginSurface::Register()` takes the profile path.
 - `Plugin`'s `TestReset`.
+- The fake's plugin info `GetFunc` returns each function as it is loaded at the
+  time, rather than the fake's own, so `Plugin::Load()` loading the API again
+  keeps the `SurfaceNotifier`'s hooks (which it would otherwise remove,
+  failing their reverse order check). The constructor loads the fake's own
+  through `GetFakeFunc`. With a test in `fake_reaper_test.cc`.
 - `plugin_test.cc`: loading through the fake registers the surface type, and
   adding a surface opens the X-Touch's ports; loading twice fails, as does a
-  version mismatch or no `GetFunc`; unloading forgets the instance; and a
-  test's leftover instance is reset.
+  version mismatch or no `GetFunc`; unloading forgets the instance; the trace
+  and profile go to the paths in `Options`; and a test's leftover instance is
+  reset.
 
 **Verify**
 - Standard checks.

@@ -72,7 +72,7 @@ constexpr double kSamplesPerSecond = 44100.0;
 // FakeReaper::Api
 //
 // A static function for each function on the API list, with the same name and
-// signature, which FakeReaper::GetFunc() returns.
+// signature, which FakeReaper::GetFakeFunc() returns.
 //==============================================================================
 
 class FakeReaper::Api final {
@@ -768,7 +768,7 @@ FakeReaper::FakeReaper() {
 
   AddProject();
 
-  CHECK(LoadReaperApi(&FakeReaper::GetFunc));
+  CHECK(LoadReaperApi(&FakeReaper::GetFakeFunc));
   MidiPorts::SetFlushWait(absl::ZeroDuration());
   TestReset::ResetAll();
 }
@@ -1027,7 +1027,7 @@ void FakeReaper::CheckEntryPoint() {
   changed_tracks_.clear();
 }
 
-void* FakeReaper::GetFunc(const char* name) {
+void* FakeReaper::GetFakeFunc(const char* name) {
   // Every function on the list must have a member of Api with the same name
   // and signature, or this doesn't compile.
   const std::string_view requested(name);
@@ -1037,6 +1037,19 @@ void* FakeReaper::GetFunc(const char* name) {
   }
   JPR_REAPER_API(JPR_FAKE_FUNCTION)
 #undef JPR_FAKE_FUNCTION
+  return nullptr;
+}
+
+void* FakeReaper::GetFunc(const char* name) {
+  // The leading :: is needed, as FakeReaper has members with some of the same
+  // names, such as GetTrack().
+  const std::string_view requested(name);
+#define JPR_LOADED_FUNCTION(name)           \
+  if (requested == #name) {                 \
+    return reinterpret_cast<void*>(::name); \
+  }
+  JPR_REAPER_API(JPR_LOADED_FUNCTION)
+#undef JPR_LOADED_FUNCTION
   return nullptr;
 }
 

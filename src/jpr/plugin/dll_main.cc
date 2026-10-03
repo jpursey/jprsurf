@@ -3,12 +3,20 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
+// The DLL REAPER loads: its entry points, and everything the plugin reads from
+// its environment, which no test runs.
+
 #include <windows.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <string_view>
 
+#include "absl/log/log.h"
 #include "jpr/common/log_file.h"
+#include "jpr/plugin/plugin.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 namespace {
@@ -21,6 +29,37 @@ void Initialize() {
     g_log_file =
         std::make_unique<LogFile>(log_path, absl::LogSeverityAtLeast::kInfo);
   }
+}
+
+// Returns true if the JPRSURF_TRACE environment variable is set to anything
+// but 0.
+bool IsTraceOn() {
+  char* value = nullptr;
+  size_t length = 0;
+  if (_dupenv_s(&value, &length, "JPRSURF_TRACE") != 0 || value == nullptr) {
+    return false;
+  }
+  const std::string_view text(value);
+  const bool trace = !text.empty() && text != "0";
+  free(value);
+  return trace;
+}
+
+// Returns the plugin's options, from its environment.
+Plugin::Options GetOptions() {
+  Plugin::Options options;
+  if (IsTraceOn()) {
+    options.trace_path = GetLogPath("jprsurf_trace.txt");
+    if (options.trace_path.empty()) {
+      LOG(ERROR)
+          << "JPRSURF_TRACE is set, but there is nowhere to write the trace.";
+    }
+  }
+  options.profile_path = GetLogPath("jprsurf_profile.txt");
+  if (options.profile_path.empty()) {
+    LOG(ERROR) << "There is nowhere to write the profile, so it is off.";
+  }
+  return options;
 }
 
 }  // namespace
@@ -41,3 +80,16 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call,
   }
   return TRUE;
 }
+
+extern "C" {
+
+REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(
+    REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin_info) {
+  if (plugin_info == nullptr) {
+    jpr::Plugin::Unload();
+    return 0;
+  }
+  return jpr::Plugin::Load(instance, *plugin_info, jpr::GetOptions()) ? 1 : 0;
+}
+
+}  // extern "C"

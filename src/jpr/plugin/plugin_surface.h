@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -22,9 +23,11 @@ namespace jpr {
 
 class PluginSurface final : private ControlSurfaceListener {
  public:
-  // Registers JPRSurf as a control surface type with REAPER. Returns false (and
-  // logs an error) if registration fails.
-  static bool Register(reaper_plugin_info_t& plugin_info);
+  // Registers JPRSurf as a control surface type with REAPER, whose surfaces
+  // write their profile to `profile_path`, or none if it is empty. Returns
+  // false (and logs an error) if registration fails.
+  static bool Register(reaper_plugin_info_t& plugin_info,
+                       const std::filesystem::path& profile_path);
 
   PluginSurface(const PluginSurface&) = delete;
   PluginSurface& operator=(const PluginSurface&) = delete;

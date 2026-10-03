@@ -462,16 +462,23 @@ the leak check, but a missed global is otherwise silent.
 The fake supplies the `reaper_plugin_info_t` REAPER gives the entry point, so a
 test loads the plugin exactly as REAPER does: `Plugin::Load()` loads the API
 through the fake's `GetFunc`, `Register("csurf")` records the surface type,
-and `AddSurface()` creates it through the recorded `create`.
+and `AddSurface()` creates it through the recorded `create`. The fake's
+`GetFunc` returns each function as it is loaded at the time, so hooks already
+over the fake, such as a `SurfaceNotifier`'s, survive the plugin loading the
+API again.
 
-This needs the plugin split into a library and a DLL:
+The plugin is split into a library and a DLL:
 - `jpr_plugin` is a static library with `plugin.cc` and `plugin_surface.cc`,
   which tests link.
 - `reaper_jprsurf` is the DLL: `dll_main.cc` with `DllMain`, and the exported
-  `REAPER_PLUGIN_ENTRYPOINT`, which moves there from `plugin.cc`. A static
-  library would drop an export nothing references.
+  `REAPER_PLUGIN_ENTRYPOINT`. A static library would drop an export nothing
+  references.
 
-`dll_main.cc` is then the only code no test runs.
+`dll_main.cc` reads the environment, whether to trace (`JPRSURF_TRACE`) and
+where the trace and profile go (beside the log), and passes it to
+`Plugin::Load()` in `Plugin::Options`. So it is the only code no test runs, and
+a test, which loads the plugin with no options, never writes the user's trace
+or profile.
 
 ## Fake X-Touch
 

@@ -108,11 +108,12 @@ plugin's name*.
 it; the plugin never does.
 
 - **Exactly the API list.** `FakeReaper::Api` has a static function for each
-  function in `JPR_REAPER_API`, and `GetFunc` returns
+  function in `JPR_REAPER_API`, and `GetFakeFunc` returns
   `static_cast<decltype(::name)>(Api::name)` for each, so a listed function
   without a fake, or with the wrong signature, doesn't compile. The constructor
   loads the API through `LoadReaperApi()`, as REAPER's entry point does, and
-  the destructor unloads it. `Api` is nested in `FakeReaper`, a friend of the
+  the destructor unloads it. The plugin info's `GetFunc` returns each function
+  as it is loaded at the time, hooks included, for the plugin to load. `Api` is nested in `FakeReaper`, a friend of the
   fake's other classes, so it reaches their private state, which tests can't.
 - **State, not behavior.** A setter stores the value, and a getter returns it.
   The fake never calls the surface by itself: a test makes the calls REAPER
