@@ -28,28 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Fake X-Touch and device tests
-
-- **Layers:** device
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** *Fake REAPER*
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Fake
-  X-Touch)
-
-A test-only `FakeXTouch`, in `jpr/device/testing`, on a pair of the fake's MIDI
-ports. It decodes what JPRSurf sends into the hardware's state (lights,
-faders, encoder rings, meters, scribble strips, and the timecode display), and
-sends presses, touches, moves, and turns as the hardware does. It is written
-from the Mackie Control protocol and the X-Touch's sysex, as tables, rather
-than from `DeviceXTouch`. Tests of every `DeviceXTouch` control's inputs and
-outputs come with it, which check the raw messages too.
-
-Once devices can be created in tests, this updates *Device types and catalogs*
-(its catalog check can be a unit test) and *Build the scene from a
-SurfaceSpec* (building can be unit tested), as the design doc's "With the
-config work" describes.
-
 ## Surface tests
 
 - **Layers:** plugin
