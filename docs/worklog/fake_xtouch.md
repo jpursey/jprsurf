@@ -369,7 +369,7 @@ Depends on: CL5a.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL6 [ ] device: Control input, output, and device tests
+### CL6 [x] device: Control input, output, and device tests
 
 Depends on: CL5.
 
@@ -380,7 +380,8 @@ Depends on: CL5.
   each timeline mode (including the ruler's, against the fake REAPER), the
   default timeline text, and cleared values.
 - The input and output handles (moving, and unregistering when destroyed), and
-  `Device` (finding its controls by name).
+  `Device` (finding its controls by name, in the order added, and ignoring a
+  name already taken).
 - On the fakes in `fake_control_io.h`, and a fake REAPER only where the code
   calls REAPER.
 
