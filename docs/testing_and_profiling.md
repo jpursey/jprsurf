@@ -455,19 +455,27 @@ This needs the plugin split into a library and a DLL:
 lists named ports (`"X-Touch"`, `"X-Touch-Ext"`) and returns its own:
 - A **fake input** queues events, and delivers them on the next
   `SwapBufsPrecise()`.
-- A **fake output** records every `Send()` and `SendMsg()`.
+- A **fake output** passes each `Send()` and `SendMsg()` to the fake hardware
+  connected to it (`Connect()`), and records it for a test that asks
+  (`SetRecording()`), independently.
 
-A `FakeXTouch` is the hardware end of a pair of them:
-- **Out of JPRSurf:** it decodes what is sent into the hardware's state: each
-  button's light (off, on, or blinking), fader positions, encoder rings, meters,
-  scribble strip text and colors, and the timecode display.
+A `FakeXTouch` (`jpr/device/testing`), for the X-Touch or its extender, lists a
+pair of them and connects to the output:
+- **Out of JPRSurf:** it decodes each message as it is sent into the hardware's
+  state: each button's light (off, on, or blinking), fader positions, encoder
+  rings, meters, scribble strip text and colors, and the timecode display.
+  Meters fall each run until they are sent again, as the hardware's do, only
+  faster.
 - **Into JPRSurf:** press, release, touch, move, and turn, encoded as the
   hardware sends them.
 
 It is written from the protocol (the Mackie Control messages the X-Touch
 speaks, and its scribble strip sysex), as tables, and not from
 `DeviceXTouch`'s code, so a misreading of the protocol isn't copied into both.
-The device's own tests also check raw messages.
+Its library doesn't link `jpr_device`. Where the X-Touch differs from the
+Mackie (its meters, and its rings' end lights), it follows the X-Touch, as
+checked on the hardware (see [fake_xtouch.md](worklog/fake_xtouch.md)). It is
+strict: a message the hardware can't take fails the test.
 
 A test through the whole surface then reads like the smoke test:
 
@@ -475,10 +483,11 @@ A test through the whole surface then reads like the smoke test:
 TEST_F(SurfaceTest, MuteButtonMutesTrack) {
   FakeTrack* track = reaper_.GetProject().AddTrack("Drums");
   std::unique_ptr<TestControlSurface> surface = AddSurface();
-  xtouch_.Press(FakeXTouch::kMute, /*strip=*/0);
+  xtouch_.Press(FakeXTouch::StripButton::kMute, /*strip=*/0);
   surface->Run();
   EXPECT_TRUE(track->mute);
-  EXPECT_EQ(xtouch_.GetLight(FakeXTouch::kMute, /*strip=*/0), kLightOn);
+  EXPECT_EQ(xtouch_.GetLight(FakeXTouch::StripButton::kMute, /*strip=*/0),
+            FakeXTouch::Light::kOn);
 }
 ```
 

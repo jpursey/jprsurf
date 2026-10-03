@@ -108,14 +108,13 @@ class FakeXTouch final {
   Light GetLight(Led led) const;
   int GetFader(int fader) const;
   Ring GetRing(int strip) const;
-  int GetMeter(int strip) const;  // The level as sent, 0x0-0xE.
+  int GetMeter(int strip) const;  // 0x0-0xE, falling one level each run.
   std::string GetScribble(int strip, int line) const;  // 7 characters.
   ScribbleColor GetScribbleColor(int strip) const;
   std::string GetTimecode() const;  // 10 digits, each lit dot a '.' after it.
 
-  // Every message sent to the X-Touch since the last call, as raw bytes, in
-  // order. Taking them forgets them.
-  std::vector<std::vector<uint8_t>> TakeReceived();
+  // The output port, where a test that checks raw messages records them.
+  FakeMidiOutput* GetOutputPort() const;
 };
 ```
 
@@ -143,8 +142,11 @@ class FakeXTouch final {
   than 63 at once fails the test. Using a control the extender doesn't have
   fails the test.
 - **Outputs** are held as the hardware shows them, and start off, at zero, and
-  blank. A fader shows the last position sent or moved to. The fake doesn't
-  decay meters, as the hardware does: it shows the last level sent. Scribble
+  blank. A fader shows the last position sent or moved to. A meter falls, as
+  on the hardware, until another level is sent: one level for each run (1/30
+  second) of the fake's clock. That's faster than the hardware, but close
+  enough, and it lets a test see at once that a meter wasn't sent again on the
+  next run, such as a track's meter while the transport plays. Scribble
   text is written at its offset into the two 56 character lines, so a strip's
   line is 7 characters of it. The timecode's digits are decoded from the MCU's
   display characters: codes 0x00-0x1F are `@` to `_`, 0x20-0x3F are ASCII, and
@@ -156,8 +158,8 @@ class FakeXTouch final {
   anything that uses the fake must. Declaring it after the fake, as fixtures
   already do, gets this right.
 - `MidiPorts` sends its last output when it is destroyed, so the fake X-Touch
-  should outlive it too, or that output goes to `TakeReceived()` on the port
-  instead. Nothing fails either way.
+  should outlive it too, or it doesn't see that output. Nothing fails either
+  way.
 
 ### Device tests (device)
 
@@ -184,11 +186,12 @@ class DeviceXTouchTest : public ::testing::Test {
   controls repeat. Buttons (press, release, and lights on and blinking), faders
   (moves through the MCU curve's points, touch, motor output held while
   touched, the master fader on the full X-Touch only, and the extender's third
-  fader without touch), pots (turns, and each ring mode, and cleared), meters,
-  scribble text on both lines, colors (the RGB to palette mapping, all eight in
-  one message), the timecode in each timeline mode and as text, and the SMPTE,
-  Beats, and Solo lights. A few tests check the raw messages too, with
-  `TakeReceived()`: one of each kind, and the sysex prefix for each model.
+  fader without touch), pots (turns, and each ring mode, and cleared), meters
+  (each level, and held while they are sent each run), scribble text on both
+  lines, colors (the RGB to palette mapping, all eight in one message), the
+  timecode in each timeline mode and as text, and the SMPTE, Beats, and Solo
+  lights. A few tests check the raw messages too, recorded on the output port:
+  one of each kind, and the sysex prefix for each model.
 - **`Control`:** what `DeviceXTouch`'s controls exercise, against the fake
   clock: press, long press, double press, and tap, alone and as siblings;
   modifiers choosing between registrations; a bound output held while touched,
@@ -272,17 +275,17 @@ log, because a connected port stopped recording.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL3 [ ] device/testing: FakeXTouch
+### CL3 [x] device/testing: FakeXTouch
 
-Depends on: CL1, CL2.
+Depends on: CL1, CL2b.
 
 - The `jpr_device_testing` library (`src/jpr/device/testing/`), linking
   `jpr_common_testing` and not `jpr_device`.
 - `FakeXTouch`, its protocol tables, as CL1 settled them, and
   `fake_xtouch_test.cc`, which checks it against raw bytes alone: each input
   sends the protocol's message on the input port, each kind of output message
-  changes the state it should, and each strictness check fails the test
-  (`EXPECT_NONFATAL_FAILURE`), on both models.
+  changes the state it should, meters fall each run until sent again, and each
+  strictness check fails the test (`EXPECT_NONFATAL_FAILURE`), on both models.
 - The design doc's Fake X-Touch section: what was built, with the example test
   in the final API.
 

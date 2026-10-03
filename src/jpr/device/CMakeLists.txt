@@ -26,3 +26,5 @@ set(jpr_device_DEPS
 
 gb_add_library(jpr_device)
 target_include_directories(jpr_device PUBLIC "../..")
+
+add_subdirectory(testing)
