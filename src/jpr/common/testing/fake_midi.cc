@@ -131,6 +131,16 @@ FakeMidiOutput::~FakeMidiOutput() {
   }
 }
 
+void FakeMidiOutput::Connect(
+    absl::AnyInvocable<void(absl::Span<const uint8_t> bytes)> receiver) {
+  if (receiver_ != nullptr) {
+    ADD_FAILURE() << "MIDI output \"" << name_
+                  << "\" was connected while a device is connected to it";
+    return;
+  }
+  receiver_ = std::move(receiver);
+}
+
 std::vector<std::vector<uint8_t>> FakeMidiOutput::TakeReceived() {
   return std::exchange(received_, {});
 }
@@ -140,8 +150,7 @@ void FakeMidiOutput::SendMsg(MIDI_event_t* message, int frame_offset) {
     ADD_FAILURE() << "MIDI output \"" << name_ << "\" was used after Destroy()";
     return;
   }
-  const absl::Span<const uint8_t> bytes = GetBytes(message);
-  received_.emplace_back(bytes.begin(), bytes.end());
+  Receive(GetBytes(message));
 }
 
 void FakeMidiOutput::Send(unsigned char status, unsigned char data1,
@@ -150,7 +159,16 @@ void FakeMidiOutput::Send(unsigned char status, unsigned char data1,
     ADD_FAILURE() << "MIDI output \"" << name_ << "\" was used after Destroy()";
     return;
   }
-  received_.push_back({status, data1, data2});
+  const uint8_t bytes[] = {status, data1, data2};
+  Receive(bytes);
+}
+
+void FakeMidiOutput::Receive(absl::Span<const uint8_t> bytes) {
+  if (receiver_ != nullptr) {
+    receiver_(bytes);
+  } else {
+    received_.emplace_back(bytes.begin(), bytes.end());
+  }
 }
 
 void FakeMidiOutput::Destroy() { open_ = false; }

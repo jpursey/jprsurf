@@ -239,7 +239,7 @@ Depends on: nothing.
 **Verify**
 - The temporary code is gone: `git diff` shows only this plan.
 
-### CL2 [ ] common/testing: Connect hardware to a fake output port
+### CL2 [x] common/testing: Connect hardware to a fake output port
 
 Depends on: nothing.
 

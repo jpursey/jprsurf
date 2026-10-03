@@ -7,8 +7,12 @@
 
 #include <array>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
@@ -139,6 +143,72 @@ TEST(FakeMidiTest, OutputRecordsWhatItReceives) {
               ElementsAre(ElementsAre(0xB0, 7, 100),
                           ElementsAre(0xF0, 0x00, 0x20, 0x32, 0x01, 0xF7)));
   EXPECT_THAT(output->TakeReceived(), IsEmpty());
+  output->Destroy();
+}
+
+// Returns a receiver that records each message in `messages`, as fake
+// hardware would.
+absl::AnyInvocable<void(absl::Span<const uint8_t>)> RecordTo(
+    std::vector<std::vector<uint8_t>>& messages) {
+  return [&messages](absl::Span<const uint8_t> bytes) {
+    messages.emplace_back(bytes.begin(), bytes.end());
+  };
+}
+
+TEST(FakeMidiTest, OutputPassesWhatItReceivesToTheConnectedDevice) {
+  FakeReaper reaper;
+  FakeMidiOutput* output = reaper.AddMidiOutput("X-Touch");
+  std::vector<std::vector<uint8_t>> device;
+  output->Connect(RecordTo(device));
+  ::CreateMIDIOutput(0, false, nullptr);
+
+  FakeMidiEventList sysex;
+  sysex.Add(kSysex, -1);
+  int bpos = 0;
+  output->Send(0xB0, 7, 100, -1);
+  EXPECT_THAT(device, ElementsAre(ElementsAre(0xB0, 7, 100)));
+  output->SendMsg(sysex.EnumItems(&bpos), -1);
+  EXPECT_THAT(device,
+              ElementsAre(ElementsAre(0xB0, 7, 100),
+                          ElementsAre(0xF0, 0x00, 0x20, 0x32, 0x01, 0xF7)));
+  EXPECT_THAT(output->TakeReceived(), IsEmpty());
+  output->Destroy();
+}
+
+TEST(FakeMidiTest, ConnectingASecondDeviceFailsTheTest) {
+  FakeReaper reaper;
+  FakeMidiOutput* output = reaper.AddMidiOutput("X-Touch");
+  std::vector<std::vector<uint8_t>> first;
+  std::vector<std::vector<uint8_t>> second;
+  output->Connect(RecordTo(first));
+  auto second_receiver = RecordTo(second);
+  EXPECT_NONFATAL_FAILURE(output->Connect(std::move(second_receiver)),
+                          "while a device is connected to it");
+
+  // The first device stays connected.
+  ::CreateMIDIOutput(0, false, nullptr);
+  output->Send(0xB0, 7, 100, -1);
+  EXPECT_THAT(first, ElementsAre(ElementsAre(0xB0, 7, 100)));
+  EXPECT_THAT(second, IsEmpty());
+  output->Destroy();
+}
+
+TEST(FakeMidiTest, DisconnectedOutputRecordsWhatItReceivesAgain) {
+  FakeReaper reaper;
+  FakeMidiOutput* output = reaper.AddMidiOutput("X-Touch");
+  std::vector<std::vector<uint8_t>> first;
+  output->Connect(RecordTo(first));
+  output->Disconnect();
+  ::CreateMIDIOutput(0, false, nullptr);
+  output->Send(0xB0, 7, 100, -1);
+  EXPECT_THAT(first, IsEmpty());
+  EXPECT_THAT(output->TakeReceived(), ElementsAre(ElementsAre(0xB0, 7, 100)));
+
+  // Another device can connect in its place.
+  std::vector<std::vector<uint8_t>> second;
+  output->Connect(RecordTo(second));
+  output->Send(0xB0, 7, 0, -1);
+  EXPECT_THAT(second, ElementsAre(ElementsAre(0xB0, 7, 0)));
   output->Destroy();
 }
 
