@@ -54,6 +54,7 @@ profiler writes.
 | REAPER profiling | The profiler on the API list, MIDI ports, the surface's runs, and runners  | `jpr/common`              |
 | Trace            | Every REAPER call and callback with its arguments, to see what REAPER does | `jpr/common`              |
 | Fake REAPER      | REAPER's state, MIDI ports, surfaces, and clock, behind the API list       | `jpr/common/testing`      |
+| Surface notifier | REAPER's calls on the surface from inside its own functions, as traced     | `jpr/common/testing`      |
 | Fake X-Touch     | The hardware end of an X-Touch's MIDI ports                                | `jpr/device/testing`      |
 | Surface harness  | The plugin loaded into the fake, with fake X-Touches                       | `jpr/plugin/testing`      |
 
@@ -325,9 +326,11 @@ to check an assumption about REAPER, hooks it over the fake with
   `device`, `scene`, and most of `common` never see `IReaperControlSurface`, so
   their tests need none. A test of `ControlSurface`, or of the plugin, makes
   the calls REAPER would make itself, such as `SetTrackListChange()` after
-  adding tracks, or `SetSurfaceMute()` after a mute. [Seen in
-  traces](#seen-in-traces) records what REAPER sends, and when, for writing
-  those tests.
+  adding tracks. The calls REAPER makes from inside its own functions, such as
+  `SetSurfaceMute()` after `SetTrackUIMute()`, a `SurfaceNotifier` makes, by
+  hooking those functions over the fake, so a test of a whole surface gets them
+  at the right moment. [Seen in traces](#seen-in-traces) records what REAPER
+  sends, and when, which the notifier follows.
 - **Text** from `mkvolstr`, `mkpanstr`, and `format_timestr_pos` is in
   REAPER's formats ([Seen in traces](#seen-in-traces)), as `Timeline` parses
   positions, for a project at REAPER's default tempo and rates.
@@ -342,15 +345,33 @@ Tests are then of two kinds, which need little of REAPER's own behavior:
 
 ### Seen in traces
 
-A trace of an 81-track project with one JPRSurf surface (2026-09-28) showed the
-following. Tests that make REAPER's calls on the surface follow these.
+Traces of an 81-track project with one JPRSurf surface (2026-09-28, and the
+smoke scenario on 2026-09-29) showed the following. `SurfaceNotifier` and tests
+that make REAPER's calls on the surface follow these.
 
 - **Surface setters notify at the end of the batch.** JPRSurf muting a track
   calls `SetTrackUIMute()` inside `PreventUIRefresh(1)` and
   `PreventUIRefresh(-1)`. During the setter, REAPER only called
   `SetSurfaceSolo(master)`. The track's `SetSurfaceMute()` and
-  `SetSurfaceSolo()` came during `PreventUIRefresh(-1)`. The surface that made
-  the change is notified too.
+  `SetSurfaceSolo()` came during `PreventUIRefresh(-1)`, for each track
+  changed, in track order. The surface that made the change is notified too.
+  `SetTrackUISolo()` notifies as mute does.
+- **Selection notifies each track whose selection changed,** in track order:
+  `SetOnlyTrackSelected()` during the call (a track already selected isn't
+  sent), and `SetTrackSelected()` in a batch at `PreventUIRefresh(-1)`.
+- **Rec arm changes the track list.** During `SetTrackUIRecArm()`, REAPER
+  called `SetTrackListChange()` and `SetSurfaceSolo(master)`. At
+  `PreventUIRefresh(-1)` came `Extended(CSURF_EXT_SETMIXERSCROLL)`,
+  `SetTrackListChange()`, `SetSurfaceSolo(master)`, and every track's state
+  (below), once for the batch.
+- **Sends don't notify.** `SetTrackSendUIVol()`, `SetTrackSendUIPan()`, and
+  `ToggleTrackSendUIMute()` called nothing back.
+- **Automation modes resend volume, pan, and selection.** Inside
+  `Main_OnCommand()` for the automation mode actions (40400 to 40404),
+  REAPER called `SetAutoMode()` with the mode (0 to 4), then for every track,
+  master first, `SetSurfaceVolume()`, `SetSurfacePan()`,
+  `Extended(CSURF_EXT_SETPAN_EX)`, and `SetSurfaceSelected()`.
+  `SetGlobalAutomationOverride()` called the same, without `SetAutoMode()`.
 - **`SetSurfaceSolo(master, on)`** reports whether any track is soloed, as the
   SDK says.
 - **Faders and pans don't notify.** `CSurf_OnVolumeChangeEx()` and
@@ -365,8 +386,11 @@ following. Tests that make REAPER's calls on the surface follow these.
   `SetSurfaceVolume()`, and `SetSurfacePan()`, `SetRepeatState()`,
   `Extended(CSURF_EXT_SETBPMANDPLAYRATE)`, `Extended(CSURF_EXT_SETMIXERSCROLL)`,
   and `SetTrackListChange()`, then every track's state (below), then the
-  master's solo, mute, volume, and pan again. The ruler's time unit actions
-  (40365, 40369, 40370) called nothing back.
+  master's solo, mute, volume, and pan again, then each track's rec arm, input
+  monitor, mute, solo, volume, and pan. The second round's volumes were the
+  project's after the undo, where the first round's weren't always. Edit: Redo
+  hasn't been traced. The ruler's time unit actions (40365, 40369, 40370), and
+  every other action the smoke scenario ran, called nothing back.
 - **Every track's state** is sent master first, then each track in order:
   `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`
   (mode 3), `SetSurfaceMute()`, `SetSurfaceSolo()` (not for the master),
@@ -516,16 +540,6 @@ local snapshot estimates the time they cost on that machine.
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees
 with the hardware, what REAPER's own UI shows, and times. The hand smoke test
 shrinks to those.
-
-## To confirm
-
-Facts the design depends on that nobody has checked yet, with the item that
-checks each:
-
-| Fact                                                                                              | Checked by                                      |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Whether the other setters (solo, rec arm, selection, and sends) notify as `SetTrackUIMute()` does | *Surface tests*, with a trace when one needs it |
-| Whether volume and pan changes made in REAPER's UI notify the surface                             | *Surface tests*, with a trace when one needs it |
 
 ## Getting there
 

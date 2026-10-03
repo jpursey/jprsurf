@@ -104,6 +104,11 @@ bool FakeProject::HadTrack(const FakeTrack* track) const {
   return record != nullptr && record->deleted;
 }
 
+bool FakeProject::AnyTrackSolo() const {
+  return std::ranges::any_of(
+      tracks_, [](const FakeTrack* track) { return track->solo; });
+}
+
 GUID FakeProject::MakeGuid() {
   GUID guid = {};
   guid.Data1 = next_guid_++;

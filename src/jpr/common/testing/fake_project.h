@@ -100,6 +100,9 @@ class FakeProject final {
   // Returns true if `track` was one of the project's tracks, and was deleted.
   bool HadTrack(const FakeTrack* track) const;
 
+  // Returns true if any track is soloed, as AnyTrackSolo() does.
+  bool AnyTrackSolo() const;
+
   //----------------------------------------------------------------------------
   // Routes
   //

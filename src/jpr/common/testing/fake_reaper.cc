@@ -60,8 +60,8 @@ constexpr int kBeatsMode = 2;
 constexpr int kSamplesMode = 4;
 constexpr int kFramesMode = 5;
 
-// The project's tempo and rates, which are REAPER's defaults.
-constexpr double kBeatsPerMinute = 120.0;
+// The project's time signature and rates, which are REAPER's defaults, as its
+// tempo is (FakeReaper::kBeatsPerMinute).
 constexpr int kBeatsPerMeasure = 4;
 constexpr int kFramesPerSecond = 30;
 constexpr double kSamplesPerSecond = 44100.0;
@@ -158,13 +158,7 @@ class FakeReaper::Api final {
   }
 
   static bool AnyTrackSolo(ReaProject* project) {
-    FakeProject& fake_project = s_instance_->FindProject(project);
-    for (int i = 0; i < fake_project.GetTrackCount(); ++i) {
-      if (fake_project.GetTrack(i)->solo) {
-        return true;
-      }
-    }
-    return false;
+    return s_instance_->FindProject(project).AnyTrackSolo();
   }
 
   //----------------------------------------------------------------------------
@@ -526,8 +520,7 @@ class FakeReaper::Api final {
   }
 
   static int GetToggleCommandState(int command) {
-    const FakeCommand* fake_command = FindCommand(command);
-    return fake_command != nullptr ? fake_command->toggle_state : -1;
+    return s_instance_->GetToggleState(command);
   }
 
   static int NamedCommandLookup(const char* name) {
@@ -834,6 +827,10 @@ std::unique_ptr<TestControlSurface> FakeReaper::AddSurface(
   return test_surface;
 }
 
+IReaperControlSurface* FakeReaper::GetSurface() {
+  return surface_ != nullptr ? surface_->surface_.get() : nullptr;
+}
+
 void FakeReaper::RemoveSurface(TestControlSurface* surface) {
   if (surface == surface_) {
     surface_ = nullptr;
@@ -860,6 +857,11 @@ void FakeReaper::SetToggleState(int id, int toggle_state) {
     return;
   }
   it->second.toggle_state = toggle_state;
+}
+
+int FakeReaper::GetToggleState(int id) const {
+  auto it = commands_.find(id);
+  return it != commands_.end() ? it->second.toggle_state : -1;
 }
 
 //------------------------------------------------------------------------------

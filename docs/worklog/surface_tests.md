@@ -53,7 +53,7 @@ as the 2026-09-29 smoke trace showed (see To confirm):
 // makes the calls it needs by hand, and has none.
 class SurfaceNotifier final {
  public:
-  explicit SurfaceNotifier(FakeReaper& reaper);
+  explicit SurfaceNotifier(FakeReaper* reaper);
   ~SurfaceNotifier();
 };
 ```
@@ -80,11 +80,11 @@ class SurfaceNotifier final {
   already tested against what REAPER sends.
 - **Every track's state** is as "Seen in traces" lists it: master first, then
   each track in order.
-- **Nested calls.** A call on a `TestControlSurface` made during another call,
-  as REAPER makes from inside its functions, is part of that call's entry
-  point, rather than one of its own, so the fake's checks still see one entry
-  point per call REAPER makes. `FakeReaper::GetSurface()` returns the open
-  surface, if any, for the notifier.
+- **Nested calls.** The notifier makes its calls on `FakeReaper::GetSurface()`,
+  the surface the `TestControlSurface` passes calls to, rather than on the
+  `TestControlSurface`. So they are part of the entry point that called the
+  function, whether a run or the test's own calls, and the fake's checks still
+  see one entry point per call REAPER makes.
 - **Order of hooks.** The notifier is created before the plugin loads and
   destroyed after it unloads, so its hooks are under the profiler's and the
   trace's, as REAPER's own functions are.
@@ -157,7 +157,7 @@ class SurfaceTest : public testing::Test {
   ...
 
   FakeReaper reaper_;
-  SurfaceNotifier notifier_{reaper_};
+  SurfaceNotifier notifier_{&reaper_};
   std::optional<FakeXTouch> xtouch_ext_;  // Strips 1-8, if there is one.
   FakeXTouch xtouch_;                     // Strips 9-16, or 1-8 alone.
   std::unique_ptr<TestControlSurface> surface_;
@@ -262,12 +262,15 @@ design doc's To confirm table goes, answered.
 
 ## CLs
 
-### CL1 [ ] common/testing: SurfaceNotifier
+### CL1 [x] common/testing: SurfaceNotifier
 
 Depends on: nothing. The UI check in To confirm only before CL7.
 
-- `TestControlSurface`: a call made during another call is part of its entry
-  point. `FakeReaper::GetSurface()`.
+- `FakeReaper::GetSurface()`, whose calls are part of the entry point in
+  progress. The state the notifier reads without calling the API:
+  `FakeReaper::IsUIRefreshPrevented()`, `GetToggleState()`, and
+  `kBeatsPerMinute`, and `FakeProject::AnyTrackSolo()`, which the fake's own
+  functions now use too.
 - `SurfaceNotifier` (`surface_notifier.cc`/`.h`), and
   `surface_notifier_test.cc`: each row of the table, including the batch rule
   (nothing sent until `PreventUIRefresh(-1)`).

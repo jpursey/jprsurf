@@ -10,6 +10,7 @@ set(jpr_common_testing_SOURCE
   fake_project.cc fake_project.h
   fake_reaper.cc fake_reaper.h
   fake_track.h
+  surface_notifier.cc surface_notifier.h
   test_control_surface.cc test_control_surface.h
 )
 
@@ -22,6 +23,7 @@ set(jpr_common_testing_DEPS
   absl::str_format
   absl::strings
   absl::time
+  gb_base
   gtest
   jpr_common
   reaper_sdk
@@ -30,6 +32,7 @@ set(jpr_common_testing_DEPS
 set(jpr_common_testing_TEST_SOURCE
   fake_midi_test.cc
   fake_reaper_test.cc
+  surface_notifier_test.cc
 )
 
 gb_add_library(jpr_common_testing)

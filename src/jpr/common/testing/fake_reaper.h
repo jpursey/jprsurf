@@ -58,9 +58,10 @@ struct FakeCommand {
 // REAPER's state, not its behavior, so it never calls a control surface by
 // itself, and runs no action's effects. A test makes the calls REAPER would
 // make on the surface AddSurface() returns (see "Seen in traces" in
-// docs/testing_and_profiling.md for what REAPER sends), and gives an action a
-// handler for what it would change. A test that needs one function to behave
-// otherwise hooks it over the fake with gb::FunctionHook.
+// docs/testing_and_profiling.md for what REAPER sends), or has a
+// SurfaceNotifier make those REAPER makes from inside its functions, and gives
+// an action a handler for what it would change. A test that needs one function
+// to behave otherwise hooks it over the fake with gb::FunctionHook.
 //
 // Text is in REAPER's formats, as far as JPRSurf reads it: volumes and pans as
 // mkvolstr() and mkpanstr() write them, and positions as format_timestr_pos()
@@ -93,6 +94,9 @@ class FakeReaper final {
  public:
   // How many times a second REAPER runs a control surface.
   static constexpr int kRunsPerSecond = 30;
+
+  // Every project's tempo, REAPER's default.
+  static constexpr double kBeatsPerMinute = 120.0;
 
   // Returns how long each run is.
   static absl::Duration GetRunTime() {
@@ -129,6 +133,17 @@ class FakeReaper final {
   // if a surface is already open and the type created another (each of which
   // fails the test). Destroying the surface removes it.
   std::unique_ptr<TestControlSurface> AddSurface(std::string_view config = {});
+
+  // Returns the open control surface, as its type created it, or null if none
+  // is open. Calls on it are made as REAPER makes them from inside its own
+  // functions: they are part of the entry point that called the function,
+  // rather than entry points of their own (see Checks). A test makes REAPER's
+  // other calls on the TestControlSurface instead. SurfaceNotifier makes its
+  // calls on this.
+  IReaperControlSurface* GetSurface();
+
+  // Returns true while a PreventUIRefresh() scope is open.
+  bool IsUIRefreshPrevented() const { return batch_depth_ > 0; }
 
   //----------------------------------------------------------------------------
   // Time
@@ -190,6 +205,10 @@ class FakeReaper final {
   // Sets the toggle state of the action `id`, which must have been added, as
   // the user changing it in REAPER does, or its handler.
   void SetToggleState(int id, int toggle_state);
+
+  // Returns the toggle state of the action `id`, as GetToggleCommandState()
+  // does, without calling it: -1 if it isn't a toggle, or wasn't added.
+  int GetToggleState(int id) const;
 
   //----------------------------------------------------------------------------
   // What the code under test did
