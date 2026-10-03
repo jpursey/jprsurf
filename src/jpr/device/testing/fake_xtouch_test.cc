@@ -240,7 +240,7 @@ TEST_F(FakeXTouchTest, MetersShowTheirLevel) {
 }
 
 TEST_F(FakeXTouchTest, MetersFallOneLevelEachRunUntilSentAgain) {
-  const absl::Duration kRun = absl::Seconds(1) / FakeReaper::kRunsPerSecond;
+  const absl::Duration kRun = FakeReaper::GetRunTime();
   Send({0xD0, 0x0E, 0x00});
   reaper_.AdvanceTime(kRun / 2);
   EXPECT_EQ(xtouch_.GetMeter(0), 0xE);

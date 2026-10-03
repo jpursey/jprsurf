@@ -210,7 +210,7 @@ class DeviceXTouchTest : public ::testing::Test {
   // and output, as PluginSurface::OnRun() does (which runs the scene after
   // input).
   void Run() {
-    reaper_.AdvanceTime(absl::Seconds(1) / FakeReaper::kRunsPerSecond);
+    reaper_.AdvanceTime(FakeReaper::GetRunTime());
     const RunTime time = RunTime::Now();
     runner_.Run(time);
     ports_.RunInput(time);

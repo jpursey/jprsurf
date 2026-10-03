@@ -498,7 +498,7 @@ TEST_F(SurfaceTest, MuteButtonMutesTrack) {
 | Library  | Tested against               | What                                                                                                                                                                  |
 | -------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `common` | The fake                     | `Track`, `TrackCache`, `TrackBatch`, `Timeline`, MIDI ports, `ContinuousUndo`, and `ControlSurface`'s callbacks and single instance rule                              |
-| `device` | The fake, and fake X-Touches | Every control's inputs and outputs on `DeviceXTouch`                                                                                                                  |
+| `device` | The fake, and other fakes    | `Control`, its inputs and outputs, and their MIDI variants, each on its own; and every control on `DeviceXTouch`, on a fake X-Touch                                   |
 | `scene`  | The fake, and fake X-Touches | Properties against REAPER's state, views (conditions, subjects, lists, references), mappings (modifiers, taps, picks), and `TrackActions` (ranges, anchors, grouping) |
 | `plugin` | The surface harness          | The smoke test: faders, pots, buttons, select presses, navigation, modes, transport, timecode, meters, and scribble strips                                            |
 

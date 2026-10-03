@@ -199,11 +199,15 @@ extender (`DeviceXTouchExtenderTest`).
   timecode in each timeline mode and as text, and the SMPTE, Beats, and Solo
   lights. A few tests check the raw messages too, recorded on the output port:
   one of each kind, and the sysex prefix for each model.
-- **`Control`:** what `DeviceXTouch`'s controls exercise, against the fake
-  clock: press, long press, double press, and tap, alone and as siblings;
-  modifiers choosing between registrations; a bound output held while touched,
-  and delayed after input with no touch (dependent and motorized); and outputs
-  cleared when the last writer goes, but not when another replaces it.
+- **Control and its inputs and outputs:** on their own, with no device. Each
+  file has its own test, on fake inputs and outputs (`fake_control_io.h`) that
+  the test drives and reads: `Control` (press, long press, double press, and
+  tap, alone and as siblings, with and without release; modifiers choosing
+  between registrations; bound outputs held while pressed, and delayed after
+  input without a press, dependent and motorized; and outputs cleared when the
+  last writer goes, but not when another replaces it), `ControlInput` and
+  `ControlOutput`, and their MIDI variants, against raw MIDI on the fake
+  REAPER's ports.
 - **With the config work:** once devices can be created in tests, *Device types
   and catalogs*' check that a device's controls match its catalog becomes a
   unit test, as well as a check at startup, and *Build the scene from a
@@ -347,15 +351,52 @@ the fake was wrong.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL5 [ ] device: Control tests
+### CL5 [x] device: Control tests
 
 Depends on: CL5a.
 
-- `control_test.cc`, on `DeviceXTouch`'s controls and the CL4 fixture (moved to
-  a shared test header if both files use it): press timing, modifiers,
-  bindings, and output writers (see Device tests).
+- `control_test.cc`, on `Control` alone: its controls are made of fake inputs
+  and outputs (`fake_control_io.h`), and run on a `Runner` with the test's own
+  clock, with no device or MIDI. It tests press timing (with and without
+  release), modifiers, values and deltas, outputs, bindings, and output writers
+  (see Device tests).
+- `FakeReaper::GetRunTime()` and `GetRunCount()`: the run's length, and the
+  runs in a duration, which `TestControlSurface::RunFor()`, the device and fake
+  X-Touch tests, and the control tests share.
 - Anything the tests find wrong in `Control` is fixed in its own follow-up CL,
   not here.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL6 [ ] device: Control input, output, and device tests
+
+Depends on: CL5.
+
+- `control_input_test.cc`: each input type's listener, presses and releases
+  (with and without release support, and repeated presses), and deltas adding
+  up until read.
+- `control_output_test.cc`: values and modes clamped to each output's range,
+  each timeline mode (including the ruler's, against the fake REAPER), the
+  default timeline text, and cleared values.
+- The input and output handles (moving, and unregistering when destroyed), and
+  `Device` (finding its controls by name).
+- On the fakes in `fake_control_io.h`, and a fake REAPER only where the code
+  calls REAPER.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL7 [ ] device: MIDI control input and output tests
+
+Depends on: CL6.
+
+- `control_input_midi_test.cc` and `control_output_midi_test.cc`: each MIDI
+  input and output against raw MIDI on the fake REAPER's ports: press and
+  release messages, the encoder's deltas and scaling, the MCU fader curve both
+  ways, note on and off in each mode, CC and channel pressure modes, and each
+  MCU config (lights, encoders, faders, buttons, and fader touches).
+- Anything the tests find wrong is fixed in its own follow-up CL.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

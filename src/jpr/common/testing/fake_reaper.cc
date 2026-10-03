@@ -880,6 +880,14 @@ FakeMidiOutput* FakeReaper::AddMidiOutput(std::string_view name) {
 // Time
 //------------------------------------------------------------------------------
 
+int FakeReaper::GetRunCount(absl::Duration duration) {
+  // In integers, so a whole number of seconds is exact.
+  constexpr int64_t kNanosecondsPerSecond = 1'000'000'000;
+  return static_cast<int>((absl::ToInt64Nanoseconds(duration) * kRunsPerSecond +
+                           kNanosecondsPerSecond - 1) /
+                          kNanosecondsPerSecond);
+}
+
 double FakeReaper::GetTime() const {
   // REAPER's clock doesn't start at zero either.
   constexpr double kStartTime = 1000.0;

@@ -25,7 +25,9 @@ set(jpr_device_DEPS
 )
 
 set(jpr_device_TEST_SOURCE
+  control_test.cc
   device_xtouch_test.cc
+  fake_control_io.h
 )
 
 set(jpr_device_TEST_DEPS

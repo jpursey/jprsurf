@@ -94,6 +94,15 @@ class FakeReaper final {
   // How many times a second REAPER runs a control surface.
   static constexpr int kRunsPerSecond = 30;
 
+  // Returns how long each run is.
+  static absl::Duration GetRunTime() {
+    return absl::Seconds(1) / kRunsPerSecond;
+  }
+
+  // Returns how many runs `duration` is, rounded up to whole runs. A whole
+  // number of seconds is exactly kRunsPerSecond runs each.
+  static int GetRunCount(absl::Duration duration);
+
   // Loads the fake as the REAPER API, and resets the process state.
   FakeReaper();
 

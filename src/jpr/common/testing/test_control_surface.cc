@@ -5,8 +5,6 @@
 
 #include "jpr/common/testing/test_control_surface.h"
 
-#include <cstdint>
-
 #include "absl/time/time.h"
 #include "jpr/common/testing/fake_reaper.h"
 
@@ -41,14 +39,8 @@ void TestControlSurface::Run() {
 }
 
 void TestControlSurface::RunFor(absl::Duration duration) {
-  // Rounds up to whole runs, in integers, so a whole number of seconds is
-  // exactly kRunsPerSecond runs each.
-  constexpr int64_t kNanosecondsPerSecond = 1'000'000'000;
-  const int64_t runs =
-      (absl::ToInt64Nanoseconds(duration) * FakeReaper::kRunsPerSecond +
-       kNanosecondsPerSecond - 1) /
-      kNanosecondsPerSecond;
-  for (int64_t i = 0; i < runs; ++i) {
+  const int runs = FakeReaper::GetRunCount(duration);
+  for (int i = 0; i < runs; ++i) {
     Run();
   }
 }
