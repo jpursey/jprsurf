@@ -28,30 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Surface tests
-
-- **Layers:** plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** *Fake X-Touch and device tests*
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
-  (Running the plugin, Tests)
-
-The smoke test as unit tests. The plugin splits into `jpr_plugin`, a static
-library that tests link, and the `reaper_jprsurf` DLL, which is just
-`dll_main.cc` with `DllMain` and the exported entry point. A harness in
-`jpr/plugin/testing` loads the plugin through the fake's
-`reaper_plugin_info_t`, adds the surface, and connects a fake X-Touch and
-extender. The tests cover the smoke test list: faders, pots, pot buttons, mute,
-solo, rec arm, select (press, double press, long press), folder navigation,
-bank and channel navigation, Global, the master fader, transport, timecode,
-meters, scribble names and colors, and mode buttons. CLAUDE.md's smoke test
-shrinks to what the fakes can't show. From then on, each feature adds surface
-tests of its own behavior, so the smoke test grows as tests, rather than as a
-list to run by hand. The fake's reset of process state (see
-[fake_reaper.md](worklog/fake_reaper.md)) extends to `Plugin`'s instance and
-trace, and the harness keeps tracing off whatever `JPRSURF_TRACE` is set to.
-
 ## Scene tests
 
 - **Layers:** scene
@@ -68,6 +44,67 @@ references, and repeated views), mappings (modifiers, taps, and picks), and
 process state extends to `scene`'s globals, such as `g_last_auto_override` in
 `state_properties.cc`.
 
+## Check the fakes in REAPER
+
+- **Layers:** common
+- **Size:** large
+- **Feature workflow:** yes
+- **Depends on:** *Surface tests*
+- **Background:** [surface_tests.md](worklog/surface_tests.md) (What REAPER
+  calls back), [testing_and_profiling.md](testing_and_profiling.md) (Tests)
+
+Surface tests trust two fakes: the fake REAPER's model of REAPER's state, and
+`SurfaceNotifier`'s model of what REAPER calls on the surface. This checks
+both against REAPER, with contract tests: tests that act only through REAPER's
+API, so they run unchanged against the fake (in `ctest`) and inside REAPER.
+The fake loads itself as REAPER's API, so only building the project a test
+starts from differs: `FakeProject` under the fake, an RPP file in REAPER. A
+test that passes under the fake but fails in REAPER is a gap in the fake, which
+is fixed, with a test, as Checking in REAPER in CLAUDE.md says.
+
+So the surface is tested in three separate parts:
+- **The surface's behavior**, and its call counts: surface tests and *REAPER
+  call count tests*, under the fake only.
+- **The fake REAPER:** what each function on the API list does to REAPER's
+  state, as the fake models it (setters read back, GUIDs, route indexing,
+  text formats, selection), and the effects of the actions the surface tests
+  give handlers (the ruler modes, the automation mode actions). What Undo
+  restores settles whether the fake should model undo.
+- **`SurfaceNotifier`:** what REAPER calls on a surface during and after each
+  function. Its own tests are already contract tests (*Surface tests* CL1).
+
+Every behavior the fake models, and every call the notifier makes, has a
+contract test. The API list is finite, so a review can check it.
+
+Running them in REAPER:
+- **Isolation:** a portable REAPER install, only for tests, with its own
+  `UserPlugins` (the test DLL, and not the plugin) and `reaper.ini`, which adds
+  the test DLL's surface. The user's setup is untouched.
+- **The test DLL** registers a surface that records every call it gets, and
+  runs the tests from inside one of its `Run()`s, once the project has loaded.
+  Each test finishes within the call, as it does under the fake, so gtest runs
+  them unchanged. A check of what REAPER calls later, between runs, needs a
+  test across runs, and is left out unless one is needed.
+- **Ending:** gtest writes its results to a file, and the DLL quits REAPER
+  (File: Quit REAPER, 40004). A script launches REAPER with the project,
+  waits, and reads the results, as a ctest test with a label a plain `ctest`
+  skips.
+- **To confirm:** how to quit without REAPER asking to save the changed
+  project, and how each test starts from the same project (undoing its changes,
+  or reverting to the saved project, within the run).
+
+It isn't for performance. The tests' own calls go through the hooks the
+profiler times, so a profile of them isn't the user's. Performance stays with
+profiles of real sessions, and *REAPER call count tests* under the fake.
+
+**Risks**, accepted: contract tests only check what someone thought to check,
+where running whole surface tests in REAPER would also find what nobody
+expected; the test install's preferences aren't the user's; the fake X-Touch
+against the hardware stays a check by hand; and what REAPER calls while
+creating the surface and loading the project is only seen in traces.
+
+It needs REAPER, so it runs in the main checkout, never a side session.
+
 ## REAPER call count tests
 
 - **Layers:** plugin
@@ -76,12 +113,77 @@ process state extends to `scene`'s globals, such as `g_last_auto_override` in
 - **Depends on:** *Profiler*, *Surface tests*
 - **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
 
-Performance checks that are deterministic. A generated project (100+ tracks,
-with sends and receives) runs in the surface harness, with the profiler over
-the fake. Tests bound the REAPER calls in a steady state run, and in a track
-list refresh, a bank change, and a mode change. Each bound starts at the count
-when the test is written, so a regression fails, and an improvement lowers it
-in the same change.
+Performance checks that are deterministic. JPRSurf controls only two things
+about its cost: which calls it makes to REAPER and how many, and its own code.
+This is the first. A generated project (100+ tracks, with sends and receives)
+runs in the surface harness, with the profiler over the fake. Tests bound the
+REAPER calls in a steady state run, and in a track list refresh, a bank change,
+and a mode change. Each bound starts at the count when the test is written, so
+a regression fails, and an improvement lowers it in the same change.
+
+The calls are weighed by cost, in a few coarse categories, so a bound says
+what matters ("two UI refreshes") rather than a raw count. A checked-in table
+gives each function on the API list its category, from the per-call times in
+the `profiles/` snapshots of a real project:
+- **Cheap reads**, such as `GetTrackState()` and `CountTracks()`.
+- **Moderate**, such as text formatting and route info.
+- **Expensive:** setters that refresh REAPER's UI (about 2-17ms each), the end
+  of a `PreventUIRefresh()` batch, and undo points. Their category carries the
+  work REAPER puts off until later, which no call's time shows.
+- **`Main_OnCommand()`**, whose cost is the action's, by action.
+
+A call whose cost grows with the project is weighed at the generated project's
+size. The table is refreshed occasionally, from a new snapshot, rather than
+with each change.
+
+With *Benchmarks under the fake*, this replaces the idle profile in REAPER that
+CLAUDE.md's Performance section asks of a CL that changes per-run work: call
+count bounds in `ctest` for every change, a benchmark when a change touches
+JPRSurf's own per-run work, and profiles in REAPER only occasionally, and at
+the end of a feature, with the log's "Slow run" warnings from the user's test.
+CLAUDE.md changes when both are done.
+
+## Benchmarks under the fake
+
+- **Layers:** plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *REAPER call count tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
+  (Profiler)
+
+The second part of JPRSurf's cost: its own code, without REAPER. The surface
+tests' scenarios (idle runs, the smoke scenario's actions) run under the fake
+with the profiler on, and report JPRSurf's self time per run and per action.
+Self time already leaves out every timed call inside a point, and every call
+into the fake and every MIDI port call is one, so neither the fake nor the fake
+X-Touches' decoding is counted.
+
+Times vary with the machine and its load, so these aren't pass/fail tests in
+`ctest`. They run on demand, under a label a plain `ctest` skips, and compare
+against a snapshot, as the idle profile does today, but without REAPER, and
+with the same scenario every time. They miss REAPER's effect on JPRSurf's own
+code (the cache, and its UI work on the same thread), which an occasional
+profile in REAPER still shows.
+
+## Profiles after Game Bits' timing fix
+
+- **Layers:** none (docs and profiles)
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** Game Bits *Profile times that hold across sessions*
+- **Background:** [profiles/README.md](../profiles/README.md)
+
+Profiles of the same scenario vary by about 30% between sessions, with every
+point moving together, so CLAUDE.md and `profiles/README.md` tell a reader to
+allow for it. Game Bits' item finds out whether that is the profiler's tick
+rate or the core the run was on, and fixes or reports it. Afterwards:
+- If what a timed point or a frame costs changed, the profiler's budget in
+  CLAUDE.md (the larger of 3us a run and 1% of the run) changes with it.
+- The bar (`profiles/idle.txt` and `smoke.txt`) is recorded again.
+- The 30% allowance in CLAUDE.md and `profiles/README.md` is replaced by what
+  was found: removed, if it was the tick rate, or a rule for the conditions to
+  profile in, if it was the core.
 
 ## Keep common free of the plugin's name
 
@@ -698,17 +800,3 @@ replaced their timing lines). `ControlSurface` already logs every REAPER
 callback with Abseil's `VLOG(1)`, so the variable could set the `VLOG` level.
 Only worth doing once a debugging session needs it.
 
-## Tests inside REAPER
-
-- **Layers:** common, plugin
-- **Size:** large
-- **Feature workflow:** yes
-- **Depends on:** *Surface tests*
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
-
-Only worth doing if the fake turns out to disagree with REAPER in ways traces
-don't catch. The surface tests' scenarios would run inside REAPER, against its
-real API but with the fake's MIDI ports and fake X-Touches, from a test DLL
-that registers its own surface (`csurf_inst`). Each scenario would run as steps
-across runs, as REAPER may act in between, and they need REAPER running, so
-they can't run in a side session.

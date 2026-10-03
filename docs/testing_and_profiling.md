@@ -543,11 +543,12 @@ JPRSurf's backlog items build the rest in order:
 5. *Fake X-Touch and device tests*.
 6. *Surface tests*: the plugin split, the harness, and the smoke test as tests.
 7. *Scene tests*.
-8. *REAPER call count tests*.
+8. *Check the fakes in REAPER*: contract tests of the fake and
+   `SurfaceNotifier`, run against both.
+9. *REAPER call count tests*.
 
-Two more wait until they are needed: *Profile snapshots on demand*, if a
-whole session mixes too much together, and *Tests inside REAPER*, if the fake
-turns out to disagree with REAPER in ways traces don't catch.
+One more waits until it is needed: *Profile snapshots on demand*, if a whole
+session mixes too much together.
 
 This work comes before the rest of the config work, so that work can use it and
 needs less testing by hand.
