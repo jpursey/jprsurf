@@ -52,18 +52,19 @@ void ControlPressInputMidiMsg::OnMidiMessage(double time,
 }
 
 //==============================================================================
-// ControlDeltaInputMidiCcOnesComp
+// ControlDeltaInputMidiCcSignMagnitude
 //==============================================================================
 
-ControlDeltaInputMidiCcOnesComp::Config
-ControlDeltaInputMidiCcOnesComp::McuEncoder(uint8_t track, double scaling) {
+ControlDeltaInputMidiCcSignMagnitude::Config
+ControlDeltaInputMidiCcSignMagnitude::McuEncoder(uint8_t track,
+                                                 double scaling) {
   return Config{
       .channel = 0,
       .control = static_cast<uint8_t>(0x10 + std::clamp<uint8_t>(track, 0, 7)),
       .scaling = scaling};
 }
 
-ControlDeltaInputMidiCcOnesComp::ControlDeltaInputMidiCcOnesComp(
+ControlDeltaInputMidiCcSignMagnitude::ControlDeltaInputMidiCcSignMagnitude(
     MidiIn* midi_in, Config config)
     : ControlDeltaInput(),
       midi_in_(midi_in),
@@ -74,11 +75,11 @@ ControlDeltaInputMidiCcOnesComp::ControlDeltaInputMidiCcOnesComp(
   midi_in_->Subscribe(this, MidiCcStatus(channel_), control_);
 }
 
-ControlDeltaInputMidiCcOnesComp::~ControlDeltaInputMidiCcOnesComp() {
+ControlDeltaInputMidiCcSignMagnitude::~ControlDeltaInputMidiCcSignMagnitude() {
   midi_in_->Unsubscribe(this);
 }
 
-void ControlDeltaInputMidiCcOnesComp::OnMidiMessage(
+void ControlDeltaInputMidiCcSignMagnitude::OnMidiMessage(
     double time, const MidiMessage& message) {
   double delta = (message.data2 & 0x3F) * scaling_;
   if (message.data2 & 0x40) {

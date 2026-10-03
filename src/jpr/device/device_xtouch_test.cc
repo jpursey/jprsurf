@@ -7,7 +7,6 @@
 
 #include <cstdint>
 #include <iterator>
-#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,7 +33,6 @@ namespace jpr {
 namespace {
 
 using ::testing::_;
-using ::testing::DoubleNear;
 using ::testing::ElementsAre;
 
 using Button = FakeXTouch::Button;
@@ -150,21 +148,6 @@ constexpr NamedLed kLeds[] = {
 // The controls on each strip: the four buttons, the pot and its button, the
 // fader, the meter, and the scribble strip's two lines and color.
 constexpr int kStripControlCount = 11;
-
-// Points on the MCU fader curve: a fader's position, and the value it is.
-struct FaderPoint {
-  int position;
-  double value;
-};
-
-constexpr FaderPoint kFaderCurve[] = {
-    {0, 0.0},                              // -inf
-    {530, 0.000316228},                    // -60 dB
-    {8250, 0.1},                           // -10 dB
-    {12720, 0.316228},                     // 0 dB
-    {13810, (0.316228 + 0.562341) / 2.0},  // Halfway from 0 dB to +5 dB.
-    {FakeXTouch::kFaderMax, 1.0},          // +10 dB
-};
 
 // A meter's peak, and the level it shows.
 struct MeterLevel {
@@ -398,31 +381,6 @@ TEST_F(DeviceXTouchTest, LedsAreOnOrBlinking) {
 //==============================================================================
 // Faders
 //==============================================================================
-
-TEST_F(DeviceXTouchTest, FaderMovesAreOnTheMcuCurve) {
-  Control* control = device_.GetControl(DeviceXTouch::kFader1);
-  ASSERT_NE(control, nullptr);
-  ControlInputHandle value = Read(control, ControlInput::Type::kValue);
-  for (const FaderPoint& point : kFaderCurve) {
-    SCOPED_TRACE(point.position);
-    xtouch_.MoveFader(0, point.position);
-    Run();
-    EXPECT_THAT(control->GetValue(value.GetId()),
-                DoubleNear(point.value, 1e-9));
-  }
-}
-
-TEST_F(DeviceXTouchTest, FadersAreSetOnTheMcuCurve) {
-  Control* control = device_.GetControl(DeviceXTouch::kFader1);
-  ASSERT_NE(control, nullptr);
-  // Highest first, so each point moves the fader.
-  for (const FaderPoint& point : kFaderCurve | std::views::reverse) {
-    SCOPED_TRACE(point.position);
-    control->SetCValue(point.value);
-    Run();
-    EXPECT_NEAR(xtouch_.GetFader(0), point.position, 1);
-  }
-}
 
 TEST_P(DeviceXTouchModelTest, EachFaderIsMoved) {
   std::vector<Control*> controls;

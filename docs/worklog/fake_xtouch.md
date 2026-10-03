@@ -388,7 +388,7 @@ Depends on: CL5.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL7 [ ] device: MIDI control input and output tests
+### CL7 [x] device: MIDI control input and output tests
 
 Depends on: CL6.
 
@@ -397,10 +397,16 @@ Depends on: CL6.
   release messages, the encoder's deltas and scaling, the MCU fader curve both
   ways, note on and off in each mode, CC and channel pressure modes, and each
   MCU config (lights, encoders, faders, buttons, and fader touches).
+- `ControlDeltaInputMidiCcOnesComp` is renamed
+  `ControlDeltaInputMidiCcSignMagnitude`, as it decodes sign-magnitude (bit 6
+  is the sign), not ones' complement.
+- The MCU fader curve's tests move here from `device_xtouch_test.cc`, which
+  keeps each fader's wiring.
 - Anything the tests find wrong is fixed in its own follow-up CL.
 
 **Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
+- Standard checks, apart from REAPER: only the rename touches the plugin,
+  which doesn't change what it does.
 
 ## Checks in REAPER
 

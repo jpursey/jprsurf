@@ -60,20 +60,21 @@ class ControlPressInputMidiMsg : public ControlPressInput,
 };
 
 //==============================================================================
-// ControlDeltaInputMidiCcOnesComp
+// ControlDeltaInputMidiCcSignMagnitude
 //==============================================================================
 
 // This control input type represents a delta value that is controlled by MIDI
-// CC messages that are represented in a 7-bit ones-complement encoding.
-class ControlDeltaInputMidiCcOnesComp : public ControlDeltaInput,
-                                        private MidiListener {
+// CC messages in a 7-bit sign-magnitude encoding: bit 6 is set for a negative
+// delta, and bits 0-5 are its size, as an MCU encoder sends.
+class ControlDeltaInputMidiCcSignMagnitude : public ControlDeltaInput,
+                                             private MidiListener {
  public:
   // Default scaling factor results in +/- 1.0 for a maximum value.
   static constexpr double kDefaultScaling = 1.0 / 63.0;
 
-  // The configuration for a ControlDeltaInputMidiCcOnesComp, which specifies
-  // the MIDI channel and control values to listen for, as well as the scaling
-  // factor to apply to the delta value.
+  // The configuration for a ControlDeltaInputMidiCcSignMagnitude, which
+  // specifies the MIDI channel and control values to listen for, as well as the
+  // scaling factor to apply to the delta value.
   struct Config {
     uint8_t channel = 0;
     uint8_t control = 0;
@@ -86,10 +87,10 @@ class ControlDeltaInputMidiCcOnesComp : public ControlDeltaInput,
   static Config McuEncoder(uint8_t track, double scaling = kDefaultScaling);
 
   // Constructs an encoder input for a MIDI control with the specified channel
-  // and control values represented as a ones-compliment signed number.
-  ControlDeltaInputMidiCcOnesComp(MidiIn* midi_in, Config config);
+  // and control values represented as a sign-magnitude number.
+  ControlDeltaInputMidiCcSignMagnitude(MidiIn* midi_in, Config config);
 
-  ~ControlDeltaInputMidiCcOnesComp() override;
+  ~ControlDeltaInputMidiCcSignMagnitude() override;
 
  private:
   // Implements MidiListener.

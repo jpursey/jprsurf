@@ -26,8 +26,10 @@ set(jpr_device_DEPS
 
 set(jpr_device_TEST_SOURCE
   control_input_handle_test.cc
+  control_input_midi_test.cc
   control_input_test.cc
   control_output_handle_test.cc
+  control_output_midi_test.cc
   control_output_test.cc
   control_test.cc
   device_test.cc
