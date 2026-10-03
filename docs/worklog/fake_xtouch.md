@@ -1,420 +1,159 @@
 # Fake X-Touch and device tests
 
 A test-only `FakeXTouch`, in `jpr/device/testing`: the hardware end of a pair of
-the fake REAPER's MIDI ports. It decodes what JPRSurf sends into the state of
-the hardware (lights, faders, encoder rings, meters, scribble strips, and the
+the fake REAPER's MIDI ports. It decodes what JPRSurf sends into what the
+hardware shows (lights, faders, encoder rings, meters, scribble strips, and the
 timecode display), and sends presses, touches, moves, and turns as the hardware
-does. With it come tests of every `DeviceXTouch` control's inputs and outputs,
-and of `Control`'s press timing and output bindings. The design is in
-[testing_and_profiling.md](../testing_and_profiling.md) (Fake X-Touch).
+does. With it, every file in `device` has its own tests: each `DeviceXTouch`
+control on the fake X-Touch, and `Control`, its inputs and outputs, their
+handles, `Device`, and the MIDI inputs and outputs on their own. The design is
+in [testing_and_profiling.md](../testing_and_profiling.md) (Fake X-Touch).
 
-There is no change in behavior, except for whatever the protocol checks below
-show `DeviceXTouch` gets wrong.
+## Behavior
 
-## Design
+Checking the protocol against the hardware found two things `DeviceXTouch` had
+wrong, which are fixed:
+- **The master fader's touch works.** It is note 0x70, not the 0x67
+  `DeviceXTouch` listened for, so the master fader's motor never held while it
+  was touched. Now it doesn't fight the hand, as the strip faders didn't.
+- **Letters on the timecode display show without dots.** The display's codes
+  are the low 6 bits of the character's ASCII, with bit 6 the dot, and
+  `DeviceXTouch` sent `@` to `_` as their ASCII, which lit each one's dot.
+  Nothing sends the display letters yet, so only its tests show it.
 
-### Names
+Nothing else changes. `ControlDeltaInputMidiCcOnesComp` is renamed
+`ControlDeltaInputMidiCcSignMagnitude`, as it decodes sign-magnitude (bit 6 is
+the sign), not ones' complement.
 
-| Name                                        | What                                                                                   | Might be confused with                                                                               |
-| ------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `FakeXTouch`                                | The hardware end of an X-Touch's (or extender's) ports in the fake REAPER              | `DeviceXTouch`, the device JPRSurf drives; `FakeReaper`, which owns the ports                        |
-| `FakeXTouch::Button`, `StripButton`, `Led`  | The X-Touch's buttons: the global ones, the ones on each strip, and the lights alone   | `DeviceXTouch`'s control names (`kPlay`, `Mute(strip)`), which are strings naming `Control`s         |
-| `FakeXTouch::Light`                         | What a light shows: off, on, or blinking                                               | `ControlDValueOutputMidiNote::Mode`, the modes JPRSurf writes lights in                              |
-| `FakeXTouch::Ring`                          | What an encoder's light ring shows: its mode (0-7) and position                        | `ControlDValueOutputMidiCc::McuEncoder()`'s modes, which are the same 0-7, plus 8 for off            |
-| `FakeXTouch::ScribbleColor`                 | One of the scribble strip's eight colors                                                | `Color` (`jpr/common/color.h`), the full RGB color JPRSurf maps to one                               |
-| `FakeMidiOutput::Connect()`                 | Passes each message sent from the port to the hardware connected to it, as it is sent  | `MidiPorts::OpenOutput()`, which opens JPRSurf's end of the port                                     |
+## Names
 
-`Connect()` says what happens physically: the hardware is plugged into the
-port. Alternatives were `SetReceiver()` (names the mechanism, not the meaning)
-and `Attach()` (vaguer).
+| Name                                        | What                                                                                   | Might be confused with                                                                         |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `FakeXTouch`                                | The hardware end of an X-Touch's (or extender's) ports in the fake REAPER              | `DeviceXTouch`, the device JPRSurf drives; `FakeReaper`, which owns the ports                  |
+| `FakeXTouch::Button`, `StripButton`, `Led`  | The X-Touch's buttons: the global ones, the ones on each strip, and the lights alone   | `DeviceXTouch`'s control names (`kPlay`, `Mute(strip)`), strings naming `Control`s             |
+| `FakeXTouch::Light`                         | What a light shows: off, on, or blinking                                               | `ControlDValueOutputMidiNote::Mode`, the modes JPRSurf writes lights in                        |
+| `FakeXTouch::Ring`                          | What an encoder's light ring shows: its mode (0-7) and position                        | `ControlDValueOutputMidiCc::McuEncoder()`'s modes, the same 0-7, plus 8 for off                |
+| `FakeXTouch::ScribbleColor`                 | One of the scribble strip's eight colors                                               | `Color` (`jpr/common/color.h`), the full RGB color JPRSurf maps to one                         |
+| `FakeMidiOutput::Connect()`                 | Plugs hardware into the port: each message sent from it is passed to the hardware      | `MidiPorts::OpenOutput()`, which opens JPRSurf's end of the port                               |
+| `FakeMidiOutput::SetRecording()`            | Whether the port records what is sent from it, for `TakeReceived()`                    | `Connect()`, which is independent of it                                                        |
+| `FakePressInput`, `FakeValueInput`, ...     | Control inputs a test drives, and outputs that keep what they were last set to         | The MIDI inputs and outputs (`control_input_midi.h`), which a device builds controls from      |
 
-The buttons are named as `DeviceXTouch` names its controls, so a test reads the
-same whichever end it works on. The names are all they share (see FakeXTouch).
+## Structure
 
-### Connecting hardware to a fake port (common/testing)
+### common/testing: Hardware on a fake port (fake_midi.h)
 
-```
-class FakeMidiOutput final : public midi_Output {
-  // Connects hardware to the port: each message sent from it is passed to
-  // `receiver` as it is sent. A port has at most one device, so connecting
-  // one while another is connected fails the test.
-  void Connect(absl::AnyInvocable<void(absl::Span<const uint8_t> bytes)>
-                   receiver);
-  void Disconnect();
+`FakeMidiOutput::Connect()` passes each message sent from the port to the
+hardware's receiver as it is sent, so the hardware's state is always current,
+and a message it can't take fails the test in the run that sent it. A port has
+at most one device: connecting a second fails the test. `Disconnect()` unplugs
+it.
 
-  // Sets whether the port records each message sent from it, for
-  // TakeReceived(). It doesn't until a test asks it to.
-  void SetRecording(bool recording);
-};
-```
+Recording (`SetRecording()`, `TakeReceived()`) is the port's own, independent
+of `Connect()`, so a test can have either, both, or neither, and no fake device
+keeps a raw log of its own. It is off until a test turns it on, and taking from
+a port that isn't recording fails the test.
 
-- The fake X-Touch decodes each message as it is sent, so its state is always
-  current, and a message it doesn't understand fails the test in the run that
-  sent it. Its getters are `const`, and a test never has to remember to read
-  the port first.
-- Recording is the port's alone, and independent of the hardware connected to
-  it, so a test can have either, both, or neither, and no fake device keeps a
-  raw log of its own. It is off by default, so a test that never reads it
-  keeps none, and taking from a port that isn't recording fails the test.
+### common/testing: Runs (fake_reaper.h)
 
-### FakeXTouch (device/testing)
+`FakeReaper::GetRunTime()` is one run's length (1/30 second), and
+`GetRunCount(duration)` the runs in a duration, rounded up in integers so a
+whole number of seconds is exact. `TestControlSurface::RunFor()`, the device
+tests, and the control tests share them.
 
-```
-class FakeXTouch final {
- public:
-  enum class Type { kFull, kExtender };
-
-  // Buttons on every strip (`strip` is 0-7), and the rest, which only the full
-  // X-Touch has.
-  enum class StripButton { kRec, kSolo, kMute, kSelect, kPotButton };
-  enum class Button { kAssignTrack, ..., kPlay, ..., kRight };
-
-  // Lights with no button.
-  enum class Led { kSmpte, kBeats, kSolo };
-
-  enum class Light { kOff, kOn, kBlinking };
-  enum class ScribbleColor { kBlack, kRed, kGreen, kYellow, kBlue, kMagenta,
-                             kCyan, kWhite };
-
-  struct Ring {
-    // 0-3: a dot, boost/cut, wrap, or spread. 4-7: the same, with the far left
-    // and right lights lit (see To confirm).
-    int mode = 0;
-    int position = 0;  // 0 for none lit, or 1-11.
-  };
-
-  // Faders are 0-7 on each strip, and the master fader, on the full X-Touch.
-  static constexpr int kMasterFader = 8;
-  static constexpr int kFaderMax = 16383;  // Pitch bend's 14 bits.
-
-  // Lists the X-Touch's input and output ports in `reaper`, as `port_name`, and
-  // connects to the output. It must be destroyed before `reaper`.
-  FakeXTouch(FakeReaper& reaper, Type type, std::string_view port_name);
-  ~FakeXTouch();  // Disconnects from the output.
-
-  // Into JPRSurf, delivered on the next MidiPorts::RunInput().
-  void Press(Button button);
-  void Press(StripButton button, int strip);
-  void Release(Button button);
-  void Release(StripButton button, int strip);
-  void TouchFader(int fader);
-  void ReleaseFader(int fader);
-  void MoveFader(int fader, int position);  // 0 to kFaderMax.
-  void TurnPot(int strip, int clicks);      // Clockwise is positive.
-
-  // What the hardware shows: the last of each sent to it.
-  Light GetLight(Button button) const;
-  Light GetLight(StripButton button, int strip) const;
-  Light GetLight(Led led) const;
-  int GetFader(int fader) const;
-  Ring GetRing(int strip) const;
-  int GetMeter(int strip) const;  // 0x0-0xE, falling one level each run.
-  std::string GetScribble(int strip, int line) const;  // 7 characters.
-  ScribbleColor GetScribbleColor(int strip) const;
-  std::string GetTimecode() const;  // 10 digits, each lit dot a '.' after it.
-
-  // The output port, where a test that checks raw messages records them.
-  FakeMidiOutput* GetOutputPort() const;
-};
-```
+### device/testing: FakeXTouch (fake_xtouch.h)
 
 - **Written from the protocol, not from `DeviceXTouch`.** Its tables come from
-  the Mackie Control protocol the X-Touch speaks in MCU mode (button notes,
-  pitch bend faders, encoder CCs and rings, channel pressure meters, and the
-  timecode CCs) and the X-Touch's sysex for scribble text and colors. The
-  library links `jpr_common_testing` but not `jpr_device`, so it can't reuse
-  `DeviceXTouch`'s tables, and a misreading of the protocol isn't copied into
-  both. Where the X-Touch differs from the Mackie it emulates (meters, and the
-  ring's end lights), the fake follows the X-Touch, and the hardware settles
-  anything not yet known (see To confirm).
-- **Strict.** Anything the hardware wouldn't accept fails the test, naming the
-  message: a note with no light, a velocity other than off (0), blinking (1),
-  or on (127), a meter level of 0xF, a ring position past 11, a control the
-  extender doesn't have, a scribble or color sysex with the other model's
-  device ID (0x14 is the X-Touch, 0x15 the extender), text past the end of the
-  display, or any message the fake doesn't decode yet
+  the Mackie Control protocol the X-Touch speaks in MCU mode, and the X-Touch's
+  scribble sysex. `jpr_device_testing` links `jpr_common_testing` but not
+  `jpr_device`, so a misreading of the protocol isn't copied into both. Where
+  the X-Touch differs from the Mackie, the fake follows the X-Touch (see
+  X-Touch facts).
+- **Strict.** Anything the hardware wouldn't take fails the test, naming the
+  message (in hex) and why: a note with no light, a velocity other than off
+  (0), blinking (1), or on (127), a meter level of 0xF, a ring position past
+  11, a sysex with the other model's device ID, text past the display's end, a
+  control the model doesn't have, or a message the fake doesn't decode yet
   (such as the jog wheel or the assignment display, which JPRSurf doesn't use).
   Supporting a new one is a change to the fake.
-- **Inputs** are sent as the hardware sends them: a button or fader touch is a
-  note on with velocity 127, and a release the same note at 0. A move is a
-  pitch bend on the fader's channel (8 for the master). A turn is CC 0x10 +
-  strip, with the clicks in bits 0-5 and bit 6 set for counterclockwise; more
-  than 63 at once fails the test. Using a control the extender doesn't have
-  fails the test.
-- **Outputs** are held as the hardware shows them, and start off, at zero, and
-  blank. A fader shows the last position sent or moved to. A meter falls, as
-  on the hardware, until another level is sent: one level for each run (1/30
-  second) of the fake's clock. That's faster than the hardware, but close
-  enough, and it lets a test see at once that a meter wasn't sent again on the
-  next run, such as a track's meter while the transport plays. Scribble
-  text is written at its offset into the two 56 character lines, so a strip's
-  line is 7 characters of it. The timecode's digits are decoded from the MCU's
-  display characters: codes 0x00-0x1F are `@` to `_`, 0x20-0x3F are ASCII, and
-  0x40 lights the dot.
-- **Performance:** test only, never linked into the plugin.
+- **Inputs** are sent as the hardware sends them, at the fake's time, and
+  arrive on the next `MidiPorts::RunInput()`: a button or touch is a note on at
+  127, and its release the same note at 0; a move is a pitch bend on the
+  fader's channel; a turn is the encoder's CC in sign-magnitude, up to 63
+  clicks.
+- **Outputs** start off, at zero, blank, and black. A fader shows the last
+  position sent, or where a hand moved it, and goes back where it was sent
+  when its touch is released. A meter falls one level each run until it is
+  sent again. Scribble text is written at its offset in the two 56 character
+  lines. The timecode reads back the character sent, with `.` after each lit
+  dot, whether or not the display can draw it.
+- `GetOutputPort()` is the port, for a test that checks the raw messages.
 
-**Brittleness:**
-- The fake must be destroyed before the `FakeReaper` that owns its ports, as
-  anything that uses the fake must. Declaring it after the fake, as fixtures
-  already do, gets this right.
-- `MidiPorts` sends its last output when it is destroyed, so the fake X-Touch
-  should outlive it too, or it doesn't see that output. Nothing fails either
-  way.
+It must be destroyed before the `FakeReaper` that owns its ports, and should
+outlive `MidiPorts`, which sends its last output when it is destroyed.
 
-### Device tests (device)
+### device: DeviceXTouch (device_xtouch.cc)
 
-A fixture in `device_xtouch_test.cc`, run as `PluginSurface` runs its devices:
+The MCU's button and fader touch notes are configs on `ControlPressInputMidiMsg`
+(`McuButton()`, `McuFaderTouch()`, and `McuMasterFaderTouch()`), beside the
+MCU's lights, encoders, and faders on their own classes. `EncodeChar()` keeps a
+character's low 6 bits.
 
-```
-class DeviceXTouchTest : public ::testing::Test {
- protected:
-  // Constructs the fake and the device as `type`.
-  explicit DeviceXTouchTest(DeviceXTouch::Type type = DeviceXTouch::Type::kFull);
+### device: Fake control inputs and outputs (fake_control_io.h)
 
-  // Advances the fake's clock by one run, as TestControlSurface::Run() does,
-  // then runs the device, then MIDI input and output, as
-  // PluginSurface::OnRun() does.
-  void Run();
+A header in `jpr_device`'s test sources (it can't go in `jpr_device_testing`,
+which doesn't link `jpr_device`):
+- `FakePressInput` (with or without release), `FakeValueInput`, and
+  `FakeDeltaInput` make their base's protected input calls public.
+- `FakeCValueOutput`, `FakeDValueOutput`, `FakeTextOutput`, and
+  `FakeColorOutput` keep the value and mode they were last set to, and how
+  many times they were set. The text output keeps a timeline position as it
+  is, rather than formatting it, so no REAPER is needed.
 
-  const DeviceXTouch::Type type_;
-  FakeReaper reaper_;
-  FakeXTouch xtouch_;
-  MidiPorts ports_;
-  Runner runner_{"Device"};
-  DeviceXTouch device_;
-};
-```
+## Tests
 
-What both models have is a parameterized test (`DeviceXTouchModelTest`), run
-on each, and what only one has is a test of the full X-Touch, or of the
-extender (`DeviceXTouchExtenderTest`).
+| File                            | Tested against                       | What                                                                                                                                                         |
+| ------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fake_midi_test.cc`             | The fake                             | Connecting hardware, recording, and both together                                                                                                            |
+| `fake_xtouch_test.cc`           | Raw bytes on the fake's ports        | Each input's message, each output's decoding, meters falling, released faders going back, and each strictness check, on both models                          |
+| `device_xtouch_test.cc`         | The fake X-Touch                     | Every control on both models: buttons, lights, faders (touch, master, extender's third), pots, rings, meters, scribble strips, timecode, raw messages        |
+| `control_test.cc`               | Fake inputs and outputs, own clock   | Press timing (with and without release), modifiers, values and deltas, outputs, bindings, and output writers                                                 |
+| `control_input_test.cc`         | Fake inputs                          | Listeners, presses and releases, deltas                                                                                                                      |
+| `control_output_test.cc`        | Fake outputs, the fake for the ruler | Clamping, timeline modes, default timeline text, cleared values                                                                                              |
+| `control_*_handle_test.cc`      | A control of fakes                   | Moving handles, and unregistering                                                                                                                            |
+| `device_test.cc`                | Fake outputs                         | Finding controls by name, their order, and taken names                                                                                                       |
+| `control_input_midi_test.cc`    | Raw MIDI on the fake's ports         | Press and release messages, sign-magnitude deltas, the MCU fader curve, and the MCU configs                                                                  |
+| `control_output_midi_test.cc`   | Raw MIDI on the fake's ports         | Notes in each mode, CC and channel pressure modes, every ring mode, the MCU fader curve, and the MCU configs                                                 |
 
-- **`DeviceXTouch`:** every control, on both models, table driven where the
-  controls repeat. Buttons (press, release, and lights on and blinking), faders
-  (moves through the MCU curve's points, touch, motor output held while
-  touched, the master fader on the full X-Touch only, and the extender's third
-  fader without touch), pots (turns, and each ring mode, and cleared), meters
-  (each level, and held while they are sent each run), scribble text on both
-  lines, colors (the RGB to palette mapping, all eight in one message), the
-  timecode in each timeline mode and as text, and the SMPTE, Beats, and Solo
-  lights. A few tests check the raw messages too, recorded on the output port:
-  one of each kind, and the sysex prefix for each model.
-- **Control and its inputs and outputs:** on their own, with no device. Each
-  file has its own test, on fake inputs and outputs (`fake_control_io.h`) that
-  the test drives and reads: `Control` (press, long press, double press, and
-  tap, alone and as siblings, with and without release; modifiers choosing
-  between registrations; bound outputs held while pressed, and delayed after
-  input without a press, dependent and motorized; and outputs cleared when the
-  last writer goes, but not when another replaces it), `ControlInput` and
-  `ControlOutput`, and their MIDI variants, against raw MIDI on the fake
-  REAPER's ports.
-- **With the config work:** once devices can be created in tests, *Device types
-  and catalogs*' check that a device's controls match its catalog becomes a
-  unit test, as well as a check at startup, and *Build the scene from a
-  SurfaceSpec*'s building is unit tested too (see "With the config work" in the
-  design doc).
+## X-Touch facts
 
-### To confirm
+Checked on the hardware, and held by the fake:
+- **Meters** show levels 0x0-0xE, with no overload light, unlike the Mackie's.
+  `DeviceXTouch`'s levels (0xD for -4 dB and up, 0xE for clipping) were tuned
+  on it.
+- **Ring bit 6** lights the far left and right lights. There is no center
+  light, as the Mackie has.
+- **The master fader's touch** is note 0x70, after the strips' 0x68-0x6F.
+- **Timecode codes** 0x00-0x1F are `@` to `_`, and 0x20-0x3F are ASCII, with
+  0x40 the dot. `@` shows blank, and `\` as a squiggle.
+- **A released fader goes back** to where it was last sent, by itself, about a
+  second after release, even with REAPER not running, and never while touched.
+  A fader whose touch doesn't work (the user's extender's third) goes back once
+  it hasn't moved for about a second. So `MidiOut` not resending a position the
+  fader was already sent is right. The fake puts it back at once, as the delay
+  doesn't matter to JPRSurf, and leaves a fader moved without a touch where it
+  is.
 
-`DeviceXTouch` and the Mackie protocol disagree on four things, and the fake
-follows the X-Touch. Two are already known:
-- **Meters:** the X-Touch's meters differ from the Mackie's, and
-  `DeviceXTouch`'s levels (0xD for -4 dB and up, 0xE for clipping) were tested
-  extensively on it. The fake holds the level as sent, with no overload light.
-- **Ring bit 6:** the X-Touch has no center light below the ring, as the Mackie
-  does. Bit 6 lights the two end lights instead (far left and far right), as
-  `DeviceXTouch`'s comment says.
+## Building blocks
 
-The other two were checked in REAPER (CL1). Each finding goes into the fake's
-tables (CL3), and the fixes into `DeviceXTouch` (CL4).
-- **Master fader touch is note 0x70**, as the protocol (and Klinke) have it,
-  not the 0x67 `DeviceXTouch` listens for. The master fader's touch has never
-  worked, so its motor output isn't held while it is touched. CL4 fixes it.
-- **The timecode follows the protocol's codes.** Sent as codes (0x00-0x1F),
-  `@` to `_` show without dots. Sent as their ASCII (0x40-0x5F), as
-  `DeviceXTouch` sends them, each shows its dot too, as bit 6 is the dot. CL4
-  fixes `DeviceXTouch` to send the codes. `@` shows as a blank, and `\` as a
-  squiggle, either way; the fake reports the character sent, not how the
-  segments draw it. ASCII 0x20-0x3F (digits, space, and punctuation) is the
-  same either way.
+- **`FakeXTouch`** for any test through a device: *Scene tests* and *Surface
+  tests* drive the surface through it, as a user does, and read what it shows.
+- **`FakeMidiOutput::Connect()`** for fake hardware of any other kind, and
+  `SetRecording()` for a test of the raw messages.
+- **`fake_control_io.h`** for testing anything built on controls without a
+  device.
+- **`FakeReaper::GetRunTime()` and `GetRunCount()`** for a test that runs on
+  REAPER's cadence.
 
-Found by CL5's tests, and confirmed by the user on the hardware:
-- **A released fader goes back to where it was last sent**, by itself, even
-  with REAPER not running. So `MidiOut` not sending a fader the position it
-  already has is right, even after a hand moved it. It never moves while it is
-  touched, and goes back about a second after it is released. A fader whose
-  touch doesn't work (the user's extender's third) goes back once it hasn't
-  moved for about a second. The fake didn't do this, and from CL5a puts a
-  fader back as soon as its touch is released, as the delay doesn't matter to
-  JPRSurf. It leaves a fader moved without a touch where it was moved.
+## Performance
 
-## CLs
-
-### CL1 [x] REAPER: Check the protocol against the hardware
-
-Depends on: nothing.
-
-- Temporary code, in the main checkout: `MidiIn::Poll()` logs every message
-  from the X-Touch, and a spare button (F8) shows the next of a few letter
-  patterns on the timecode display, each sent once as ASCII and once as the
-  protocol's codes, logging what it sent.
-- The user touches the master fader and presses through the patterns, and says
-  what each step shows.
-- Commits only the findings, in To confirm above, and any change to the later
-  CLs they call for.
-
-**Verify**
-- The temporary code is gone: `git diff` shows only this plan.
-
-### CL2 [x] common/testing: Connect hardware to a fake output port
-
-Depends on: nothing.
-
-- `FakeMidiOutput::Connect()` and `Disconnect()`, and their tests in
-  `fake_midi_test.cc`: a connected port passes each message (short and sysex)
-  to the receiver as it is sent, and keeps none for `TakeReceived()`;
-  connecting a second device fails the test; and disconnecting goes back to
-  keeping them, after which another device can connect.
-- Unused, so no visible change.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-
-### CL2b [x] common/testing: Record a fake output port independently
-
-Depends on: CL2.
-
-Added after CL3's review, which found the fake X-Touch keeping a second raw
-log, because a connected port stopped recording.
-
-- `FakeMidiOutput::SetRecording()`: recording is independent of `Connect()`,
-  off by default, and `TakeReceived()` on a port that isn't recording fails the
-  test. `fake_midi_test.cc` tests each combination, and `midi_port_test.cc` and
-  `midi_ports_test.cc` turn recording on.
-- Unused by the plugin, so no visible change.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-
-### CL3 [x] device/testing: FakeXTouch
-
-Depends on: CL1, CL2b.
-
-- The `jpr_device_testing` library (`src/jpr/device/testing/`), linking
-  `jpr_common_testing` and not `jpr_device`.
-- `FakeXTouch`, its protocol tables, as CL1 settled them, and
-  `fake_xtouch_test.cc`, which checks it against raw bytes alone: each input
-  sends the protocol's message on the input port, each kind of output message
-  changes the state it should, meters fall each run until sent again, and each
-  strictness check fails the test (`EXPECT_NONFATAL_FAILURE`), on both models.
-- The design doc's Fake X-Touch section: what was built, with the example test
-  in the final API.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-
-### CL4 [x] device: DeviceXTouch tests
-
-Depends on: CL3.
-
-- `device_xtouch_test.cc`, with the fixture, and `jpr_device_TEST_SOURCE`
-  linking `jpr_device_testing`.
-- Tests of every control on both models (see Device tests).
-- Fixes to `DeviceXTouch` for what CL1 found, which its tests show: the master
-  fader's touch is note 0x70, and the timecode sends `@` to `_` as the
-  protocol's codes (`EncodeChar()` keeps the low 6 bits). And the stray
-  `#pragma once` in `device_xtouch.cc`. The MCU's button and fader touch notes
-  are configs on `ControlPressInputMidiMsg` (`McuButton()`, `McuFaderTouch()`,
-  and `McuMasterFaderTouch()`), as the MCU's lights, encoders, and faders
-  already are on their classes.
-- `docs/backlog.md`: *Device types and catalogs* and *Build the scene from a
-  SurfaceSpec* as "With the config work" describes.
-
-**Verify**
-- Standard checks.
-- Each fix, by hand, in Checks in REAPER below.
-
-### CL5a [x] device/testing: A released fader goes back to where it was sent
-
-Depends on: CL4.
-
-Added during CL5, whose tests showed a fader moved by hand isn't sent the
-position it was last sent again. The user confirmed the hardware puts a
-released fader back there by itself (see To confirm), so that is right, and
-the fake was wrong.
-
-- `FakeXTouch::ReleaseFader()` puts the fader back where it was last sent, and
-  `fake_xtouch_test.cc` tests it.
-- The design doc's Fake X-Touch section says so.
-- Unused by the plugin, so no visible change.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-
-### CL5 [x] device: Control tests
-
-Depends on: CL5a.
-
-- `control_test.cc`, on `Control` alone: its controls are made of fake inputs
-  and outputs (`fake_control_io.h`), and run on a `Runner` with the test's own
-  clock, with no device or MIDI. It tests press timing (with and without
-  release), modifiers, values and deltas, outputs, bindings, and output writers
-  (see Device tests).
-- `FakeReaper::GetRunTime()` and `GetRunCount()`: the run's length, and the
-  runs in a duration, which `TestControlSurface::RunFor()`, the device and fake
-  X-Touch tests, and the control tests share.
-- Anything the tests find wrong in `Control` is fixed in its own follow-up CL,
-  not here.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-
-### CL6 [x] device: Control input, output, and device tests
-
-Depends on: CL5.
-
-- `control_input_test.cc`: each input type's listener, presses and releases
-  (with and without release support, and repeated presses), and deltas adding
-  up until read.
-- `control_output_test.cc`: values and modes clamped to each output's range,
-  each timeline mode (including the ruler's, against the fake REAPER), the
-  default timeline text, and cleared values.
-- The input and output handles (moving, and unregistering when destroyed), and
-  `Device` (finding its controls by name, in the order added, and ignoring a
-  name already taken).
-- On the fakes in `fake_control_io.h`, and a fake REAPER only where the code
-  calls REAPER.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
-
-### CL7 [x] device: MIDI control input and output tests
-
-Depends on: CL6.
-
-- `control_input_midi_test.cc` and `control_output_midi_test.cc`: each MIDI
-  input and output against raw MIDI on the fake REAPER's ports: press and
-  release messages, the encoder's deltas and scaling, the MCU fader curve both
-  ways, note on and off in each mode, CC and channel pressure modes, and each
-  MCU config (lights, encoders, faders, buttons, and fader touches).
-- `ControlDeltaInputMidiCcOnesComp` is renamed
-  `ControlDeltaInputMidiCcSignMagnitude`, as it decodes sign-magnitude (bit 6
-  is the sign), not ones' complement.
-- The MCU fader curve's tests move here from `device_xtouch_test.cc`, which
-  keeps each fader's wiring.
-- Anything the tests find wrong is fixed in its own follow-up CL.
-
-**Verify**
-- Standard checks, apart from REAPER: only the rename touches the plugin,
-  which doesn't change what it does.
-
-## Checks in REAPER
-
-- The master fader's touch: touch the master fader and move it while the
-  volume changes in REAPER (play automation), and it doesn't fight the hand;
-  let go, and it follows the volume again.
-- The timecode still shows each timeline mode as before, with its dots. Nothing
-  sends it letters yet, so the letter fix is only checked by its tests.
-- The extension loads with no new errors in `jprsurf.log`, and the smoke test
-  passes. There is no idle or smoke profile: nothing on the realtime path
-  changes.
+Test only. The fixes change no per-run work, so no profile was taken.
