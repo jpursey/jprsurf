@@ -143,6 +143,15 @@ TEST_F(FakeXTouchTest, FaderMovesSendPitchBendAndMoveTheFader) {
   EXPECT_EQ(xtouch_.GetFader(FakeXTouch::kMasterFader), FakeXTouch::kFaderMax);
 }
 
+TEST_F(FakeXTouchTest, ReleasedFaderGoesBackToWhereItWasSent) {
+  Send({0xE0, 0x30, 0x63});  // 12720
+  xtouch_.TouchFader(0);
+  xtouch_.MoveFader(0, 1000);
+  EXPECT_EQ(xtouch_.GetFader(0), 1000);
+  xtouch_.ReleaseFader(0);
+  EXPECT_EQ(xtouch_.GetFader(0), 12720);
+}
+
 TEST_F(FakeXTouchTest, PotTurnsSendTheirClicks) {
   xtouch_.TurnPot(0, 1);
   xtouch_.TurnPot(5, -3);

@@ -465,7 +465,9 @@ pair of them and connects to the output:
   state: each button's light (off, on, or blinking), fader positions, encoder
   rings, meters, scribble strip text and colors, and the timecode display.
   Meters fall each run until they are sent again, as the hardware's do, only
-  faster.
+  faster. A fader let go of goes back to where it was last sent, as the
+  hardware's does by itself (a second later, where the fake's goes at once),
+  so a fader isn't sent the same position again.
 - **Into JPRSurf:** press, release, touch, move, and turn, encoded as the
   hardware sends them.
 

@@ -234,6 +234,16 @@ tables (CL3), and the fixes into `DeviceXTouch` (CL4).
   segments draw it. ASCII 0x20-0x3F (digits, space, and punctuation) is the
   same either way.
 
+Found by CL5's tests, and confirmed by the user on the hardware:
+- **A released fader goes back to where it was last sent**, by itself, even
+  with REAPER not running. So `MidiOut` not sending a fader the position it
+  already has is right, even after a hand moved it. It never moves while it is
+  touched, and goes back about a second after it is released. A fader whose
+  touch doesn't work (the user's extender's third) goes back once it hasn't
+  moved for about a second. The fake didn't do this, and from CL5a puts a
+  fader back as soon as its touch is released, as the delay doesn't matter to
+  JPRSurf. It leaves a fader moved without a touch where it was moved.
+
 ## CLs
 
 ### CL1 [x] REAPER: Check the protocol against the hardware
@@ -320,9 +330,26 @@ Depends on: CL3.
 - Standard checks.
 - Each fix, by hand, in Checks in REAPER below.
 
-### CL5 [ ] device: Control tests
+### CL5a [x] device/testing: A released fader goes back to where it was sent
 
 Depends on: CL4.
+
+Added during CL5, whose tests showed a fader moved by hand isn't sent the
+position it was last sent again. The user confirmed the hardware puts a
+released fader back there by itself (see To confirm), so that is right, and
+the fake was wrong.
+
+- `FakeXTouch::ReleaseFader()` puts the fader back where it was last sent, and
+  `fake_xtouch_test.cc` tests it.
+- The design doc's Fake X-Touch section says so.
+- Unused by the plugin, so no visible change.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL5 [ ] device: Control tests
+
+Depends on: CL5a.
 
 - `control_test.cc`, on `DeviceXTouch`'s controls and the CL4 fixture (moved to
   a shared test header if both files use it): press timing, modifiers,

@@ -182,6 +182,8 @@ class FakeXTouch final {
   void Release(Button button);
   void Release(StripButton button, int strip);
 
+  // Letting go of a fader puts it back where it was last sent, as the hardware
+  // does by itself (about a second later, where the fake does it at once).
   void TouchFader(int fader);
   void ReleaseFader(int fader);
 
@@ -202,7 +204,8 @@ class FakeXTouch final {
   Light GetLight(StripButton button, int strip) const;
   Light GetLight(Led led) const;
 
-  // The last position the fader was sent, or moved to by hand.
+  // The last position the fader was sent, or moved to by hand until it is
+  // released.
   int GetFader(int fader) const;
 
   Ring GetRing(int strip) const;
@@ -286,6 +289,9 @@ class FakeXTouch final {
   std::string scribble_;  // Both lines, one after the other.
   std::array<ScribbleColor, kStripCount> colors_ = {};
   std::array<uint8_t, kTimecodeDigits> timecode_ = {};  // Right to left.
+
+  // Where each fader was last sent, which it goes back to when released.
+  std::array<int, kStripCount + 1> sent_faders_ = {};
 };
 
 }  // namespace jpr

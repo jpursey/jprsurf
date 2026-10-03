@@ -250,6 +250,7 @@ void FakeXTouch::TouchFader(int fader) {
 void FakeXTouch::ReleaseFader(int fader) {
   if (CheckFader(fader)) {
     SendNote(FaderTouchNote(fader), /*pressed=*/false);
+    faders_[fader] = sent_faders_[fader];
   }
 }
 
@@ -472,6 +473,7 @@ void FakeXTouch::ReceiveFader(absl::Span<const uint8_t> bytes) {
     return;
   }
   faders_[fader] = (bytes[2] << 7) | bytes[1];
+  sent_faders_[fader] = faders_[fader];
 }
 
 void FakeXTouch::ReceiveSysex(absl::Span<const uint8_t> bytes) {
