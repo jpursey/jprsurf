@@ -24,12 +24,13 @@ set(jpr_plugin_TEST_SOURCE
 )
 
 set(jpr_plugin_TEST_DEPS
-  jpr_common_testing
-  jpr_device_testing
+  jpr_plugin_testing
 )
 
 gb_add_library(jpr_plugin)
 target_include_directories(jpr_plugin PUBLIC "../..")
+
+add_subdirectory(testing)
 
 # The DLL REAPER loads: just its entry points, which read the environment.
 

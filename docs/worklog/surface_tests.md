@@ -3,10 +3,12 @@
 The smoke test as unit tests. The plugin is loaded into the fake REAPER exactly
 as REAPER loads it, a fake X-Touch and extender are connected, and the tests
 press buttons, move faders, and turn pots, then check what REAPER was asked to
-do and what the hardware shows. They follow the smoke scenario in
-`profiles/README.md`, step by step, on the same SurfaceTest project, and cover
-the rest of CLAUDE.md's smoke test list: faders, pots, meters, scribble strips,
-the master fader, and the timecode display.
+do and what the hardware shows. They cover what the smoke scenario in
+`profiles/README.md` does, and the rest of CLAUDE.md's smoke test list:
+faders, pots, meters, scribble strips, the master fader, and the timecode
+display. Each test builds just the project the behavior it checks needs,
+rather than the SurfaceTest project the smoke scenario runs on, which stays
+for profiling in REAPER.
 
 CLAUDE.md's smoke test then shrinks to what the fakes can't show, and each
 feature from then on adds surface tests of its own behavior, so the smoke test
@@ -139,13 +141,10 @@ class SurfaceTest : public testing::Test {
   // loads.
   void AddSurface();
 
-  // Builds the SurfaceTest project the smoke scenario runs on (see
-  // profiles/README.md), as the 2026-09-29 trace lists it: T1 to T25, T2's,
-  // T3's, and T5's nested folders, T5's 32 children, and T4's children with
-  // their sends: T4.1-T4.4 to T4.7, T4.5 and T4.6 to T4.8, and T4.7 and T4.8
-  // to T4.9.
-  void AddSmokeProject();
-  FakeTrack* GetTrack(std::string_view name);
+  // Adds `count` tracks to the end of `folder`, or of the current project if
+  // it is null, and returns them. Each is named for where it is: T1, T2, and
+  // so on at the top level, and T2.1, T2.2, and so on in T2.
+  std::vector<FakeTrack*> AddTracks(int count, FakeTrack* folder = nullptr);
 
   // Presses that need the clock moved, each ending released, once whatever
   // it started is done (a press held back in case it is a double press, and
@@ -169,16 +168,23 @@ class SurfaceTest : public testing::Test {
 Tests use the fake REAPER, the fake X-Touches, and the surface directly: press
 on an X-Touch, `surface_->Run()`, then check the fake's tracks and the
 X-Touch's lights. The fixture only holds what every test needs, and the few
-helpers that save getting the clock right.
+helpers that save getting the clock right, or naming tracks by hand.
+
+- **Projects:** each test, or each file's fixture, builds the project the
+  behavior it checks needs, with `AddTracks()` and the fake's own methods
+  (`AddSend()`, and setting a track's values), and nothing more. So a test
+  shows what it depends on, and doesn't break when another test needs a
+  different project. Names come from positions, so what a scribble strip
+  shows says where the track is.
 
 - **Loading:** `Plugin::Load()` with the fake's plugin info and no options, then
   `AddSurface()`. The destructor removes the surface, unloads the plugin, and
   then the X-Touches and the fake go, in that order.
-- **Errors fail the test.** The fixture holds Game Bits' helper from *Fail
-  tests on logged errors*, which fails the test with anything logged at
-  `ERROR` or above, as `jprsurf.log` with no new errors is the first check in
-  REAPER. Game Bits doesn't have it yet, so it is added in its own CL once it
-  does (CL3a).
+- **Errors fail the test.** The fixture holds a `gb::LogErrorGuard` (Game
+  Bits' *Fail tests on logged errors*), first, so it outlives everything else,
+  and fails the test with anything logged at `ERROR` or above, from setup to
+  teardown, as `jprsurf.log` with no new errors is the first check in REAPER.
+  A test that means to log an error takes it from the guard and checks it.
 - **REAPER's actions:** the fake records every action `Main_OnCommand()` runs
   (`GetCommandsRun()`), which is what most tests check. Every action the
   surface maps must also exist in the fake (`AddCommand()`), or its mapping
@@ -198,9 +204,9 @@ helpers that save getting the clock right.
   and settle for exactly the double press window (and a run each), from the
   times `Control` makes public (CL2a), so they follow any change to them.
 - Its own tests, in `jpr_plugin_testing_test`, check the fixture: the surface
-  loads with both models and with the X-Touch alone, the smoke project's tracks
-  and routes, and that each press helper does what the gesture does on the
-  surface.
+  loads with both models and with the X-Touch alone, `AddTracks()`' names and
+  folders, and that each press helper does what the gesture does on the
+  surface, on a few tracks and a folder.
 
 ### Undo
 
@@ -212,27 +218,37 @@ its name (a range is one, route moves merge into one after 500ms), Undo and
 Redo run 40029 and 40030, the Undo light follows `Undo_CanRedo2()`, and the
 surface follows the state an undo leaves (the test's handler for Undo sets it,
 and the notifier sends what REAPER sends). That the faders and pans come back
-(smoke step 14) is REAPER's, and stays a check in REAPER until *Check the fakes
+(as in smoke step 14) is REAPER's, and stays a check in REAPER until *Check the fakes
 in REAPER* shows what undo restores, and whether the fake should model it.
 
 ### Tests
 
-By area, one file each, following the smoke scenario's steps where it has them:
+By area, one file each, grouped by behavior. The smoke scenario's steps each
+area covers are in parentheses, so CL8 knows what leaves the smoke test. Each
+file's project is the least that shows its behavior:
 - **`track_strip_test.cc`** (smoke steps 1-3, 5): faders, pots, pot buttons,
   mute, solo, and rec arm, each way between the surface and REAPER; meters;
   scribble names, volumes, and colors; the ring for a folder and an empty
-  strip; the master fader; and ranges of mute, solo, and rec arm.
+  strip; the master fader; and ranges of mute, solo, and rec arm. Project:
+  fewer tracks than the 16 strips, so some strips are empty, one of them a
+  folder, with volumes, pans, and colors set, and ranges that cross from the
+  extender to the X-Touch.
 - **`track_list_test.cc`** (4, 6, 7, 20-25): select's press, double press into
   a folder, and long press and range; Global, pressed and held, and its light;
   Bank and Channel left and right, at the ends too; and the X-Touch alone.
+  Project: top level tracks two banks past the strips, a folder two levels
+  deep, and a folder with more children than strips.
 - **`send_mode_test.cc`** (8-19): the Track and Send lights; entering by
   tapping Send, and by holding Send and pressing select; route strips; the Info
   strip; switching between sends and receives; walking the routes with select;
-  route undo points; and following a track touched in REAPER.
+  route undo points; and following a track touched in REAPER. Project: a bus
+  with several receives, a track sending to two buses, a chain (one track with
+  both sends and receives), and a track with only receives.
 - **`global_test.cc`** (26-40): the transport, with Rewind and Forward by
   measure, beat, and marker; Cycle, Click, and Solo; the timecode and ruler
   modes; the utility buttons; and automation modes and the global override,
-  each with its lights.
+  each with its lights. Project: a few tracks, some selected, for the
+  automation modes.
 
 Modifiers on track controls, grouping, and the detail of ranges are left to
 *Scene tests*, which test them on the scene directly.
@@ -357,30 +373,20 @@ until *Check the fakes in REAPER*.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL3 [ ] plugin/testing: SurfaceTest
+### CL3 [x] plugin/testing: SurfaceTest
 
-Depends on: CL1, CL2, CL2a.
+Depends on: CL1, CL2, CL2a, and Game Bits *Fail tests on logged errors*
+(done).
 
 - The `jpr_plugin_testing` library, with `SurfaceTest`, and its own tests (see
-  SurfaceTest), apart from errors failing the test (CL3a).
+  SurfaceTest), including that the fixture's guard records an error logged.
 - `jpr_plugin_TEST_DEPS` links it.
+- This was CL3 and CL3a, the errors failing the test, which waited on Game
+  Bits. Game Bits' item was done first, so they are one CL.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - The fixture's tests log no errors.
-
-### CL3a [ ] plugin/testing: Errors fail surface tests
-
-Depends on: CL3, and Game Bits *Fail tests on logged errors*.
-
-- `SurfaceTest` holds Game Bits' helper, so an error logged anywhere in a test,
-  its setup and teardown included, fails it.
-- A test in `surface_test_test.cc` that an error logged fails the test.
-- Any errors this shows in the tests already written are fixed in follow-up
-  CLs, as for CL4.
-
-**Verify**
-- Standard checks, apart from REAPER: the plugin doesn't change.
 
 ### CL4 [ ] plugin: Track strip tests
 
