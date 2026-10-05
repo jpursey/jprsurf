@@ -95,9 +95,12 @@ The user runs REAPER, with the extension deployed to it, only for these:
 1. **Behavior nobody has checked.** What REAPER or the hardware does, where code will rely on it, is checked before that code is written, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. As much as possible, this is a step at the start of a feature, from its plan's To confirm (see Feature workflow). A fact that turns up partway through stops the work until it is checked. Each finding is recorded in the plan's To confirm, and goes into the fake as a tested fact (and the calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`), so it is never checked twice. When REAPER shows the fake is wrong, fix the fake first, with a test, then the code.
 2. **Performance**, for the changes Performance below names.
 3. **The end of a feature.** Before a feature is done, the user tests it in REAPER:
-   - REAPER loads the extension, and `jprsurf.log` has no new errors.
+   - REAPER loads the extension (which runs `dll_main.cc`, the only code no test runs), and `jprsurf.log` has no new errors.
    - The feature's own checks, and how it feels on the hardware.
-   - **Smoke test:** existing behavior still works: faders, pots, pot buttons, mute, solo, rec arm, select (press, double press, long press), folder navigation, bank/channel navigation, Global, master fader, transport, timecode, meters, scribble names and colors, and mode buttons. As *Surface tests* and the items after it in `docs/backlog.md` make it tests, this shrinks to what the fakes can't show.
+   - **Smoke test:** what the fakes can't show. Existing behavior is covered by the surface tests in `src/jpr/plugin/default_config`, and each feature adds surface tests of its own behavior. These are checked by hand during the smoke scenario the end of the feature profiles anyway (see `profiles/README.md`), and anything it doesn't reach is checked after it:
+     - The hardware agrees with the fake X-Touch, and the surface feels right: faders, pots, buttons and their lights, meters, scribble strips, and the timecode display.
+     - REAPER's own UI shows what the surface changes, and Undo restores it (after moving route faders and pans, Undo brings them back).
+     - The surface follows changes made in REAPER's own UI that no trace has covered (see "Seen in traces" in `docs/testing_and_profiling.md`).
 
    A bug found then is fixed in a follow-up CL, after fixing the gap in the fake that let it through.
 

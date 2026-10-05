@@ -591,7 +591,7 @@ Depends on: CL7.
 - An empty route strip's bottom line is blank in REAPER (with the end of the
   feature).
 
-### CL8 [ ] docs: The smoke test shrinks
+### CL8 [x] docs: The smoke test shrinks
 
 Depends on: CL4-CL7a.
 
@@ -599,9 +599,13 @@ Depends on: CL4-CL7a.
   extension (`dll_main.cc`), changes made in REAPER's own UI that no trace has
   covered, that the fake X-Touch agrees with the hardware and how it feels,
   and undo restoring REAPER's state. New features add surface tests of their
-  own behavior.
-- `testing_and_profiling.md`: the surface harness as built, and the Tests
-  table.
+  own behavior. The hand checks are made during the smoke scenario the end of
+  a feature profiles anyway, so there is one pass in REAPER, not two.
+- `testing_and_profiling.md`: a Surface harness section, as built (the
+  fixtures, REAPER's actions and calls back, timing, and when a test sets the
+  fake or acts through REAPER), in place of the Fake X-Touch section's
+  example, which predated it. The Tests table's plugin row lists the files'
+  areas, and what still needs REAPER adds what Undo restores.
 
 **Verify**
 - None beyond reading it: docs only.

@@ -519,19 +519,61 @@ Mackie (its meters, and its rings' end lights), it follows the X-Touch, as
 checked on the hardware (see [fake_xtouch.md](worklog/fake_xtouch.md)). It is
 strict: a message the hardware can't take fails the test.
 
-A test through the whole surface then reads like the smoke test:
+## Surface harness
+
+Tests of the whole surface load the plugin into the fake, as REAPER loads it
+(see Running the plugin), with fake X-Touches connected, and act as a user
+does: press buttons, move faders, and turn pots, then check what REAPER was
+asked to do and what the hardware shows. The design and how it was built are
+in [surface_tests.md](worklog/surface_tests.md).
+
+- **`SurfaceTest`** (`jpr/plugin/testing`) is the fixture for any config: the
+  fake, a `SurfaceNotifier`, and the surface, with `AddSurface()` and
+  `RemoveSurface()` as REAPER does at startup and exit. It has helpers for
+  what is easy to get wrong by hand: `AddTracks()`, which names each track for
+  where it is (T2, T2.1), `RunUntilShown()`, and presses and moves that get
+  the clock right (`Tap()`, `DoublePress()`, `LongPress()`, `Hold()`, and
+  `MoveFader()`). Anything logged at `ERROR` or above fails the test, as
+  `jprsurf.log` with no new errors is the first check in REAPER.
+- **`DefaultConfigTest`** (`jpr/plugin/default_config`) is the fixture for the
+  config `PluginSurface` builds: an X-Touch with an extender to its left (or
+  the X-Touch alone), its strips numbered across both, and what its tests
+  share (how a strip shows 0dB and a pan, a strip's lights, and selecting).
+  Each file's fixture derives from it, and builds the least project that
+  shows its behavior.
+- **REAPER's actions:** the fake has every action JPRSurf uses, as traced
+  (`AddReaperActions()`), and records each one run (`GetCommandsRun()`), which
+  is what most tests check. Those whose effect a test needs (the ruler modes,
+  and the automation modes) have a handler that makes it.
+- **REAPER's calls back:** the notifier makes the calls REAPER makes from
+  inside its own functions, during the run, and the calls for a change made in
+  REAPER's own UI, between runs, when a test asks (`ClickTrack()`,
+  `CtrlClickTrack()`, and `ClickMute()`). A change no trace has shown fails the
+  test.
+
+A test reads like the smoke test:
 
 ```
-TEST_F(SurfaceTest, MuteButtonMutesTrack) {
-  FakeTrack* track = reaper_.GetProject().AddTrack("Drums");
-  std::unique_ptr<TestControlSurface> surface = AddSurface();
-  xtouch_.Press(FakeXTouch::StripButton::kMute, /*strip=*/0);
-  surface->Run();
-  EXPECT_TRUE(track->mute);
-  EXPECT_EQ(xtouch_.GetLight(FakeXTouch::StripButton::kMute, /*strip=*/0),
-            FakeXTouch::Light::kOn);
+TEST_F(TrackStripTest, MovingAFaderSetsTheVolume) {
+  MoveFader(xtouch_, 1, 0);
+  EXPECT_EQ(tracks_[9]->volume, 0.0);
+  EXPECT_EQ(xtouch_.GetFader(1), 0);
 }
 ```
+
+**Timing.** Each run reads the project before it acts, so what a run changes
+on other tracks, or sends to a fader, is shown on the next: `RunUntilShown()`
+is two runs. The press helpers also wait out the double press time, in case a
+press is held back as the first of two.
+
+**Setting the fake, or acting through REAPER.** What the surface polls each
+run (a track's mute, solo, volume, pan, color, and selection light, toggle
+states, the override, the cursor, and route values) a test sets on the fake
+directly, and the surface follows it. What the surface caches until REAPER
+calls back (the selected tracks' automation modes) a test changes through the
+surface or REAPER's API, so the notifier makes the call that refreshes it.
+Setting the fake directly for those is a change REAPER would have told the
+surface about, and the surface doesn't follow it.
 
 ## Tests
 
@@ -540,7 +582,7 @@ TEST_F(SurfaceTest, MuteButtonMutesTrack) {
 | `common` | The fake                     | `Track`, `TrackCache`, `TrackBatch`, `Timeline`, MIDI ports, `ContinuousUndo`, and `ControlSurface`'s callbacks and single instance rule                              |
 | `device` | The fake, and other fakes    | `Control`, its inputs and outputs, and their MIDI variants, each on its own; and every control on `DeviceXTouch`, on a fake X-Touch                                   |
 | `scene`  | The fake, and fake X-Touches | Properties against REAPER's state, views (conditions, subjects, lists, references), mappings (modifiers, taps, picks), and `TrackActions` (ranges, anchors, grouping) |
-| `plugin` | The surface harness          | The smoke test: faders, pots, buttons, select presses, navigation, modes, transport, timecode, meters, and scribble strips                                            |
+| `plugin` | The surface harness          | JPRSurf's own surface, a file per area: track strips, the track list and its navigation, Send/Receive mode, and the global controls                                   |
 
 Existing tests that need no REAPER stay as they are.
 
@@ -554,8 +596,8 @@ local snapshot estimates the time they cost on that machine.
 
 **What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees
-with the hardware, what REAPER's own UI shows, and times. The hand smoke test
-shrinks to those.
+with the hardware, what REAPER's own UI shows, what Undo restores, and times.
+The smoke test in CLAUDE.md checks those by hand.
 
 ## Getting there
 
