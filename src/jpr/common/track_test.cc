@@ -5,6 +5,7 @@
 
 #include "jpr/common/track.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@ namespace {
 using ::testing::ElementsAre;
 using ::testing::Field;
 using ::testing::IsEmpty;
+using ::testing::Optional;
 
 // Records what a track reports to its listeners, for as long as it exists.
 class TestListener final : public TrackListener {
@@ -447,6 +449,96 @@ TEST(TrackBatchTest, ChangingSeveralTracksWithoutABatchFailsTheTest) {
         GetCachedTrack(bass)->SetMute(true);
       },
       "in one TrackBatch");
+}
+
+//------------------------------------------------------------------------------
+// TrackRange
+//------------------------------------------------------------------------------
+
+// The project is T1, T2 (a folder of T2.1 and T2.2), and T3.
+class TrackRangeTest : public ::testing::Test {
+ protected:
+  TrackRangeTest()
+      : top_(project_.AddTracks(3)), folder_(project_.AddTracks(2, top_[1])) {
+    TrackCache::Get().Refresh();
+  }
+
+  static std::optional<TrackRange> Between(
+      FakeTrack* from, FakeTrack* to, TrackFilter filter = TrackFilter::kAll,
+      bool same_parent = false) {
+    return TrackRange::Between(GetCachedTrack(from), GetCachedTrack(to), filter,
+                               same_parent);
+  }
+
+  // Returns the names of the tracks in the range Between() returns, in order,
+  // or nullopt if it returns none.
+  std::optional<std::vector<std::string>> GetTracksBetween(
+      FakeTrack* from, FakeTrack* to, TrackFilter filter = TrackFilter::kAll,
+      bool same_parent = false) {
+    std::optional<TrackRange> range = Between(from, to, filter, same_parent);
+    if (!range.has_value()) {
+      return std::nullopt;
+    }
+    std::vector<std::string> names;
+    for (int i = 0; i < project_.GetTrackCount(); ++i) {
+      if (range->Contains(GetCachedTrack(project_.GetTrack(i)))) {
+        names.push_back(project_.GetTrack(i)->name);
+      }
+    }
+    return names;
+  }
+
+  FakeReaper reaper_;
+  FakeProject& project_ = reaper_.GetProject();
+  std::vector<FakeTrack*> top_;
+  std::vector<FakeTrack*> folder_;
+};
+
+TEST_F(TrackRangeTest, IncludesEveryTrackBetweenItsEndsInEitherOrder) {
+  EXPECT_THAT(GetTracksBetween(folder_[0], top_[2]),
+              Optional(ElementsAre("T2.1", "T2.2", "T3")));
+  EXPECT_THAT(GetTracksBetween(top_[2], folder_[0]),
+              Optional(ElementsAre("T2.1", "T2.2", "T3")));
+  EXPECT_THAT(GetTracksBetween(top_[1], top_[1]), Optional(ElementsAre("T2")));
+}
+
+TEST_F(TrackRangeTest, AnEndNotInTheFilterMakesNoRange) {
+  EXPECT_FALSE(TrackRange::Between(nullptr, GetCachedTrack(top_[0]),
+                                   TrackFilter::kAll, false));
+  EXPECT_FALSE(TrackRange::Between(GetCachedTrack(top_[0]), nullptr,
+                                   TrackFilter::kAll, false));
+  EXPECT_FALSE(Between(project_.GetMasterTrack(), top_[0]));
+
+  project_.ShowInMixer(top_[2], false);
+  TrackCache::Get().RefreshVisibility();
+  EXPECT_FALSE(Between(top_[0], top_[2], TrackFilter::kMcp));
+  EXPECT_FALSE(Between(top_[2], top_[0], TrackFilter::kMcp));
+  EXPECT_TRUE(Between(top_[0], top_[2], TrackFilter::kTcp));
+}
+
+TEST_F(TrackRangeTest, SameParentIncludesOnlyTracksWithTheParentOfFrom) {
+  EXPECT_THAT(GetTracksBetween(top_[0], top_[2], TrackFilter::kAll, true),
+              Optional(ElementsAre("T1", "T2", "T3")));
+  EXPECT_THAT(GetTracksBetween(folder_[0], top_[2], TrackFilter::kAll, true),
+              Optional(ElementsAre("T2.1", "T2.2")));
+
+  // From the top level, the folder's tracks are left out, even `to`.
+  EXPECT_THAT(GetTracksBetween(top_[2], folder_[0], TrackFilter::kAll, true),
+              Optional(ElementsAre("T3")));
+}
+
+TEST_F(TrackRangeTest, TracksNotInTheFilterAreLeftOut) {
+  project_.ShowInMixer(folder_[0], false);
+  TrackCache::Get().RefreshVisibility();
+
+  EXPECT_THAT(GetTracksBetween(top_[1], top_[2], TrackFilter::kMcp),
+              Optional(ElementsAre("T2", "T2.2", "T3")));
+  EXPECT_THAT(GetTracksBetween(top_[1], top_[2], TrackFilter::kTcp),
+              Optional(ElementsAre("T2", "T2.1", "T2.2", "T3")));
+
+  std::optional<TrackRange> range = Between(top_[1], top_[2]);
+  ASSERT_TRUE(range.has_value());
+  EXPECT_FALSE(range->Contains(TrackCache::Get().GetMasterTrack()));
 }
 
 }  // namespace

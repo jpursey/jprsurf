@@ -295,7 +295,7 @@ Depends on: CL3, CL5.
 **Verify**
 - Standard checks.
 
-### CL8 [ ] common: Tests of TrackRange
+### CL8 [x] common: Tests of TrackRange
 
 Depends on: nothing.
 
@@ -306,6 +306,7 @@ Depends on: nothing.
 
 **Verify**
 - Standard checks.
+
 ### CL9 [ ] scene: Views
 
 Depends on: CL3.
