@@ -6,39 +6,24 @@
 #include "jpr/device/device.h"
 
 #include <iterator>
-#include <memory>
-#include <string_view>
 
 #include "gtest/gtest.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/control.h"
-#include "jpr/device/fake_control_io.h"
+#include "jpr/device/testing/fake_device.h"
 
 namespace jpr {
 namespace {
 
-// A device that adds whatever controls a test gives it.
-class TestDevice final : public Device {
- public:
-  explicit TestDevice(RunRegistry& run_registry) : Device(run_registry) {}
-
-  using Device::AddControl;
-};
-
-// Returns the options for a control named `name`, with a text output.
-Control::Options MakeOptions(std::string_view name) {
-  return {.name = name, .text_output = std::make_unique<FakeTextOutput>()};
-}
-
 class DeviceTest : public ::testing::Test {
  protected:
   Runner runner_{"Controls"};
-  TestDevice device_{runner_};
+  FakeDevice device_{runner_};
 };
 
 TEST_F(DeviceTest, FindsControlsByName) {
-  device_.AddControl(MakeOptions("Play"));
-  device_.AddControl(MakeOptions("Stop"));
+  device_.AddButton("Play");
+  device_.AddButton("Stop");
 
   Control* play = device_.GetControl("Play");
   ASSERT_NE(play, nullptr);
@@ -50,8 +35,8 @@ TEST_F(DeviceTest, FindsControlsByName) {
 }
 
 TEST_F(DeviceTest, ListsControlsInTheOrderAdded) {
-  device_.AddControl(MakeOptions("Stop"));
-  device_.AddControl(MakeOptions("Play"));
+  device_.AddButton("Stop");
+  device_.AddButton("Play");
 
   ASSERT_EQ(std::ssize(device_.GetControls()), 2);
   EXPECT_EQ(device_.GetControls()[0]->GetName(), "Stop");
@@ -59,9 +44,9 @@ TEST_F(DeviceTest, ListsControlsInTheOrderAdded) {
 }
 
 TEST_F(DeviceTest, ControlWithATakenNameIsntAdded) {
-  device_.AddControl(MakeOptions("Play"));
-  Control* play = device_.GetControl("Play");
-  device_.AddControl(MakeOptions("Play"));
+  Control* play = device_.AddButton("Play").control;
+  ASSERT_NE(play, nullptr);
+  EXPECT_EQ(device_.AddButton("Play").control, nullptr);
 
   EXPECT_EQ(std::ssize(device_.GetControls()), 1);
   EXPECT_EQ(device_.GetControl("Play"), play);

@@ -12,7 +12,7 @@
 #include "jpr/common/runner.h"
 #include "jpr/device/control.h"
 #include "jpr/device/control_input.h"
-#include "jpr/device/fake_control_io.h"
+#include "jpr/device/testing/fake_control_io.h"
 
 namespace jpr {
 namespace {

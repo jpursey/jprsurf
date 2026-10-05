@@ -41,8 +41,9 @@ class Device {
  protected:
   explicit Device(RunRegistry& run_registry) : run_registry_(run_registry) {}
 
-  // Derived classes should call this to add a control to the device.
-  void AddControl(Control::Options options);
+  // Derived classes should call this to add a control to the device. Returns
+  // the control, or null (logging an error) if its name is already taken.
+  Control* AddControl(Control::Options options);
 
  private:
   RunRegistry& run_registry_;

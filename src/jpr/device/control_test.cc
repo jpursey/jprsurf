@@ -22,7 +22,7 @@
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output_handle.h"
-#include "jpr/device/fake_control_io.h"
+#include "jpr/device/testing/fake_control_io.h"
 
 namespace jpr {
 namespace {

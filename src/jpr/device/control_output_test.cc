@@ -15,7 +15,7 @@
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/timeline.h"
-#include "jpr/device/fake_control_io.h"
+#include "jpr/device/testing/fake_control_io.h"
 
 namespace jpr {
 namespace {

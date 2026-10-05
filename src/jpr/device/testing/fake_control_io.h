@@ -21,7 +21,8 @@ namespace jpr {
 // Fake control inputs and outputs
 //
 // Inputs a test drives, and outputs that keep what they were last set to, for
-// testing controls without a device. Only tests include this.
+// testing controls without hardware (see also FakeDevice). Only tests include
+// this.
 //==============================================================================
 
 // A press input the test presses and releases.

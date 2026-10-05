@@ -51,37 +51,51 @@ the file it tests:
 ### device: FakeDevice (device/testing/fake_device.h)
 
 ```
-// A device of fake controls, which a test adds by name, and drives and reads
-// directly, with no MIDI. Its controls run on the run registry, as a real
-// device's do.
+// A device of fake controls, which a test adds by name, then drives and reads
+// through their fake inputs and outputs, with no MIDI or hardware.
 class FakeDevice final : public Device {
  public:
-  // The fake inputs and outputs of a control, null for any it doesn't have.
+  // The fakes a control is made of, as Control::Options takes them. The
+  // control has no input or output for any that is null.
+  struct ControlOptions {
+    std::string_view name;
+    std::unique_ptr<FakeValueInput> value_input;
+    ...  // Each input, the binding, and each output.
+  };
+
+  // A control added to the device, and its fakes, which are null for any it
+  // doesn't have.
   struct FakeControl {
-    Control* control;
-    FakePressInput* press;
-    FakeValueInput* value;
-    FakeDeltaInput* delta;
-    FakeCValueOutput* cvalue;
-    FakeDValueOutput* dvalue;
-    FakeTextOutput* text;
-    FakeColorOutput* color;
+    Control* control = nullptr;
+    FakeValueInput* value_input = nullptr;
+    ...  // Each input and output.
   };
 
   explicit FakeDevice(RunRegistry& run_registry);
 
-  // Adds a control with the inputs and outputs in `options`, which must be
-  // fakes, and returns them. The common kinds have their own:
-  //   AddButton(): a press (with release) and a light (a DValue output).
-  //   AddFader(): a value, a touch (a press), and a CValue output, motorized.
-  //   AddPot(): a delta, a press, and a CValue output (its ring).
-  //   AddDisplay(): text and color outputs.
-  FakeControl AddControl(Control::Options options);
+  // Adds a control made of the fakes, and returns it. If the name is taken,
+  // every pointer returned is null.
+  FakeControl AddControl(ControlOptions options);
+
+  // Each adds a control of a common kind:
+  // - A button: a press input with release, and a light (a DValue output).
+  // - A fader: a value input, a touch (a press input), and a CValue output,
+  //   motorized.
+  // - A pot: a delta input, and a CValue output (its ring). A pot that can be
+  //   pushed has a button of its own, as Control::Options recommends.
+  // - A display: text and color outputs.
   FakeControl AddButton(std::string_view name);
-  ...
+  FakeControl AddFader(std::string_view name);
+  FakeControl AddPot(std::string_view name);
+  FakeControl AddDisplay(std::string_view name);
 };
 ```
 
+- `ControlOptions` holds the fake types, so a control can only be made of
+  fakes, with no cast. It mirrors `Control::Options`, so a new input or output
+  type in `Control` is added to it too.
+- `Device::AddControl()` returns the control it added, or null if the name is
+  taken, which `FakeDevice` returns. `DeviceXTouch` ignores it.
 - `fake_control_io.h` moves from `jpr_device`'s test sources into
   `jpr_device_fakes`, beside `FakeDevice`, in `jpr/device/testing`.
   `jpr_device_testing` stays as it is, so `FakeXTouch` still can't reach
@@ -171,7 +185,7 @@ Depends on: nothing.
 - `fake_reaper_test.cc` checks the names and folders, with the tests moved
   from `surface_test_test.cc`.
 
-### CL2 [ ] device: FakeDevice
+### CL2 [x] device: FakeDevice
 
 Depends on: nothing.
 
@@ -179,6 +193,8 @@ Depends on: nothing.
   `FakeDevice`.
 - `device_test.cc` uses `FakeDevice` for its `TestDevice`, and every device
   test that included `fake_control_io.h` links `jpr_device_fakes`.
+- `Device::AddControl()` returns the control it added, or null if the name is
+  taken.
 
 **Verify**
 - Standard checks.

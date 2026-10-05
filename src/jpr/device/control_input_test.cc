@@ -6,7 +6,7 @@
 #include "jpr/device/control_input.h"
 
 #include "gtest/gtest.h"
-#include "jpr/device/fake_control_io.h"
+#include "jpr/device/testing/fake_control_io.h"
 
 namespace jpr {
 namespace {

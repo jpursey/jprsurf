@@ -26,3 +26,24 @@ set(jpr_device_testing_TEST_SOURCE
 )
 
 gb_add_library(jpr_device_testing)
+
+# Fake controls, and a device made of them, for unit tests of anything built on
+# devices. Only tests link this, never the plugin. It is kept apart from
+# jpr_device_testing, as it links jpr_device.
+
+set(jpr_device_fakes_SOURCE
+  fake_control_io.h
+  fake_device.cc fake_device.h
+)
+
+set(jpr_device_fakes_DEPS
+  absl::span
+  jpr_common
+  jpr_device
+)
+
+set(jpr_device_fakes_TEST_SOURCE
+  fake_device_test.cc
+)
+
+gb_add_library(jpr_device_fakes)

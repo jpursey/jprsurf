@@ -17,16 +17,18 @@ Control* Device::GetControl(std::string_view name) const {
   return it->second;
 }
 
-void Device::AddControl(Control::Options options) {
+Control* Device::AddControl(Control::Options options) {
   std::string_view name = options.name;
   if (control_map_.contains(name)) {
     LOG(ERROR) << "Attempted to add multiple controls with the same name: "
                << name;
-    return;
+    return nullptr;
   }
   auto control = std::make_unique<Control>(run_registry_, std::move(options));
-  control_map_[name] = control.get();
+  Control* added = control.get();
+  control_map_[name] = added;
   controls_.push_back(std::move(control));
+  return added;
 }
 
 }  // namespace jpr
