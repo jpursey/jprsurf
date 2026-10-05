@@ -54,6 +54,7 @@ set(jpr_scene_TEST_SOURCE
   track_reference_test.cc
   value_property_test.cc
   view_condition_test.cc
+  view_list_test.cc
   view_property_test.cc
   view_test.cc
 )

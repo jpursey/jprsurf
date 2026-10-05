@@ -316,7 +316,7 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL10 [ ] scene: View lists
+### CL10 [x] scene: View lists
 
 Depends on: CL9.
 
