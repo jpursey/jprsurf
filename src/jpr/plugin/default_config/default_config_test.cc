@@ -27,4 +27,18 @@ std::string DefaultConfigTest::GetName(int strip) {
       GetXTouch(strip).GetScribble(GetXTouchStrip(strip), 0)));
 }
 
+void DefaultConfigTest::TapSelect(int strip) {
+  Tap(GetXTouch(strip), FakeXTouch::StripButton::kSelect,
+      GetXTouchStrip(strip));
+}
+
+void DefaultConfigTest::SelectRange(int first, int last) {
+  Hold(GetXTouch(first), FakeXTouch::StripButton::kSelect,
+       GetXTouchStrip(first));
+  TapSelect(last);
+  GetXTouch(first).Release(FakeXTouch::StripButton::kSelect,
+                           GetXTouchStrip(first));
+  surface_->Run();
+}
+
 }  // namespace jpr

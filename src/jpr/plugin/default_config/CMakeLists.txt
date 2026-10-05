@@ -18,6 +18,7 @@ set(jpr_default_config_DEPS
 
 set(jpr_default_config_TEST_SOURCE
   default_config_test_test.cc
+  global_test.cc
   track_list_test.cc
   track_strip_test.cc
 )

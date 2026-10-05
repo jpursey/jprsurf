@@ -36,6 +36,13 @@ class DefaultConfigTest : public SurfaceTest {
   // Returns the name `strip` shows, without the spaces after it.
   std::string GetName(int strip);
 
+  // Taps select on `strip`, which selects only its track.
+  void TapSelect(int strip);
+
+  // Holds select on `first`, and taps it on `last`, which selects the tracks
+  // from one to the other.
+  void SelectRange(int first, int last);
+
   std::optional<FakeXTouch> xtouch_ext_;  // Strips 0-7, if there is one.
   FakeXTouch xtouch_;                     // Strips 8-15, or 0-7 alone.
 };

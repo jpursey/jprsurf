@@ -196,6 +196,10 @@ class DefaultConfigTest : public SurfaceTest {
   static int GetXTouchStrip(int strip);
   std::string GetName(int strip);  // Without the spaces after it.
 
+  // Taps select on `strip`, or holds it on `first` and taps it on `last`.
+  void TapSelect(int strip);
+  void SelectRange(int first, int last);
+
   std::optional<FakeXTouch> xtouch_ext_;  // Strips 0-7, if there is one.
   FakeXTouch xtouch_;                     // Strips 8-15, or 0-7 alone.
 };
@@ -524,11 +528,19 @@ their own, which will only ever hold tests: a config's mappings are data.
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - The same tests run, and pass, in their new places.
 
-### CL6 [ ] plugin: Global control tests
+### CL6 [x] plugin: Global control tests
 
 Depends on: CL5a.
 
 - `global_test.cc` (see Tests).
+- `DefaultConfigTest` gains `TapSelect()` and `SelectRange()`, from the track
+  list tests, which use them too.
+- Its tests select tracks, and set their automation modes, with the surface's
+  buttons, and select the master with `SetTrackSelected()`, so the calls REAPER
+  makes back are the ones traces showed (see "Seen in traces"). The surface
+  reads the selected tracks' modes again only when REAPER says the selection,
+  or a mode, changed, so setting the fake's tracks directly shows nothing. What
+  REAPER calls for a change in its own UI is To confirm, for CL7.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

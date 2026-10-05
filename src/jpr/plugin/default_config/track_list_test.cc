@@ -39,9 +39,6 @@ class TrackListTest : public DefaultConfigTest {
                                      GetXTouchStrip(strip));
   }
 
-  void TapSelect(int strip) {
-    Tap(GetXTouch(strip), StripButton::kSelect, GetXTouchStrip(strip));
-  }
   void DoublePressSelect(int strip) {
     DoublePress(GetXTouch(strip), StripButton::kSelect, GetXTouchStrip(strip));
   }
@@ -100,10 +97,7 @@ TEST_F(TrackListTest, HoldingSelectSelectsTheTrack) {
 // Holding select on T1, on the extender, and pressing it on T12, on the
 // X-Touch, selects the tracks from one to the other.
 TEST_F(TrackListTest, HoldingSelectAndPressingAnotherSelectsTheRange) {
-  Hold(*xtouch_ext_, StripButton::kSelect, 0);
-  TapSelect(11);
-  xtouch_ext_->Release(StripButton::kSelect, 0);
-  surface_->Run();
+  SelectRange(0, 11);
 
   for (int i = 0; i < kTopCount; ++i) {
     EXPECT_EQ(top_[i]->selected, i <= 11) << top_[i]->name;
