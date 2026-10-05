@@ -6,8 +6,6 @@
 #pragma once
 
 #include <memory>
-#include <optional>
-#include <string>
 #include <vector>
 
 #include "gb/test/log_error_guard.h"
@@ -23,10 +21,11 @@ namespace jpr {
 //==============================================================================
 // SurfaceTest
 //
-// A fixture for tests of the whole surface: the plugin, loaded into the fake
-// REAPER as REAPER loads it, with a fake X-Touch and extender connected. Tests
-// press, move, and turn the X-Touches' controls, run the surface, and check
-// the fake's tracks, the actions it ran, and what the X-Touches show.
+// A fixture for tests of the whole surface, whatever its config: the plugin,
+// loaded into the fake REAPER as REAPER loads it. Each config's tests derive a
+// fixture from it that connects the config's fake devices. Tests press, move,
+// and turn the devices' controls, run the surface, and check the fake's
+// tracks, the actions it ran, and what the devices show.
 //
 // REAPER's calls back to the surface from inside its functions are made by a
 // SurfaceNotifier, and the fake has REAPER's actions (see AddReaperActions()).
@@ -37,38 +36,27 @@ namespace jpr {
 
 class SurfaceTest : public ::testing::Test {
  protected:
-  // With an extender to the left of the X-Touch, as JPRSurf expects, unless
-  // `extender` is false, for the X-Touch alone.
-  explicit SurfaceTest(bool extender = true);
+  SurfaceTest();
 
-  // Removes the surface, and unloads the plugin.
-  ~SurfaceTest() override;
+  // Calls RemoveSurface(), before any fixture's members go, so the surface
+  // goes before the fake devices a fixture derived from this holds.
+  void TearDown() override;
 
   // Loads the plugin, and adds the surface, as REAPER does at startup. Then
   // calls SetTrackListChange(), as REAPER does when the project loads, and
-  // runs until the X-Touches show the project. A test builds its project
-  // first.
+  // runs until the devices show the project. A test builds its project first,
+  // and connects its devices.
   void AddSurface();
 
-  // Runs the surface until the X-Touches show the project as it is now. That
+  // Removes the surface, if there is one, and unloads the plugin, if it is
+  // loaded, as REAPER does at exit.
+  void RemoveSurface();
+
+  // Runs the surface until the devices show the project as it is now. That
   // takes two runs, as each run reads the project before it acts: what a run's
   // actions change on other tracks is read on the next, and a fader's position
   // is sent when its device next runs.
   void RunUntilShown();
-
-  //----------------------------------------------------------------------------
-  // Strips
-  //
-  // Strips are numbered across the surface: 0-7 on the extender, and 8-15 on
-  // the X-Touch, or 0-7 on the X-Touch alone.
-  //----------------------------------------------------------------------------
-
-  // Returns the X-Touch `strip` is on, and its strip there.
-  FakeXTouch& GetXTouch(int strip);
-  static int GetXTouchStrip(int strip) { return strip % 8; }
-
-  // Returns the name `strip` shows, without the spaces after it.
-  std::string GetName(int strip);
 
   //----------------------------------------------------------------------------
   // The project
@@ -113,8 +101,6 @@ class SurfaceTest : public ::testing::Test {
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
   SurfaceNotifier notifier_{&reaper_};
-  std::optional<FakeXTouch> xtouch_ext_;  // Strips 1-8, if there is one.
-  FakeXTouch xtouch_;                     // Strips 9-16, or 1-8 alone.
   std::unique_ptr<TestControlSurface> surface_;
 
  private:

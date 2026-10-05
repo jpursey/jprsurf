@@ -123,33 +123,36 @@ static bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& info,
 - `Plugin`'s instance, and the trace it owns, get a `TestReset` in `plugin.cc`,
   so a test that fails before unloading doesn't leave it for the next.
 
-### SurfaceTest (plugin/testing)
+### SurfaceTest (plugin/testing) and DefaultConfigTest (plugin/default_config)
 
-A gtest fixture in a test-only `jpr_plugin_testing` library, which the plugin's
-tests derive from:
+`SurfaceTest` is a gtest fixture in a test-only `jpr_plugin_testing` library,
+for tests of the whole surface, whatever its config: the fake REAPER, the
+plugin loaded into it, and helpers for the project and for pressing fake
+devices. Each config's tests derive a fixture of their own from it, with that
+config's fake devices. Today the only config is the one `PluginSurface`
+builds, so the only one is `DefaultConfigTest`, in a test-only
+`plugin/default_config` (see CL5a):
 
 ```
 class SurfaceTest : public testing::Test {
  protected:
-  // With an extender to the left of the X-Touch, as JPRSurf expects, unless a
-  // test asks for the X-Touch alone.
-  explicit SurfaceTest(bool extender = true);
-  ~SurfaceTest() override;  // Checks that nothing logged an error.
+  SurfaceTest();
+  // Calls RemoveSurface(), before any fixture's members go, so the surface
+  // goes before the fake devices a derived fixture holds.
+  void TearDown() override;
 
   // Loads the plugin, and adds the surface, as REAPER does at startup. Then
   // calls SetTrackListChange(), as REAPER does when the project loads, and
-  // runs until the X-Touches show the project.
+  // runs until the devices show the project.
   void AddSurface();
 
-  // Runs the surface until the X-Touches show the project as it is now: two
+  // Removes the surface, if there is one, and unloads the plugin, as REAPER
+  // does at exit.
+  void RemoveSurface();
+
+  // Runs the surface until the devices show the project as it is now: two
   // runs, as each run reads the project before it acts (see CL4b).
   void RunUntilShown();
-
-  // Strips are numbered across the surface: 0-7 on the extender, and 8-15 on
-  // the X-Touch, or 0-7 on the X-Touch alone.
-  FakeXTouch& GetXTouch(int strip);
-  static int GetXTouchStrip(int strip);
-  std::string GetName(int strip);  // Without the spaces after it.
 
   // Adds `count` tracks to the end of `folder`, or of the current project if
   // it is null, and returns them. Each is named for where it is: T1, T2, and
@@ -174,13 +177,32 @@ class SurfaceTest : public testing::Test {
   // Touches the fader, moves it, and lets go, as a hand does.
   void MoveFader(FakeXTouch& xtouch, int fader, int position);
 
+  gb::LogErrorGuard log_error_guard_;
   FakeReaper reaper_;
   SurfaceNotifier notifier_{&reaper_};
-  std::optional<FakeXTouch> xtouch_ext_;  // Strips 1-8, if there is one.
-  FakeXTouch xtouch_;                     // Strips 9-16, or 1-8 alone.
   std::unique_ptr<TestControlSurface> surface_;
 };
+
+// The X-Touch and its extender that PluginSurface expects.
+class DefaultConfigTest : public SurfaceTest {
+ protected:
+  // With an extender to the left of the X-Touch, unless `extender` is false,
+  // for the X-Touch alone.
+  explicit DefaultConfigTest(bool extender = true);
+
+  // Strips are numbered across the surface: 0-7 on the extender, and 8-15 on
+  // the X-Touch, or 0-7 on the X-Touch alone.
+  FakeXTouch& GetXTouch(int strip);
+  static int GetXTouchStrip(int strip);
+  std::string GetName(int strip);  // Without the spaces after it.
+
+  std::optional<FakeXTouch> xtouch_ext_;  // Strips 0-7, if there is one.
+  FakeXTouch xtouch_;                     // Strips 8-15, or 0-7 alone.
+};
 ```
+
+The press helpers stay in `SurfaceTest`: they take the fake X-Touch they
+press, and hold no config's state, so any config with an X-Touch uses them.
 
 Tests use the fake REAPER, the fake X-Touches, and the surface directly: press
 on an X-Touch, `surface_->Run()`, then check the fake's tracks and the
@@ -221,10 +243,11 @@ helpers that save getting the clock right, or naming tracks by hand.
   (and a run), and settle for exactly the double press window, and then until
   what the press changed is shown, from the times `Control` makes public
   (CL2a), so they follow any change to them.
-- Its own tests, in `jpr_plugin_testing_test`, check the fixture: the surface
-  loads with both models and with the X-Touch alone, `AddTracks()`' names and
-  folders, and that each press helper does what the gesture does on the
-  surface, on a few tracks and a folder.
+- Their own tests check the fixtures: `jpr_plugin_testing_test` that an
+  error logged is kept, and `AddTracks()`' names and folders, and
+  `jpr_default_config_test` that the surface loads with both models and with
+  the X-Touch alone, and that each press helper does what the gesture does on
+  the surface, on a few tracks and a folder.
 
 ### Undo
 
@@ -241,9 +264,10 @@ in REAPER* shows what undo restores, and whether the fake should model it.
 
 ### Tests
 
-By area, one file each, grouped by behavior. The smoke scenario's steps each
-area covers are in parentheses, so CL8 knows what leaves the smoke test. Each
-file's project is the least that shows its behavior:
+By area, one file each in `plugin/default_config` (from CL5a), grouped by
+behavior. The smoke scenario's steps each area covers are in parentheses, so
+CL8 knows what leaves the smoke test. Each file's project is the least that
+shows its behavior:
 - **`track_strip_test.cc`** (smoke steps 1-3, 5): faders, pots, pot buttons,
   mute, solo, and rec arm, each way between the surface and REAPER; meters;
   scribble names, volumes, and colors; the ring for a folder and an empty
@@ -477,9 +501,32 @@ Depends on: CL3.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
+### CL5a [x] plugin: The default config's tests
+
+Depends on: CL5.
+
+The surface tests test `PluginSurface`'s one hard-coded config, not the
+plugin, and when configs come from files (see *Getting there* in
+`config_model.md`), each config will have its own. So they move to a folder of
+their own, which will only ever hold tests: a config's mappings are data.
+- `plugin/default_config`, with a test-only `jpr_default_config` library (its
+  tests are `jpr_default_config_test`): `DefaultConfigTest`, and the track
+  strip and track list tests, moved there.
+- `SurfaceTest` loses what is the default config's: the fake X-Touches, and
+  strips numbered across them. It gains `RemoveSurface()`, which its
+  `TearDown()` calls, before any fixture's members go, so the surface goes
+  before a derived fixture's fake devices, whatever it holds. Its own tests of
+  the presses, and of the X-Touches' order, move to `DefaultConfigTest`'s.
+- `jpr_plugin_test` no longer links `jpr_plugin_testing`, which none of its
+  tests use.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+- The same tests run, and pass, in their new places.
+
 ### CL6 [ ] plugin: Global control tests
 
-Depends on: CL3.
+Depends on: CL5a.
 
 - `global_test.cc` (see Tests).
 
@@ -488,7 +535,7 @@ Depends on: CL3.
 
 ### CL7 [ ] plugin: Send mode tests
 
-Depends on: CL3, and the UI check in To confirm.
+Depends on: CL5a, and the UI check in To confirm.
 
 - `send_mode_test.cc` (see Tests).
 - An empty route strip's bottom line is blank: route strips map their volume

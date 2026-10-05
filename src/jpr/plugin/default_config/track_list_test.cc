@@ -8,7 +8,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/testing/surface_test.h"
+#include "jpr/plugin/default_config/default_config_test.h"
 
 namespace jpr {
 namespace {
@@ -20,14 +20,14 @@ using StripButton = FakeXTouch::StripButton;
 // 32 top level tracks: two banks past the 16 strips. T2 is a folder two levels
 // deep (T2.1, with T2.1.1, and T2.2), and T20 has 20 tracks, more than the
 // strips.
-class TrackListTest : public SurfaceTest {
+class TrackListTest : public DefaultConfigTest {
  protected:
   static constexpr int kTopCount = 32;
   static constexpr int kFolder = 1;      // T2.
   static constexpr int kBigFolder = 19;  // T20.
   static constexpr int kBigFolderCount = 20;
 
-  explicit TrackListTest(bool extender = true) : SurfaceTest(extender) {
+  explicit TrackListTest(bool extender = true) : DefaultConfigTest(extender) {
     top_ = AddTracks(kTopCount);
     AddTracks(1, AddTracks(2, top_[kFolder])[0]);
     AddTracks(kBigFolderCount, top_[kBigFolder]);

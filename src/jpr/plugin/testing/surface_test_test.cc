@@ -14,7 +14,6 @@
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
-#include "jpr/device/testing/fake_xtouch.h"
 
 namespace jpr {
 namespace {
@@ -22,9 +21,8 @@ namespace {
 using ::testing::ElementsAre;
 using ::testing::Field;
 
-using Button = FakeXTouch::Button;
-using StripButton = FakeXTouch::StripButton;
-
+// The presses, and the surface with devices, are tested with a config's
+// devices (see DefaultConfigTest's tests).
 class SurfaceTestTest : public SurfaceTest {
  protected:
   // Returns the names of the current project's tracks, in order.
@@ -56,56 +54,6 @@ TEST_F(SurfaceTestTest, AddTracksNamesTracksForWhereTheyAre) {
   FakeProject& project = reaper_.GetProject();
   EXPECT_EQ(project.GetParentTrack(children[1]), top[1]);
   EXPECT_EQ(project.GetParentTrack(top[2]), nullptr);
-}
-
-TEST_F(SurfaceTestTest, TheExtenderIsLeftOfTheXTouch) {
-  AddTracks(16);
-  AddSurface();
-  EXPECT_EQ(GetName(0), "T1");
-  EXPECT_EQ(GetName(8), "T9");
-}
-
-// A folder on the fourth strip, to press its select button.
-class PressTest : public SurfaceTestTest {
- protected:
-  static constexpr int kFolderStrip = 3;
-
-  PressTest() {
-    folder_ = AddTracks(4)[kFolderStrip];
-    AddTracks(2, folder_);
-    AddSurface();
-  }
-
-  FakeTrack* folder_ = nullptr;
-};
-
-TEST_F(PressTest, TapPressesOnce) {
-  Tap(*xtouch_ext_, StripButton::kSelect, kFolderStrip);
-  EXPECT_TRUE(folder_->selected);
-  EXPECT_EQ(GetName(0), "T1");
-}
-
-TEST_F(PressTest, DoublePressPressesTwice) {
-  DoublePress(*xtouch_ext_, StripButton::kSelect, kFolderStrip);
-  EXPECT_EQ(GetName(0), "T4.1");
-}
-
-TEST_F(PressTest, LongPressHolds) {
-  DoublePress(*xtouch_ext_, StripButton::kSelect, kFolderStrip);
-  LongPress(xtouch_, Button::kGlobal);
-  EXPECT_EQ(GetName(0), "T1");
-}
-
-class XTouchAloneTest : public SurfaceTest {
- protected:
-  XTouchAloneTest() : SurfaceTest(/*extender=*/false) {}
-};
-
-TEST_F(XTouchAloneTest, TheXTouchShowsTheFirstTracks) {
-  AddTracks(1);
-  AddSurface();
-  EXPECT_FALSE(xtouch_ext_.has_value());
-  EXPECT_EQ(GetName(0), "T1");
 }
 
 }  // namespace

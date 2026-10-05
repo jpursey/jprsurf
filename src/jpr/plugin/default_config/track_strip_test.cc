@@ -12,7 +12,7 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/testing/surface_test.h"
+#include "jpr/plugin/default_config/default_config_test.h"
 
 namespace jpr {
 namespace {
@@ -48,7 +48,7 @@ constexpr absl::Duration kMeterFallTime = absl::Milliseconds(500);
 
 // Ten tracks: eight on the extender, and two on the X-Touch, whose other six
 // strips are empty. T3 is a folder, with a track in it.
-class TrackStripTest : public SurfaceTest {
+class TrackStripTest : public DefaultConfigTest {
  protected:
   static constexpr int kTrackCount = 10;
   static constexpr int kFolder = 2;      // T3, on the extender's third strip.

@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "jpr/common/testing/fake_project.h"
@@ -28,20 +27,9 @@ absl::Duration GetLongPressTime() {
 
 }  // namespace
 
-SurfaceTest::SurfaceTest(bool extender)
-    : xtouch_(reaper_, FakeXTouch::Type::kFull, "X-Touch") {
-  if (extender) {
-    xtouch_ext_.emplace(reaper_, FakeXTouch::Type::kExtender, "X-Touch-Ext");
-  }
-  AddReaperActions(&reaper_);
-}
+SurfaceTest::SurfaceTest() { AddReaperActions(&reaper_); }
 
-SurfaceTest::~SurfaceTest() {
-  surface_.reset();
-  if (Plugin::GetInstance() != nullptr) {
-    Plugin::Unload();
-  }
-}
+void SurfaceTest::TearDown() { RemoveSurface(); }
 
 void SurfaceTest::AddSurface() {
   ASSERT_TRUE(Plugin::Load(nullptr, reaper_.GetPluginInfo(), {}));
@@ -51,22 +39,16 @@ void SurfaceTest::AddSurface() {
   RunUntilShown();
 }
 
+void SurfaceTest::RemoveSurface() {
+  surface_.reset();
+  if (Plugin::GetInstance() != nullptr) {
+    Plugin::Unload();
+  }
+}
+
 void SurfaceTest::RunUntilShown() {
   surface_->Run();
   surface_->Run();
-}
-
-//------------------------------------------------------------------------------
-// Strips
-//------------------------------------------------------------------------------
-
-FakeXTouch& SurfaceTest::GetXTouch(int strip) {
-  return xtouch_ext_.has_value() && strip < 8 ? *xtouch_ext_ : xtouch_;
-}
-
-std::string SurfaceTest::GetName(int strip) {
-  return std::string(absl::StripTrailingAsciiWhitespace(
-      GetXTouch(strip).GetScribble(GetXTouchStrip(strip), 0)));
 }
 
 //------------------------------------------------------------------------------

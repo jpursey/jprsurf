@@ -21,18 +21,17 @@ set(jpr_plugin_DEPS
 
 set(jpr_plugin_TEST_SOURCE
   plugin_test.cc
-  track_list_test.cc
-  track_strip_test.cc
 )
 
 set(jpr_plugin_TEST_DEPS
-  jpr_plugin_testing
+  jpr_common_testing
 )
 
 gb_add_library(jpr_plugin)
 target_include_directories(jpr_plugin PUBLIC "../..")
 
 add_subdirectory(testing)
+add_subdirectory(default_config)
 
 # The DLL REAPER loads: just its entry points, which read the environment.
 
