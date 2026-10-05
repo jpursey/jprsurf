@@ -635,7 +635,7 @@ scenario nor CL7 covered, in `send_mode_test.cc`:
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL9a [ ] plugin: An empty Info strip shows no route kind
+### CL9a [x] plugin: An empty Info strip shows no route kind
 
 Depends on: CL9.
 

@@ -722,11 +722,13 @@ void PluginSurface::InitViews() {
 
     // The Info strip shows the Send/Receive mode track itself, the same as in
     // Track mode, except the bottom scribble line shows whether its sends or
-    // receives are shown.
+    // receives are shown, and is blank once the track is deleted.
     AddTrackStripMappings(send_receive_mode_view, "XTouch/", kInfoStrip);
     send_receive_mode_view->AddMapping(
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
-        absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)));
+        absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)),
+        {.condition = ViewCondition::Config{
+             .property = std::string(TrackProperties::kTrackExists)}});
 
     // Tapping Send switches between showing sends and receives.
     send_receive_mode_view->AddMapping(

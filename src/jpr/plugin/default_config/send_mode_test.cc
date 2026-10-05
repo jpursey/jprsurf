@@ -482,6 +482,7 @@ TEST_F(SendModeTest, DeletedTrackShowsNothingUntilAnotherIsTouched) {
   surface_->SetTrackListChange();
   RunUntilShown();
   EXPECT_EQ(GetName(kInfoStrip), "");
+  EXPECT_EQ(GetBottomLine(kInfoStrip), "");
   EXPECT_EQ(xtouch_.GetScribbleColor(GetXTouchStrip(kInfoStrip)),
             ScribbleColor::kBlack);
   EXPECT_EQ(GetName(0), "");
@@ -490,16 +491,8 @@ TEST_F(SendModeTest, DeletedTrackShowsNothingUntilAnotherIsTouched) {
   notifier_.ClickTrack(tracks_[kBus]);
   RunUntilShown();
   EXPECT_EQ(GetName(kInfoStrip), "T4");
+  EXPECT_EQ(GetBottomLine(kInfoStrip), "Send");
   EXPECT_EQ(GetName(0), "T5");
-}
-
-// Disabled until CL9a: it shows "Send".
-TEST_F(SendModeTest, DISABLED_DeletedTrackShowsNoRouteKind) {
-  EnterSendMode(kSource);
-  reaper_.GetProject().DeleteTrack(tracks_[kSource]);
-  surface_->SetTrackListChange();
-  RunUntilShown();
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "");
 }
 
 //------------------------------------------------------------------------------
