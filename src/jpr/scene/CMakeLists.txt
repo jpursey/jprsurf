@@ -39,11 +39,14 @@ set(jpr_scene_DEPS
 )
 
 set(jpr_scene_TEST_SOURCE
+  command_properties_test.cc
   const_property_test.cc
+  polled_toggle_property_test.cc
   route_properties_test.cc
   route_reference_test.cc
   scene_test.cc
   state_properties_test.cc
+  timeline_property_test.cc
   track_properties_test.cc
   track_reference_test.cc
   value_property_test.cc

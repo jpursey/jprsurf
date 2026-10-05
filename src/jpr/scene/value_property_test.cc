@@ -6,11 +6,31 @@
 #include "jpr/scene/value_property.h"
 
 #include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
 
 namespace jpr {
 namespace {
+
+TEST(ToggleValuePropertyTest, HoldsItsValue) {
+  ToggleValueProperty property("user:flag", true);
+  EXPECT_EQ(property.GetType(), ViewProperty::Type::kToggle);
+  EXPECT_TRUE(property.GetBool());
+  property.SetBool(false);
+  EXPECT_FALSE(property.GetBool());
+}
+
+TEST(ToggleValuePropertyTest, NotifiesOnlyOnChange) {
+  ToggleValueProperty property("user:flag");
+  bool changed = false;
+  property.RegisterFlag(&changed);
+  property.SetBool(false);
+  EXPECT_FALSE(changed);
+  property.SetBool(true);
+  EXPECT_TRUE(changed);
+  property.UnregisterFlag(&changed);
+}
 
 TEST(EnumeratedValuePropertyTest, NamesSetTheRange) {
   EnumeratedValueProperty property("user:step", {"measure", "beat", "marker"});
@@ -73,6 +93,27 @@ TEST(EnumeratedValuePropertyTest, NoNamesHasOneEmptyValue) {
   EXPECT_EQ(property.GetMaxValue(), 0);
   EXPECT_EQ(property.GetInt(), 0);
   EXPECT_EQ(property.GetText(), "");
+}
+
+TEST(CallbackActionPropertyTest, RunningItCallsTheCallback) {
+  int calls = 0;
+  CallbackActionProperty property("user:action", [&calls] { ++calls; });
+  EXPECT_EQ(property.GetType(), ViewProperty::Type::kAction);
+  property.RunAction();
+  property.RunAction();
+  EXPECT_EQ(calls, 2);
+}
+
+TEST(CallbackTogglePropertyTest, EveryWriteCallsTheCallback) {
+  std::vector<bool> writes;
+  CallbackToggleProperty property(
+      "user:toggle", [&writes](bool value) { writes.push_back(value); });
+  EXPECT_EQ(property.GetType(), ViewProperty::Type::kToggle);
+  property.SetBool(true);
+  EXPECT_FALSE(property.GetBool());
+  property.SetBool(true);
+  property.SetBool(false);
+  EXPECT_EQ(writes, (std::vector<bool>{true, true, false}));
 }
 
 }  // namespace

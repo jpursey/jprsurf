@@ -310,6 +310,32 @@ TEST_F(SceneTest, IsActiveWhileItsSurfaceIs) {
   EXPECT_FALSE(root->IsActive());
 }
 
+TEST_F(SceneTest, StatePropertiesArePolledOnlyWhileWatched) {
+  ViewProperty* dirty = scene_.GetProperty(kStateProjectDirty);
+  ASSERT_NE(dirty, nullptr);
+  AddSurface();
+
+  reaper_.GetProject().SetDirty(true);
+  surface_->Run();
+  EXPECT_FALSE(dirty->GetBool());
+
+  // Watching it brings it up to date at once.
+  bool changed = false;
+  dirty->RegisterFlag(&changed);
+  EXPECT_TRUE(dirty->GetBool());
+
+  changed = false;
+  reaper_.GetProject().SetDirty(false);
+  surface_->Run();
+  EXPECT_TRUE(changed);
+  EXPECT_FALSE(dirty->GetBool());
+
+  dirty->UnregisterFlag(&changed);
+  reaper_.GetProject().SetDirty(true);
+  surface_->Run();
+  EXPECT_FALSE(dirty->GetBool());
+}
+
 TEST_F(SceneTest, ViewConditionsApplyOnTheNextRun) {
   ToggleValueProperty* flag = scene_.AddUserProperty(
       std::make_unique<ToggleValueProperty>("user:flag"));

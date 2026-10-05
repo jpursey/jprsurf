@@ -129,7 +129,13 @@ A fixture in a test-only `jpr_scene_testing` library, as `SurfaceTest` is in
 - `RunUntilShown()` is two runs, as for the surface. Presses that get the
   clock right: `Tap()`, `DoublePress()`, `LongPress()`, and `Hold()`, waiting
   for `Control::kLongPressDurationSecs` and `kDoublePressWindowSecs`, as
-  `SurfaceTest`'s do. A test of a property alone doesn't need the fixture.
+  `SurfaceTest`'s do.
+- **A test of a property alone doesn't need the fixture.** It uses a plain
+  fixture (the fake, and a scene for the property), refreshes the track cache
+  or calls `UpdateState()` itself, and ends each call with
+  `EndEntryPoint()` where it needs to. The scene's polling of what is watched
+  is tested with the scene. Tests that need REAPER's calls back, such as for
+  the selected tracks' automation modes, use `SceneTest`.
 - Anything logged at `ERROR` or above fails the test (`gb::LogErrorGuard`),
   unless the test takes it, as a mapping that fails to be added logs why.
 
@@ -267,7 +273,7 @@ Depends on: nothing.
   without the end fail.
 - `reaper_trace_test.cc` checks what it did before.
 
-### CL6 [ ] scene: State, command, and timeline properties
+### CL6 [x] scene: State, command, and timeline properties
 
 Depends on: CL3.
 
