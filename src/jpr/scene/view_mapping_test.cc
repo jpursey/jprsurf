@@ -180,32 +180,36 @@ TEST_F(ViewMappingTest, TogglesWriteEachOutput) {
 TEST_F(ViewMappingTest, PansWriteSteps) {
   TestProperty* property = AddProperty(Type::kPan, -1.0);
   FakeDevice::FakeControl three = AddDValue("Three", {2});
+  FakeDevice::FakeControl four = AddDValue("Four", {3});
   FakeDevice::FakeControl five = AddDValue("Five", {4});
-  Write("user:value", {"DValue", "Three", "Five", "CValue"});
+  Write("user:value", {"DValue", "Three", "Four", "Five", "CValue"});
   AddSurface();
 
   // Two steps split at the center, three beyond a pan of 0.65 either way, and
-  // more keep a step each for hard left, the center, and hard right.
+  // more keep a step each for hard left and hard right (and the center, with an
+  // odd number).
   struct Row {
     double pan;
     int two;
     int three;
+    int four;
     int five;
   };
   for (const Row& row : std::vector<Row>{
-           {-1.0, 0, 0, 0},
-           {-0.8, 0, 0, 1},
-           {-0.5, 0, 1, 1},
-           {0.0, 1, 1, 2},
-           {0.5, 1, 1, 3},
-           {0.8, 1, 2, 3},
-           {1.0, 1, 2, 4},
+           {-1.0, 0, 0, 0, 0},
+           {-0.8, 0, 0, 1, 1},
+           {-0.5, 0, 1, 1, 1},
+           {0.0, 1, 1, 1, 2},
+           {0.5, 1, 1, 2, 3},
+           {0.8, 1, 2, 2, 3},
+           {1.0, 1, 2, 3, 4},
        }) {
     SCOPED_TRACE(row.pan);
     property->SetPan(row.pan);
     surface_->Run();
     EXPECT_EQ(dvalue_.dvalue_output->GetValue(), row.two);
     EXPECT_EQ(three.dvalue_output->GetValue(), row.three);
+    EXPECT_EQ(four.dvalue_output->GetValue(), row.four);
     EXPECT_EQ(five.dvalue_output->GetValue(), row.five);
     EXPECT_NEAR(cvalue_.cvalue_output->GetValue(), (row.pan + 1.0) / 2.0, 1e-9);
   }
@@ -437,6 +441,49 @@ TEST_F(ViewMappingTest, TheFirstModeOverrideThatMatchesWins) {
     EXPECT_EQ(lights.dvalue_output->GetMode(), row.expected_mode);
     EXPECT_EQ(lights.dvalue_output->GetValue(),
               (std::vector<int>{1, 3, 2, 4}[row.expected_mode]));
+  }
+}
+
+TEST_F(ViewMappingTest, StepsAreThoseOfTheModeAnOverridePicks) {
+  // Each value is on in mode 0, and its step in mode 1.
+  struct Row {
+    Type type;
+    Value value;
+    int step;
+  };
+  const std::vector<Row> rows = {
+      {Type::kPan, 0.5, 3},
+      {Type::kVolume, 2.0, 2},
+      {Type::kNormalized, 0.6, 2},
+      // A luminance of 0.6.
+      {Type::kColor, Color{204, 204, 204}, 2},
+  };
+  ToggleValueProperty* alt = AddFlag("user:alt");
+  std::vector<FakeDevice::FakeControl> controls;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    const std::string name = absl::StrCat("user:value", i);
+    AddProperty(rows[i].type, rows[i].value, name);
+
+    // Mode 0 is off or on, and mode 1 has five steps.
+    controls.push_back(AddDValue(absl::StrCat("Lights", i), {1, 4}));
+    Write(
+        name, {absl::StrCat("Lights", i)},
+        {.write = {.mode_overrides = {{.property = "user:alt",
+                                       .value_to_mode = {{Value(true), 1}}}}}});
+  }
+  AddSurface();
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(controls[i].dvalue_output->GetMode(), 0);
+    EXPECT_EQ(controls[i].dvalue_output->GetValue(), 1);
+  }
+
+  alt->SetBool(true);
+  surface_->Run();
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(controls[i].dvalue_output->GetMode(), 1);
+    EXPECT_EQ(controls[i].dvalue_output->GetValue(), rows[i].step);
   }
 }
 

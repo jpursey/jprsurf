@@ -5,6 +5,9 @@
 
 #include "jpr/scene/view_mapping.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_property.h"
 
@@ -775,7 +778,7 @@ int MapPanToEvenRange(double pan, int max) {
 
   // Determine the number of remaining intermediate values.
   int value_count = max - 1;
-  int value = (pan + 1.0) * 0.5;  // Shift pan to the range (0,1)
+  double value = (pan + 1.0) * 0.5;  // Shift pan to the range (0,1)
   return static_cast<int>(std::ceil(value * value_count));
 }
 
@@ -807,37 +810,38 @@ int MapPanToOddRange(double pan, int max) {
   return center + value;
 }
 
+// Maps the pan to a DValue output's steps, up to `max`. With more than three
+// steps, hard left and hard right each have a step of their own (and the
+// center, with an odd number of steps), and the pans in between are spread
+// over the rest.
+int MapPanToSteps(double pan, int max) {
+  if (max == 1) {
+    return MapPanToTwoStates(pan);
+  }
+  if (max == 2) {
+    return MapPanToThreeStates(pan);
+  }
+
+  // There are max + 1 steps, so an odd max is an even number of them.
+  if (max % 2 == 1) {
+    return MapPanToEvenRange(pan, max);
+  }
+  return MapPanToOddRange(pan, max);
+}
+
 }  // namespace
 
 void ViewMapping::InitWritePanSyncFunction() {
   Control::Outputs outputs = control_->GetOutputs();
 
-  // If there is a dvalue output, we clamp the pan value hard left, center, and
-  // hard right to explicit values if possible, and then interpolate for values
-  // in between.
+  // If there is a dvalue output, we map the pan value to the steps of the mode
+  // it is written in (see MapPanToSteps()).
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control_->GetDValueMaxValue(config_.write.mode);
-    if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapPanToTwoStates(property.GetPan()), mode);
-      };
-    } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapPanToThreeStates(property.GetPan()), mode);
-      };
-    } else if (max_value % 2 == 1) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapPanToEvenRange(property.GetPan(),
-                                            control.GetDValueMaxValue(mode)),
-                          mode);
-      };
-    } else {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapPanToOddRange(property.GetPan(),
-                                           control.GetDValueMaxValue(mode)),
-                          mode);
-      };
-    }
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      control.SetDValue(
+          MapPanToSteps(property.GetPan(), control.GetDValueMaxValue(mode)),
+          mode);
+    };
     return;
   }
 
@@ -895,30 +899,30 @@ int MapVolumeToRange(double volume, int max) {
   return static_cast<int>(std::ceil(value * (max - 1)));
 }
 
+// Maps the volume to a DValue output's steps, up to `max`.
+int MapVolumeToSteps(double volume, int max) {
+  if (max == 1) {
+    return MapVolumeToTwoStates(volume);
+  }
+  if (max == 2) {
+    return MapVolumeToThreeStates(volume);
+  }
+  return MapVolumeToRange(volume, max);
+}
+
 }  // namespace
 
 void ViewMapping::InitWriteVolumeSyncFunction() {
   Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a dvalue output, we map the volume value from [0,kMaxVolume] to
-  // discrete steps based on the max value.
+  // the steps of the mode it is written in.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control_->GetDValueMaxValue(config_.write.mode);
-    if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapVolumeToTwoStates(property.GetVolume()), mode);
-      };
-    } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapVolumeToThreeStates(property.GetVolume()), mode);
-      };
-    } else {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapVolumeToRange(property.GetVolume(),
-                                           control.GetDValueMaxValue(mode)),
-                          mode);
-      };
-    }
+    write_control_ = [](ViewProperty& property, Control& control, int mode) {
+      control.SetDValue(MapVolumeToSteps(property.GetVolume(),
+                                         control.GetDValueMaxValue(mode)),
+                        mode);
+    };
     return;
   }
 
@@ -976,32 +980,34 @@ int MapNormalizedToRange(double value, int max) {
   return static_cast<int>(std::ceil(value * (max - 1)));
 }
 
+// Maps the normalized value to a DValue output's steps, up to `max`.
+int MapNormalizedToSteps(double value, int max) {
+  if (max == 1) {
+    return MapNormalizedToTwoStates(value);
+  }
+  if (max == 2) {
+    return MapNormalizedToThreeStates(value);
+  }
+  return MapNormalizedToRange(value, max);
+}
+
+// Writes the property's normalized value to the steps of the mode it is
+// written in.
+void WriteNormalizedSteps(ViewProperty& property, Control& control, int mode) {
+  control.SetDValue(MapNormalizedToSteps(property.GetNormalized(),
+                                         control.GetDValueMaxValue(mode)),
+                    mode);
+}
+
 }  // namespace
 
 void ViewMapping::InitWriteNormalizedSyncFunction() {
   Control::Outputs outputs = control_->GetOutputs();
 
   // If there is a dvalue output, we map the normalized value from [0,1] to
-  // to discrete steps depending on the max value.
+  // the steps of the mode it is written in.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control_->GetDValueMaxValue(config_.write.mode);
-    if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()),
-                          mode);
-      };
-    } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()),
-                          mode);
-      };
-    } else {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToRange(property.GetNormalized(),
-                                               control.GetDValueMaxValue(mode)),
-                          mode);
-      };
-    }
+    write_control_ = WriteNormalizedSteps;
     return;
   }
 
@@ -1081,24 +1087,7 @@ void ViewMapping::InitWriteColorSyncFunction() {
   // normalized value, and make it discrete in the same way as the normalized
   // property.
   if (outputs.IsSet(ControlOutput::Type::kDValue)) {
-    int max_value = control_->GetDValueMaxValue(config_.write.mode);
-    if (max_value == 1) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToTwoStates(property.GetNormalized()),
-                          mode);
-      };
-    } else if (max_value == 2) {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToThreeStates(property.GetNormalized()),
-                          mode);
-      };
-    } else {
-      write_control_ = [](ViewProperty& property, Control& control, int mode) {
-        control.SetDValue(MapNormalizedToRange(property.GetNormalized(),
-                                               control.GetDValueMaxValue(mode)),
-                          mode);
-      };
-    }
+    write_control_ = WriteNormalizedSteps;
     return;
   }
 }

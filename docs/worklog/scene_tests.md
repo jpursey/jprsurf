@@ -340,7 +340,7 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL12 [ ] scene: Fix steps written in some modes
+### CL12 [x] scene: Fix steps written in some modes
 
 Depends on: CL11.
 
@@ -364,7 +364,10 @@ The fixes:
   value.
 
 **Verify**
-- Standard checks.
+- Standard checks, and the new tests fail without the fixes.
+- No check in REAPER: the X-Touch's pans are written in ring mode 1, and
+  overridden only to modes 5 and 8, whose highest values pick the same spread
+  as before, so the surface shows the same.
 
 ### CL13 [ ] scene: Mappings that read
 
