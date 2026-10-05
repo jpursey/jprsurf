@@ -28,22 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Scene tests
-
-- **Layers:** scene
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** *Fake X-Touch and device tests*
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
-
-Tests of `scene` against the fake and fake X-Touches, for the detail surface
-tests don't reach: properties against REAPER's state (track, route, state,
-command, and timeline properties), views (conditions, subjects, lists,
-references, and repeated views), mappings (modifiers, taps, and picks), and
-`TrackActions` (ranges, anchors, grouping, and batching). The fake's reset of
-process state extends to `scene`'s globals, such as `g_last_auto_override` in
-`state_properties.cc`.
-
 ## Check the fakes in REAPER
 
 - **Layers:** common

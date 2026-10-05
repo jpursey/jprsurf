@@ -147,8 +147,8 @@ Checked on the hardware, and held by the fake:
 
 ## Building blocks
 
-- **`FakeXTouch`** for any test through a device: *Scene tests* and *Surface
-  tests* drive the surface through it, as a user does, and read what it shows.
+- **`FakeXTouch`** for any test through the X-Touch: *Surface tests* drive the
+  surface through it, as a user does, and read what it shows.
 - **`FakeMidiOutput::Connect()`** for fake hardware of any other kind, and
   `SetRecording()` for a test of the raw messages.
 - **`fake_control_io.h`** for testing anything built on controls without a

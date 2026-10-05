@@ -581,7 +581,7 @@ surface about, and the surface doesn't follow it.
 | -------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `common` | The fake                     | `Track`, `TrackCache`, `TrackBatch`, `Timeline`, MIDI ports, `ContinuousUndo`, and `ControlSurface`'s callbacks and single instance rule                              |
 | `device` | The fake, and other fakes    | `Control`, its inputs and outputs, and their MIDI variants, each on its own; and every control on `DeviceXTouch`, on a fake X-Touch                                   |
-| `scene`  | The fake, and fake X-Touches | Properties against REAPER's state, views (conditions, subjects, lists, references), mappings (modifiers, taps, picks), and `TrackActions` (ranges, anchors, grouping) |
+| `scene`  | The fake, and fake controls  | Properties against REAPER's state, views (conditions, subjects, lists, references), mappings (modifiers, taps, picks), and `TrackActions` (ranges, anchors, grouping) |
 | `plugin` | The surface harness          | JPRSurf's own surface, a file per area: track strips, the track list and its navigation, Send/Receive mode, and the global controls                                   |
 
 Existing tests that need no REAPER stay as they are.
