@@ -118,6 +118,39 @@ TEST_F(GlobalTest, HoldingSoloUnsolosAllTracks) {
 }
 
 //------------------------------------------------------------------------------
+// Modifiers
+//
+// Shift, Option, Control, and Alt are lit while held.
+//------------------------------------------------------------------------------
+
+struct Modifier {
+  Button button;
+  std::string test_name;
+};
+
+class ModifierTest : public GlobalTest, public WithParamInterface<Modifier> {};
+
+INSTANTIATE_TEST_SUITE_P(Global, ModifierTest,
+                         Values(Modifier{Button::kShift, "Shift"},
+                                Modifier{Button::kOption, "Option"},
+                                Modifier{Button::kControl, "Control"},
+                                Modifier{Button::kAlt, "Alt"}),
+                         [](const TestParamInfo<Modifier>& info) {
+                           return info.param.test_name;
+                         });
+
+TEST_P(ModifierTest, LightIsLitWhileHeld) {
+  EXPECT_EQ(xtouch_.GetLight(GetParam().button), Light::kOff);
+  xtouch_.Press(GetParam().button);
+  RunUntilShown();
+  EXPECT_EQ(xtouch_.GetLight(GetParam().button), Light::kOn);
+
+  xtouch_.Release(GetParam().button);
+  RunUntilShown();
+  EXPECT_EQ(xtouch_.GetLight(GetParam().button), Light::kOff);
+}
+
+//------------------------------------------------------------------------------
 // Lights that show an action's toggle state
 //------------------------------------------------------------------------------
 

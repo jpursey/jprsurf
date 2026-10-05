@@ -686,7 +686,7 @@ In `track_list_test.cc`:
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL11 [ ] plugin: Whole surface tests
+### CL11 [x] plugin: Whole surface tests
 
 Depends on: CL8.
 
