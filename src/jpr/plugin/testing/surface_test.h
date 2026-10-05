@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "gb/test/log_error_guard.h"
@@ -49,10 +50,25 @@ class SurfaceTest : public ::testing::Test {
   // first.
   void AddSurface();
 
-  // Runs the surface until the X-Touches show what it reads in the first run.
-  // That takes two runs: a fader's position is sent when its device runs, and
-  // the surface runs its devices before its scene.
+  // Runs the surface until the X-Touches show the project as it is now. That
+  // takes two runs, as each run reads the project before it acts: what a run's
+  // actions change on other tracks is read on the next, and a fader's position
+  // is sent when its device next runs.
   void RunUntilShown();
+
+  //----------------------------------------------------------------------------
+  // Strips
+  //
+  // Strips are numbered across the surface: 0-7 on the extender, and 8-15 on
+  // the X-Touch, or 0-7 on the X-Touch alone.
+  //----------------------------------------------------------------------------
+
+  // Returns the X-Touch `strip` is on, and its strip there.
+  FakeXTouch& GetXTouch(int strip);
+  static int GetXTouchStrip(int strip) { return strip % 8; }
+
+  // Returns the name `strip` shows, without the spaces after it.
+  std::string GetName(int strip);
 
   //----------------------------------------------------------------------------
   // The project
@@ -81,6 +97,10 @@ class SurfaceTest : public ::testing::Test {
   // Held past the long press time.
   void LongPress(FakeXTouch& xtouch, FakeXTouch::Button button);
 
+  // Pressed, and held past the long press time, but not released: the test
+  // releases it, after pressing whatever it holds the button for.
+  void Hold(FakeXTouch& xtouch, FakeXTouch::StripButton button, int strip);
+
   //----------------------------------------------------------------------------
   // Moves
   //----------------------------------------------------------------------------
@@ -98,7 +118,7 @@ class SurfaceTest : public ::testing::Test {
   std::unique_ptr<TestControlSurface> surface_;
 
  private:
-  // Runs until whatever a button press started is done.
+  // Runs until whatever a button press started is done, and shown.
   void Settle();
 };
 

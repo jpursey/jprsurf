@@ -141,9 +141,15 @@ class SurfaceTest : public testing::Test {
   // runs until the X-Touches show the project.
   void AddSurface();
 
-  // Runs the surface until the X-Touches show what it reads in the first run:
-  // two runs, as a fader's position is sent when its device next runs.
+  // Runs the surface until the X-Touches show the project as it is now: two
+  // runs, as each run reads the project before it acts (see CL4b).
   void RunUntilShown();
+
+  // Strips are numbered across the surface: 0-7 on the extender, and 8-15 on
+  // the X-Touch, or 0-7 on the X-Touch alone.
+  FakeXTouch& GetXTouch(int strip);
+  static int GetXTouchStrip(int strip);
+  std::string GetName(int strip);  // Without the spaces after it.
 
   // Adds `count` tracks to the end of `folder`, or of the current project if
   // it is null, and returns them. Each is named for where it is: T1, T2, and
@@ -151,8 +157,8 @@ class SurfaceTest : public testing::Test {
   std::vector<FakeTrack*> AddTracks(int count, FakeTrack* folder = nullptr);
 
   // Presses that need the clock moved, each ending released, once whatever
-  // it started is done (a press held back in case it is a double press, and
-  // outputs held back after an input): a tap, a double press (two presses
+  // it started is done and shown (a press held back in case it is a double
+  // press, and then RunUntilShown()): a tap, a double press (two presses
   // within the double press time), and a long press (held past the long
   // press time). Overloads are added as tests need them.
   void Tap(FakeXTouch& xtouch, FakeXTouch::Button button);
@@ -160,6 +166,10 @@ class SurfaceTest : public testing::Test {
   void DoublePress(FakeXTouch& xtouch, FakeXTouch::StripButton button,
                    int strip);
   void LongPress(FakeXTouch& xtouch, FakeXTouch::Button button);
+
+  // Pressed, and held past the long press time, but not released: the test
+  // releases it, after pressing whatever it holds the button for.
+  void Hold(FakeXTouch& xtouch, FakeXTouch::StripButton button, int strip);
 
   // Touches the fader, moves it, and lets go, as a hand does.
   void MoveFader(FakeXTouch& xtouch, int fader, int position);
@@ -207,9 +217,10 @@ helpers that save getting the clock right, or naming tracks by hand.
   These handlers model what REAPER's actions do, which the backlog's *Check the
   fakes in REAPER* checks. A test gives another action, such as Undo, a
   handler with `FakeReaper::SetCommandHandler()`.
-- **Press timing:** the press helpers hold a button for exactly a long press,
-  and settle for exactly the double press window (and a run each), from the
-  times `Control` makes public (CL2a), so they follow any change to them.
+- **Press timing:** the press helpers hold a button for exactly a long press
+  (and a run), and settle for exactly the double press window, and then until
+  what the press changed is shown, from the times `Control` makes public
+  (CL2a), so they follow any change to them.
 - Its own tests, in `jpr_plugin_testing_test`, check the fixture: the surface
   loads with both models and with the X-Touch alone, `AddTracks()`' names and
   folders, and that each press helper does what the gesture does on the
@@ -430,30 +441,38 @@ Depends on: CL4.
 - An empty strip's bottom line is blank in REAPER (with the end of the
   feature).
 
-### CL4b [ ] plugin: Faders move on the run that reads the change (to decide)
+### CL4b: Faders move on the run that reads the change (dropped)
 
-Depends on: CL4.
+Found by CL4: every change the scene makes to a fader reaches the X-Touch a
+run (1/30s) late, touched or not. A fader's output is bound to its input, so
+`Control` holds it as pending, and sends it when the device next runs, and
+`PluginSurface::OnRun()` runs the devices before the scene, so input has no
+latency.
 
-- Found by CL4: every change the scene makes to a fader reaches the X-Touch a
-  run (1/30s) late, touched or not. A fader's output is bound to its input, so
-  `Control` holds it as pending, and sends it when the device next runs, and
-  `PluginSurface::OnRun()` runs the devices before the scene. The devices
-  still run first, so input has no latency: instead, a bound output is sent
-  at once when nothing holds it (the fader isn't touched, or the input delay
-  has passed), and is only left pending while it is held. Whether a run of
-  latency is worth the change is the user's call.
-- If it is fixed: `RunUntilShown()` becomes one run, and a test checks a
-  fader is shown after a single run.
+Not fixed: a run is never noticeable, and a motor fader moves slower than
+that anyway. Sending a bound output at once when nothing holds it would give
+`Control` two paths for an output where it has one, and the tests would still
+need the run after letting go of a fader, which is kept on purpose (the
+finger is likely still near it). So `RunUntilShown()` stays.
 
-**Verify**
-- Standard checks.
-- An idle profile: it changes per-run work.
+CL5 found the same run elsewhere: the scene reads the tracks it shows before
+it runs its actions, so what an action changes on other tracks (such as the
+tracks select unselects) is read, and shown, on the next run. It is the same
+run, and the same decision.
 
-### CL5 [ ] plugin: Track list tests
+### CL5 [x] plugin: Track list tests
 
 Depends on: CL3.
 
-- `track_list_test.cc` (see Tests).
+- `track_list_test.cc` (see Tests). The big folder is T20, with 20 tracks,
+  so that leaving it shows Global centering it, and a bank in it stops short
+  at its last track.
+- `SurfaceTest` gains `Hold()`, for a select range, and strips numbered
+  across the surface (`GetXTouch()`, `GetXTouchStrip()`, and `GetName()`),
+  which its own tests now use too. The press helpers settle for the double
+  press window, in whose last run a held back press is acted on, and then
+  `RunUntilShown()`, as what the press changes on other tracks is read on the
+  run after (see CL4b).
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

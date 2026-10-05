@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "jpr/common/testing/fake_project.h"
@@ -22,14 +23,6 @@ namespace {
 // Returns how long LongPress() holds a button: a run past a long press.
 absl::Duration GetLongPressTime() {
   return absl::Seconds(Control::kLongPressDurationSecs) +
-         FakeReaper::GetRunTime();
-}
-
-// Returns how long Settle() runs: a run past the time a press is held back in
-// case it is a double press. A button's outputs aren't held back after an
-// input, as a fader's are.
-absl::Duration GetSettleTime() {
-  return absl::Seconds(Control::kDoublePressWindowSecs) +
          FakeReaper::GetRunTime();
 }
 
@@ -61,6 +54,19 @@ void SurfaceTest::AddSurface() {
 void SurfaceTest::RunUntilShown() {
   surface_->Run();
   surface_->Run();
+}
+
+//------------------------------------------------------------------------------
+// Strips
+//------------------------------------------------------------------------------
+
+FakeXTouch& SurfaceTest::GetXTouch(int strip) {
+  return xtouch_ext_.has_value() && strip < 8 ? *xtouch_ext_ : xtouch_;
+}
+
+std::string SurfaceTest::GetName(int strip) {
+  return std::string(absl::StripTrailingAsciiWhitespace(
+      GetXTouch(strip).GetScribble(GetXTouchStrip(strip), 0)));
 }
 
 //------------------------------------------------------------------------------
@@ -120,7 +126,18 @@ void SurfaceTest::LongPress(FakeXTouch& xtouch, FakeXTouch::Button button) {
   Settle();
 }
 
-void SurfaceTest::Settle() { surface_->RunFor(GetSettleTime()); }
+void SurfaceTest::Hold(FakeXTouch& xtouch, FakeXTouch::StripButton button,
+                       int strip) {
+  xtouch.Press(button, strip);
+  surface_->RunFor(GetLongPressTime());
+}
+
+void SurfaceTest::Settle() {
+  // A press held back in case it is a double press is acted on in the last run
+  // of the double press window.
+  surface_->RunFor(absl::Seconds(Control::kDoublePressWindowSecs));
+  RunUntilShown();
+}
 
 //------------------------------------------------------------------------------
 // Moves

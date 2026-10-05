@@ -27,9 +27,6 @@ using StripButton = FakeXTouch::StripButton;
 
 class SurfaceTestTest : public SurfaceTest {
  protected:
-  // Returns the name the extender's `strip` shows.
-  std::string GetName(int strip) { return xtouch_ext_->GetScribble(strip, 0); }
-
   // Returns the names of the current project's tracks, in order.
   std::vector<std::string> GetTrackNames() {
     FakeProject& project = reaper_.GetProject();
@@ -64,8 +61,8 @@ TEST_F(SurfaceTestTest, AddTracksNamesTracksForWhereTheyAre) {
 TEST_F(SurfaceTestTest, TheExtenderIsLeftOfTheXTouch) {
   AddTracks(16);
   AddSurface();
-  EXPECT_EQ(GetName(0), "T1     ");
-  EXPECT_EQ(xtouch_.GetScribble(0, 0), "T9     ");
+  EXPECT_EQ(GetName(0), "T1");
+  EXPECT_EQ(GetName(8), "T9");
 }
 
 // A folder on the fourth strip, to press its select button.
@@ -85,18 +82,18 @@ class PressTest : public SurfaceTestTest {
 TEST_F(PressTest, TapPressesOnce) {
   Tap(*xtouch_ext_, StripButton::kSelect, kFolderStrip);
   EXPECT_TRUE(folder_->selected);
-  EXPECT_EQ(GetName(0), "T1     ");
+  EXPECT_EQ(GetName(0), "T1");
 }
 
 TEST_F(PressTest, DoublePressPressesTwice) {
   DoublePress(*xtouch_ext_, StripButton::kSelect, kFolderStrip);
-  EXPECT_EQ(GetName(0), "T4.1   ");
+  EXPECT_EQ(GetName(0), "T4.1");
 }
 
 TEST_F(PressTest, LongPressHolds) {
   DoublePress(*xtouch_ext_, StripButton::kSelect, kFolderStrip);
   LongPress(xtouch_, Button::kGlobal);
-  EXPECT_EQ(GetName(0), "T1     ");
+  EXPECT_EQ(GetName(0), "T1");
 }
 
 class XTouchAloneTest : public SurfaceTest {
@@ -108,7 +105,7 @@ TEST_F(XTouchAloneTest, TheXTouchShowsTheFirstTracks) {
   AddTracks(1);
   AddSurface();
   EXPECT_FALSE(xtouch_ext_.has_value());
-  EXPECT_EQ(xtouch_.GetScribble(0, 0), "T1     ");
+  EXPECT_EQ(GetName(0), "T1");
 }
 
 }  // namespace
