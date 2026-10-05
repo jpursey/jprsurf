@@ -576,7 +576,7 @@ Depends on: CL5a, and the UI check in To confirm.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL7a [ ] plugin: Empty route strips show no volume
+### CL7a [x] plugin: Empty route strips show no volume
 
 Depends on: CL7.
 
@@ -584,8 +584,7 @@ Depends on: CL7.
   It should be blank, as the top line is.
 - CL4a's fix: the volume line's mapping in the route view only acts while its
   route exists (a condition on `RouteProperties::kExists`).
-- `send_mode_test.cc`: its disabled test enabled, or folded into
-  `EmptyRouteStripIsBlank`.
+- `send_mode_test.cc`: its disabled test folded into `EmptyRouteStripIsBlank`.
 
 **Verify**
 - Standard checks.

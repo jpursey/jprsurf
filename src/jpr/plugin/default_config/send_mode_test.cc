@@ -202,18 +202,13 @@ TEST_F(SendModeTest, RouteStripShowsTheRoute) {
 TEST_F(SendModeTest, EmptyRouteStripIsBlank) {
   EnterSendMode(1);  // T2, with one send.
   EXPECT_EQ(GetName(1), "");
+  EXPECT_EQ(GetBottomLine(1), "");
   EXPECT_EQ(xtouch_ext_->GetScribbleColor(1), ScribbleColor::kBlack);
   EXPECT_EQ(xtouch_ext_->GetFader(1), 0);
   EXPECT_EQ(xtouch_ext_->GetRing(1), Ring{});
 
   Tap(*xtouch_ext_, StripButton::kMute, 1);
   EXPECT_EQ(GetLight(StripButton::kMute, 1), Light::kOff);
-}
-
-// Disabled until CL7a: it shows "-inf dB".
-TEST_F(SendModeTest, DISABLED_EmptyRouteStripShowsNoVolume) {
-  EnterSendMode(1);  // T2, with one send.
-  EXPECT_EQ(GetBottomLine(1), "");
 }
 
 TEST_F(SendModeTest, MovingARouteFaderSetsTheVolume) {

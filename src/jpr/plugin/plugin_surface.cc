@@ -693,9 +693,13 @@ void PluginSurface::InitViews() {
       route_view->AddMapping(
           ViewMapping::kWriteControl, kOtherTrackName,
           absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 0)));
+      // The bottom scribble line shows the volume, and is blank for an empty
+      // strip.
       route_view->AddMapping(
           ViewMapping::kWriteControl, RouteProperties::kVolume,
-          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)));
+          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)),
+          {.condition = ViewCondition::Config{
+               .property = std::string(RouteProperties::kExists)}});
       route_view->AddMapping(
           ViewMapping::kWriteControl, kOtherTrackColor,
           absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(i)));
