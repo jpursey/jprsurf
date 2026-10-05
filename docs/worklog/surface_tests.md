@@ -615,5 +615,14 @@ Depends on: CL4-CL7a.
 - REAPER loads the extension, `jprsurf.log` has no new errors, and closing
   REAPER still writes `jprsurf_profile.txt`.
 - With `JPRSURF_TRACE=1`, REAPER still writes `jprsurf_trace.txt`.
-- The smoke test, as CL8 leaves it. There is no idle or smoke profile: nothing
-  on the realtime path changes.
+- The smoke test, as CL8 leaves it. There is no idle profile: nothing on the
+  realtime path changes. The smoke run is profiled, as the hand checks ride
+  along with it.
+
+Checked on 2026-10-05: the extension loads with no new errors, and writes its
+profile and trace. The smoke test passed, and its profile matches
+`profiles/smoke.txt` (per run, counts per action, and the profiler's cost).
+The blank volume line of an empty strip (CL4a and CL7a) can't be seen on the
+hardware: an empty strip is black, which shows no text (see X-Touch facts in
+[fake_xtouch.md](fake_xtouch.md)). The fixes still stop the surface sending
+text nobody can read, and show if a config ever colors empty strips.

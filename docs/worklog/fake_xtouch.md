@@ -142,6 +142,8 @@ Checked on the hardware, and held by the fake:
   fader was already sent is right. The fake puts it back at once, as the delay
   doesn't matter to JPRSurf, and leaves a fader moved without a touch where it
   is.
+- **A black scribble strip shows nothing:** its backlight is off, so its text
+  can't be read. The fake keeps the text sent, which is what tests check.
 
 ## Building blocks
 
