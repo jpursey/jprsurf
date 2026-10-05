@@ -581,9 +581,13 @@ void PluginSurface::InitViews() {
       AddTrackAnchorMapping(track_view, kAnchorRecArm,
                             {.action = TrackBoolProperty::kRecArm},
                             absl::StrCat(device_prefix, DeviceXTouch::Rec(i)));
+      // The bottom scribble line shows the volume, and is blank for an empty
+      // strip.
       track_view->AddMapping(
           ViewMapping::kWriteControl, TrackProperties::kUiVolume,
-          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)));
+          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)),
+          {.condition = ViewCondition::Config{
+               .property = std::string(TrackProperties::kTrackExists)}});
       track_view->Enable();
     }
   }

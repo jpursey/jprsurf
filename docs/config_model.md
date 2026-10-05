@@ -413,7 +413,11 @@ own subject (Send/Receive mode's Info strip could be one).
   instances (Send/Receive mode pages through every route strip at once).
 - An instance past the end of the list has an empty subject of the list's
   kind, so its `track:exists` or `route:exists` is false, and its controls show
-  nothing.
+  nothing. An empty subject's values read as nothing where they can (no name,
+  black, the fader down), and a mapping whose value would still show something
+  does nothing while `exists` is false: a condition on it, so the control is
+  cleared (a volume's text, which would read "-inf dB"), or a mode override (a
+  ring's mode with no lights). A template such as a track strip bundles these.
 - The scroll position stays in range when the list changes, such as when
   tracks are deleted or hidden.
 - A list can **reveal** a reference: scroll so that its subject is shown,

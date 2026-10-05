@@ -410,13 +410,20 @@ Depends on: CL3.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL4a [ ] plugin: Empty strips show no volume
+### CL4a [x] plugin: Empty strips show no volume
 
 Depends on: CL4.
 
 - Found by CL4: an empty strip's bottom scribble line shows "-inf dB", as the
   stub track's volume is 0. It should be blank, as the top line is.
-- Enables `TrackStripTest.EmptyStripShowsNoVolume`.
+- The volume line's mapping in `PluginSurface` only acts while its track
+  exists (a condition on `TrackProperties::kTrackExists`), so an empty strip
+  has no writer, and is cleared. The ring does the same with a mode override,
+  but the scribble strip's text has no modes. `config_model.md` says how a
+  list's empty instances show nothing: by these, not by the runtime.
+- `track_strip_test.cc`: the empty strip's bottom line is blank (its disabled
+  test folded into `EmptyStripScribbleIsBlank`), a track added to an empty
+  strip shows its volume, and a deleted track's strip goes blank.
 
 **Verify**
 - Standard checks.
@@ -465,6 +472,10 @@ Depends on: CL3.
 Depends on: CL3, and the UI check in To confirm.
 
 - `send_mode_test.cc` (see Tests).
+- An empty route strip's bottom line is blank: route strips map their volume
+  line as track strips did before CL4a, so it likely shows "-inf dB" too. If
+  so, its fix is CL4a's, a condition on `RouteProperties::kExists`, in a
+  follow-up CL.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

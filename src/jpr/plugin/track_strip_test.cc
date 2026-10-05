@@ -212,13 +212,24 @@ TEST_F(TrackStripTest, ScribbleIsWhiteForATrackWithNoColor) {
 
 TEST_F(TrackStripTest, EmptyStripScribbleIsBlank) {
   EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 0), "       ");
+  EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 1), "       ");
   EXPECT_EQ(xtouch_.GetScribbleColor(kEmptyStrip), ScribbleColor::kBlack);
 }
 
-// Disabled: an empty strip shows "-inf dB" (see CL4a in
-// docs/worklog/surface_tests.md).
-TEST_F(TrackStripTest, DISABLED_EmptyStripShowsNoVolume) {
-  EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 1), "       ");
+TEST_F(TrackStripTest, ScribbleShowsATrackAddedToAnEmptyStrip) {
+  AddTracks(1);
+  surface_->SetTrackListChange();
+  RunUntilShown();
+  EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 0), "T11    ");
+  EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 1), "+0.00dB");
+}
+
+TEST_F(TrackStripTest, ScribbleIsBlankForADeletedTrack) {
+  reaper_.GetProject().DeleteTrack(tracks_[9]);
+  surface_->SetTrackListChange();
+  RunUntilShown();
+  EXPECT_EQ(xtouch_.GetScribble(1, 0), "       ");
+  EXPECT_EQ(xtouch_.GetScribble(1, 1), "       ");
 }
 
 //------------------------------------------------------------------------------
