@@ -71,7 +71,8 @@ So the surface is tested in three separate parts:
   give handlers (the ruler modes, the automation mode actions). What Undo
   restores settles whether the fake should model undo.
 - **`SurfaceNotifier`:** what REAPER calls on a surface during and after each
-  function. Its own tests are already contract tests (*Surface tests* CL1).
+  function. Its own tests are already contract tests
+  (`surface_notifier_test.cc`, from *Surface tests*).
 
 Every behavior the fake models, and every call the notifier makes, has a
 contract test. The API list is finite, so a review can check it.
