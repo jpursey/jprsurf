@@ -24,6 +24,7 @@ follow-up CL, with the test disabled until then, as in *Surface tests*.
 | `SceneTest`                   | The fixture for scene tests                | `SurfaceTest`; `scene_test.cc`     |
 | `GetCachedTrack()`            | The track cache's track for a fake track   | `TrackCache::GetTrack()`           |
 | `FakeReaper::EndEntryPoint()` | Ends a call REAPER would have made         | `TestControlSurface`'s `EndCall()` |
+| `TestProperty`                | A property of any type holding a value     | `CreateConstProperty()`            |
 
 - `AddTracks()` names tracks T2 and T2.1, and moves from `SurfaceTest`.
   `AddTrack()` takes the name.
@@ -325,18 +326,47 @@ Depends on: CL9.
 **Verify**
 - Standard checks.
 
-### CL11 [ ] scene: Mappings that write
+### CL11 [x] scene: Mappings that write
 
 Depends on: CL3.
 
 - `view_mapping_test.cc`: each property type written to its output, modes and
   mode overrides, conditions holding and releasing the output, and writes
   when the property, its condition, or an override changes.
+- `TestProperty` (`scene/testing/test_property.h`), a property of any type
+  that holds a value its setters change, replaces `view_property_test.cc`'s
+  own copy, so mapping tests can write and read any type.
 
 **Verify**
 - Standard checks.
 
-### CL12 [ ] scene: Mappings that read
+### CL12 [ ] scene: Fix steps written in some modes
+
+Depends on: CL11.
+
+CL11 found two bugs in writing a pan, volume, normalized, or color property
+to a DValue output, neither of which the X-Touch mappings reach today:
+- A pan written to an output whose highest value is odd (an even number of
+  steps, such as the X-Touch ring's spread mode) shows every pan between hard
+  left and hard right as hard left: `MapPanToEvenRange()` truncates the pan to
+  an int before scaling it.
+- How the value is spread over the steps is picked once, from the highest
+  value of the mapping's own mode, so a mode override to a mode with a
+  different highest value spreads it wrongly (a pan in a mode with 2 steps
+  overridden to one with 11 only ever lights the first 2).
+
+The fixes:
+- Fix `MapPanToEvenRange()` in `view_mapping.cc`.
+- Pick the spread from the highest value of the mode each write resolves to,
+  as the toggle and enumerated writes already do.
+- `view_mapping_test.cc`: the pan test gains a DValue output with four steps,
+  and a pan written with a mode override to a mode with a different highest
+  value.
+
+**Verify**
+- Standard checks.
+
+### CL13 [ ] scene: Mappings that read
 
 Depends on: CL11.
 

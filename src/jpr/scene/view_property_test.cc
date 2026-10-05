@@ -6,44 +6,16 @@
 #include "jpr/scene/view_property.h"
 
 #include <string>
-#include <utility>
-#include <variant>
 
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
 #include "jpr/common/timeline.h"
+#include "jpr/scene/testing/test_property.h"
 
 namespace jpr {
 namespace {
 
 using Type = ViewProperty::Type;
-
-// A property of any type that reads the value it is constructed with.
-class TestProperty final : public ViewProperty {
- public:
-  TestProperty(Type type, Value value, int max_value = 0)
-      : ViewProperty("user:test", type),
-        value_(std::move(value)),
-        max_value_(max_value) {}
-
-  int GetMaxValue() const override { return max_value_; }
-
- protected:
-  bool ReadBool() const override { return std::get<bool>(value_); }
-  double ReadDouble() const override { return std::get<double>(value_); }
-  std::string ReadString() const override {
-    return std::get<std::string>(value_);
-  }
-  Color ReadColor() const override { return std::get<Color>(value_); }
-  TimelinePosition ReadTimelinePosition() const override {
-    return std::get<TimelinePosition>(value_);
-  }
-  int ReadInt() const override { return std::get<int>(value_); }
-
- private:
-  Value value_;
-  int max_value_;
-};
 
 TEST(ViewPropertyTest, EqualsBoolReadsAsBool) {
   EXPECT_TRUE(TestProperty(Type::kToggle, true).Equals(true));

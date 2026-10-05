@@ -7,6 +7,7 @@
 
 set(jpr_scene_testing_SOURCE
   scene_test.cc scene_test.h
+  test_property.h
 )
 
 set(jpr_scene_testing_DEPS
