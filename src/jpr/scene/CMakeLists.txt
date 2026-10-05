@@ -55,6 +55,7 @@ set(jpr_scene_TEST_SOURCE
   value_property_test.cc
   view_condition_test.cc
   view_property_test.cc
+  view_test.cc
 )
 
 set(jpr_scene_TEST_DEPS

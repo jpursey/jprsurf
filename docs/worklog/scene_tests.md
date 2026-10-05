@@ -307,7 +307,7 @@ Depends on: nothing.
 **Verify**
 - Standard checks.
 
-### CL9 [ ] scene: Views
+### CL9 [x] scene: Views
 
 Depends on: CL3.
 
