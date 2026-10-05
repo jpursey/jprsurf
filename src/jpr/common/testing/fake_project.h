@@ -73,6 +73,12 @@ class FakeProject final {
   // isn't a track in the project, this fails the test, and returns null.
   FakeTrack* AddTrack(std::string_view name, FakeTrack* parent = nullptr);
 
+  // Adds `count` tracks to the end of `folder`, or of the project if it is
+  // null, and returns them. Each is named for where it is, after those already
+  // there: T1, T2, and so on at the top level, and T2.1, T2.2, and so on in
+  // T2.
+  std::vector<FakeTrack*> AddTracks(int count, FakeTrack* folder = nullptr);
+
   // Deletes `track`, and its routes, as the user does in REAPER. Its child
   // tracks move up to its parent. Its pointer is never reused, and a call with
   // it fails the test.

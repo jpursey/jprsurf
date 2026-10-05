@@ -5,12 +5,7 @@
 
 #include "jpr/plugin/testing/surface_test.h"
 
-#include <string>
-#include <vector>
-
-#include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
-#include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/device/control.h"
 #include "jpr/plugin/plugin.h"
@@ -49,28 +44,6 @@ void SurfaceTest::RemoveSurface() {
 void SurfaceTest::RunUntilShown() {
   surface_->Run();
   surface_->Run();
-}
-
-//------------------------------------------------------------------------------
-// The project
-//------------------------------------------------------------------------------
-
-std::vector<FakeTrack*> SurfaceTest::AddTracks(int count, FakeTrack* folder) {
-  FakeProject& project = reaper_.GetProject();
-  const std::string prefix =
-      folder != nullptr ? absl::StrCat(folder->name, ".") : "T";
-  int number = 0;
-  for (int i = 0; i < project.GetTrackCount(); ++i) {
-    if (project.GetParentTrack(project.GetTrack(i)) == folder) {
-      ++number;
-    }
-  }
-  std::vector<FakeTrack*> tracks;
-  tracks.reserve(count);
-  for (int i = 0; i < count; ++i) {
-    tracks.push_back(project.AddTrack(absl::StrCat(prefix, ++number), folder));
-  }
-  return tracks;
 }
 
 //------------------------------------------------------------------------------

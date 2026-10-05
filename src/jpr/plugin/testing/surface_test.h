@@ -10,6 +10,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/surface_notifier.h"
@@ -63,10 +64,11 @@ class SurfaceTest : public ::testing::Test {
   //----------------------------------------------------------------------------
 
   // Adds `count` tracks to the end of `folder`, or of the current project if
-  // it is null, and returns them. Each is named for where it is, after those
-  // already there: T1, T2, and so on at the top level, and T2.1, T2.2, and so
-  // on in T2.
-  std::vector<FakeTrack*> AddTracks(int count, FakeTrack* folder = nullptr);
+  // it is null, and returns them, named for where they are (see
+  // FakeProject::AddTracks()).
+  std::vector<FakeTrack*> AddTracks(int count, FakeTrack* folder = nullptr) {
+    return reaper_.GetProject().AddTracks(count, folder);
+  }
 
   //----------------------------------------------------------------------------
   // Presses

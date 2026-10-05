@@ -7,9 +7,11 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "gtest/gtest.h"
 
 namespace jpr {
@@ -32,6 +34,28 @@ FakeTrack* FakeProject::AddTrack(std::string_view name, FakeTrack* parent) {
   FakeTrack* track = InsertTrack(MakeGuid(), parent);
   track->name = name;
   return track;
+}
+
+std::vector<FakeTrack*> FakeProject::AddTracks(int count, FakeTrack* folder) {
+  if (folder != nullptr && FindTrack(folder) < 0) {
+    ADD_FAILURE() << "AddTracks() was given a folder that isn't a track in the "
+                     "project";
+    return {};
+  }
+  const std::string prefix =
+      folder != nullptr ? absl::StrCat(folder->name, ".") : "T";
+  int number = 0;
+  for (FakeTrack* track : tracks_) {
+    if (GetParentTrack(track) == folder) {
+      ++number;
+    }
+  }
+  std::vector<FakeTrack*> tracks;
+  tracks.reserve(count);
+  for (int i = 0; i < count; ++i) {
+    tracks.push_back(AddTrack(absl::StrCat(prefix, ++number), folder));
+  }
+  return tracks;
 }
 
 void FakeProject::DeleteTrack(FakeTrack* track) {

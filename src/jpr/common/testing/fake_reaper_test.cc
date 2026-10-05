@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/time/time.h"
 #include "gb/base/function_hook.h"
@@ -278,6 +279,25 @@ TEST(FakeReaperTest, AddsTracksToTheEndOfTheirFolder) {
   EXPECT_EQ(::GetParentTrack(ToMediaTrack(drums)), nullptr);
 }
 
+TEST(FakeReaperTest, AddsTracksNamedForWhereTheyAre) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  std::vector<FakeTrack*> top = project.AddTracks(3);
+  std::vector<FakeTrack*> children = project.AddTracks(2, top[1]);
+  project.AddTracks(1, children[0]);
+  project.AddTracks(1, top[1]);
+  project.AddTracks(1);
+
+  std::vector<std::string> names;
+  for (int i = 0; i < project.GetTrackCount(); ++i) {
+    names.push_back(project.GetTrack(i)->name);
+  }
+  EXPECT_THAT(names, ElementsAre("T1", "T2", "T2.1", "T2.1.1", "T2.2", "T2.3",
+                                 "T3", "T4"));
+  EXPECT_EQ(project.GetParentTrack(children[1]), top[1]);
+  EXPECT_EQ(project.GetParentTrack(top[2]), nullptr);
+}
+
 TEST(FakeReaperTest, FindsTracksByName) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
@@ -321,6 +341,19 @@ TEST(FakeReaperTest, AddingATrackToAMissingFolderFailsTheTest) {
   EXPECT_NONFATAL_FAILURE(kick = project.AddTrack("Kick", drums),
                           "isn't a track in the project");
   EXPECT_EQ(kick, nullptr);
+  EXPECT_EQ(project.GetTrackCount(), 0);
+}
+
+TEST(FakeReaperTest, AddingTracksToAMissingFolderFailsTheTest) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  project.DeleteTrack(drums);
+
+  std::vector<FakeTrack*> tracks;
+  EXPECT_NONFATAL_FAILURE(tracks = project.AddTracks(2, drums),
+                          "isn't a track in the project");
+  EXPECT_THAT(tracks, IsEmpty());
   EXPECT_EQ(project.GetTrackCount(), 0);
 }
 
