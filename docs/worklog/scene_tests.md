@@ -233,7 +233,7 @@ Depends on: CL1, CL2.
 - A test that turning the override on restores Bypass in a new fake, after
   an earlier fake saw Write.
 
-### CL4 [ ] scene: Track and route properties, and references
+### CL4 [x] scene: Track and route properties, and references
 
 Depends on: CL3.
 

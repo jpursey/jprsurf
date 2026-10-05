@@ -40,8 +40,12 @@ set(jpr_scene_DEPS
 
 set(jpr_scene_TEST_SOURCE
   const_property_test.cc
+  route_properties_test.cc
+  route_reference_test.cc
   scene_test.cc
   state_properties_test.cc
+  track_properties_test.cc
+  track_reference_test.cc
   value_property_test.cc
   view_condition_test.cc
   view_property_test.cc
