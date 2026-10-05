@@ -137,9 +137,13 @@ class SurfaceTest : public testing::Test {
   ~SurfaceTest() override;  // Checks that nothing logged an error.
 
   // Loads the plugin, and adds the surface, as REAPER does at startup. Then
-  // calls SetTrackListChange() and runs once, as REAPER does when the project
-  // loads.
+  // calls SetTrackListChange(), as REAPER does when the project loads, and
+  // runs until the X-Touches show the project.
   void AddSurface();
+
+  // Runs the surface until the X-Touches show what it reads in the first run:
+  // two runs, as a fader's position is sent when its device next runs.
+  void RunUntilShown();
 
   // Adds `count` tracks to the end of `folder`, or of the current project if
   // it is null, and returns them. Each is named for where it is: T1, T2, and
@@ -156,6 +160,9 @@ class SurfaceTest : public testing::Test {
   void DoublePress(FakeXTouch& xtouch, FakeXTouch::StripButton button,
                    int strip);
   void LongPress(FakeXTouch& xtouch, FakeXTouch::Button button);
+
+  // Touches the fader, moves it, and lets go, as a hand does.
+  void MoveFader(FakeXTouch& xtouch, int fader, int position);
 
   FakeReaper reaper_;
   SurfaceNotifier notifier_{&reaper_};
@@ -388,16 +395,52 @@ Depends on: CL1, CL2, CL2a, and Game Bits *Fail tests on logged errors*
 - Standard checks, apart from REAPER: the plugin doesn't change.
 - The fixture's tests log no errors.
 
-### CL4 [ ] plugin: Track strip tests
+### CL4 [x] plugin: Track strip tests
 
 Depends on: CL3.
 
 - `track_strip_test.cc` (see Tests).
+- `SurfaceTest` gains `RunUntilShown()`, which `AddSurface()` now ends with,
+  and `MoveFader()`. A fader's position is sent a run after the surface reads
+  it (see CL4b).
 - Anything the tests find wrong is fixed in its own follow-up CL, after this
-  one, not here. The same goes for each test CL below.
+  one, not here, with its test disabled until then. The same goes for each
+  test CL below.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL4a [ ] plugin: Empty strips show no volume
+
+Depends on: CL4.
+
+- Found by CL4: an empty strip's bottom scribble line shows "-inf dB", as the
+  stub track's volume is 0. It should be blank, as the top line is.
+- Enables `TrackStripTest.EmptyStripShowsNoVolume`.
+
+**Verify**
+- Standard checks.
+- An empty strip's bottom line is blank in REAPER (with the end of the
+  feature).
+
+### CL4b [ ] plugin: Faders move on the run that reads the change (to decide)
+
+Depends on: CL4.
+
+- Found by CL4: every change the scene makes to a fader reaches the X-Touch a
+  run (1/30s) late, touched or not. A fader's output is bound to its input, so
+  `Control` holds it as pending, and sends it when the device next runs, and
+  `PluginSurface::OnRun()` runs the devices before the scene. The devices
+  still run first, so input has no latency: instead, a bound output is sent
+  at once when nothing holds it (the fader isn't touched, or the input delay
+  has passed), and is only left pending while it is held. Whether a run of
+  latency is worth the change is the user's call.
+- If it is fixed: `RunUntilShown()` becomes one run, and a test checks a
+  fader is shown after a single run.
+
+**Verify**
+- Standard checks.
+- An idle profile: it changes per-run work.
 
 ### CL5 [ ] plugin: Track list tests
 

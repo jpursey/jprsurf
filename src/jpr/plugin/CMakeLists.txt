@@ -21,6 +21,7 @@ set(jpr_plugin_DEPS
 
 set(jpr_plugin_TEST_SOURCE
   plugin_test.cc
+  track_strip_test.cc
 )
 
 set(jpr_plugin_TEST_DEPS

@@ -55,6 +55,11 @@ void SurfaceTest::AddSurface() {
   surface_ = reaper_.AddSurface();
   ASSERT_NE(surface_, nullptr);
   surface_->SetTrackListChange();
+  RunUntilShown();
+}
+
+void SurfaceTest::RunUntilShown() {
+  surface_->Run();
   surface_->Run();
 }
 
@@ -116,5 +121,17 @@ void SurfaceTest::LongPress(FakeXTouch& xtouch, FakeXTouch::Button button) {
 }
 
 void SurfaceTest::Settle() { surface_->RunFor(GetSettleTime()); }
+
+//------------------------------------------------------------------------------
+// Moves
+//------------------------------------------------------------------------------
+
+void SurfaceTest::MoveFader(FakeXTouch& xtouch, int fader, int position) {
+  xtouch.TouchFader(fader);
+  xtouch.MoveFader(fader, position);
+  surface_->Run();
+  xtouch.ReleaseFader(fader);
+  RunUntilShown();
+}
 
 }  // namespace jpr

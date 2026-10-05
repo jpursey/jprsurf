@@ -44,9 +44,15 @@ class SurfaceTest : public ::testing::Test {
   ~SurfaceTest() override;
 
   // Loads the plugin, and adds the surface, as REAPER does at startup. Then
-  // calls SetTrackListChange() and runs once, as REAPER does when the project
-  // loads. A test builds its project first.
+  // calls SetTrackListChange(), as REAPER does when the project loads, and
+  // runs until the X-Touches show the project. A test builds its project
+  // first.
   void AddSurface();
+
+  // Runs the surface until the X-Touches show what it reads in the first run.
+  // That takes two runs: a fader's position is sent when its device runs, and
+  // the surface runs its devices before its scene.
+  void RunUntilShown();
 
   //----------------------------------------------------------------------------
   // The project
@@ -74,6 +80,15 @@ class SurfaceTest : public ::testing::Test {
 
   // Held past the long press time.
   void LongPress(FakeXTouch& xtouch, FakeXTouch::Button button);
+
+  //----------------------------------------------------------------------------
+  // Moves
+  //----------------------------------------------------------------------------
+
+  // Touches the fader, moves it to `position`, and lets go, as a hand does,
+  // running the surface after the move, and until it is shown after letting
+  // go.
+  void MoveFader(FakeXTouch& xtouch, int fader, int position);
 
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
