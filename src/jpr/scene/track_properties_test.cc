@@ -11,6 +11,7 @@
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -30,11 +31,6 @@ class TrackPropertiesTest : public ::testing::Test {
     TrackCache::Get().Refresh();
   }
 
-  // Returns the cache's track for the fake's track.
-  static Track* GetTrack(FakeTrack* track) {
-    return TrackCache::Get().GetTrack(ToMediaTrack(track));
-  }
-
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
   FakeProject& project_ = reaper_.GetProject();
@@ -52,8 +48,8 @@ TEST_F(TrackPropertiesTest, ReadsTheTrack) {
   track->mute = true;
   track->solo = true;
   track->rec_arm = true;
-  GetTrack(track)->Refresh();
-  TrackProperties properties(&actions_, GetTrack(track));
+  GetCachedTrack(track)->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(track));
 
   EXPECT_EQ(properties.GetProperty(TrackProperties::kName)->GetText(), "T2");
   EXPECT_EQ(properties.GetProperty(TrackProperties::kColor)->GetColor(),
@@ -76,7 +72,7 @@ TEST_F(TrackPropertiesTest, ReadsTheTrack) {
 }
 
 TEST_F(TrackPropertiesTest, PropertiesAreCreatedOnce) {
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
 
   ViewProperty* mute = properties.GetProperty(TrackProperties::kMute);
   ASSERT_NE(mute, nullptr);
@@ -89,7 +85,7 @@ TEST_F(TrackPropertiesTest, PropertiesAreCreatedOnce) {
 TEST_F(TrackPropertiesTest, PlainPropertiesSetOnlyTheirTrack) {
   tracks_[0]->group = 1;
   tracks_[1]->group = 1;
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
 
   properties.GetProperty(TrackProperties::kName)->SetText("Drums");
   properties.GetProperty(TrackProperties::kVolume)->SetVolume(0.5);
@@ -115,37 +111,32 @@ TEST_F(TrackPropertiesTest, PlainPropertiesSetOnlyTheirTrack) {
 
 // Each ui_ property runs the track action (see TrackActions, whose tests
 // cover each action), which by default changes the track's group too, where a
-// plain property changes only its own track.
+// plain property changes only its own track. Each write is a call of its own.
 TEST_F(TrackPropertiesTest, UiPropertiesRunTheTrackActions) {
   tracks_[0]->group = 1;
   tracks_[1]->group = 1;
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
+  tracks_[2]->selected = true;
+  GetCachedTrack(tracks_[2])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
 
   properties.GetProperty(TrackProperties::kUiMute)->SetBool(true);
+  reaper_.EndEntryPoint();
   properties.GetProperty(TrackProperties::kUiVolume)->SetVolume(0.5);
   properties.GetProperty(TrackProperties::kUiPan)->SetPan(0.25);
+  reaper_.EndEntryPoint();
+  properties.GetProperty(TrackProperties::kUiSelected)->SetBool(true);
   EXPECT_TRUE(tracks_[1]->mute);
   EXPECT_EQ(tracks_[1]->volume, 0.5);
   EXPECT_EQ(tracks_[1]->pan, 0.25);
+  EXPECT_TRUE(tracks_[0]->selected);
   EXPECT_FALSE(tracks_[2]->mute);
   EXPECT_EQ(tracks_[2]->volume, 1.0);
   EXPECT_EQ(tracks_[2]->pan, 0.0);
-}
-
-// Selecting changes the selection of more than one track, which is a change
-// of its own (see the batching check in FakeReaper).
-TEST_F(TrackPropertiesTest, UiSelectedRunsTheTrackAction) {
-  tracks_[2]->selected = true;
-  GetTrack(tracks_[2])->Refresh();
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
-
-  properties.GetProperty(TrackProperties::kUiSelected)->SetBool(true);
-  EXPECT_TRUE(tracks_[0]->selected);
   EXPECT_FALSE(tracks_[2]->selected);
 }
 
 TEST_F(TrackPropertiesTest, ChangesNotifyWhenTheTrackIsRefreshed) {
-  Track* track = GetTrack(tracks_[0]);
+  Track* track = GetCachedTrack(tracks_[0]);
   TrackProperties properties(&actions_, track);
   ViewProperty* mute = properties.GetProperty(TrackProperties::kMute);
   mute->RegisterFlag(&changed_);
@@ -162,7 +153,7 @@ TEST_F(TrackPropertiesTest, ChangesNotifyWhenTheTrackIsRefreshed) {
 }
 
 TEST_F(TrackPropertiesTest, MeterNotifiesOnceWhenSilent) {
-  Track* track = GetTrack(tracks_[0]);
+  Track* track = GetCachedTrack(tracks_[0]);
   TrackProperties properties(&actions_, track);
   ViewProperty* meter = properties.GetProperty(TrackProperties::kMeter);
   meter->RegisterFlag(&changed_);
@@ -187,8 +178,8 @@ TEST_F(TrackPropertiesTest, MeterNotifiesOnceWhenSilent) {
 TEST_F(TrackPropertiesTest, IsFolderCountsOnlyChildrenOnTheSurface) {
   FakeTrack* child = project_.AddTracks(1, tracks_[0])[0];
   TrackCache::Get().Refresh();
-  TrackProperties folder(&actions_, GetTrack(tracks_[0]));
-  TrackProperties other(&actions_, GetTrack(tracks_[1]));
+  TrackProperties folder(&actions_, GetCachedTrack(tracks_[0]));
+  TrackProperties other(&actions_, GetCachedTrack(tracks_[1]));
   EXPECT_TRUE(folder.GetProperty(TrackProperties::kTrackIsFolder)->GetBool());
   EXPECT_FALSE(other.GetProperty(TrackProperties::kTrackIsFolder)->GetBool());
 
@@ -201,8 +192,8 @@ TEST_F(TrackPropertiesTest, OnlyTheMasterTrackHasNoParent) {
   FakeTrack* child = project_.AddTracks(1, tracks_[0])[0];
   TrackCache::Get().Refresh();
   TrackProperties master(&actions_, TrackCache::Get().GetMasterTrack());
-  TrackProperties top(&actions_, GetTrack(tracks_[0]));
-  TrackProperties inner(&actions_, GetTrack(child));
+  TrackProperties top(&actions_, GetCachedTrack(tracks_[0]));
+  TrackProperties inner(&actions_, GetCachedTrack(child));
 
   EXPECT_FALSE(master.GetProperty(TrackProperties::kTrackHasParent)->GetBool());
   EXPECT_TRUE(top.GetProperty(TrackProperties::kTrackHasParent)->GetBool());
@@ -210,7 +201,7 @@ TEST_F(TrackPropertiesTest, OnlyTheMasterTrackHasNoParent) {
 }
 
 TEST_F(TrackPropertiesTest, ExistsUntilTheTrackIsDeleted) {
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
   TrackProperties stub(&actions_);
   ViewProperty* exists = properties.GetProperty(TrackProperties::kTrackExists);
   EXPECT_TRUE(exists->GetBool());
@@ -227,9 +218,9 @@ TEST_F(TrackPropertiesTest, ExistsUntilTheTrackIsDeleted) {
 TEST_F(TrackPropertiesTest, HasRoutesForSendsAndReceives) {
   project_.AddSend(tracks_[0], tracks_[1]);
   TrackCache::Get().Refresh();
-  TrackProperties source(&actions_, GetTrack(tracks_[0]));
-  TrackProperties destination(&actions_, GetTrack(tracks_[1]));
-  TrackProperties other(&actions_, GetTrack(tracks_[2]));
+  TrackProperties source(&actions_, GetCachedTrack(tracks_[0]));
+  TrackProperties destination(&actions_, GetCachedTrack(tracks_[1]));
+  TrackProperties other(&actions_, GetCachedTrack(tracks_[2]));
   ViewProperty* has_routes =
       other.GetProperty(TrackProperties::kTrackHasRoutes);
   EXPECT_TRUE(source.GetProperty(TrackProperties::kTrackHasRoutes)->GetBool());
@@ -246,20 +237,20 @@ TEST_F(TrackPropertiesTest, HasRoutesForSendsAndReceives) {
 }
 
 TEST_F(TrackPropertiesTest, SettingTheTrackMovesEveryProperty) {
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
   ViewProperty* name = properties.GetProperty(TrackProperties::kName);
   name->RegisterFlag(&changed_);
 
-  properties.SetTrack(GetTrack(tracks_[1]));
+  properties.SetTrack(GetCachedTrack(tracks_[1]));
   EXPECT_TRUE(changed_);
-  EXPECT_EQ(properties.GetTrack(), GetTrack(tracks_[1]));
+  EXPECT_EQ(properties.GetTrack(), GetCachedTrack(tracks_[1]));
   EXPECT_EQ(properties.GetProperty(TrackProperties::kName), name);
   EXPECT_EQ(name->GetText(), "T2");
   name->UnregisterFlag(&changed_);
 }
 
 TEST_F(TrackPropertiesTest, IsWatchedWhileAnyPropertyIs) {
-  TrackProperties properties(&actions_, GetTrack(tracks_[0]));
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
   ViewProperty* mute = properties.GetProperty(TrackProperties::kMute);
   EXPECT_FALSE(properties.IsWatched());
 

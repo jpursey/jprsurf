@@ -309,6 +309,35 @@ TEST(FakeReaperTest, FindsTracksByName) {
   EXPECT_EQ(project.FindTrackByName("Snare"), nullptr);
 }
 
+TEST(FakeReaperTest, TracksHaveNumbersAndNames) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick", drums);
+  MediaTrack* master = ToMediaTrack(project.GetMasterTrack());
+
+  EXPECT_EQ(::GetMediaTrackInfo_Value(ToMediaTrack(drums), "IP_TRACKNUMBER"),
+            1.0);
+  EXPECT_EQ(::GetMediaTrackInfo_Value(ToMediaTrack(kick), "IP_TRACKNUMBER"),
+            2.0);
+  EXPECT_EQ(::GetMediaTrackInfo_Value(master, "IP_TRACKNUMBER"), -1.0);
+
+  char name[64] = "";
+  EXPECT_TRUE(
+      ::GetSetMediaTrackInfo_String(ToMediaTrack(kick), "P_NAME", name, false));
+  EXPECT_STREQ(name, "Kick");
+  char new_name[] = "Snare";
+  EXPECT_TRUE(::GetSetMediaTrackInfo_String(ToMediaTrack(kick), "P_NAME",
+                                            new_name, true));
+  EXPECT_EQ(kick->name, "Snare");
+
+  // REAPER's documentation says the master's name reads as null, which nobody
+  // has checked.
+  EXPECT_NONFATAL_FAILURE(
+      ::GetSetMediaTrackInfo_String(master, "P_NAME", name, false),
+      "isn't faked yet");
+}
+
 TEST(FakeReaperTest, ShowingAFolderInTheMixerSetsItsTracks) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
@@ -694,6 +723,28 @@ TEST(FakeReaperTest, TheTestsOwnChangesAreCheckedAtTheEnd) {
         FakeProject& project = reaper.GetProject();
         ::SetTrackUIMute(ToMediaTrack(project.AddTrack("Drums")), 1, 0);
         ::SetTrackUIMute(ToMediaTrack(project.AddTrack("Bass")), 1, 0);
+      },
+      "in one TrackBatch");
+}
+
+TEST(FakeReaperTest, TheTestCanEndItsOwnEntryPoints) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  MediaTrack* drums = ToMediaTrack(project.AddTrack("Drums"));
+  MediaTrack* bass = ToMediaTrack(project.AddTrack("Bass"));
+
+  // Each ended on its own is a change to one track.
+  ::SetTrackUIMute(drums, 1, 0);
+  reaper.EndEntryPoint();
+  ::SetTrackUIMute(bass, 1, 0);
+  reaper.EndEntryPoint();
+
+  // Without an end between them, they are one entry point.
+  EXPECT_NONFATAL_FAILURE(
+      {
+        ::SetTrackUIMute(drums, 0, 0);
+        ::SetTrackUIMute(bass, 0, 0);
+        reaper.EndEntryPoint();
       },
       "in one TrackBatch");
 }

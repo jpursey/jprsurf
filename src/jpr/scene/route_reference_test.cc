@@ -10,6 +10,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -32,11 +33,6 @@ class RouteReferenceTest : public ::testing::Test {
     TrackCache::Get().Refresh();
   }
 
-  // Returns the cache's track for the fake's track.
-  static Track* GetTrack(FakeTrack* track) {
-    return TrackCache::Get().GetTrack(ToMediaTrack(track));
-  }
-
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
   FakeProject& project_ = reaper_.GetProject();
@@ -54,23 +50,23 @@ TEST_F(RouteReferenceTest, RefersToNothingAtFirst) {
 
 TEST_F(RouteReferenceTest, VersionChangesWithTheRoute) {
   int64_t version = reference_.GetVersion();
-  reference_.Set(GetTrack(tracks_[0]), TrackRouteType::kSend, 0);
+  reference_.Set(GetCachedTrack(tracks_[0]), TrackRouteType::kSend, 0);
   EXPECT_NE(reference_.GetVersion(), version);
   ASSERT_NE(reference_.GetRoute(), nullptr);
-  EXPECT_EQ(reference_.GetRoute()->other_track, GetTrack(tracks_[1]));
+  EXPECT_EQ(reference_.GetRoute()->other_track, GetCachedTrack(tracks_[1]));
 
   version = reference_.GetVersion();
-  reference_.Set(GetTrack(tracks_[0]), TrackRouteType::kSend, 0);
+  reference_.Set(GetCachedTrack(tracks_[0]), TrackRouteType::kSend, 0);
   EXPECT_EQ(reference_.GetVersion(), version);
 
   // A new index, track, or type is each a new route.
-  reference_.Set(GetTrack(tracks_[0]), TrackRouteType::kSend, 1);
+  reference_.Set(GetCachedTrack(tracks_[0]), TrackRouteType::kSend, 1);
   EXPECT_NE(reference_.GetVersion(), version);
   version = reference_.GetVersion();
-  reference_.Set(GetTrack(tracks_[1]), TrackRouteType::kSend, 1);
+  reference_.Set(GetCachedTrack(tracks_[1]), TrackRouteType::kSend, 1);
   EXPECT_NE(reference_.GetVersion(), version);
   version = reference_.GetVersion();
-  reference_.Set(GetTrack(tracks_[1]), TrackRouteType::kReceive, 1);
+  reference_.Set(GetCachedTrack(tracks_[1]), TrackRouteType::kReceive, 1);
   EXPECT_NE(reference_.GetVersion(), version);
 }
 
@@ -82,7 +78,7 @@ TEST_F(RouteReferenceTest, FieldsFollowTheReference) {
   EXPECT_EQ(reference_.GetField("nothing"), nullptr);
   exists->RegisterFlag(&changed_);
 
-  reference_.Set(GetTrack(tracks_[2]), TrackRouteType::kReceive, 0);
+  reference_.Set(GetCachedTrack(tracks_[2]), TrackRouteType::kReceive, 0);
   EXPECT_TRUE(changed_);
   EXPECT_TRUE(exists->GetBool());
   EXPECT_EQ(other_name->GetText(), "T1");
@@ -90,7 +86,7 @@ TEST_F(RouteReferenceTest, FieldsFollowTheReference) {
 }
 
 TEST_F(RouteReferenceTest, UpdateRefreshesTheOtherTracksWatchedFields) {
-  reference_.Set(GetTrack(tracks_[0]), TrackRouteType::kSend, 0);
+  reference_.Set(GetCachedTrack(tracks_[0]), TrackRouteType::kSend, 0);
   ViewProperty* other_name = reference_.GetField("other_track.name");
   other_name->RegisterFlag(&changed_);
 

@@ -11,6 +11,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/guid.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -25,9 +26,6 @@ using ::testing::IsEmpty;
 class TrackCacheTest : public ::testing::Test {
  protected:
   TrackCache& Cache() { return TrackCache::Get(); }
-
-  // Returns the cached Track for `track`.
-  Track* Get(FakeTrack* track) { return Cache().GetTrack(ToMediaTrack(track)); }
 
   FakeReaper reaper_;
   FakeProject& project_ = reaper_.GetProject();
@@ -44,13 +42,16 @@ TEST_F(TrackCacheTest, ListsTracksInOrderWithTheirFolders) {
   ASSERT_NE(master, nullptr);
   EXPECT_EQ(master->GetTrackId(), ToMediaTrack(project_.GetMasterTrack()));
   EXPECT_THAT(Cache().GetTracks(),
-              ElementsAre(Get(drums), Get(kick), Get(snare), Get(bass)));
-  EXPECT_THAT(master->GetChildTracks(), ElementsAre(Get(drums), Get(bass)));
-  EXPECT_THAT(Get(drums)->GetChildTracks(), ElementsAre(Get(kick), Get(snare)));
-  EXPECT_EQ(Get(kick)->GetParentTrack(), Get(drums));
-  EXPECT_EQ(Get(bass)->GetParentTrack(), master);
-  EXPECT_EQ(Get(snare)->GetIndex(TrackFilter::kAll), 1);
-  EXPECT_EQ(Get(bass)->GetGlobalIndex(TrackFilter::kAll), 3);
+              ElementsAre(GetCachedTrack(drums), GetCachedTrack(kick),
+                          GetCachedTrack(snare), GetCachedTrack(bass)));
+  EXPECT_THAT(master->GetChildTracks(),
+              ElementsAre(GetCachedTrack(drums), GetCachedTrack(bass)));
+  EXPECT_THAT(GetCachedTrack(drums)->GetChildTracks(),
+              ElementsAre(GetCachedTrack(kick), GetCachedTrack(snare)));
+  EXPECT_EQ(GetCachedTrack(kick)->GetParentTrack(), GetCachedTrack(drums));
+  EXPECT_EQ(GetCachedTrack(bass)->GetParentTrack(), master);
+  EXPECT_EQ(GetCachedTrack(snare)->GetIndex(TrackFilter::kAll), 1);
+  EXPECT_EQ(GetCachedTrack(bass)->GetGlobalIndex(TrackFilter::kAll), 3);
 }
 
 TEST_F(TrackCacheTest, FiltersHiddenTracks) {
@@ -63,10 +64,10 @@ TEST_F(TrackCacheTest, FiltersHiddenTracks) {
   drums->show_in_mixer = false;
   EXPECT_TRUE(Cache().RefreshVisibility());
   EXPECT_NE(Cache().GetTrackListVersion(), version);
-  EXPECT_FALSE(Get(drums)->IsVisible(TrackFilter::kMcp));
-  EXPECT_TRUE(Get(drums)->IsVisible(TrackFilter::kTcp));
-  EXPECT_EQ(Get(drums)->GetIndex(TrackFilter::kMcp), std::nullopt);
-  EXPECT_EQ(Get(bass)->GetIndex(TrackFilter::kMcp), 0);
+  EXPECT_FALSE(GetCachedTrack(drums)->IsVisible(TrackFilter::kMcp));
+  EXPECT_TRUE(GetCachedTrack(drums)->IsVisible(TrackFilter::kTcp));
+  EXPECT_EQ(GetCachedTrack(drums)->GetIndex(TrackFilter::kMcp), std::nullopt);
+  EXPECT_EQ(GetCachedTrack(bass)->GetIndex(TrackFilter::kMcp), 0);
   EXPECT_EQ(Cache().GetMasterTrack()->GetChildTrackCount(TrackFilter::kMcp), 1);
   EXPECT_EQ(Cache().GetMasterTrack()->GetChildTrackCount(TrackFilter::kTcp), 2);
 }
@@ -97,13 +98,13 @@ TEST_F(TrackCacheTest, DeletedFolderTracksMoveUp) {
   FakeTrack* kick = project_.AddTrack("Kick", drums);
   project_.DeleteTrack(drums);
   Cache().Refresh();
-  EXPECT_EQ(Get(kick)->GetParentTrack(), Cache().GetMasterTrack());
+  EXPECT_EQ(GetCachedTrack(kick)->GetParentTrack(), Cache().GetMasterTrack());
 }
 
 TEST_F(TrackCacheTest, ForgetsTheLastTouchedTrackWhenItIsDeleted) {
   FakeTrack* drums = project_.AddTrack("Drums");
   Cache().Refresh();
-  Cache().SetLastTouchedTrack(Get(drums));
+  Cache().SetLastTouchedTrack(GetCachedTrack(drums));
 
   project_.DeleteTrack(drums);
   Cache().Refresh();
@@ -119,12 +120,13 @@ TEST_F(TrackCacheTest, Selection) {
 
   bass->selected = true;
   project_.GetMasterTrack()->selected = true;
-  EXPECT_EQ(Cache().GetOnlySelectedTrack(), Get(bass));
-  EXPECT_THAT(Cache().GetSelectedTracks(), ElementsAre(Get(bass)));
+  EXPECT_EQ(Cache().GetOnlySelectedTrack(), GetCachedTrack(bass));
+  EXPECT_THAT(Cache().GetSelectedTracks(), ElementsAre(GetCachedTrack(bass)));
 
   keys->selected = true;
   EXPECT_EQ(Cache().GetOnlySelectedTrack(), nullptr);
-  EXPECT_THAT(Cache().GetSelectedTracks(), ElementsAre(Get(bass), Get(keys)));
+  EXPECT_THAT(Cache().GetSelectedTracks(),
+              ElementsAre(GetCachedTrack(bass), GetCachedTrack(keys)));
   EXPECT_FALSE(drums->selected);
 }
 

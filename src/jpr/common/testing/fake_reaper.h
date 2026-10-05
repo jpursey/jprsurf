@@ -81,8 +81,9 @@ struct FakeCommand {
 // - A MIDI port created while it is open, or used after it is destroyed.
 // - A control surface or MIDI port still open when the fake is destroyed.
 // - The end of an entry point that broke a rule for using REAPER. An entry
-//   point is each call on a TestControlSurface, and the test's own calls, which
-//   are checked when the fake is destroyed. Each must leave PreventUIRefresh()
+//   point is each call on a TestControlSurface, and the test's own calls since
+//   the last one, which are checked when the test ends them (EndEntryPoint()),
+//   or when the fake is destroyed. Each must leave PreventUIRefresh()
 //   balanced, and follow the TrackBatch rule: an entry point that changes the
 //   mute, solo, rec arm, or selection of several tracks makes them one change,
 //   in one PreventUIRefresh() scope, or one call outside of any. Each change
@@ -145,6 +146,13 @@ class FakeReaper final {
 
   // Returns true while a PreventUIRefresh() scope is open.
   bool IsUIRefreshPrevented() const { return batch_depth_ > 0; }
+
+  // Ends the entry point: checks what was called since the last one ended (see
+  // Checks), and starts the next. A test that calls JPRSurf's code directly,
+  // rather than through a surface, ends each call REAPER would have made, so
+  // each is checked on its own. It ends them only where REAPER's calls would
+  // end, never in the middle of one, which would hide what the checks catch.
+  void EndEntryPoint();
 
   //----------------------------------------------------------------------------
   // Time
@@ -274,9 +282,6 @@ class FakeReaper final {
   // Ends a PreventUIRefresh() scope, counting it as one change if anything
   // changed in it.
   void EndBatch();
-
-  // Checks the entry point that just ended, and starts the next one.
-  void CheckEntryPoint();
 
   // The one instance that exists, if any.
   static FakeReaper* s_instance_;

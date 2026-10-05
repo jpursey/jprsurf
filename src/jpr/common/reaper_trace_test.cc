@@ -10,12 +10,17 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <vector>
 
+#include "gb/base/function_hook.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/testing/fake_project.h"
+#include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/fake_track.h"
+#include "jpr/common/testing/surface_notifier.h"
+#include "jpr/common/testing/test_control_surface.h"
 
 namespace jpr {
 namespace {
@@ -30,82 +35,15 @@ using ::testing::StartsWith;
 constexpr int kTimeWidth = 11;
 
 //------------------------------------------------------------------------------
-// A fake REAPER, just big enough for the calls these tests make
+// A control surface, as the plugin registers
 //------------------------------------------------------------------------------
-
-// What a MediaTrack* points to in these tests.
-struct FakeTrack {
-  int number;  // As REAPER's IP_TRACKNUMBER: -1 for the master track.
-  std::string name;
-};
-
-MediaTrack* ToMediaTrack(FakeTrack& track) {
-  return reinterpret_cast<MediaTrack*>(&track);
-}
-
-FakeTrack& FromMediaTrack(MediaTrack* track) {
-  return *reinterpret_cast<FakeTrack*>(track);
-}
-
-void CopyText(std::string_view text, char* out) {
-  text.copy(out, text.size());
-  out[text.size()] = '\0';
-}
-
-// The surface REAPER created, which SetTrackUIMute() notifies.
-IReaperControlSurface* g_surface = nullptr;
-
-// The last mute the surface was set to.
-bool g_surface_mute = false;
-
-// The master track, which GetParentTrack() returns.
-FakeTrack g_master_track = {-1, "MASTER"};
-
-double FakeGetMediaTrackInfo_Value(MediaTrack* track, const char* parmname) {
-  return FromMediaTrack(track).number;
-}
-
-// How many times a track's name has been read.
-int g_name_reads = 0;
-
-bool FakeGetSetMediaTrackInfo_String(MediaTrack* track, const char* parmname,
-                                     char* value, bool set_new_value) {
-  if (set_new_value) {
-    FromMediaTrack(track).name = value;
-  } else {
-    ++g_name_reads;
-    CopyText(FromMediaTrack(track).name, value);
-  }
-  return true;
-}
-
-int FakeCountTracks(ReaProject* project) { return 12; }
-
-MediaTrack* FakeGetParentTrack(MediaTrack* track) {
-  return ToMediaTrack(g_master_track);
-}
-
-bool FakeGetTrackUIVolPan(MediaTrack* track, double* volume, double* pan) {
-  *volume = 0.5;
-  *pan = -0.25;
-  return true;
-}
-
-void FakeMkvolstr(char* text, double volume) { CopyText("-6.02dB", text); }
-
-// There are no MIDI inputs, so this always fails, leaving `name` unwritten.
-bool FakeGetMIDIInputName(int device, char* name, int name_size) {
-  return false;
-}
-
-int FakeSetTrackUIMute(MediaTrack* track, int mute, int igngroupflags) {
-  g_surface->SetSurfaceMute(track, mute != 0);
-  return mute;
-}
 
 // What the surface does when REAPER calls its Run() or SetTrackListChange():
 // the calls a test makes, as JPRSurf only calls REAPER from inside a callback.
 std::function<void()> g_surface_calls = [] {};
+
+// The last mute the surface was set to.
+bool g_surface_mute = false;
 
 class TestSurface final : public IReaperControlSurface {
  public:
@@ -131,6 +69,19 @@ IReaperControlSurface* CreateTestSurface(const char* type_string,
 reaper_csurf_reg_t g_test_surface_reg = {"TEST", "Test surface",
                                          &CreateTestSurface, nullptr};
 
+// Counts the times a track's name is read, under the trace.
+struct NameReadCounter {
+  bool Call(decltype(GetSetMediaTrackInfo_String) original, MediaTrack* track,
+            const char* name, char* value, bool set) {
+    if (!set) {
+      ++count;
+    }
+    return original(track, name, value, set);
+  }
+
+  int count = 0;
+};
+
 //------------------------------------------------------------------------------
 // Tests
 //------------------------------------------------------------------------------
@@ -138,33 +89,28 @@ reaper_csurf_reg_t g_test_surface_reg = {"TEST", "Test surface",
 // The first line of every trace, as each test starts by creating the surface.
 constexpr char kCreateLine[] = R"(csurf/Create("TEST", "config", out) -> )";
 
+// The fake REAPER, with Drums as the third track, and a SurfaceNotifier for
+// the calls REAPER makes back. Each test traces from creating the surface.
 class ReaperTraceTest : public ::testing::Test {
  protected:
-  void SetUp() override {
-    ::GetMediaTrackInfo_Value = &FakeGetMediaTrackInfo_Value;
-    ::GetSetMediaTrackInfo_String = &FakeGetSetMediaTrackInfo_String;
-    ::CountTracks = &FakeCountTracks;
-    ::GetParentTrack = &FakeGetParentTrack;
-    ::GetTrackUIVolPan = &FakeGetTrackUIVolPan;
-    ::mkvolstr = &FakeMkvolstr;
-    ::GetMIDIInputName = &FakeGetMIDIInputName;
-    ::SetTrackUIMute = &FakeSetTrackUIMute;
-    trace_ = std::make_unique<ReaperTrace>(path_);
+  ReaperTraceTest() {
+    project_.AddTracks(2);
+    drums_ = project_.AddTrack("Drums");
+    drums_->volume = 0.5;
+    drums_->pan = -0.25;
+  }
 
-    reaper_csurf_reg_t* reg =
-        ReaperTrace::TraceSurfaceRegistration(&g_test_surface_reg);
-    ASSERT_NE(reg, &g_test_surface_reg);
-    g_surface = reg->create("TEST", "config", nullptr);
-    ASSERT_NE(g_surface, nullptr);
+  void SetUp() override {
+    trace_ = std::make_unique<ReaperTrace>(path_);
+    reaper_.GetPluginInfo().Register(
+        "csurf", ReaperTrace::TraceSurfaceRegistration(&g_test_surface_reg));
+    surface_ = reaper_.AddSurface("config");
+    ASSERT_NE(surface_, nullptr);
   }
 
   void TearDown() override {
-    trace_.reset();
-    delete g_surface;
-    g_surface = nullptr;
     g_surface_calls = [] {};
     g_surface_mute = false;
-    g_name_reads = 0;
   }
 
   // Ends the trace, and returns its lines after the header, without the time
@@ -184,8 +130,15 @@ class ReaperTraceTest : public ::testing::Test {
 
   const std::filesystem::path path_ =
       std::filesystem::path(::testing::TempDir()) / "reaper_trace_test.txt";
-  FakeTrack drums_ = {3, "Drums"};
+  FakeReaper reaper_;
+  FakeProject& project_ = reaper_.GetProject();
+  FakeTrack* drums_ = nullptr;
+  SurfaceNotifier notifier_{&reaper_};
+  decltype(CountTracks) const untraced_count_tracks_ = CountTracks;
+  gb::FunctionHook<&GetSetMediaTrackInfo_String, NameReadCounter>
+      name_read_counter_;
   std::unique_ptr<ReaperTrace> trace_;
+  std::unique_ptr<TestControlSurface> surface_;
 };
 
 TEST_F(ReaperTraceTest, TracesResultsAndOutputs) {
@@ -198,11 +151,10 @@ TEST_F(ReaperTraceTest, TracesResultsAndOutputs) {
     char text[64];
     mkvolstr(text, 0.5);
     EXPECT_STREQ(text, "-6.02dB");
-    EXPECT_EQ(CountTracks(nullptr), 12);
-    EXPECT_EQ(GetParentTrack(ToMediaTrack(drums_)),
-              ToMediaTrack(g_master_track));
+    EXPECT_EQ(CountTracks(nullptr), 3);
+    EXPECT_EQ(GetMasterTrack(nullptr), ToMediaTrack(project_.GetMasterTrack()));
   };
-  g_surface->SetTrackListChange();
+  surface_->SetTrackListChange();
 
   EXPECT_THAT(
       ReadTrace(),
@@ -210,8 +162,8 @@ TEST_F(ReaperTraceTest, TracesResultsAndOutputs) {
           StartsWith(kCreateLine), "csurf/SetTrackListChange()",
           R"(  GetTrackUIVolPan(track 3 "Drums", out, out) -> true; out: 0.5, -0.25)",
           R"(  mkvolstr(out, 0.5) -> out: "-6.02dB")",
-          R"(  CountTracks(null) -> 12)",
-          R"(  GetParentTrack(track 3 "Drums") -> master)"));
+          R"(  CountTracks(null) -> 3)",
+          R"(  GetMasterTrack(null) -> master)"));
 }
 
 TEST_F(ReaperTraceTest, NamesTracksAgainOnlyAfterChanges) {
@@ -224,11 +176,11 @@ TEST_F(ReaperTraceTest, NamesTracksAgainOnlyAfterChanges) {
     GetSetMediaTrackInfo_String(ToMediaTrack(drums_), "P_NAME", name, true);
     GetTrackUIVolPan(ToMediaTrack(drums_), &volume, &pan);
   };
-  g_surface->Run();
+  surface_->Run();
 
   // Once for the reads and the change (which is formatted before it is made),
   // and once for the read after it.
-  EXPECT_EQ(g_name_reads, 2);
+  EXPECT_EQ(name_read_counter_.hook().count, 2);
   EXPECT_THAT(
       ReadTrace(),
       ElementsAre(
@@ -245,7 +197,7 @@ TEST_F(ReaperTraceTest, SkipsOutputsWhenCallFails) {
     char name[4] = {'x', 'x', 'x', 'x'};
     EXPECT_FALSE(GetMIDIInputName(5, name, 4));
   };
-  g_surface->SetTrackListChange();
+  surface_->SetTrackListChange();
 
   EXPECT_THAT(ReadTrace(),
               ElementsAre(StartsWith(kCreateLine), "csurf/SetTrackListChange()",
@@ -256,20 +208,20 @@ TEST_F(ReaperTraceTest, TracesSurfaceCallsInsideCalls) {
   g_surface_calls = [this] {
     EXPECT_EQ(SetTrackUIMute(ToMediaTrack(drums_), 1, 0), 1);
   };
-  g_surface->Run();
-  EXPECT_TRUE(g_surface_mute);
-  EXPECT_EQ(g_surface->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK,
-                                ToMediaTrack(drums_), nullptr, nullptr),
+  surface_->Run();
+  EXPECT_EQ(surface_->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK,
+                               ToMediaTrack(drums_), nullptr, nullptr),
             1);
-  delete g_surface;
-  g_surface = nullptr;
+  surface_.reset();
 
   EXPECT_THAT(
       ReadTrace(),
       ElementsAre(
-          AllOf(StartsWith(kCreateLine), EndsWith("; out: null")),
-          "csurf/Run()", R"(  SetTrackUIMute(track 3 "Drums", 1, 0))",
+          AllOf(StartsWith(kCreateLine), EndsWith("; out: 0")), "csurf/Run()",
+          R"(  SetTrackUIMute(track 3 "Drums", 1, 0))",
+          R"(    csurf/SetSurfaceSolo(master, false))",
           R"(    csurf/SetSurfaceMute(track 3 "Drums", true))",
+          R"(    csurf/SetSurfaceSolo(track 3 "Drums", false))",
           R"(  SetTrackUIMute -> 1)",
           R"(csurf/Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, track 3 "Drums", null, null) -> 1)",
           "csurf/Destroy()"));
@@ -277,13 +229,13 @@ TEST_F(ReaperTraceTest, TracesSurfaceCallsInsideCalls) {
 
 TEST_F(ReaperTraceTest, LeavesOutQuietCalls) {
   g_surface_calls = [] { CountTracks(nullptr); };
-  g_surface->Run();
-  g_surface->Run();
-  g_surface->IsKeyDown(VK_SHIFT);
+  surface_->Run();
+  surface_->Run();
+  surface_->IsKeyDown(VK_SHIFT);
   g_surface_calls = [] {};
-  g_surface->SetTrackListChange();
-  g_surface->Run();
-  g_surface->Run();
+  surface_->SetTrackListChange();
+  surface_->Run();
+  surface_->Run();
 
   EXPECT_THAT(
       ReadTrace(),
@@ -294,12 +246,12 @@ TEST_F(ReaperTraceTest, LeavesOutQuietCalls) {
 TEST_F(ReaperTraceTest, StopsTracingWhenDestroyed) {
   trace_.reset();
 
-  EXPECT_EQ(::CountTracks, &FakeCountTracks);
+  EXPECT_EQ(CountTracks, untraced_count_tracks_);
   EXPECT_EQ(ReaperTrace::TraceSurfaceRegistration(&g_test_surface_reg),
             &g_test_surface_reg);
 
   // A surface that outlives the trace still works.
-  g_surface->SetSurfaceMute(ToMediaTrack(drums_), true);
+  surface_->SetSurfaceMute(ToMediaTrack(drums_), true);
   EXPECT_TRUE(g_surface_mute);
 }
 

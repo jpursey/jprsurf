@@ -14,10 +14,10 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/modifiers.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/track.h"
-#include "jpr/common/track_cache.h"
 #include "jpr/device/testing/fake_device.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
@@ -50,11 +50,6 @@ class SceneReferenceTest : public SceneTest {
       return nullptr;
     }
     return reference->GetTrack()->GetTrackId();
-  }
-
-  // Returns the cache's track for the fake's track.
-  static Track* GetTrack(FakeTrack* track) {
-    return TrackCache::Get().GetTrack(ToMediaTrack(track));
   }
 
   std::vector<FakeTrack*> tracks_;
@@ -253,12 +248,12 @@ TEST_F(SceneReferenceTest, AddedReferencesFallBack) {
       ToMediaTrack(reaper_.GetProject().GetMasterTrack());
   EXPECT_EQ(GetTrackOf("user:track"), master);
 
-  reference->Set(GetTrack(tracks_[1]));
+  reference->Set(GetCachedTrack(tracks_[1]));
   EXPECT_EQ(GetTrackOf("user:track"), ToMediaTrack(tracks_[1]));
   reference->Set(nullptr);
   EXPECT_EQ(GetTrackOf("user:track"), master);
 
-  reference->Set(GetTrack(tracks_[1]));
+  reference->Set(GetCachedTrack(tracks_[1]));
   reaper_.GetProject().DeleteTrack(tracks_[1]);
   surface_->SetTrackListChange();
   surface_->Run();

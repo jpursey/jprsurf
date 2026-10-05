@@ -12,6 +12,7 @@
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -50,15 +51,10 @@ class TestListener final : public TrackListener {
 
 class TrackTest : public ::testing::Test {
  protected:
-  // Returns the cached Track for `track`.
-  Track* Get(FakeTrack* track) {
-    return TrackCache::Get().GetTrack(ToMediaTrack(track));
-  }
-
   // Refreshes the cache, and returns the cached Track for `track`.
   Track* Refresh(FakeTrack* track) {
     TrackCache::Get().Refresh();
-    return Get(track);
+    return GetCachedTrack(track);
   }
 
   FakeReaper reaper_;
@@ -213,29 +209,32 @@ TEST_F(TrackTest, RefreshReadsRoutes) {
 
   // Hardware outputs aren't routes between tracks, so they aren't listed.
   EXPECT_THAT(
-      Get(drums)->GetSends(),
-      ElementsAre(
-          TrackRoute{.other_track = Get(bus), .volume = 0.5},
-          TrackRoute{.other_track = Get(reverb), .volume = 1.0, .pan = -0.25}));
-  EXPECT_THAT(Get(drums)->GetReceives(), IsEmpty());
-  EXPECT_THAT(
-      Get(reverb)->GetReceives(),
-      ElementsAre(
-          TrackRoute{.other_track = Get(drums), .volume = 1.0, .pan = -0.25},
-          TrackRoute{.other_track = Get(bus), .volume = 1.0, .mute = true}));
+      GetCachedTrack(drums)->GetSends(),
+      ElementsAre(TrackRoute{.other_track = GetCachedTrack(bus), .volume = 0.5},
+                  TrackRoute{.other_track = GetCachedTrack(reverb),
+                             .volume = 1.0,
+                             .pan = -0.25}));
+  EXPECT_THAT(GetCachedTrack(drums)->GetReceives(), IsEmpty());
+  EXPECT_THAT(GetCachedTrack(reverb)->GetReceives(),
+              ElementsAre(TrackRoute{.other_track = GetCachedTrack(drums),
+                                     .volume = 1.0,
+                                     .pan = -0.25},
+                          TrackRoute{.other_track = GetCachedTrack(bus),
+                                     .volume = 1.0,
+                                     .mute = true}));
 }
 
 TEST_F(TrackTest, RefreshNotifiesWhenRoutesChange) {
   FakeTrack* drums = project_.AddTrack("Drums");
   FakeTrack* bus = project_.AddTrack("Bus");
   TrackCache::Get().Refresh();
-  TestListener drums_listener(Get(drums));
-  TestListener bus_listener(Get(bus));
+  TestListener drums_listener(GetCachedTrack(drums));
+  TestListener bus_listener(GetCachedTrack(bus));
 
   FakeRoute* send = project_.AddSend(drums, bus);
   TrackCache::Get().Refresh();
-  EXPECT_EQ(Get(drums)->GetSends().size(), 1);
-  EXPECT_EQ(Get(bus)->GetReceives().size(), 1);
+  EXPECT_EQ(GetCachedTrack(drums)->GetSends().size(), 1);
+  EXPECT_EQ(GetCachedTrack(bus)->GetReceives().size(), 1);
   EXPECT_EQ(drums_listener.routes_change_count, 1);
   EXPECT_EQ(bus_listener.routes_change_count, 1);
 
@@ -245,8 +244,8 @@ TEST_F(TrackTest, RefreshNotifiesWhenRoutesChange) {
 
   project_.DeleteRoute(send);
   TrackCache::Get().Refresh();
-  EXPECT_THAT(Get(drums)->GetSends(), IsEmpty());
-  EXPECT_THAT(Get(bus)->GetReceives(), IsEmpty());
+  EXPECT_THAT(GetCachedTrack(drums)->GetSends(), IsEmpty());
+  EXPECT_THAT(GetCachedTrack(bus)->GetReceives(), IsEmpty());
   EXPECT_EQ(drums_listener.routes_change_count, 2);
   EXPECT_EQ(bus_listener.routes_change_count, 2);
 }
@@ -261,8 +260,9 @@ TEST_F(TrackTest, DeletingATrackRemovesItsRoutes) {
 
   project_.DeleteTrack(bus);
   TrackCache::Get().Refresh();
-  EXPECT_THAT(Get(drums)->GetSends(),
-              ElementsAre(Field(&TrackRoute::other_track, Get(reverb))));
+  EXPECT_THAT(
+      GetCachedTrack(drums)->GetSends(),
+      ElementsAre(Field(&TrackRoute::other_track, GetCachedTrack(reverb))));
   EXPECT_THAT(bus_track->GetReceives(), IsEmpty());
 }
 
@@ -281,9 +281,9 @@ TEST_F(TrackTest, RefreshRoutesRereadsTheirValues) {
   EXPECT_EQ(listener.routes_change_count, 1);
 
   // Each end of the route rereads its own values.
-  EXPECT_EQ(Get(bus)->GetReceives()[0].volume, 1.0);
-  Get(bus)->RefreshRoutes();
-  EXPECT_EQ(Get(bus)->GetReceives()[0].volume, 0.5);
+  EXPECT_EQ(GetCachedTrack(bus)->GetReceives()[0].volume, 1.0);
+  GetCachedTrack(bus)->RefreshRoutes();
+  EXPECT_EQ(GetCachedTrack(bus)->GetReceives()[0].volume, 0.5);
 
   // Rereading values that didn't change notifies no one.
   track->RefreshRoutes();
@@ -308,10 +308,11 @@ TEST_F(TrackTest, SetsSendsAfterHardwareOutputs) {
   EXPECT_TRUE(to_reverb->mute);
   EXPECT_EQ(output->volume, 1.0);
   EXPECT_EQ(to_bus->volume, 1.0);
-  EXPECT_EQ(track->GetSends()[1], (TrackRoute{.other_track = Get(reverb),
-                                              .volume = 0.5,
-                                              .pan = -0.25,
-                                              .mute = true}));
+  EXPECT_EQ(track->GetSends()[1],
+            (TrackRoute{.other_track = GetCachedTrack(reverb),
+                        .volume = 0.5,
+                        .pan = -0.25,
+                        .mute = true}));
   EXPECT_EQ(listener.routes_change_count, 3);
 
   // Setting a route the track doesn't have does nothing.
@@ -376,8 +377,8 @@ TEST_F(TrackTest, BatchAddsOneUndoPoint) {
   TrackCache::Get().Refresh();
   {
     TrackBatch batch;
-    batch.SetMute(Get(drums), true);
-    batch.SetMute(Get(bass), true);
+    batch.SetMute(GetCachedTrack(drums), true);
+    batch.SetMute(GetCachedTrack(bass), true);
   }
   EXPECT_TRUE(drums->mute);
   EXPECT_TRUE(bass->mute);
@@ -391,9 +392,9 @@ TEST_F(TrackTest, BatchOfSeveralPropertiesAddsOneUndoPoint) {
   TrackCache::Get().Refresh();
   {
     TrackBatch batch;
-    batch.SetSolo(Get(drums), true);
-    batch.SetRecArm(Get(bass), true);
-    batch.SetSelected(Get(bass), true);
+    batch.SetSolo(GetCachedTrack(drums), true);
+    batch.SetRecArm(GetCachedTrack(bass), true);
+    batch.SetSelected(GetCachedTrack(bass), true);
   }
   EXPECT_TRUE(drums->solo);
   EXPECT_TRUE(bass->rec_arm);
@@ -408,8 +409,8 @@ TEST_F(TrackTest, BatchOfSelectionAloneAddsNoUndoPoint) {
   TrackCache::Get().Refresh();
   {
     TrackBatch batch;
-    batch.SetSelected(Get(drums), true);
-    batch.SetSelected(Get(bass), true);
+    batch.SetSelected(GetCachedTrack(drums), true);
+    batch.SetSelected(GetCachedTrack(bass), true);
   }
   EXPECT_TRUE(drums->selected);
   EXPECT_TRUE(bass->selected);
@@ -423,13 +424,13 @@ TEST_F(TrackTest, GroupingChangesTheGroup) {
   kick->group = 1;
   TrackCache::Get().Refresh();
 
-  Get(drums)->SetMute(true);
-  Get(drums)->SetVolume(0.5);
+  GetCachedTrack(drums)->SetMute(true);
+  GetCachedTrack(drums)->SetVolume(0.5);
   EXPECT_FALSE(kick->mute);
   EXPECT_EQ(kick->volume, 1.0);
 
-  Get(drums)->SetSolo(true, TrackGrouping::kGrouped);
-  Get(drums)->SetPan(0.25, TrackGrouping::kGrouped);
+  GetCachedTrack(drums)->SetSolo(true, TrackGrouping::kGrouped);
+  GetCachedTrack(drums)->SetPan(0.25, TrackGrouping::kGrouped);
   EXPECT_TRUE(kick->solo);
   EXPECT_EQ(kick->pan, 0.25);
 }
@@ -442,8 +443,8 @@ TEST(TrackBatchTest, ChangingSeveralTracksWithoutABatchFailsTheTest) {
         FakeTrack* drums = reaper.GetProject().AddTrack("Drums");
         FakeTrack* bass = reaper.GetProject().AddTrack("Bass");
         TrackCache::Get().Refresh();
-        TrackCache::Get().GetTrack(ToMediaTrack(drums))->SetMute(true);
-        TrackCache::Get().GetTrack(ToMediaTrack(bass))->SetMute(true);
+        GetCachedTrack(drums)->SetMute(true);
+        GetCachedTrack(bass)->SetMute(true);
       },
       "in one TrackBatch");
 }

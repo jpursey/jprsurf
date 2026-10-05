@@ -129,6 +129,13 @@ class FakeReaper::Api final {
     if (parameter == "I_AUTOMODE") {
       return track.auto_mode;
     }
+    if (parameter == "IP_TRACKNUMBER") {
+      // 1 for the first track, and -1 for the master.
+      FakeProject& project = s_instance_->GetProjectOf(track);
+      return &track == project.GetMasterTrack()
+                 ? -1.0
+                 : project.FindTrack(&track) + 1.0;
+    }
     ADD_FAILURE() << "GetMediaTrackInfo_Value(\"" << parameter
                   << "\") isn't faked yet";
     return 0.0;
@@ -138,8 +145,15 @@ class FakeReaper::Api final {
                                           const char* name, char* value,
                                           bool set) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    if (std::string_view(name) == "P_NAME" && set) {
-      track.name = value;
+    if (std::string_view(name) == "P_NAME" &&
+        &track != s_instance_->GetProjectOf(track).GetMasterTrack()) {
+      if (set) {
+        track.name = value;
+      } else {
+        // The API passes no size for `value`, so it must hold the name.
+        track.name.copy(value, track.name.size());
+        value[track.name.size()] = '\0';
+      }
       return true;
     }
     ADD_FAILURE() << "GetSetMediaTrackInfo_String(\"" << name
@@ -764,7 +778,7 @@ FakeReaper::FakeReaper() {
 }
 
 FakeReaper::~FakeReaper() {
-  CheckEntryPoint();
+  EndEntryPoint();
   if (surface_ != nullptr) {
     ADD_FAILURE() << "A control surface is still open when FakeReaper is "
                      "destroyed";
@@ -801,7 +815,7 @@ std::unique_ptr<TestControlSurface> FakeReaper::AddSurface(
   int errors = 0;
   IReaperControlSurface* surface = surface_reg_->create(
       surface_reg_->type_string, std::string(config).c_str(), &errors);
-  CheckEntryPoint();
+  EndEntryPoint();
   if (surface == nullptr) {
     return nullptr;
   }
@@ -809,7 +823,7 @@ std::unique_ptr<TestControlSurface> FakeReaper::AddSurface(
     ADD_FAILURE() << "A second control surface was created while one is open. "
                      "JPRSurf has one surface, with a listener for each use.";
     delete surface;
-    CheckEntryPoint();
+    EndEntryPoint();
     return nullptr;
   }
   auto test_surface = absl::WrapUnique(new TestControlSurface(this, surface));
@@ -1005,7 +1019,7 @@ void FakeReaper::OnBatchedChange(const FakeTrack* track) {
   }
 }
 
-void FakeReaper::CheckEntryPoint() {
+void FakeReaper::EndEntryPoint() {
   if (batch_depth_ != 0) {
     ADD_FAILURE() << "PreventUIRefresh() is unbalanced by " << batch_depth_
                   << " at the end of an entry point";

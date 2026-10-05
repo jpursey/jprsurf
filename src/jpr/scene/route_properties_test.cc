@@ -9,6 +9,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -34,11 +35,6 @@ class RoutePropertiesTest : public ::testing::Test {
     TrackCache::Get().Refresh();
   }
 
-  // Returns the cache's track for the fake's track.
-  static Track* GetTrack(FakeTrack* track) {
-    return TrackCache::Get().GetTrack(ToMediaTrack(track));
-  }
-
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
   FakeProject& project_ = reaper_.GetProject();
@@ -50,8 +46,8 @@ class RoutePropertiesTest : public ::testing::Test {
 };
 
 TEST_F(RoutePropertiesTest, ReadsASend) {
-  RouteProperties send(&actions_, GetTrack(tracks_[0]), TrackRouteType::kSend,
-                       0);
+  RouteProperties send(&actions_, GetCachedTrack(tracks_[0]),
+                       TrackRouteType::kSend, 0);
   EXPECT_TRUE(send.GetProperty(RouteProperties::kExists)->GetBool());
   EXPECT_EQ(send.GetProperty(RouteProperties::kVolume)->GetVolume(), 0.5);
   EXPECT_EQ(send.GetProperty(RouteProperties::kPan)->GetPan(), -0.25);
@@ -60,7 +56,7 @@ TEST_F(RoutePropertiesTest, ReadsASend) {
 }
 
 TEST_F(RoutePropertiesTest, ReadsAReceive) {
-  RouteProperties receive(&actions_, GetTrack(tracks_[1]),
+  RouteProperties receive(&actions_, GetCachedTrack(tracks_[1]),
                           TrackRouteType::kReceive, 0);
   EXPECT_TRUE(receive.GetProperty(RouteProperties::kExists)->GetBool());
   EXPECT_EQ(receive.GetProperty(RouteProperties::kVolume)->GetVolume(), 0.5);
@@ -70,8 +66,8 @@ TEST_F(RoutePropertiesTest, ReadsAReceive) {
 }
 
 TEST_F(RoutePropertiesTest, RoutePastTheEndDoesntExist) {
-  RouteProperties send(&actions_, GetTrack(tracks_[0]), TrackRouteType::kSend,
-                       2);
+  RouteProperties send(&actions_, GetCachedTrack(tracks_[0]),
+                       TrackRouteType::kSend, 2);
   EXPECT_EQ(send.GetRoute(), nullptr);
   EXPECT_FALSE(send.GetProperty(RouteProperties::kExists)->GetBool());
   EXPECT_EQ(send.GetProperty(RouteProperties::kVolume)->GetVolume(), 0.0);
@@ -81,8 +77,8 @@ TEST_F(RoutePropertiesTest, RoutePastTheEndDoesntExist) {
 }
 
 TEST_F(RoutePropertiesTest, PropertiesAreCreatedOnce) {
-  RouteProperties send(&actions_, GetTrack(tracks_[0]), TrackRouteType::kSend,
-                       0);
+  RouteProperties send(&actions_, GetCachedTrack(tracks_[0]),
+                       TrackRouteType::kSend, 0);
   ViewProperty* volume = send.GetProperty(RouteProperties::kVolume);
   ASSERT_NE(volume, nullptr);
   EXPECT_EQ(volume->GetName(), RouteProperties::kVolume);
@@ -93,7 +89,7 @@ TEST_F(RoutePropertiesTest, PropertiesAreCreatedOnce) {
 }
 
 TEST_F(RoutePropertiesTest, WritesSetTheRoute) {
-  RouteProperties receive(&actions_, GetTrack(tracks_[2]),
+  RouteProperties receive(&actions_, GetCachedTrack(tracks_[2]),
                           TrackRouteType::kReceive, 0);
   receive.GetProperty(RouteProperties::kVolume)->SetVolume(0.25);
   receive.GetProperty(RouteProperties::kPan)->SetPan(0.5);
@@ -106,7 +102,7 @@ TEST_F(RoutePropertiesTest, WritesSetTheRoute) {
 }
 
 TEST_F(RoutePropertiesTest, RefreshedValuesNotify) {
-  Track* track = GetTrack(tracks_[0]);
+  Track* track = GetCachedTrack(tracks_[0]);
   RouteProperties send(&actions_, track, TrackRouteType::kSend, 1);
   ViewProperty* volume = send.GetProperty(RouteProperties::kVolume);
   volume->RegisterFlag(&changed_);
@@ -120,28 +116,28 @@ TEST_F(RoutePropertiesTest, RefreshedValuesNotify) {
 }
 
 TEST_F(RoutePropertiesTest, SettingTheRouteMovesEveryProperty) {
-  RouteProperties route(&actions_, GetTrack(tracks_[0]), TrackRouteType::kSend,
-                        0);
+  RouteProperties route(&actions_, GetCachedTrack(tracks_[0]),
+                        TrackRouteType::kSend, 0);
   ViewProperty* volume = route.GetProperty(RouteProperties::kVolume);
   ViewProperty* other_name = route.GetProperty("route:other_track.name");
   volume->RegisterFlag(&changed_);
 
-  route.SetRoute(GetTrack(tracks_[0]), TrackRouteType::kSend, 1);
+  route.SetRoute(GetCachedTrack(tracks_[0]), TrackRouteType::kSend, 1);
   EXPECT_TRUE(changed_);
   EXPECT_EQ(route.GetIndex(), 1);
   EXPECT_EQ(volume->GetVolume(), 1.0);
   EXPECT_EQ(other_name->GetText(), "T3");
 
-  route.SetRoute(GetTrack(tracks_[2]), TrackRouteType::kReceive, 0);
-  EXPECT_EQ(route.GetTrack(), GetTrack(tracks_[2]));
+  route.SetRoute(GetCachedTrack(tracks_[2]), TrackRouteType::kReceive, 0);
+  EXPECT_EQ(route.GetTrack(), GetCachedTrack(tracks_[2]));
   EXPECT_EQ(route.GetType(), TrackRouteType::kReceive);
   EXPECT_EQ(other_name->GetText(), "T1");
   volume->UnregisterFlag(&changed_);
 }
 
 TEST_F(RoutePropertiesTest, ChangingTheRoutesNotifies) {
-  RouteProperties send(&actions_, GetTrack(tracks_[0]), TrackRouteType::kSend,
-                       2);
+  RouteProperties send(&actions_, GetCachedTrack(tracks_[0]),
+                       TrackRouteType::kSend, 2);
   ViewProperty* exists = send.GetProperty(RouteProperties::kExists);
   exists->RegisterFlag(&changed_);
 

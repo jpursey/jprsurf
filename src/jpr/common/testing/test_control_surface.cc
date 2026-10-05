@@ -26,7 +26,7 @@ void TestControlSurface::Close() {
   reaper_ = nullptr;
 }
 
-void TestControlSurface::EndCall() { reaper_->CheckEntryPoint(); }
+void TestControlSurface::EndCall() { reaper_->EndEntryPoint(); }
 
 //------------------------------------------------------------------------------
 // Running

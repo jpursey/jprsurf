@@ -10,6 +10,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -31,11 +32,6 @@ class TrackReferenceTest : public ::testing::Test {
     TrackCache::Get().Refresh();
   }
 
-  // Returns the cache's track for the fake's track.
-  static Track* GetTrack(FakeTrack* track) {
-    return TrackCache::Get().GetTrack(ToMediaTrack(track));
-  }
-
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
   FakeProject& project_ = reaper_.GetProject();
@@ -54,12 +50,12 @@ TEST_F(TrackReferenceTest, RefersToNothingAtFirst) {
 
 TEST_F(TrackReferenceTest, VersionChangesWithTheTrack) {
   const int64_t first = reference_.GetVersion();
-  reference_.Set(GetTrack(tracks_[0]));
+  reference_.Set(GetCachedTrack(tracks_[0]));
   const int64_t second = reference_.GetVersion();
   EXPECT_NE(second, first);
-  EXPECT_EQ(reference_.GetTrack(), GetTrack(tracks_[0]));
+  EXPECT_EQ(reference_.GetTrack(), GetCachedTrack(tracks_[0]));
 
-  reference_.Set(GetTrack(tracks_[0]));
+  reference_.Set(GetCachedTrack(tracks_[0]));
   EXPECT_EQ(reference_.GetVersion(), second);
 
   reference_.Set(nullptr);
@@ -74,14 +70,14 @@ TEST_F(TrackReferenceTest, FieldsFollowTheReference) {
   EXPECT_EQ(reference_.GetField("nothing"), nullptr);
   name->RegisterFlag(&changed_);
 
-  reference_.Set(GetTrack(tracks_[1]));
+  reference_.Set(GetCachedTrack(tracks_[1]));
   EXPECT_TRUE(changed_);
   EXPECT_EQ(name->GetText(), "T2");
   name->UnregisterFlag(&changed_);
 }
 
 TEST_F(TrackReferenceTest, ADeletedTrackIsNothing) {
-  reference_.Set(GetTrack(tracks_[0]));
+  reference_.Set(GetCachedTrack(tracks_[0]));
   project_.DeleteTrack(tracks_[0]);
   TrackCache::Get().Refresh();
   reference_.Update();
@@ -89,7 +85,7 @@ TEST_F(TrackReferenceTest, ADeletedTrackIsNothing) {
 }
 
 TEST_F(TrackReferenceTest, UpdateRefreshesOnlyWatchedFields) {
-  reference_.Set(GetTrack(tracks_[0]));
+  reference_.Set(GetCachedTrack(tracks_[0]));
   ViewProperty* mute = reference_.GetField("mute");
   tracks_[0]->mute = true;
   reference_.Update();
@@ -103,7 +99,7 @@ TEST_F(TrackReferenceTest, UpdateRefreshesOnlyWatchedFields) {
 }
 
 TEST_F(TrackReferenceTest, UpdateRefreshesTheMeterOnlyWhileItIsWatched) {
-  reference_.Set(GetTrack(tracks_[0]));
+  reference_.Set(GetCachedTrack(tracks_[0]));
   ViewProperty* mute = reference_.GetField("mute");
   ViewProperty* meter = reference_.GetField("meter");
   mute->RegisterFlag(&changed_);
@@ -123,28 +119,28 @@ TEST_F(TrackReferenceTest, UpdateRefreshesTheMeterOnlyWhileItIsWatched) {
 TEST_F(TrackReferenceTest, FallsBackToTheFallbacksTrack) {
   TrackReference fallback("user:fallback", &actions_);
   TrackReference reference("user:reference", &actions_, &fallback);
-  fallback.Set(GetTrack(tracks_[2]));
+  fallback.Set(GetCachedTrack(tracks_[2]));
 
   reference.Set(nullptr);
-  EXPECT_EQ(reference.GetTrack(), GetTrack(tracks_[2]));
-  reference.Set(GetTrack(tracks_[0]));
-  EXPECT_EQ(reference.GetTrack(), GetTrack(tracks_[0]));
+  EXPECT_EQ(reference.GetTrack(), GetCachedTrack(tracks_[2]));
+  reference.Set(GetCachedTrack(tracks_[0]));
+  EXPECT_EQ(reference.GetTrack(), GetCachedTrack(tracks_[0]));
 }
 
 TEST_F(TrackReferenceTest, FollowsOnlyTracksOnTheSurface) {
   TrackReference followed("user:followed", &actions_);
   TrackReference reference("user:reference", &actions_, nullptr, &followed);
-  followed.Set(GetTrack(tracks_[1]));
+  followed.Set(GetCachedTrack(tracks_[1]));
   reference.Update();
-  EXPECT_EQ(reference.GetTrack(), GetTrack(tracks_[1]));
+  EXPECT_EQ(reference.GetTrack(), GetCachedTrack(tracks_[1]));
 
   followed.Set(TrackCache::Get().GetMasterTrack());
   reference.Update();
-  EXPECT_EQ(reference.GetTrack(), GetTrack(tracks_[1]));
+  EXPECT_EQ(reference.GetTrack(), GetCachedTrack(tracks_[1]));
 
   followed.Set(nullptr);
   reference.Update();
-  EXPECT_EQ(reference.GetTrack(), GetTrack(tracks_[1]));
+  EXPECT_EQ(reference.GetTrack(), GetCachedTrack(tracks_[1]));
 }
 
 }  // namespace

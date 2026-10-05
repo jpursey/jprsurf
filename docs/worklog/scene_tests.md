@@ -16,12 +16,14 @@ follow-up CL, with the test disabled until then, as in *Surface tests*.
 
 ### Names
 
-| Name                       | What                                         | Might be confused with                |
-| -------------------------- | -------------------------------------------- | ------------------------------------- |
-| `FakeProject::AddTracks()` | Adds tracks named for where they are         | `FakeProject::AddTrack()`             |
-| `FakeDevice`               | A `Device` of fake controls, with no MIDI    | `FakeXTouch`; `TestDevice`            |
-| `jpr_device_fakes`         | The test-only library holding `FakeDevice`   | `jpr_device_testing`                  |
-| `SceneTest`                | The fixture for scene tests                  | `SurfaceTest`; `scene_test.cc`        |
+| Name                          | What                                       | Might be confused with             |
+| ----------------------------- | ------------------------------------------ | ---------------------------------- |
+| `FakeProject::AddTracks()`    | Adds tracks named for where they are       | `FakeProject::AddTrack()`          |
+| `FakeDevice`                  | A `Device` of fake controls, with no MIDI  | `FakeXTouch`; `TestDevice`         |
+| `jpr_device_fakes`            | The test-only library holding `FakeDevice` | `jpr_device_testing`               |
+| `SceneTest`                   | The fixture for scene tests                | `SurfaceTest`; `scene_test.cc`     |
+| `GetCachedTrack()`            | The track cache's track for a fake track   | `TrackCache::GetTrack()`           |
+| `FakeReaper::EndEntryPoint()` | Ends a call REAPER would have made         | `TestControlSurface`'s `EndCall()` |
 
 - `AddTracks()` names tracks T2 and T2.1, and moves from `SurfaceTest`.
   `AddTrack()` takes the name.
@@ -243,7 +245,29 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL5 [ ] scene: State, command, and timeline properties
+### CL5 [x] common: Entry points and cached tracks in the fake
+
+Depends on: nothing.
+
+- `FakeReaper::EndEntryPoint()`: a test that calls JPRSurf's code directly,
+  outside a surface's run, ends each call REAPER would have made, so the fake
+  checks each on its own (such as the batching rule) rather than all of the
+  test's calls as one. `TestControlSurface` ends its calls with it.
+- `GetCachedTrack(FakeTrack*)`, in its own `cached_track.h` so the fake
+  doesn't depend on the cache: the track cache's track for a fake track,
+  replacing the copies in each test that needed one.
+- `reaper_trace_test.cc` moves onto `FakeReaper`, with a `SurfaceNotifier`
+  for the calls back it checks, in place of its own small fake. The fake reads
+  `IP_TRACKNUMBER`, and reads `P_NAME` for every track but the master, which
+  REAPER's documentation says reads as null, and nobody has checked.
+
+**Verify**
+- Standard checks.
+- `fake_reaper_test.cc`: two changes to several tracks, each ended, pass, and
+  without the end fail.
+- `reaper_trace_test.cc` checks what it did before.
+
+### CL6 [ ] scene: State, command, and timeline properties
 
 Depends on: CL3.
 
@@ -254,9 +278,9 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL6 [ ] scene: Track actions, anchors, and picks
+### CL7 [ ] scene: Track actions, anchors, and picks
 
-Depends on: CL3.
+Depends on: CL3, CL5.
 
 - `track_actions_test.cc`, `track_anchor_property_test.cc`, and
   `track_pick_property_test.cc`. The fake fails any change of more than one
@@ -265,7 +289,7 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL7 [ ] scene: Views
+### CL8 [ ] scene: Views
 
 Depends on: CL3.
 
@@ -274,16 +298,16 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL8 [ ] scene: View lists
+### CL9 [ ] scene: View lists
 
-Depends on: CL7.
+Depends on: CL8.
 
 - `view_list_test.cc`.
 
 **Verify**
 - Standard checks.
 
-### CL9 [ ] scene: Mappings that write
+### CL10 [ ] scene: Mappings that write
 
 Depends on: CL3.
 
@@ -294,9 +318,9 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL10 [ ] scene: Mappings that read
+### CL11 [ ] scene: Mappings that read
 
-Depends on: CL9.
+Depends on: CL10.
 
 - `view_mapping_test.cc`: each property type read from each input type,
   input type choice, property ranges, press_toggles, press_release, required
