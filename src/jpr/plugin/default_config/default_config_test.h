@@ -43,8 +43,10 @@ class DefaultConfigTest : public SurfaceTest {
   FakeXTouch& GetXTouch(int strip);
   static int GetXTouchStrip(int strip) { return strip % 8; }
 
-  // Returns the name `strip` shows, without the spaces after it.
+  // Returns the name `strip` shows, and its bottom line, without the spaces
+  // after them.
   std::string GetName(int strip);
+  std::string GetBottomLine(int strip);
 
   // Returns the light of `button` on `strip`.
   FakeXTouch::Light GetLight(FakeXTouch::StripButton button, int strip);

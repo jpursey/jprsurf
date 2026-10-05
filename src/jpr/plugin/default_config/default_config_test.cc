@@ -27,6 +27,11 @@ std::string DefaultConfigTest::GetName(int strip) {
       GetXTouch(strip).GetScribble(GetXTouchStrip(strip), 0)));
 }
 
+std::string DefaultConfigTest::GetBottomLine(int strip) {
+  return std::string(absl::StripTrailingAsciiWhitespace(
+      GetXTouch(strip).GetScribble(GetXTouchStrip(strip), 1)));
+}
+
 FakeXTouch::Light DefaultConfigTest::GetLight(FakeXTouch::StripButton button,
                                               int strip) {
   return GetXTouch(strip).GetLight(button, GetXTouchStrip(strip));

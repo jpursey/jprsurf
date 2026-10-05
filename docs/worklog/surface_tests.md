@@ -198,6 +198,7 @@ class DefaultConfigTest : public SurfaceTest {
   FakeXTouch& GetXTouch(int strip);
   static int GetXTouchStrip(int strip);
   std::string GetName(int strip);  // Without the spaces after it.
+  std::string GetBottomLine(int strip);  // The same, for its bottom line.
   FakeXTouch::Light GetLight(FakeXTouch::StripButton button, int strip);
 
   // Taps select on `strip`, or holds it on `first` and taps it on `last`.
@@ -609,6 +610,73 @@ Depends on: CL4-CL7a.
 
 **Verify**
 - None beyond reading it: docs only.
+
+### CL9 [x] plugin: More send mode tests
+
+Depends on: CL8.
+
+What the default config does in Send/Receive mode that neither the smoke
+scenario nor CL7 covered, in `send_mode_test.cc`:
+- Bank and Channel left and right page through the route strips, on a track
+  with more routes than the 15 strips, stopping at each end.
+- The Info strip controls the track it shows, as a track strip does: fader,
+  pot, pot button, mute, solo, rec arm, color, and meter.
+- Deleting the shown track leaves the strips blank until another track is
+  touched.
+- With the X-Touch alone, 7 route strips and the Info strip.
+- Holding Send while a select is held as a range's anchor picks the track
+  pressed, rather than selecting the range.
+- An empty Info strip's bottom line shows "Send", as route strips did before
+  CL7a. Its test is disabled until CL9a. The strip is black, so the hardware
+  shows nothing either way.
+- `DefaultConfigTest` gains `GetBottomLine()`, from the send mode tests, for
+  the X-Touch alone's.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL9a [ ] plugin: An empty Info strip shows no route kind
+
+Depends on: CL9.
+
+- Found by CL9: once the Send/Receive mode track is deleted, the Info strip's
+  bottom line shows "Send". It should be blank, as its top line is. The line
+  is the routes list's own setting (`View::kChildRouteTypeName`), not a value
+  of its track, and the list sets it to sends when its subject changes, so it
+  has no empty form: only a condition can blank it.
+- CL4a's fix: the route kind line's mapping only acts while the track exists
+  (a condition on `TrackProperties::kTrackExists`).
+- `send_mode_test.cc`: its disabled test folded into
+  `DeletedTrackShowsNothingUntilAnotherIsTouched`.
+
+**Verify**
+- Standard checks. Nothing to see in REAPER: the strip is black.
+
+### CL10 [ ] plugin: More track list tests
+
+Depends on: CL8.
+
+In `track_list_test.cc`:
+- The track list scrolls to show the current track: one touched in REAPER, off
+  the strips shown, and one reached across a route in Send/Receive mode, on
+  returning to Track mode.
+- Deleting the shown folder goes back to the top level. Hiding it blanks its
+  strips, which come back when it is shown again.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
+
+### CL11 [ ] plugin: Whole surface tests
+
+Depends on: CL8.
+
+- `default_config_test_test.cc`: removing the surface, as REAPER does at exit,
+  clears the hardware: lights off, faders down, scribble strips blank, and the
+  timecode display empty.
+- `global_test.cc`: Shift, Control, Alt, and Option are lit while held.
+
+**Verify**
+- Standard checks, apart from REAPER: the plugin doesn't change.
 
 ## Checks in REAPER
 
