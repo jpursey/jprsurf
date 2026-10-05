@@ -177,6 +177,8 @@ On an 81-track project (2 devices, 243 controls, 36 views, 595 mappings):
 - **Events** are REAPER's time: `Main_OnCommand` from about 4ms to over 100ms,
   `PreventUIRefresh` about 3ms, and `Undo_OnStateChangeEx` about 1.5ms. A
   track list refresh is about 90us of JPRSurf's own time.
-- **Between sessions**, the same build's run times vary by about 30%, so only
-  sessions taken close together, with the same activity and other programs
-  closed, are comparable.
+- **Between sessions**, the same build's run times varied by about 30%. The
+  cause is the kind of core the frames ran on, not the profiler's tick rate:
+  frames on efficiency cores take about 25-30% longer, and sessions with REAPER
+  in the foreground, which stay on performance cores, agree within about 10%
+  (see `profiles/README.md`).

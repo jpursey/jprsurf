@@ -14,11 +14,25 @@ change can be compared against them without rebuilding an older version.
   and the feature's directory is deleted either way. The smoke test is a long
   manual run, so it is only recorded here.
 
-**Comparing:** call counts, and counts per action, compare directly. Times vary
-by about 30% between sessions on the same machine, so they are a guide within
-that. A back to back run (a session without the change, then one with it) is
-only needed when a time moves by more than that, or when the change is meant to
-make something faster.
+**Comparing:** call counts, and counts per action, compare directly. Times
+depend on the kind of core the code ran on. On this machine (an i9-14900KF, with
+8 performance and 16 efficiency cores), a frame on an efficiency core takes
+about 25-30% longer. With REAPER in the foreground, Windows keeps nearly every
+frame on performance cores, and times vary by about 10% between sessions; in
+the background, it moves a third or more of them to efficiency cores. The
+profile's core table shows where frames ran (class 1 is performance, class 0
+efficiency), with a warning when they ran on both:
+- **A few frames** (a few percent) on efficiency cores barely move the totals,
+  and the class 1 row compares on its own.
+- **More than that** makes the per run and point times read high, so the
+  session is recorded again, with REAPER in the foreground throughout.
+
+REAPER can be set to keep off efficiency cores, but that limits its use of the
+machine just to profile it, so profiles are taken as REAPER normally runs.
+
+A back to back run (a session without the change, then one with it) is only
+needed when a time moves by more than 10%, or when the change is meant to make
+something faster.
 
 Each snapshot's header has the build it was made from, and the date.
 
@@ -26,8 +40,8 @@ Each snapshot's header has the build it was made from, and the date.
 
 Both run on the same machine, with other programs such as web browsers closed.
 REAPER is started fresh by double-clicking the SurfaceTest project (81 tracks,
-with sends and receives), so it opens at once, and closed (without saving)
-right after, so the profile covers the scenario and nothing else. A profile
+with sends and receives), so it opens at once, stays in the foreground, and is
+closed (without saving) right after, so the profile covers the scenario and nothing else. A profile
 starts with the surface, so time spent choosing a project in REAPER lowers the
 per-run counts of everything that polls tracks.
 
