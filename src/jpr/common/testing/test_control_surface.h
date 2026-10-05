@@ -41,6 +41,12 @@ class TestControlSurface final : public IReaperControlSurface {
   // exactly FakeReaper::kRunsPerSecond runs each.
   void RunFor(absl::Duration duration);
 
+  // Returns the surface, as its type created it. Calls on it are made as REAPER
+  // makes them from inside its own functions: they are part of the entry point
+  // that called the function, rather than entry points of their own (see
+  // "Checks" in FakeReaper). SurfaceNotifier makes those calls on this.
+  IReaperControlSurface* GetWrapped() { return surface_.get(); }
+
   // The rest of IReaperControlSurface, each passed on to the surface.
   const char* GetTypeString() override;
   const char* GetDescString() override;

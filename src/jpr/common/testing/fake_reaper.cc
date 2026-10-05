@@ -817,10 +817,6 @@ std::unique_ptr<TestControlSurface> FakeReaper::AddSurface(
   return test_surface;
 }
 
-IReaperControlSurface* FakeReaper::GetSurface() {
-  return surface_ != nullptr ? surface_->surface_.get() : nullptr;
-}
-
 void FakeReaper::RemoveSurface(TestControlSurface* surface) {
   if (surface == surface_) {
     surface_ = nullptr;

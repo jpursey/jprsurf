@@ -15,11 +15,13 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "gmock/gmock.h"
+#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/testing/test_control_surface.h"
 #include "sdk/reaper_plugin.h"
@@ -510,6 +512,90 @@ TEST_F(SurfaceNotifierTest, UndoSendsTheRepeatState) {
   reaper_.AddCommand({.id = 1068, .toggle_state = 1});
   Main_OnCommand(40029, 0);
   EXPECT_THAT(TakeCalls(), Contains("SetRepeatState(true)"));
+}
+
+//------------------------------------------------------------------------------
+// Changes made in REAPER's own UI
+//
+// Only in the fake: REAPER's UI is the user's. Each change is made between
+// runs, as REAPER makes it, and each of its calls is an entry point of its own.
+//------------------------------------------------------------------------------
+
+TEST_F(SurfaceNotifierTest, ClickingATrackSelectsOnlyIt) {
+  FakeTrack* const a = reaper_.GetProject().GetTrack(0);
+  FakeTrack* const b = reaper_.GetProject().GetTrack(1);
+  a->selected = true;
+
+  notifier_.ClickTrack(b);
+  EXPECT_FALSE(a->selected);
+  EXPECT_TRUE(b->selected);
+  EXPECT_THAT(
+      TakeCalls(),
+      ElementsAre("SetSurfaceSelected(A, false)", "SetSurfaceSelected(B, true)",
+                  "OnTrackSelection(B)", "Extended(SETLASTTOUCHEDTRACK, B)"));
+}
+
+TEST_F(SurfaceNotifierTest, CtrlClickingATrackAddsIt) {
+  FakeTrack* const a = reaper_.GetProject().GetTrack(0);
+  FakeTrack* const b = reaper_.GetProject().GetTrack(1);
+  a->selected = true;
+
+  notifier_.CtrlClickTrack(b);
+  EXPECT_TRUE(a->selected);
+  EXPECT_TRUE(b->selected);
+  EXPECT_THAT(TakeCalls(),
+              ElementsAre("SetSurfaceSelected(B, true)", "OnTrackSelection(B)",
+                          "Extended(SETLASTTOUCHEDTRACK, B)"));
+}
+
+TEST_F(SurfaceNotifierTest, ClickingMuteTogglesItAndTouchesTheTrack) {
+  FakeTrack* const a = reaper_.GetProject().GetTrack(0);
+
+  notifier_.ClickMute(a);
+  EXPECT_TRUE(a->mute);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETLASTTOUCHEDTRACK, A)",
+                                       "SetSurfaceMute(A, true)",
+                                       "SetSurfaceSolo(A, false)"));
+
+  notifier_.ClickMute(a);
+  EXPECT_FALSE(a->mute);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETLASTTOUCHEDTRACK, A)",
+                                       "SetSurfaceMute(A, false)",
+                                       "SetSurfaceSolo(A, false)"));
+}
+
+TEST_F(SurfaceNotifierTest, ChangesNoTraceHasShownFail) {
+  FakeTrack* const master = reaper_.GetProject().GetMasterTrack();
+  FakeTrack* const a = reaper_.GetProject().GetTrack(0);
+  FakeTrack* const b = reaper_.GetProject().GetTrack(1);
+  a->selected = true;
+  b->selected = true;
+
+  EXPECT_NONFATAL_FAILURE(notifier_.ClickTrack(master),
+                          "a click on the master");
+  EXPECT_NONFATAL_FAILURE(notifier_.CtrlClickTrack(master),
+                          "a Ctrl+click on the master");
+  EXPECT_NONFATAL_FAILURE(notifier_.CtrlClickTrack(a),
+                          "a Ctrl+click that unselects a track");
+  EXPECT_NONFATAL_FAILURE(notifier_.ClickMute(master),
+                          "a click on the master's mute");
+  EXPECT_NONFATAL_FAILURE(
+      notifier_.ClickMute(a),
+      "a click on the mute of one of several selected tracks");
+  EXPECT_FALSE(master->selected);
+  EXPECT_FALSE(master->mute);
+  EXPECT_TRUE(a->selected);
+  EXPECT_FALSE(a->mute);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+TEST_F(SurfaceNotifierTest, ChangesInsideABatchFail) {
+  FakeTrack* const a = reaper_.GetProject().GetTrack(0);
+  PreventUIRefresh(1);
+  EXPECT_NONFATAL_FAILURE(notifier_.ClickMute(a), "PreventUIRefresh() scope");
+  EXPECT_FALSE(a->mute);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 
 }  // namespace

@@ -137,13 +137,11 @@ class FakeReaper final {
   // fails the test). Destroying the surface removes it.
   std::unique_ptr<TestControlSurface> AddSurface(std::string_view config = {});
 
-  // Returns the open control surface, as its type created it, or null if none
-  // is open. Calls on it are made as REAPER makes them from inside its own
-  // functions: they are part of the entry point that called the function,
-  // rather than entry points of their own (see Checks). A test makes REAPER's
-  // other calls on the TestControlSurface instead. SurfaceNotifier makes its
-  // calls on this.
-  IReaperControlSurface* GetSurface();
+  // Returns the open control surface, or null if none is open. Each call on it
+  // is an entry point of its own (see Checks). Calls REAPER makes from inside
+  // its own functions are made on the surface it wraps instead (see
+  // TestControlSurface::GetWrapped()).
+  TestControlSurface* GetSurface() { return surface_; }
 
   // Returns true while a PreventUIRefresh() scope is open.
   bool IsUIRefreshPrevented() const { return batch_depth_ > 0; }

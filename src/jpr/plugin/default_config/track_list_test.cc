@@ -34,11 +34,6 @@ class TrackListTest : public DefaultConfigTest {
     AddSurface();
   }
 
-  Light GetSelectLight(int strip) {
-    return GetXTouch(strip).GetLight(StripButton::kSelect,
-                                     GetXTouchStrip(strip));
-  }
-
   void DoublePressSelect(int strip) {
     DoublePress(GetXTouch(strip), StripButton::kSelect, GetXTouchStrip(strip));
   }
@@ -65,23 +60,23 @@ TEST_F(TrackListTest, TapSelectsOnlyTheTrack) {
   for (FakeTrack* track : top_) {
     EXPECT_EQ(track->selected, track == top_[3]) << track->name;
   }
-  EXPECT_EQ(GetSelectLight(0), Light::kOff);
-  EXPECT_EQ(GetSelectLight(3), Light::kOn);
-  EXPECT_EQ(GetSelectLight(12), Light::kOff);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 0), Light::kOff);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 3), Light::kOn);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 12), Light::kOff);
 }
 
 TEST_F(TrackListTest, TapUnselectsTheOnlySelectedTrack) {
   TapSelect(3);
   TapSelect(3);
   EXPECT_FALSE(top_[3]->selected);
-  EXPECT_EQ(GetSelectLight(3), Light::kOff);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 3), Light::kOff);
 }
 
 TEST_F(TrackListTest, SelectLightShowsTheSelection) {
   top_[9]->selected = true;
   RunUntilShown();
-  EXPECT_EQ(GetSelectLight(9), Light::kOn);
-  EXPECT_EQ(GetSelectLight(8), Light::kOff);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 9), Light::kOn);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 8), Light::kOff);
 }
 
 TEST_F(TrackListTest, HoldingSelectSelectsTheTrack) {
@@ -102,7 +97,7 @@ TEST_F(TrackListTest, HoldingSelectAndPressingAnotherSelectsTheRange) {
   for (int i = 0; i < kTopCount; ++i) {
     EXPECT_EQ(top_[i]->selected, i <= 11) << top_[i]->name;
   }
-  EXPECT_EQ(GetSelectLight(11), Light::kOn);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 11), Light::kOn);
 }
 
 //------------------------------------------------------------------------------
@@ -221,7 +216,7 @@ TEST_F(XTouchAloneTrackListTest, BankMovesEightTracks) {
 TEST_F(XTouchAloneTrackListTest, TapSelectsTheTrack) {
   TapSelect(7);
   EXPECT_TRUE(top_[7]->selected);
-  EXPECT_EQ(GetSelectLight(7), Light::kOn);
+  EXPECT_EQ(GetLight(StripButton::kSelect, 7), Light::kOn);
 }
 
 }  // namespace

@@ -381,7 +381,15 @@ that make REAPER's calls on the surface follow these.
   `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)` with the track.
 - **Changes in REAPER's own UI** arrive between runs. Muting a track with its
   button called `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)`, then the track's
-  `SetSurfaceMute()` and `SetSurfaceSolo()`.
+  `SetSurfaceMute()` and `SetSurfaceSolo()`. Clicking a track in the track
+  panel (2026-10-05) called `SetSurfaceSelected()` for each track whose
+  selection changed, in track order (the track unselected too), then
+  `OnTrackSelection()` and `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)` with the
+  track clicked. Ctrl+clicking a track to add it to the selection
+  called the same, with only that track's `SetSurfaceSelected()`. Each click
+  was followed, a run later, by `Extended(CSURF_EXT_SETMIXERSCROLL)` with the
+  track. Setting the global automation override in REAPER called what
+  `SetGlobalAutomationOverride()` does.
 - **Undo resends everything, during the call.** Inside `Main_OnCommand()` for
   Edit: Undo, REAPER called the master's `SetSurfaceMute()`,
   `SetSurfaceVolume()`, and `SetSurfacePan()`, `SetRepeatState()`,

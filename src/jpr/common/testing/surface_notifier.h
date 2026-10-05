@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <string_view>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -12,6 +13,7 @@
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/testing/test_control_surface.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -21,8 +23,9 @@ namespace jpr {
 //
 // Makes the calls REAPER makes on the open control surface from inside its own
 // functions, as traces showed (see "Seen in traces" in
-// docs/testing_and_profiling.md), for as long as it exists. A test of a whole
-// surface creates one before the plugin loads, so its hooks are under the
+// docs/testing_and_profiling.md), for as long as it exists, and those for the
+// changes made in REAPER's own UI that tests make (see below). A test of a
+// whole surface creates one before the plugin loads, so its hooks are under the
 // profiler's and the trace's, as REAPER's own functions are. A test of
 // ControlSurface itself makes the calls it needs by hand, and has none.
 //
@@ -53,8 +56,11 @@ namespace jpr {
 // except those about state the fake doesn't hold: the mixer's scroll, and
 // input monitoring.
 //
-// Calls are made on FakeReaper::GetSurface(), so they are part of the entry
-// point that called the function (see "Checks" in FakeReaper), and are only
+// Calls from inside a function are made on the surface the open
+// TestControlSurface wraps (see TestControlSurface::GetWrapped()), so they are
+// part of the entry point that called the function (see "Checks" in
+// FakeReaper). Calls for a change in REAPER's UI are made on the
+// TestControlSurface, so each is an entry point of its own. Calls are only
 // made while a surface is open.
 //
 // Brittleness: it knows only what traces showed. A function JPRSurf starts
@@ -72,6 +78,34 @@ class SurfaceNotifier final {
   SurfaceNotifier(const SurfaceNotifier&) = delete;
   SurfaceNotifier& operator=(const SurfaceNotifier&) = delete;
   ~SurfaceNotifier() = default;
+
+  //----------------------------------------------------------------------------
+  // Changes made in REAPER's own UI
+  //
+  // Each changes the current project as the user does in REAPER, and makes the
+  // calls REAPER makes on the surface for it, as traces showed. REAPER makes
+  // them between runs, so a test does too, outside any PreventUIRefresh()
+  // scope. A change no trace has shown, such as one to the master, fails the
+  // test, and changes nothing. A change to what JPRSurf polls, such as a
+  // volume or a route, needs none of these: a test sets the fake. Setting the
+  // global automation override in REAPER calls what
+  // SetGlobalAutomationOverride() does.
+  //----------------------------------------------------------------------------
+
+  // Clicks `track` in the track panel, which selects only it: the
+  // selection of each track that changed, then OnTrackSelection() and the
+  // track as the last touched.
+  void ClickTrack(FakeTrack* track);
+
+  // Ctrl+clicks `track`, which adds it to the selection, and calls back
+  // as a click does. Traces only showed a track being added, so `track` must
+  // not be selected.
+  void CtrlClickTrack(FakeTrack* track);
+
+  // Clicks `track`'s mute button, which toggles its mute: the track as the
+  // last touched, then its mute and solo. Traces only showed a track that is
+  // the only one selected, or isn't selected.
+  void ClickMute(FakeTrack* track);
 
  private:
   // A gb::FunctionHook's Hook, which passes each call to `kHandler`.
@@ -132,6 +166,23 @@ class SurfaceNotifier final {
   // Adds each track whose flags differ from `before` to `changed`.
   void AddChanges(const std::vector<TrackFlags>& before,
                   absl::flat_hash_set<const FakeTrack*>& changed);
+
+  // Selects `clicked`, and only it if `only` is true, as a click on it
+  // in REAPER does, and calls back.
+  void ClickToSelect(FakeTrack* clicked, bool only);
+
+  // Returns true if `track` is the current project's master.
+  bool IsMaster(const FakeTrack* track);
+
+  // Each returns true if a change in REAPER's UI can be made, and otherwise
+  // fails the test: outside any PreventUIRefresh() scope, and only if
+  // `traced`, for the `change` no trace has shown.
+  bool CheckOutsideBatch();
+  bool CheckTraced(bool traced, std::string_view change);
+
+  // Returns the surface to make calls from inside a function on, or null if
+  // none is open.
+  IReaperControlSurface* GetWrappedSurface();
 
   // Sends what the track setters left for the end of the batch, unless a
   // PreventUIRefresh() scope is open in the fake.

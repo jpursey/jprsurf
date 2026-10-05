@@ -82,11 +82,14 @@ class SurfaceNotifier final {
   already tested against what REAPER sends.
 - **Every track's state** is as "Seen in traces" lists it: master first, then
   each track in order.
-- **Nested calls.** The notifier makes its calls on `FakeReaper::GetSurface()`,
-  the surface the `TestControlSurface` passes calls to, rather than on the
-  `TestControlSurface`. So they are part of the entry point that called the
-  function, whether a run or the test's own calls, and the fake's checks still
-  see one entry point per call REAPER makes.
+- **Nested calls.** The notifier makes its calls on the surface the
+  `TestControlSurface` wraps (`TestControlSurface::GetWrapped()`), rather than
+  on the `TestControlSurface`. So they are part of the entry point that called
+  the function, whether a run or the test's own calls, and the fake's checks
+  still see one entry point per call REAPER makes. Its calls for a change in
+  REAPER's own UI (CL7) are made on the `TestControlSurface`
+  (`FakeReaper::GetSurface()`), as they come between runs, each an entry point
+  of its own.
 - **Order of hooks.** The notifier is created before the plugin loads and
   destroyed after it unloads, so its hooks are under the profiler's and the
   trace's, as REAPER's own functions are.
@@ -195,6 +198,7 @@ class DefaultConfigTest : public SurfaceTest {
   FakeXTouch& GetXTouch(int strip);
   static int GetXTouchStrip(int strip);
   std::string GetName(int strip);  // Without the spaces after it.
+  FakeXTouch::Light GetLight(FakeXTouch::StripButton button, int strip);
 
   // Taps select on `strip`, or holds it on `first` and taps it on `last`.
   void TapSelect(int strip);
@@ -317,20 +321,23 @@ call the surface makes:
   track's volume, pan, and selection, and so does
   `SetGlobalAutomationOverride()`.
 
-What the trace doesn't have is changes made in REAPER's own UI, which a few
-tests make by hand. Volume and pan changes in REAPER's UI don't matter, as
-JPRSurf polls them. What does is selecting a track in REAPER, which Send mode
-follows (CL7):
-- **Fact:** what clicking a track in REAPER's track panel calls on the surface,
-  and in what order. Expected: `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)`, then
-  `SetSurfaceSelected()` for each track whose selection changed.
-- **Check:** with `JPRSURF_TRACE=1`, click a track's name in the track panel,
-  then Ctrl+click another, then set the global automation override to Latch
-  Preview in REAPER, and exit.
+What that trace doesn't have is changes made in REAPER's own UI, which a few
+tests make. Volume and pan changes in REAPER's UI don't matter, as JPRSurf
+polls them. What does is selecting a track in REAPER, which Send mode follows
+(CL7). Checked on 2026-10-05, with `JPRSURF_TRACE=1`, by clicking a track
+in the track panel, clicking another, Ctrl+clicking a third, and
+setting the global automation override to Latch Preview in REAPER:
+- **A click** calls `SetSurfaceSelected()` for each track whose selection
+  changed, in track order (the track unselected too), then
+  `OnTrackSelection()` and `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)` with the
+  track clicked. The expected order was the other way round.
+- **A Ctrl+click** adding a track calls the same, with only its
+  `SetSurfaceSelected()`.
+- **The override** set in REAPER calls what `SetGlobalAutomationOverride()`
+  does: every track's volume, pan, and selection, and no `SetAutoMode()`.
 
-No temporary code is needed: the trace is enough. Its findings, and the
-2026-09-29 trace's, go into "Seen in traces" in the design doc (CL1), and the
-design doc's To confirm table goes, answered.
+These are in "Seen in traces" in the design doc, with the 2026-09-29 trace's
+findings (CL1), and `SurfaceNotifier` makes them (CL7).
 
 ## CLs
 
@@ -545,22 +552,49 @@ Depends on: CL5a.
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
-### CL7 [ ] plugin: Send mode tests
+### CL7 [x] plugin: Send mode tests
 
 Depends on: CL5a, and the UI check in To confirm.
 
 - `send_mode_test.cc` (see Tests).
-- An empty route strip's bottom line is blank: route strips map their volume
-  line as track strips did before CL4a, so it likely shows "-inf dB" too. If
-  so, its fix is CL4a's, a condition on `RouteProperties::kExists`, in a
-  follow-up CL.
+- `DefaultConfigTest` gains how the X-Touch shows 0dB and a pan (`kFader0dB`,
+  `kPanRing`, and the ring positions), and `GetLight()` for a strip's button,
+  from the track strip and track list tests, which use them too.
+- An empty route strip's bottom line shows "-inf dB", as track strips did
+  before CL4a. Its test is disabled until CL7a.
+- **common/testing:** `SurfaceNotifier` gains a function for each change made
+  in REAPER's own UI that a test needs: clicking a track, Ctrl+clicking it,
+  and clicking its mute button. Each sets the fake and makes the calls
+  traces showed (see To confirm), with its own tests, and a change no trace
+  has shown (one to the master, or a mute of one of several selected tracks)
+  fails the test. Following a track touched in REAPER is tested with them.
+- **common/testing:** those calls come between runs, so each is an entry point
+  of its own, made on the `TestControlSurface`, which
+  `FakeReaper::GetSurface()` now returns. The surface it wraps, which the
+  notifier's other calls are made on, is `TestControlSurface::GetWrapped()`.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.
 
+### CL7a [ ] plugin: Empty route strips show no volume
+
+Depends on: CL7.
+
+- Found by CL7: an empty route strip's bottom scribble line shows "-inf dB".
+  It should be blank, as the top line is.
+- CL4a's fix: the volume line's mapping in the route view only acts while its
+  route exists (a condition on `RouteProperties::kExists`).
+- `send_mode_test.cc`: its disabled test enabled, or folded into
+  `EmptyRouteStripIsBlank`.
+
+**Verify**
+- Standard checks.
+- An empty route strip's bottom line is blank in REAPER (with the end of the
+  feature).
+
 ### CL8 [ ] docs: The smoke test shrinks
 
-Depends on: CL4-CL7.
+Depends on: CL4-CL7a.
 
 - CLAUDE.md's smoke test becomes what the fakes can't show: REAPER loads the
   extension (`dll_main.cc`), changes made in REAPER's own UI that no trace has

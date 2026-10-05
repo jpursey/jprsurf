@@ -29,18 +29,9 @@ using Ring = FakeXTouch::Ring;
 using ScribbleColor = FakeXTouch::ScribbleColor;
 using StripButton = FakeXTouch::StripButton;
 
-// Where the X-Touch's faders show 0dB, give or take a position for rounding.
-constexpr int kFader0dB = 12720;
-
-// The ring modes the surface shows a pan with: boost/cut for a track, and the
-// same with the far left and right lights lit for a folder.
-constexpr int kTrackRing = 1;
+// The ring mode the surface shows a folder's pan with: boost/cut, with the far
+// left and right lights lit.
 constexpr int kFolderRing = 5;
-
-// The ring positions for full left, center, and full right.
-constexpr int kLeftRing = 1;
-constexpr int kCenterRing = 6;
-constexpr int kRightRing = 11;
 
 // Long enough for a meter to fall from the top, a level a run, unless it is
 // sent again.
@@ -120,9 +111,9 @@ TEST_F(TrackStripTest, RingShowsThePan) {
   tracks_[0]->pan = -1.0;
   tracks_[9]->pan = 1.0;
   RunUntilShown();
-  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kTrackRing, kLeftRing}));
-  EXPECT_EQ(xtouch_ext_->GetRing(1), (Ring{kTrackRing, kCenterRing}));
-  EXPECT_EQ(xtouch_.GetRing(1), (Ring{kTrackRing, kRightRing}));
+  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kLeftRing}));
+  EXPECT_EQ(xtouch_ext_->GetRing(1), (Ring{kPanRing, kCenterRing}));
+  EXPECT_EQ(xtouch_.GetRing(1), (Ring{kPanRing, kRightRing}));
 }
 
 TEST_F(TrackStripTest, FolderRingHasItsEndsLit) {
@@ -137,7 +128,7 @@ TEST_F(TrackStripTest, TurningAPotSetsThePan) {
   xtouch_ext_->TurnPot(0, 63);
   RunUntilShown();
   EXPECT_DOUBLE_EQ(tracks_[0]->pan, 1.0);
-  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kTrackRing, kRightRing}));
+  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kRightRing}));
 
   xtouch_ext_->TurnPot(0, -21);
   RunUntilShown();
@@ -150,7 +141,7 @@ TEST_F(TrackStripTest, TurningAPotStopsAtEachEnd) {
   xtouch_.TurnPot(0, -63);
   RunUntilShown();
   EXPECT_DOUBLE_EQ(tracks_[8]->pan, -1.0);
-  EXPECT_EQ(xtouch_.GetRing(0), (Ring{kTrackRing, kLeftRing}));
+  EXPECT_EQ(xtouch_.GetRing(0), (Ring{kPanRing, kLeftRing}));
 }
 
 TEST_F(TrackStripTest, PotButtonCentersThePan) {
@@ -158,7 +149,7 @@ TEST_F(TrackStripTest, PotButtonCentersThePan) {
   RunUntilShown();
   Tap(*xtouch_ext_, StripButton::kPotButton, 0);
   EXPECT_EQ(tracks_[0]->pan, 0.0);
-  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kTrackRing, kCenterRing}));
+  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kCenterRing}));
 }
 
 //------------------------------------------------------------------------------

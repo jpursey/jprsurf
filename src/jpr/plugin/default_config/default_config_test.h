@@ -25,6 +25,16 @@ namespace jpr {
 
 class DefaultConfigTest : public SurfaceTest {
  protected:
+  // Where the X-Touch's faders show 0dB, give or take a position for rounding.
+  static constexpr int kFader0dB = 12720;
+
+  // The ring mode a strip shows a pan with (boost/cut), and the ring positions
+  // for full left, center, and full right.
+  static constexpr int kPanRing = 1;
+  static constexpr int kLeftRing = 1;
+  static constexpr int kCenterRing = 6;
+  static constexpr int kRightRing = 11;
+
   // With an extender to the left of the X-Touch, unless `extender` is false,
   // for the X-Touch alone.
   explicit DefaultConfigTest(bool extender = true);
@@ -35,6 +45,9 @@ class DefaultConfigTest : public SurfaceTest {
 
   // Returns the name `strip` shows, without the spaces after it.
   std::string GetName(int strip);
+
+  // Returns the light of `button` on `strip`.
+  FakeXTouch::Light GetLight(FakeXTouch::StripButton button, int strip);
 
   // Taps select on `strip`, which selects only its track.
   void TapSelect(int strip);

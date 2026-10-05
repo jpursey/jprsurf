@@ -5,15 +5,18 @@
 
 #include "jpr/common/testing/surface_notifier.h"
 
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "gtest/gtest.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/reaper_actions.h"
+#include "jpr/common/testing/test_control_surface.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -54,7 +57,7 @@ int SurfaceNotifier::OnSetMuteOrSolo(decltype(SetTrackUIMute) original,
   const std::vector<TrackFlags> before = GetFlags();
   const int result = original(track, value, group_flags);
   AddChanges(before, pending_mute_solo_);
-  if (IReaperControlSurface* surface = reaper_->GetSurface()) {
+  if (IReaperControlSurface* surface = GetWrappedSurface()) {
     SendMasterSolo(*surface);
   }
   SendIfNoBatch();
@@ -65,7 +68,7 @@ int SurfaceNotifier::OnSetTrackUIRecArm(decltype(SetTrackUIRecArm) original,
                                         MediaTrack* track, int rec_arm,
                                         int group_flags) {
   const int result = original(track, rec_arm, group_flags);
-  if (IReaperControlSurface* surface = reaper_->GetSurface()) {
+  if (IReaperControlSurface* surface = GetWrappedSurface()) {
     surface->SetTrackListChange();
     SendMasterSolo(*surface);
   }
@@ -94,7 +97,7 @@ double SurfaceNotifier::OnVolumeOrPanChange(
     decltype(CSurf_OnVolumeChangeEx) original, MediaTrack* track, double value,
     bool relative, bool allow_gang) {
   const double result = original(track, value, relative, allow_gang);
-  if (IReaperControlSurface* surface = reaper_->GetSurface()) {
+  if (IReaperControlSurface* surface = GetWrappedSurface()) {
     surface->IsKeyDown(kShiftKey);
     surface->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, track, nullptr, nullptr);
   }
@@ -104,7 +107,7 @@ double SurfaceNotifier::OnVolumeOrPanChange(
 void SurfaceNotifier::OnSetGlobalAutomationOverride(
     decltype(SetGlobalAutomationOverride) original, int mode) {
   original(mode);
-  if (IReaperControlSurface* surface = reaper_->GetSurface()) {
+  if (IReaperControlSurface* surface = GetWrappedSurface()) {
     SendAutomationChange(*surface);
   }
 }
@@ -112,7 +115,7 @@ void SurfaceNotifier::OnSetGlobalAutomationOverride(
 void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
                                       int command, int flag) {
   original(command, flag);
-  IReaperControlSurface* surface = reaper_->GetSurface();
+  IReaperControlSurface* surface = GetWrappedSurface();
   if (surface == nullptr) {
     return;
   }
@@ -123,6 +126,90 @@ void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
     surface->SetAutoMode(command - kFirstAutoModeAction);
     SendAutomationChange(*surface);
   }
+}
+
+//------------------------------------------------------------------------------
+// Changes made in REAPER's own UI
+//------------------------------------------------------------------------------
+
+void SurfaceNotifier::ClickTrack(FakeTrack* track) {
+  if (CheckOutsideBatch() &&
+      CheckTraced(!IsMaster(track), "a click on the master")) {
+    ClickToSelect(track, /*only=*/true);
+  }
+}
+
+void SurfaceNotifier::CtrlClickTrack(FakeTrack* track) {
+  if (CheckOutsideBatch() &&
+      CheckTraced(!IsMaster(track), "a Ctrl+click on the master") &&
+      CheckTraced(!track->selected, "a Ctrl+click that unselects a track")) {
+    ClickToSelect(track, /*only=*/false);
+  }
+}
+
+void SurfaceNotifier::ClickMute(FakeTrack* track) {
+  // REAPER may mute every selected track, when the one clicked is selected.
+  const int selected_count = static_cast<int>(
+      reaper_->GetProject().GetSelectedTracks(/*include_master=*/true).size());
+  if (!CheckOutsideBatch() ||
+      !CheckTraced(!IsMaster(track), "a click on the master's mute") ||
+      !CheckTraced(!track->selected || selected_count == 1,
+                   "a click on the mute of one of several selected tracks")) {
+    return;
+  }
+  track->mute = !track->mute;
+  if (TestControlSurface* surface = reaper_->GetSurface()) {
+    surface->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, ToMediaTrack(track),
+                      nullptr, nullptr);
+    surface->SetSurfaceMute(ToMediaTrack(track), track->mute);
+    surface->SetSurfaceSolo(ToMediaTrack(track), track->solo);
+  }
+}
+
+void SurfaceNotifier::ClickToSelect(FakeTrack* clicked, bool only) {
+  std::vector<FakeTrack*> changed;
+  for (FakeTrack* track : GetTracks()) {
+    const bool selected = track == clicked || (!only && track->selected);
+    if (track->selected != selected) {
+      track->selected = selected;
+      changed.push_back(track);
+    }
+  }
+  TestControlSurface* surface = reaper_->GetSurface();
+  if (surface == nullptr) {
+    return;
+  }
+  for (FakeTrack* track : changed) {
+    surface->SetSurfaceSelected(ToMediaTrack(track), track->selected);
+  }
+  surface->OnTrackSelection(ToMediaTrack(clicked));
+  surface->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, ToMediaTrack(clicked),
+                    nullptr, nullptr);
+}
+
+bool SurfaceNotifier::IsMaster(const FakeTrack* track) {
+  return track == reaper_->GetProject().GetMasterTrack();
+}
+
+bool SurfaceNotifier::CheckOutsideBatch() {
+  if (reaper_->IsUIRefreshPrevented()) {
+    ADD_FAILURE() << "A change in REAPER's UI was made inside a "
+                     "PreventUIRefresh() scope, which REAPER's UI can't do";
+    return false;
+  }
+  return true;
+}
+
+bool SurfaceNotifier::CheckTraced(bool traced, std::string_view change) {
+  if (!traced) {
+    ADD_FAILURE() << "No trace has shown what REAPER calls for " << change;
+  }
+  return traced;
+}
+
+IReaperControlSurface* SurfaceNotifier::GetWrappedSurface() {
+  TestControlSurface* surface = reaper_->GetSurface();
+  return surface != nullptr ? surface->GetWrapped() : nullptr;
 }
 
 //------------------------------------------------------------------------------
@@ -174,7 +261,7 @@ void SurfaceNotifier::SendPending() {
   const auto mute_solo = std::exchange(pending_mute_solo_, {});
   const auto selected = std::exchange(pending_selected_, {});
   const bool track_list = std::exchange(pending_track_list_, false);
-  IReaperControlSurface* surface = reaper_->GetSurface();
+  IReaperControlSurface* surface = GetWrappedSurface();
   if (surface == nullptr ||
       (mute_solo.empty() && selected.empty() && !track_list)) {
     return;
