@@ -71,14 +71,17 @@ Color LerpColor(double t, Color min, Color max) {
   };
 }
 
-// Toggles a double value between min and max. If the current value is not
-// exactly at min or max, it toggles to whichever is closer.
+// Toggles a double value between min and max. A value at (or beyond) either
+// end goes to the other end, and one between them goes to whichever is
+// nearer, or max from the middle.
 double ToggleDouble(double current, double min, double max) {
-  double mid = (min + max) / 2.0;
-  if (current <= mid) {
+  if (current <= min) {
     return max;
   }
-  return min;
+  if (current >= max) {
+    return min;
+  }
+  return current < (min + max) / 2.0 ? min : max;
 }
 
 }  // namespace

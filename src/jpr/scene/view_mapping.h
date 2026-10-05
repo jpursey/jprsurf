@@ -76,11 +76,14 @@ class ViewMapping final {
     //   - If the control has a Delta input, then the property value will be
     //     clamped to the specified min and max after the delta is applied.
     //   - If the control has a Press input, then the property value will be
-    //     toggled between the min and max values when the control is pressed if
-    //     both are specified. If the value is not currently at either the min
-    //     or max value, then it will be toggled to the max value if it is
-    //     closer to the max value, or the min value if it is closer to the min
-    //     value. An enumerated property is different (see press_toggles).
+    //     toggled between the min and max values when the control is pressed:
+    //       - A pan, volume, or normalized value at (or beyond) either end goes
+    //         to the other end, and one between them goes to the nearer end,
+    //         or the max from the middle. A pan whose range spans the center
+    //         instead steps from min to the center, to max, and back to min.
+    //       - Text and color need both min and max specified, and go to the
+    //         max unless they are already at it.
+    //       - An enumerated property is different (see press_toggles).
     //     Either way, if min and max are the same, a press sets that value.
     //
     // These values are ignored for action and toggle properties.

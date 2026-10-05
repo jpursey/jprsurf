@@ -1029,6 +1029,49 @@ TEST_F(ViewMappingTest, TimelinePositionsReadOnlyADelta) {
 // Reading in a range
 //==============================================================================
 
+TEST_F(ViewMappingTest, APressGoesToTheOtherEndOrTheNearerOne) {
+  // A pan whose range is on one side of the center, a volume, and a
+  // normalized value each toggle between the ends of their range: from one end
+  // to the other, and from between them to the nearer.
+  struct Row {
+    Type type;
+    Value initial;
+    ViewMapping::ReadConfig read;
+    double pressed;
+  };
+  const ViewMapping::ReadConfig right = {.property_min = Value(0.0),
+                                         .property_max = Value(1.0)};
+  const ViewMapping::ReadConfig middle = {.property_min = Value(0.2),
+                                          .property_max = Value(0.6)};
+  const std::vector<Row> rows = {
+      {Type::kPan, 0.0, right, 1.0},
+      {Type::kPan, 1.0, right, 0.0},
+      {Type::kPan, 0.3, right, 0.0},
+      {Type::kPan, 0.7, right, 1.0},
+      {Type::kPan, 0.5, right, 1.0},
+      {Type::kVolume, 0.3, {}, 0.0},
+      {Type::kVolume, 0.8, {}, 1.0},
+      {Type::kNormalized, 0.3, middle, 0.2},
+      {Type::kNormalized, 0.5, middle, 0.6},
+
+      // Beyond an end is at it.
+      {Type::kVolume, 2.0, {}, 0.0},
+      {Type::kNormalized, 0.1, middle, 0.6},
+  };
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
+                                rows[i].initial, Input::kPress, rows[i].read));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    Tap(readers[i].control);
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].pressed));
+  }
+}
+
 TEST_F(ViewMappingTest, PansReadInTheirRange) {
   TestProperty* property = AddProperty(Type::kPan, 0.0);
   Read("user:value", {"Fader", "Pot", "Button"},
@@ -1051,17 +1094,6 @@ TEST_F(ViewMappingTest, PansReadInTheirRange) {
   EXPECT_DOUBLE_EQ(property->GetPan(), 0.5);
   Tap(button_);
   EXPECT_DOUBLE_EQ(property->GetPan(), -0.5);
-}
-
-TEST_F(ViewMappingTest, APressTogglesAPanInARangeToOneSide) {
-  TestProperty* property = AddProperty(Type::kPan, 0.0);
-  Read("user:value", {"Button"},
-       {.read = {.property_min = Value(0.0), .property_max = Value(1.0)}});
-  AddSurface();
-  Tap(button_);
-  EXPECT_DOUBLE_EQ(property->GetPan(), 1.0);
-  Tap(button_);
-  EXPECT_DOUBLE_EQ(property->GetPan(), 0.0);
 }
 
 TEST_F(ViewMappingTest, VolumesReadInTheirRange) {

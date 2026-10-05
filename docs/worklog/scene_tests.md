@@ -406,7 +406,7 @@ The fix:
 **Verify**
 - Standard checks, and the new tests fail without the fix.
 
-### CL15 [ ] scene: A press between a range's ends goes to the nearer end
+### CL15 [x] scene: A press between a range's ends goes to the nearer end
 
 Depends on: CL13.
 
@@ -415,13 +415,14 @@ or normalized property whose value is between the ends of its range goes to
 the farther end: `ToggleDouble()` sends a value at or below the middle to the
 max, and one above it to the min. `ReadConfig::property_min` and
 `ToggleDouble()`'s comments say it goes to the nearer end, which is what is
-wanted. A value at either end still goes to the other. No mapping in JPRSurf's
-own surface reads a press into these types, so the surface isn't affected.
+wanted. A value at either end still goes to the other. JPRSurf's own surface
+reads a press into these types only to center a pan (the pot pushes, with min
+and max both 0), which a press still sets, so the surface isn't affected.
 
 The fix:
-- `ToggleDouble()` in `view_mapping.cc` toggles a value at an end to the other
-  end, and moves a value between them to the nearer end (the max, from the
-  middle).
+- `ToggleDouble()` in `view_mapping.cc` toggles a value at (or beyond) an end
+  to the other end, and moves a value between them to the nearer end (the
+  max, from the middle).
 - `view_mapping_test.cc`: a press from between the ends, nearer each one, for
   a pan, volume, and normalized property.
 
