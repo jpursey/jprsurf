@@ -58,12 +58,6 @@ class SendModeTest : public DefaultConfigTest {
     AddSurface();
   }
 
-  // Selects only the track on `strip`, and taps Send.
-  void EnterSendMode(int strip) {
-    TapSelect(strip);
-    Tap(xtouch_, Button::kAssignSend);
-  }
-
   // Holds Send, and taps select on `strip`.
   void PickWithSendHeld(int strip) {
     xtouch_.Press(Button::kAssignSend);
@@ -514,8 +508,7 @@ class SendModeAloneTest : public DefaultConfigTest {
 };
 
 TEST_F(SendModeAloneTest, SevenStripsShowTheRoutes) {
-  TapSelect(0);
-  Tap(xtouch_, Button::kAssignSend);
+  EnterSendMode(0);
   EXPECT_EQ(GetName(0), "T2");
   EXPECT_EQ(GetName(6), "T8");
   EXPECT_EQ(GetName(7), "T1");

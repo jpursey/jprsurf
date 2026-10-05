@@ -51,4 +51,9 @@ void DefaultConfigTest::SelectRange(int first, int last) {
   surface_->Run();
 }
 
+void DefaultConfigTest::EnterSendMode(int strip) {
+  TapSelect(strip);
+  Tap(xtouch_, FakeXTouch::Button::kAssignSend);
+}
+
 }  // namespace jpr

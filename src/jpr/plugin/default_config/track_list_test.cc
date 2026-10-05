@@ -6,6 +6,9 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "jpr/common/control_surface.h"
+#include "jpr/common/testing/fake_project.h"
+#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/default_config/default_config_test.h"
@@ -19,18 +22,20 @@ using StripButton = FakeXTouch::StripButton;
 
 // 32 top level tracks: two banks past the 16 strips. T2 is a folder two levels
 // deep (T2.1, with T2.1.1, and T2.2), and T20 has 20 tracks, more than the
-// strips.
+// strips. T1 sends to T20.19, for Send/Receive mode to go to.
 class TrackListTest : public DefaultConfigTest {
  protected:
   static constexpr int kTopCount = 32;
   static constexpr int kFolder = 1;      // T2.
   static constexpr int kBigFolder = 19;  // T20.
   static constexpr int kBigFolderCount = 20;
+  static constexpr int kSendTarget = 18;  // T20.19.
 
   explicit TrackListTest(bool extender = true) : DefaultConfigTest(extender) {
     top_ = AddTracks(kTopCount);
     AddTracks(1, AddTracks(2, top_[kFolder])[0]);
-    AddTracks(kBigFolderCount, top_[kBigFolder]);
+    big_ = AddTracks(kBigFolderCount, top_[kBigFolder]);
+    reaper_.GetProject().AddSend(top_[0], big_[kSendTarget]);
     AddSurface();
   }
 
@@ -44,7 +49,15 @@ class TrackListTest : public DefaultConfigTest {
     DoublePressSelect(kBigFolder - 8);
   }
 
+  // Lets the surface see a track shown or hidden.
+  void WaitForVisibility() {
+    surface_->RunFor(ControlSurface::kVisibilityInterval +
+                     FakeReaper::GetRunTime());
+    RunUntilShown();
+  }
+
   std::vector<FakeTrack*> top_;
+  std::vector<FakeTrack*> big_;  // T20's tracks.
 };
 
 //------------------------------------------------------------------------------
@@ -196,6 +209,71 @@ TEST_F(TrackListTest, BankInAFolderStopsAtItsLastTrack) {
   EXPECT_EQ(GetName(15), "T20.20");
   Tap(xtouch_, Button::kBankRight);
   EXPECT_EQ(GetName(0), "T20.5");
+}
+
+//------------------------------------------------------------------------------
+// The current track
+//
+// The track list shows the track last touched, in REAPER or by going across a
+// route in Send/Receive mode. A track in the folder shown is scrolled to as
+// little as it can be, and a track in another folder goes to that folder, with
+// the track on the last strip if it can be.
+//------------------------------------------------------------------------------
+
+TEST_F(TrackListTest, ScrollsToATrackClickedInReaper) {
+  notifier_.ClickTrack(top_[25]);
+  RunUntilShown();
+  EXPECT_EQ(GetName(0), "T11");
+  EXPECT_EQ(GetName(15), "T26");
+
+  notifier_.ClickTrack(top_[2]);
+  RunUntilShown();
+  EXPECT_EQ(GetName(0), "T3");
+}
+
+TEST_F(TrackListTest, GoesToTheFolderOfATrackClickedInReaper) {
+  notifier_.ClickTrack(big_[kSendTarget]);
+  RunUntilShown();
+  EXPECT_EQ(GetName(0), "T20.4");
+  EXPECT_EQ(GetName(15), "T20.19");
+  EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOn);
+}
+
+TEST_F(TrackListTest, ShowsTheTrackSendModeWentToOnReturning) {
+  EnterSendMode(0);
+  TapSelect(0);  // Across T1's send, to T20.19.
+  Tap(xtouch_, Button::kAssignTrack);
+  EXPECT_EQ(GetName(0), "T20.4");
+  EXPECT_EQ(GetName(15), "T20.19");
+}
+
+//------------------------------------------------------------------------------
+// Losing the folder
+//
+// A deleted folder goes back to the top level. A hidden one is kept, rather
+// than going back, until it is shown again.
+//------------------------------------------------------------------------------
+
+TEST_F(TrackListTest, DeletingTheFolderGoesToTheTop) {
+  DoublePressSelect(kFolder);
+  reaper_.GetProject().DeleteTrack(top_[kFolder]);
+  surface_->SetTrackListChange();
+  RunUntilShown();
+  EXPECT_EQ(GetName(0), "T1");
+  EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOff);
+}
+
+TEST_F(TrackListTest, HiddenFolderIsKeptUntilItIsShown) {
+  DoublePressSelect(kFolder);
+  reaper_.GetProject().ShowInMixer(top_[kFolder], false);
+  WaitForVisibility();
+  EXPECT_EQ(GetName(0), "");
+  EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOn);
+
+  reaper_.GetProject().ShowInMixer(top_[kFolder], true);
+  WaitForVisibility();
+  EXPECT_EQ(GetName(0), "T2.1");
+  EXPECT_EQ(GetName(1), "T2.2");
 }
 
 //------------------------------------------------------------------------------

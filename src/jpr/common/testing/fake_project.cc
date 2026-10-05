@@ -88,6 +88,23 @@ FakeTrack* FakeProject::GetParentTrack(const FakeTrack* track) const {
   return record != nullptr ? record->parent : nullptr;
 }
 
+void FakeProject::ShowInMixer(FakeTrack* track, bool shown) {
+  if (FindTrack(track) < 0) {
+    ADD_FAILURE() << "ShowInMixer() was given a track that isn't in the "
+                     "project";
+    return;
+  }
+  for (FakeTrack* other : tracks_) {
+    for (const FakeTrack* folder = other; folder != nullptr;
+         folder = GetParentTrack(folder)) {
+      if (folder == track) {
+        other->show_in_mixer = shown;
+        break;
+      }
+    }
+  }
+}
+
 const GUID& FakeProject::GetGuid(const FakeTrack* track) const {
   static constexpr GUID kNoGuid = {};
   const TrackRecord* record = FindRecord(track);

@@ -89,6 +89,10 @@ class FakeProject final {
   // master, as GetParentTrack() does.
   FakeTrack* GetParentTrack(const FakeTrack* track) const;
 
+  // Shows or hides `track` in the mixer, as the user does in REAPER. Every
+  // track in its folder, at any depth, is set the same, whatever it was.
+  void ShowInMixer(FakeTrack* track, bool shown);
+
   // Returns `track`'s GUID, which a deleted track keeps, or a zero GUID if it
   // was never one of the project's tracks. It stays put for as long as the
   // project exists.

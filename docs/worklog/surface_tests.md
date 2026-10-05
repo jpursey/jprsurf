@@ -204,6 +204,7 @@ class DefaultConfigTest : public SurfaceTest {
   // Taps select on `strip`, or holds it on `first` and taps it on `last`.
   void TapSelect(int strip);
   void SelectRange(int first, int last);
+  void EnterSendMode(int strip);  // Selects only its track, and taps Send.
 
   std::optional<FakeXTouch> xtouch_ext_;  // Strips 0-7, if there is one.
   FakeXTouch xtouch_;                     // Strips 8-15, or 0-7 alone.
@@ -339,6 +340,16 @@ setting the global automation override to Latch Preview in REAPER:
 
 These are in "Seen in traces" in the design doc, with the 2026-09-29 trace's
 findings (CL1), and `SurfaceNotifier` makes them (CL7).
+
+CL10 found one more. The fake and `TrackCache` hold each track's mixer
+visibility (`B_SHOWINMIXER`) on its own, so hiding only a folder still shows its
+tracks on the surface, and the `kFolder` comment in `plugin_surface.cc` says a
+hidden folder's "strips go blank". Checked on 2026-10-05: showing or hiding a
+folder in the mixer (or the track control panel) sets every track in it to the
+same, at every depth, whatever each was before, so hiding and showing it again doesn't bring
+back a mix of shown and hidden tracks. Each track's own `B_SHOWINMIXER` is
+set, which the surface already follows, so only the fake changes:
+`FakeProject::ShowInMixer()` does the same (CL10).
 
 ## CLs
 
@@ -652,7 +663,7 @@ Depends on: CL9.
 **Verify**
 - Standard checks. Nothing to see in REAPER: the strip is black.
 
-### CL10 [ ] plugin: More track list tests
+### CL10 [x] plugin: More track list tests
 
 Depends on: CL8.
 
@@ -660,8 +671,17 @@ In `track_list_test.cc`:
 - The track list scrolls to show the current track: one touched in REAPER, off
   the strips shown, and one reached across a route in Send/Receive mode, on
   returning to Track mode.
-- Deleting the shown folder goes back to the top level. Hiding it blanks its
-  strips, which come back when it is shown again.
+- Deleting the shown folder goes back to the top level. Hiding it keeps it,
+  with its strips blank, until it is shown again.
+- The fixture gains a send from T1 to T20.19, for Send/Receive mode to go to,
+  and T20's tracks. `ControlSurface::kVisibilityInterval` is public, so a
+  test waits for the visibility poll by it.
+- `DefaultConfigTest` gains `EnterSendMode()`, from the send mode tests, which
+  the track list's and the X-Touch alone's send mode tests use too.
+- **common/testing:** `FakeProject::ShowInMixer()` shows or hides a track as
+  the user does in REAPER, setting every track in its folder the same (see To
+  confirm), with its own test. The hidden folder test uses it, and the
+  `kFolder` comment in `plugin_surface.cc` says why its strips go blank.
 
 **Verify**
 - Standard checks, apart from REAPER: the plugin doesn't change.

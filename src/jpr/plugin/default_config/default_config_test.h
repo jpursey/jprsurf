@@ -58,6 +58,10 @@ class DefaultConfigTest : public SurfaceTest {
   // from one to the other.
   void SelectRange(int first, int last);
 
+  // Selects only the track on `strip`, and taps Send, which enters
+  // Send/Receive mode for it if it has routes.
+  void EnterSendMode(int strip);
+
   std::optional<FakeXTouch> xtouch_ext_;  // Strips 0-7, if there is one.
   FakeXTouch xtouch_;                     // Strips 8-15, or 0-7 alone.
 };

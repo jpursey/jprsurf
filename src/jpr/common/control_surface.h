@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "jpr/common/reaper_profiler.h"
 #include "jpr/common/runner.h"
@@ -54,7 +55,8 @@ class ControlSurfaceListener {
 // It keeps the rest of the common library up to date with REAPER, and passes
 // the events a surface needs on to its ControlSurfaceListener:
 // - TrackCache is refreshed at the start of the next run after the track list
-//   changes. Changes to track visibility are picked up within a second.
+//   changes. Changes to track visibility are picked up within
+//   kVisibilityInterval.
 // - TrackCache follows selection, automation mode, and last touched track
 //   changes.
 // - ContinuousUndo is updated at the start of every run.
@@ -69,6 +71,14 @@ class ControlSurfaceListener {
 
 class ControlSurface final : private IReaperControlSurface {
  public:
+  // How often track visibility is polled. REAPER gives control surfaces no
+  // notification when a track is shown or hidden, so the only way to see it is
+  // to query every track in the project, which is far too much to do on every
+  // run. Hiding a track is a deliberate, infrequent action taken in the Track
+  // Manager, so a delay of up to this long before the surface follows is not
+  // noticeable.
+  static constexpr absl::Duration kVisibilityInterval = absl::Seconds(1);
+
   // A type of control surface, which the user can add in REAPER's
   // preferences.
   struct Type {

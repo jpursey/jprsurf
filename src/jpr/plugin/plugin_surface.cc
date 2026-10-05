@@ -54,7 +54,8 @@ constexpr int kInfoStrip = 7;
 
 // The track whose child tracks the track list shows. It starts as, and returns
 // to, the master track if its track is deleted. A folder that is only hidden is
-// kept: its strips go blank, and come back as soon as it is shown again.
+// kept: REAPER hides its tracks with it, so its strips go blank, and come back
+// as soon as it is shown again.
 constexpr std::string_view kFolder = kUserName<"folder">;
 
 // The track whose routes Send/Receive mode shows, and which the track list

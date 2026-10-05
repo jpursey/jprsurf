@@ -26,17 +26,6 @@
 
 namespace jpr {
 
-namespace {
-
-// How often track visibility is polled. REAPER gives control surfaces no
-// notification when a track is shown or hidden, so the only way to see it is to
-// query every track in the project, which is far too much to do on every run.
-// Hiding a track is a deliberate, infrequent action taken in the Track Manager,
-// so a delay of up to this long before the surface follows is not noticeable.
-constexpr absl::Duration kVisibilityInterval = absl::Seconds(1);
-
-}  // namespace
-
 ControlSurface::Type ControlSurface::s_type_ = {};
 reaper_csurf_reg_t ControlSurface::s_reg_ = {};
 ControlSurface* ControlSurface::s_instance_ = nullptr;

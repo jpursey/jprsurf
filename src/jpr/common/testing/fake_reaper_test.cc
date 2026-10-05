@@ -289,6 +289,28 @@ TEST(FakeReaperTest, FindsTracksByName) {
   EXPECT_EQ(project.FindTrackByName("Snare"), nullptr);
 }
 
+TEST(FakeReaperTest, ShowingAFolderInTheMixerSetsItsTracks) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick", drums);
+  FakeTrack* inside = project.AddTrack("Kick In", kick);
+  FakeTrack* bass = project.AddTrack("Bass");
+  kick->show_in_mixer = false;
+
+  project.ShowInMixer(drums, true);
+  EXPECT_TRUE(kick->show_in_mixer);
+
+  project.ShowInMixer(drums, false);
+  for (FakeTrack* track : {drums, kick, inside}) {
+    EXPECT_FALSE(track->show_in_mixer) << track->name;
+    EXPECT_EQ(::GetMediaTrackInfo_Value(ToMediaTrack(track), "B_SHOWINMIXER"),
+              0.0)
+        << track->name;
+  }
+  EXPECT_TRUE(bass->show_in_mixer);
+}
+
 TEST(FakeReaperTest, AddingATrackToAMissingFolderFailsTheTest) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
