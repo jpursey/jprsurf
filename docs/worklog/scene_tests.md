@@ -284,7 +284,7 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL7 [ ] scene: Track actions, anchors, and picks
+### CL7 [x] scene: Track actions, anchors, and picks
 
 Depends on: CL3, CL5.
 
@@ -295,7 +295,18 @@ Depends on: CL3, CL5.
 **Verify**
 - Standard checks.
 
-### CL8 [ ] scene: Views
+### CL8 [ ] common: Tests of TrackRange
+
+Depends on: nothing.
+
+- `track_test.cc` tests `TrackRange` on its own: which ends make a range (an
+  end that is null, or isn't in the filter, makes none), either order, the
+  same parent rule, and tracks off the surface left out of `Contains()`. Its
+  rules were only tested through `TrackActions` (CL7).
+
+**Verify**
+- Standard checks.
+### CL9 [ ] scene: Views
 
 Depends on: CL3.
 
@@ -304,16 +315,16 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL9 [ ] scene: View lists
+### CL10 [ ] scene: View lists
 
-Depends on: CL8.
+Depends on: CL9.
 
 - `view_list_test.cc`.
 
 **Verify**
 - Standard checks.
 
-### CL10 [ ] scene: Mappings that write
+### CL11 [ ] scene: Mappings that write
 
 Depends on: CL3.
 
@@ -324,9 +335,9 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL11 [ ] scene: Mappings that read
+### CL12 [ ] scene: Mappings that read
 
-Depends on: CL10.
+Depends on: CL11.
 
 - `view_mapping_test.cc`: each property type read from each input type,
   input type choice, property ranges, press_toggles, press_release, required

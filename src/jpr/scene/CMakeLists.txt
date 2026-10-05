@@ -47,6 +47,9 @@ set(jpr_scene_TEST_SOURCE
   scene_test.cc
   state_properties_test.cc
   timeline_property_test.cc
+  track_actions_test.cc
+  track_anchor_property_test.cc
+  track_pick_property_test.cc
   track_properties_test.cc
   track_reference_test.cc
   value_property_test.cc
