@@ -40,10 +40,18 @@ set(jpr_scene_DEPS
 
 set(jpr_scene_TEST_SOURCE
   const_property_test.cc
+  scene_test.cc
+  state_properties_test.cc
   value_property_test.cc
   view_condition_test.cc
   view_property_test.cc
 )
 
+set(jpr_scene_TEST_DEPS
+  jpr_scene_testing
+)
+
 gb_add_library(jpr_scene)
 target_include_directories(jpr_scene PUBLIC "../..")
+
+add_subdirectory(testing)

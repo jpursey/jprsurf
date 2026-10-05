@@ -11,6 +11,7 @@
 
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/test_reset.h"
 #include "jpr/common/timeline.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/scene/polled_toggle_property.h"
@@ -64,6 +65,9 @@ void WriteAutoOverride(bool value) {
 // function is polled every run while mapped, so this includes overrides set
 // from REAPER as well as the surface.
 AutoOverride g_last_auto_override = AutoOverride::kBypass;
+const TestReset kResetLastAutoOverride([] {
+  g_last_auto_override = AutoOverride::kBypass;
+});
 
 bool IsAutoOverrideActive() {
   const AutoOverride auto_override = GetAutoOverride();

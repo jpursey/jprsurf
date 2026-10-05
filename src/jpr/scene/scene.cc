@@ -14,7 +14,6 @@
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
@@ -52,17 +51,15 @@ Scene::~Scene() { SetWorkloadValues(); }
 
 void Scene::AddDevice(std::string_view device_name,
                       std::unique_ptr<Device> device) {
-  for (const auto& control : device->GetControls()) {
-    std::string control_name =
-        absl::StrCat(device_name, "/", control->GetName());
-    controls_.emplace(std::move(control_name), control.get());
-  }
   devices_.emplace(device_name, std::move(device));
 }
 
 Control* Scene::GetControl(std::string_view name) const {
-  auto it = controls_.find(name);
-  return it != controls_.end() ? it->second : nullptr;
+  const auto [device_name, control_name] =
+      std::pair<std::string_view, std::string_view>(
+          absl::StrSplit(name, absl::MaxSplits('/', 1)));
+  auto it = devices_.find(device_name);
+  return it != devices_.end() ? it->second->GetControl(control_name) : nullptr;
 }
 
 ViewProperty* Scene::GetProperty(std::string_view name) {
@@ -234,7 +231,11 @@ void Scene::SetWorkloadValues() const {
     }
   }
   gb::ProfileSetValue<"devices">(static_cast<int>(devices_.size()));
-  gb::ProfileSetValue<"controls">(static_cast<int>(controls_.size()));
+  int control_count = 0;
+  for (const auto& [name, device] : devices_) {
+    control_count += static_cast<int>(device->GetControls().size());
+  }
+  gb::ProfileSetValue<"controls">(control_count);
   gb::ProfileSetValue<"views">(view_count);
   gb::ProfileSetValue<"mappings">(mapping_count);
   gb::ProfileSetValue<"properties">(property_count);
@@ -294,4 +295,4 @@ void Scene::UnregisterProperty(SceneStateProperty* property) {
   state_properties_.erase(property);
 }
 
-}  // namespace jpr
+}  // namespace jpr

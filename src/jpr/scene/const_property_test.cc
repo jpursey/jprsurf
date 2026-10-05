@@ -12,6 +12,7 @@
 
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/timeline.h"
 #include "jpr/scene/view_property.h"
 
@@ -99,6 +100,17 @@ TEST(ConstPropertyTest, RejectsOtherTypes) {
   EXPECT_EQ(CreateConstProperty(Type::kEnumerated, 0), nullptr);
   EXPECT_EQ(CreateConstProperty(Type::kTimelinePosition, TimelinePosition()),
             nullptr);
+}
+
+TEST(ConstPropertyTest, NamesStartOverWithEachFake) {
+  std::string first_name;
+  {
+    FakeReaper reaper;
+    first_name = CreateConstProperty(Type::kToggle, true)->GetName();
+    EXPECT_NE(CreateConstProperty(Type::kToggle, true)->GetName(), first_name);
+  }
+  FakeReaper reaper;
+  EXPECT_EQ(CreateConstProperty(Type::kToggle, true)->GetName(), first_name);
 }
 
 }  // namespace

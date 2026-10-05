@@ -13,6 +13,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "jpr/common/color.h"
+#include "jpr/common/test_reset.h"
 
 namespace jpr {
 
@@ -21,6 +22,7 @@ namespace {
 // The number in the next constant's name. Constants are only created on
 // REAPER's UI thread.
 int g_next_const_id = 1;
+const TestReset kResetNextConstId([] { g_next_const_id = 1; });
 
 // A property whose value never changes. CreateConstProperty() only creates it
 // with a value that holds the type that is read for its property type.

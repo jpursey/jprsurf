@@ -31,6 +31,10 @@ namespace jpr {
 //
 // It holds the state for all actively mapped controls and reaper properties,
 // and is responsible for ensuring synchronization.
+//
+// The scene reads REAPER's state through TrackCache, and changes routes through
+// ContinuousUndo, so it must run where both are kept current: from a
+// ControlSurfaceListener's OnRun(), as its ControlSurface keeps them current.
 class Scene final {
  public:
   // The track filter decides which tracks the scene's views show, and which
@@ -55,6 +59,9 @@ class Scene final {
   TrackActions& GetTrackActions() { return track_actions_; }
 
   // Controls and Properties
+
+  // Returns the control named <device>/<control>, such as "XTouch/Play", or
+  // null if there is none.
   Control* GetControl(std::string_view name) const;
 
   // Returns the global property with the name, or null if there is none (see
@@ -193,7 +200,6 @@ class Scene final {
   // State
   std::string name_;
   absl::flat_hash_map<std::string, std::unique_ptr<Device>> devices_;
-  absl::flat_hash_map<std::string, Control*> controls_;
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
   absl::flat_hash_set<SceneStateProperty*> state_properties_;
   TrackActions track_actions_;

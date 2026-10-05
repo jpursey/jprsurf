@@ -324,8 +324,10 @@ getter returns it. A test that needs one function to behave otherwise, such as
 to check an assumption about REAPER, hooks it over the fake with
 `gb::FunctionHook`, and every other function still reads the model.
 - **No callbacks of its own.** The fake never calls the surface by itself.
-  `device`, `scene`, and most of `common` never see `IReaperControlSurface`, so
-  their tests need none. A test of `ControlSurface`, or of the plugin, makes
+  `device` and most of `common` never see `IReaperControlSurface`, so their
+  tests need none. `scene` reads REAPER through `TrackCache`, which only a
+  `ControlSurface` keeps current, so its tests run it from one, with a
+  `SurfaceNotifier`. A test of `ControlSurface`, or of the plugin, makes
   the calls REAPER would make itself, such as `SetTrackListChange()` after
   adding tracks. The calls REAPER makes from inside its own functions, such as
   `SetSurfaceMute()` after `SetTrackUIMute()`, a `SurfaceNotifier` makes, by
@@ -448,6 +450,7 @@ between tests:
 | `ControlSurface`'s registered type                         | The fake                                                         |
 | `ControlSurface`'s instance, and `Plugin`'s                | Destroying the surface, unloading the plugin, and the leak check |
 | `g_modifiers`, and `timeline.cc`'s `g_last_ruler_*` caches | The fake                                                         |
+| `scene`'s `g_last_auto_override` and `g_next_const_id`     | The fake                                                         |
 | The run's time                                             | The fake                                                         |
 | The API table                                              | The fake: unloaded at teardown                                   |
 | The profiler                                               | Destroying the surface, which owns it                            |

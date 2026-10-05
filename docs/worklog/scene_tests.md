@@ -107,18 +107,32 @@ class FakeDevice final : public Device {
 A fixture in a test-only `jpr_scene_testing` library, as `SurfaceTest` is in
 `jpr_plugin_testing`:
 - The fake REAPER, with REAPER's actions (`AddReaperActions()`), a
-  `FakeDevice` added to a `Scene`, and the scene activated on a runner.
-- `Run()` advances the clock a run, then runs the device and the scene, as
-  `PluginSurface::OnRun()` does (with no MIDI). `RunUntilShown()` is two runs,
-  as for the surface.
-- `RefreshTracks()` refreshes the `TrackCache` after a test changes the track
-  list, as `SetTrackListChange()` does.
-- Presses that get the clock right, on a `FakeControl`: `Tap()`,
-  `DoublePress()`, `LongPress()`, and `Hold()`, waiting for
-  `Control::kLongPressDurationSecs` and `kDoublePressWindowSecs`, as
+  `SurfaceNotifier`, a `Scene`, and a `FakeDevice` in it, which a test adds
+  its controls to. `Scene::GetControl()` now asks the device for a control,
+  rather than keeping its own copy of each device's controls from when the
+  device was added, so a control can be added at any time.
+- **The scene runs from a control surface,** as in the plugin. The scene reads
+  REAPER through `TrackCache` and `ContinuousUndo`, which only a
+  `ControlSurface` keeps current, so `Scene`'s comment now says it must run
+  from a `ControlSurfaceListener`'s `OnRun()`. The fixture registers a surface
+  type whose listener activates the scene, and runs the devices, then the
+  input, then the scene, as `PluginSurface` does. `AddSurface()` and
+  `RemoveSurface()` add and remove it, as REAPER does at startup and exit. So
+  the notifier makes REAPER's calls back (selection, rec arm, the last touched
+  track), each run is an entry point the fake checks, and the notifier's UI
+  changes (`ClickTrack()`) work.
+- **Input is queued** (`Press()` and `Release()`), and arrives in the next run
+  between the controls and the scene, as MIDI input does. Each run, the
+  controls clear the input that arrived since they last ran.
+- `RunUntilShown()` is two runs, as for the surface. Presses that get the
+  clock right: `Tap()`, `DoublePress()`, `LongPress()`, and `Hold()`, waiting
+  for `Control::kLongPressDurationSecs` and `kDoublePressWindowSecs`, as
   `SurfaceTest`'s do. A test of a property alone doesn't need the fixture.
 - Anything logged at `ERROR` or above fails the test (`gb::LogErrorGuard`),
   unless the test takes it, as a mapping that fails to be added logs why.
+
+**Brittleness:** a test must give input through the fixture, never on a
+control's fakes, which would never reach the scene. The header says so.
 
 ### scene: Process state
 
@@ -201,7 +215,7 @@ Depends on: nothing.
 - `fake_device_test.cc`: each kind of control has the inputs and outputs it
   says, and a control added from options keeps its fakes.
 
-### CL3 [ ] scene: SceneTest, process state, and Scene's tests
+### CL3 [x] scene: SceneTest, process state, and Scene's tests
 
 Depends on: CL1, CL2.
 
@@ -209,6 +223,9 @@ Depends on: CL1, CL2.
   design doc's process state table.
 - `jpr_scene_testing` with `SceneTest`, and `scene_test_test.cc` for its
   presses and `RunUntilShown()`.
+- `Scene`'s comment says it runs from a `ControlSurfaceListener`.
+- `Scene::GetControl()` asks the device for the control, and the scene no
+  longer keeps its own copy of the controls.
 - `scene_test.cc`.
 
 **Verify**
