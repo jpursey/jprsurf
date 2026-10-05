@@ -383,7 +383,7 @@ Depends on: CL11.
 **Verify**
 - Standard checks.
 
-### CL14 [ ] scene: Read the configured input type
+### CL14 [x] scene: Read the configured input type
 
 Depends on: CL13.
 
@@ -399,9 +399,6 @@ The fix:
   property type can't read it, and a press_release mapping reads nothing with
   any type but a press.
 - `ReadConfig::input_type`'s comment says so.
-- Removing `input_type` instead is the other way, as nothing sets it, and
-  `docs/config_model.md` has no use for it yet. Which to do is decided before
-  this CL starts.
 - `view_mapping_test.cc`: a configured input type is read in place of the one
   the type prefers, and a mapping configured with an input type the control
   doesn't have reads nothing.

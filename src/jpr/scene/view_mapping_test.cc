@@ -50,6 +50,9 @@ constexpr Color kWhite = {255, 255, 255};
 constexpr Color kRed = {255, 0, 0};
 constexpr Color kBlue = {0, 0, 255};
 
+constexpr Control::Inputs kAllInputs = {Input::kValue, Input::kDelta,
+                                        Input::kPress};
+
 // The device has a control with each kind of output alone: "DValue" (off or
 // on), "CValue", "Text", and "Color"; and with each kind of input alone:
 // "Fader" (a value input), "Pot" (a delta input), and "Button" (a press input,
@@ -693,14 +696,13 @@ TEST_F(ViewMappingTest, EachTypeReadsTheInputItSuitsBest) {
   // Text reads a press only with a range.
   const ViewMapping::ReadConfig read = {.property_min = std::string("A"),
                                         .property_max = std::string("B")};
-  const Control::Inputs all = {Input::kValue, Input::kDelta, Input::kPress};
   std::vector<Reader> best;
   std::vector<Reader> next;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-    Control::Inputs rest = all;
+    Control::Inputs rest = kAllInputs;
     rest.Clear(rows[i].best);
     best.push_back(AddReader(absl::StrCat("best", i), rows[i].type,
-                             rows[i].initial, all, read));
+                             rows[i].initial, kAllInputs, read));
     next.push_back(AddReader(absl::StrCat("next", i), rows[i].type,
                              rows[i].initial, rest, read));
   }
@@ -711,6 +713,68 @@ TEST_F(ViewMappingTest, EachTypeReadsTheInputItSuitsBest) {
     EXPECT_EQ(GetInputRead(best[i], rows[i].initial), rows[i].best);
     EXPECT_EQ(GetInputRead(next[i], rows[i].initial), rows[i].next);
   }
+}
+
+TEST_F(ViewMappingTest, AConfiguredInputTypeIsReadInPlaceOfTheBest) {
+  // Each type is read from a control with every kind of input, configured to
+  // read one that isn't the best for it, or that it can't read at all.
+  struct Row {
+    Type type;
+    Value initial;
+    Input input;
+    std::optional<Input> read;
+  };
+  const std::vector<Row> rows = {
+      {Type::kToggle, false, Input::kValue, Input::kValue},
+      {Type::kToggle, false, Input::kDelta, Input::kDelta},
+      {Type::kPan, 0.0, Input::kDelta, Input::kDelta},
+      {Type::kPan, 0.0, Input::kPress, Input::kPress},
+      {Type::kVolume, 0.0, Input::kPress, Input::kPress},
+      {Type::kNormalized, 0.0, Input::kDelta, Input::kDelta},
+      {Type::kEnumerated, 0, Input::kPress, Input::kPress},
+      {Type::kText, std::string("A"), Input::kPress, Input::kPress},
+      {Type::kText, std::string("A"), Input::kDelta, std::nullopt},
+      {Type::kColor, kBlack, Input::kDelta, Input::kDelta},
+      {Type::kTimelinePosition, TimelinePosition(0.0), Input::kPress,
+       std::nullopt},
+  };
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    // Text reads a press only with a range.
+    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
+                                rows[i].initial, kAllInputs,
+                                {.input_type = rows[i].input,
+                                 .property_min = std::string("A"),
+                                 .property_max = std::string("B")}));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(GetInputRead(readers[i], rows[i].initial), rows[i].read);
+  }
+}
+
+TEST_F(ViewMappingTest, AConfiguredInputTypeTheControlLacksReadsNothing) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  Read("user:value", {"Button"}, {.read = {.input_type = Input::kValue}});
+  AddSurface();
+  Tap(button_);
+  EXPECT_FALSE(property->GetBool());
+}
+
+TEST_F(ViewMappingTest, PressReleaseReadsNothingWithAnotherInputType) {
+  Reader reader =
+      AddReader("value", Type::kToggle, false, kAllInputs,
+                {.input_type = Input::kValue, .press_release = true});
+  AddSurface();
+  Press(reader.control);
+  surface_->Run();
+  EXPECT_FALSE(reader.property->GetBool());
+  Release(reader.control);
+  Move(reader.control, 1.0);
+  surface_->Run();
+  EXPECT_FALSE(reader.property->GetBool());
 }
 
 TEST_F(ViewMappingTest, ActionsReadOnlyPresses) {

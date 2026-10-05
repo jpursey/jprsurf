@@ -47,6 +47,11 @@ class ViewMapping final {
     // The type of physical input to use for reading the control. If not set,
     // the mapping will automatically choose the best input type based on the
     // property type and available inputs.
+    //
+    // If set, the mapping reads only that input, and reads nothing if the
+    // control doesn't have it, or the property type can't read it (such as a
+    // timeline position from a press). A press_release mapping reads nothing
+    // with any input type but a press.
     std::optional<ControlInput::Type> input_type;
 
     // The modifier keys that must be active for this input to trigger. When
@@ -91,9 +96,10 @@ class ViewMapping final {
 
     // If true, then the property value will be set to property_max when the
     // control is pressed and property_min when the control is released. If the
-    // underlying control does not have press/release capbility
-    // (HasPressRelease() returns false), then this will never update the
-    // property value (effectively disabling kReadControl capability).
+    // underlying control does not have press/release capability
+    // (HasPressRelease() returns false), or input_type is set to anything but a
+    // press, then this will never update the property value (effectively
+    // disabling kReadControl capability).
     bool press_release = false;
   };
 
@@ -189,15 +195,15 @@ class ViewMapping final {
   void RefreshActive(bool parent_active);
 
   void InitReadControl();
-  void InitReadActionSyncFunction();
-  void InitReadToggleSyncFunction();
-  void InitReadPanSyncFunction();
-  void InitReadVolumeSyncFunction();
-  void InitReadNormalizedSyncFunction();
-  void InitReadTextSyncFunction();
-  void InitReadColorSyncFunction();
-  void InitReadTimelinePositionSyncFunction();
-  void InitReadEnumeratedSyncFunction();
+  void InitReadActionSyncFunction(Control::Inputs inputs);
+  void InitReadToggleSyncFunction(Control::Inputs inputs);
+  void InitReadPanSyncFunction(Control::Inputs inputs);
+  void InitReadVolumeSyncFunction(Control::Inputs inputs);
+  void InitReadNormalizedSyncFunction(Control::Inputs inputs);
+  void InitReadTextSyncFunction(Control::Inputs inputs);
+  void InitReadColorSyncFunction(Control::Inputs inputs);
+  void InitReadTimelinePositionSyncFunction(Control::Inputs inputs);
+  void InitReadEnumeratedSyncFunction(Control::Inputs inputs);
 
   void InitWriteControl();
   void InitWriteToggleSyncFunction();

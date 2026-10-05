@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "gb/base/flags.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_property.h"
 
@@ -110,7 +111,15 @@ void ViewMapping::InitReadControl() {
   if (!type_.IsSet(kReadControl)) {
     return;
   }
-  if (config_.read.press_release && !control_->HasPressRelease()) {
+  // A configured input type leaves only that input to read from, if the control
+  // has it.
+  Control::Inputs inputs = control_->GetInputs();
+  if (config_.read.input_type.has_value()) {
+    inputs = gb::Intersect(inputs, *config_.read.input_type);
+  }
+  if (config_.read.press_release &&
+      (!control_->HasPressRelease() ||
+       !inputs.IsSet(ControlInput::Type::kPress))) {
     type_.Clear(kReadControl);
     config_.read.press_release = false;
     return;
@@ -119,38 +128,36 @@ void ViewMapping::InitReadControl() {
   input_config_.press_behavior = config_.read.press_behavior;
   switch (property_->GetType()) {
     case ViewProperty::Type::kAction:
-      InitReadActionSyncFunction();
+      InitReadActionSyncFunction(inputs);
       return;
     case ViewProperty::Type::kToggle:
-      InitReadToggleSyncFunction();
+      InitReadToggleSyncFunction(inputs);
       break;
     case ViewProperty::Type::kPan:
-      InitReadPanSyncFunction();
+      InitReadPanSyncFunction(inputs);
       break;
     case ViewProperty::Type::kVolume:
-      InitReadVolumeSyncFunction();
+      InitReadVolumeSyncFunction(inputs);
       break;
     case ViewProperty::Type::kNormalized:
-      InitReadNormalizedSyncFunction();
+      InitReadNormalizedSyncFunction(inputs);
       break;
     case ViewProperty::Type::kText:
-      InitReadTextSyncFunction();
+      InitReadTextSyncFunction(inputs);
       break;
     case ViewProperty::Type::kColor:
-      InitReadColorSyncFunction();
+      InitReadColorSyncFunction(inputs);
       break;
     case ViewProperty::Type::kTimelinePosition:
-      InitReadTimelinePositionSyncFunction();
+      InitReadTimelinePositionSyncFunction(inputs);
       break;
     case ViewProperty::Type::kEnumerated:
-      InitReadEnumeratedSyncFunction();
+      InitReadEnumeratedSyncFunction(inputs);
       break;
   }
 }
 
-void ViewMapping::InitReadActionSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
-
+void ViewMapping::InitReadActionSyncFunction(Control::Inputs inputs) {
   // Only press inputs make sense for triggering actions.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
     input_config_.input_type = ControlInput::Type::kPress;
@@ -164,9 +171,7 @@ void ViewMapping::InitReadActionSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadToggleSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
-
+void ViewMapping::InitReadToggleSyncFunction(Control::Inputs inputs) {
   // If we are configured for press/release behavior, then we set the property
   // based on whether the control is currently pressed.
   if (config_.read.press_release) {
@@ -213,8 +218,7 @@ void ViewMapping::InitReadToggleSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadPanSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+void ViewMapping::InitReadPanSyncFunction(Control::Inputs inputs) {
   auto cfg_min = GetDouble(config_.read.property_min);
   auto cfg_max = GetDouble(config_.read.property_max);
 
@@ -296,8 +300,7 @@ void ViewMapping::InitReadPanSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadVolumeSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+void ViewMapping::InitReadVolumeSyncFunction(Control::Inputs inputs) {
   auto cfg_min = GetDouble(config_.read.property_min);
   auto cfg_max = GetDouble(config_.read.property_max);
 
@@ -354,8 +357,7 @@ void ViewMapping::InitReadVolumeSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadNormalizedSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+void ViewMapping::InitReadNormalizedSyncFunction(Control::Inputs inputs) {
   auto cfg_min = GetDouble(config_.read.property_min);
   auto cfg_max = GetDouble(config_.read.property_max);
 
@@ -422,9 +424,7 @@ void ViewMapping::InitReadNormalizedSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadTextSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
-
+void ViewMapping::InitReadTextSyncFunction(Control::Inputs inputs) {
   // While weird, press/release behavior is technically supported for text
   // properties. If configured, the property is set to the configured max text
   // value when the control is pressed, and set to the configured min text value
@@ -478,8 +478,7 @@ void ViewMapping::InitReadTextSyncFunction() {
   // don't support them.
 }
 
-void ViewMapping::InitReadColorSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+void ViewMapping::InitReadColorSyncFunction(Control::Inputs inputs) {
   auto cfg_min = GetColor(config_.read.property_min);
   auto cfg_max = GetColor(config_.read.property_max);
 
@@ -564,9 +563,7 @@ void ViewMapping::InitReadColorSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadTimelinePositionSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
-
+void ViewMapping::InitReadTimelinePositionSyncFunction(Control::Inputs inputs) {
   // Only delta inputs make sense for timeline position (e.g. jog wheel to
   // scrub). Value and press inputs are not supported.
   if (inputs.IsSet(ControlInput::Type::kDelta)) {
@@ -584,8 +581,7 @@ void ViewMapping::InitReadTimelinePositionSyncFunction() {
   }
 }
 
-void ViewMapping::InitReadEnumeratedSyncFunction() {
-  Control::Inputs inputs = control_->GetInputs();
+void ViewMapping::InitReadEnumeratedSyncFunction(Control::Inputs inputs) {
   auto cfg_min = GetInt(config_.read.property_min);
   auto cfg_max = GetInt(config_.read.property_max);
 
