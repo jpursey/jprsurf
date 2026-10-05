@@ -881,3 +881,19 @@ replaced their timing lines). `ControlSurface` already logs every REAPER
 callback with Abseil's `VLOG(1)`, so the variable could set the `VLOG` level.
 Only worth doing once a debugging session needs it.
 
+
+## Use Game Bits' log file
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** Game Bits *Log file*
+- **Background:** none
+
+`LogFile` and `GetLocalTimeZone()` (`common/log_file.{h,cc}` and
+`common/local_time.{h,cc}`) move into Game Bits, so other projects can use
+them. Once Game Bits has them, switch the plugin's log in `dll_main.cc` to
+Game Bits' `LogFile`, and the profiler and trace timestamps to its
+`GetLocalTimeZone()`, then delete JPRSurf's copies and their tests.
+`GetLogPath()` stays in `common`. The log's contents and format stay the same,
+so there is no change in behavior.
