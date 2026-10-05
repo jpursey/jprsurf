@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -17,7 +18,11 @@
 #include "absl/strings/str_cat.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/timeline.h"
+#include "jpr/device/control.h"
+#include "jpr/device/control_input.h"
+#include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output.h"
 #include "jpr/device/testing/fake_control_io.h"
 #include "jpr/device/testing/fake_device.h"
@@ -34,12 +39,21 @@ namespace {
 using Type = ViewProperty::Type;
 using Value = ViewProperty::Value;
 using Output = ControlOutput::Type;
+using Input = ControlInput::Type;
+using PressBehavior = InputConfig::PressBehavior;
 
 // +10dB, the loudest volume a control shows (as in view_mapping.cc).
 constexpr double kMaxVolume = 3.16228;
 
+constexpr Color kBlack = {0, 0, 0};
+constexpr Color kWhite = {255, 255, 255};
+constexpr Color kRed = {255, 0, 0};
+constexpr Color kBlue = {0, 0, 255};
+
 // The device has a control with each kind of output alone: "DValue" (off or
-// on), "CValue", "Text", and "Color". Mappings are added to an active view.
+// on), "CValue", "Text", and "Color"; and with each kind of input alone:
+// "Fader" (a value input), "Pot" (a delta input), and "Button" (a press input,
+// with a release). Mappings are added to an active view.
 class ViewMappingTest : public SceneTest {
  protected:
   ViewMappingTest()
@@ -47,6 +61,9 @@ class ViewMappingTest : public SceneTest {
         cvalue_(AddCValue("CValue")),
         text_(AddText("Text")),
         color_(AddColor("Color")),
+        fader_(AddInputs("Fader", Input::kValue)),
+        pot_(AddInputs("Pot", Input::kDelta)),
+        button_(AddInputs("Button", Input::kPress)),
         view_(scene_.GetRootView()->AddChildView("View")) {
     scene_.GetRootView()->Enable();
     view_->Enable();
@@ -84,6 +101,24 @@ class ViewMappingTest : public SceneTest {
          .color_output = std::make_unique<FakeColorOutput>()});
   }
 
+  // Adds a control with only the inputs. A press input has a release, unless
+  // `has_release` is false.
+  FakeDevice::FakeControl AddInputs(std::string_view name,
+                                    Control::Inputs inputs,
+                                    bool has_release = true) {
+    FakeDevice::ControlOptions options = {.name = name};
+    if (inputs.IsSet(Input::kValue)) {
+      options.value_input = std::make_unique<FakeValueInput>();
+    }
+    if (inputs.IsSet(Input::kDelta)) {
+      options.delta_input = std::make_unique<FakeDeltaInput>();
+    }
+    if (inputs.IsSet(Input::kPress)) {
+      options.press_input = std::make_unique<FakePressInput>(has_release);
+    }
+    return device_->AddControl(std::move(options));
+  }
+
   // Adds a property to the scene that holds `value` (see TestProperty).
   TestProperty* AddProperty(Type type, Value value,
                             std::string_view name = "user:value",
@@ -95,15 +130,16 @@ class ViewMappingTest : public SceneTest {
     return scene_.AddUserProperty(std::make_unique<ToggleValueProperty>(name));
   }
 
-  // Maps the property to write to each control.
+  // Maps the property to write to, or read from, each control.
   void Write(std::string_view property,
              std::initializer_list<std::string_view> controls,
              const ViewMapping::Config& config = {}) {
-    for (std::string_view control : controls) {
-      EXPECT_TRUE(view_->AddMapping(ViewMapping::kWriteControl, property,
-                                    GetControlName(control), config))
-          << property << " to " << control;
-    }
+    Map(ViewMapping::kWriteControl, property, controls, config);
+  }
+  void Read(std::string_view property,
+            std::initializer_list<std::string_view> controls,
+            const ViewMapping::Config& config = {}) {
+    Map(ViewMapping::kReadControl, property, controls, config);
   }
 
   // Maps the property to write to each of DValue, CValue, Text, and Color.
@@ -111,11 +147,76 @@ class ViewMappingTest : public SceneTest {
     Write(property, {"DValue", "CValue", "Text", "Color"});
   }
 
+  // A property, and a control that reads it.
+  struct Reader {
+    TestProperty* property;
+    FakeDevice::FakeControl control;
+  };
+
+  // Adds a property that holds `value` (see AddProperty(), with a highest
+  // value of 2), and a control with the inputs that reads it, named
+  // "user:<name>" and `name`.
+  Reader AddReader(std::string_view name, Type type, Value value,
+                   Control::Inputs inputs,
+                   const ViewMapping::ReadConfig& read = {}) {
+    const std::string property = absl::StrCat("user:", name);
+    Reader reader = {
+        .property = AddProperty(type, std::move(value), property,
+                                /*max_value=*/2),
+        .control = AddInputs(name, inputs),
+    };
+    Read(property, {name}, {.read = read});
+    return reader;
+  }
+
+  // Gives each kind of input the reader's control has in turn (a value of 1, a
+  // delta of 0.5, and a tap), and returns the first that changed its property
+  // from `initial`, or nullopt if none did.
+  std::optional<Input> GetInputRead(const Reader& reader,
+                                    const Value& initial) {
+    const FakeDevice::FakeControl& control = reader.control;
+    if (control.value_input != nullptr) {
+      Move(control, 1.0);
+      surface_->Run();
+      if (!reader.property->Equals(initial)) {
+        return Input::kValue;
+      }
+    }
+    if (control.delta_input != nullptr) {
+      Turn(control, 0.5);
+      surface_->Run();
+      if (!reader.property->Equals(initial)) {
+        return Input::kDelta;
+      }
+    }
+    if (control.press_input != nullptr) {
+      Tap(control);
+      if (!reader.property->Equals(initial)) {
+        return Input::kPress;
+      }
+    }
+    return std::nullopt;
+  }
+
   const FakeDevice::FakeControl dvalue_;
   const FakeDevice::FakeControl cvalue_;
   const FakeDevice::FakeControl text_;
   const FakeDevice::FakeControl color_;
+  const FakeDevice::FakeControl fader_;
+  const FakeDevice::FakeControl pot_;
+  const FakeDevice::FakeControl button_;
   View* const view_;
+
+ private:
+  void Map(ViewMapping::TypeFlags type, std::string_view property,
+           std::initializer_list<std::string_view> controls,
+           const ViewMapping::Config& config) {
+    for (std::string_view control : controls) {
+      EXPECT_TRUE(
+          view_->AddMapping(type, property, GetControlName(control), config))
+          << property << " and " << control;
+    }
+  }
 };
 
 //==============================================================================
@@ -167,14 +268,14 @@ TEST_F(ViewMappingTest, TogglesWriteEachOutput) {
   EXPECT_EQ(dvalue_.dvalue_output->GetValue(), 1);
   EXPECT_EQ(cvalue_.cvalue_output->GetValue(), 1.0);
   EXPECT_EQ(text_.text_output->GetText(), "On");
-  EXPECT_EQ(color_.color_output->GetColor(), (Color{255, 255, 255}));
+  EXPECT_EQ(color_.color_output->GetColor(), kWhite);
 
   property->SetBool(false);
   surface_->Run();
   EXPECT_EQ(dvalue_.dvalue_output->GetValue(), 0);
   EXPECT_EQ(cvalue_.cvalue_output->GetValue(), 0.0);
   EXPECT_EQ(text_.text_output->GetText(), "Off");
-  EXPECT_EQ(color_.color_output->GetColor(), (Color{0, 0, 0}));
+  EXPECT_EQ(color_.color_output->GetColor(), kBlack);
 }
 
 TEST_F(ViewMappingTest, PansWriteSteps) {
@@ -277,7 +378,7 @@ TEST_F(ViewMappingTest, NormalizedValuesWriteEachOutput) {
     EXPECT_DOUBLE_EQ(cvalue_.cvalue_output->GetValue(), row.value);
   }
   EXPECT_EQ(text_.text_output->GetText(), "1");
-  EXPECT_EQ(color_.color_output->GetColor(), (Color{255, 255, 255}));
+  EXPECT_EQ(color_.color_output->GetColor(), kWhite);
 }
 
 TEST_F(ViewMappingTest, EnumeratedValuesWriteEachOutput) {
@@ -336,17 +437,17 @@ TEST_F(ViewMappingTest, TextWritesOnlyText) {
 }
 
 TEST_F(ViewMappingTest, ColorsWriteEachOutput) {
-  TestProperty* property = AddProperty(Type::kColor, Color{255, 255, 255});
+  TestProperty* property = AddProperty(Type::kColor, kWhite);
   WriteToEach("user:value");
   AddSurface();
-  EXPECT_EQ(color_.color_output->GetColor(), (Color{255, 255, 255}));
+  EXPECT_EQ(color_.color_output->GetColor(), kWhite);
   EXPECT_EQ(text_.text_output->GetText(), "#ffffff");
   EXPECT_NEAR(cvalue_.cvalue_output->GetValue(), 1.0, 0.01);
   EXPECT_EQ(dvalue_.dvalue_output->GetValue(), 1);
 
-  property->SetColor({0, 0, 0});
+  property->SetColor(kBlack);
   surface_->Run();
-  EXPECT_EQ(color_.color_output->GetColor(), (Color{0, 0, 0}));
+  EXPECT_EQ(color_.color_output->GetColor(), kBlack);
   EXPECT_EQ(text_.text_output->GetText(), "#000000");
   EXPECT_DOUBLE_EQ(cvalue_.cvalue_output->GetValue(), 0.0);
   EXPECT_EQ(dvalue_.dvalue_output->GetValue(), 0);
@@ -562,6 +663,818 @@ TEST_F(ViewMappingTest, WritesOnlyWhenThePropertyChanges) {
   property->SetBool(false);
   RunUntilShown();
   EXPECT_EQ(dvalue_.dvalue_output->GetSetCount(), set_count + 1);
+}
+
+//==============================================================================
+// Reading each property type
+//==============================================================================
+
+TEST_F(ViewMappingTest, EachTypeReadsTheInputItSuitsBest) {
+  // Each type is read from a control with every kind of input, and from one
+  // with every kind but the best.
+  struct Row {
+    Type type;
+    Value initial;
+    Input best;
+    std::optional<Input> next;
+  };
+  const std::vector<Row> rows = {
+      {Type::kToggle, false, Input::kPress, Input::kDelta},
+      {Type::kPan, 0.0, Input::kValue, Input::kDelta},
+      {Type::kVolume, 0.0, Input::kValue, Input::kDelta},
+      {Type::kNormalized, 0.0, Input::kValue, Input::kDelta},
+      {Type::kEnumerated, 0, Input::kValue, Input::kDelta},
+      {Type::kText, std::string("A"), Input::kValue, Input::kPress},
+      {Type::kColor, kBlack, Input::kValue, Input::kDelta},
+      {Type::kTimelinePosition, TimelinePosition(0.0), Input::kDelta,
+       std::nullopt},
+  };
+
+  // Text reads a press only with a range.
+  const ViewMapping::ReadConfig read = {.property_min = std::string("A"),
+                                        .property_max = std::string("B")};
+  const Control::Inputs all = {Input::kValue, Input::kDelta, Input::kPress};
+  std::vector<Reader> best;
+  std::vector<Reader> next;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    Control::Inputs rest = all;
+    rest.Clear(rows[i].best);
+    best.push_back(AddReader(absl::StrCat("best", i), rows[i].type,
+                             rows[i].initial, all, read));
+    next.push_back(AddReader(absl::StrCat("next", i), rows[i].type,
+                             rows[i].initial, rest, read));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(GetInputRead(best[i], rows[i].initial), rows[i].best);
+    EXPECT_EQ(GetInputRead(next[i], rows[i].initial), rows[i].next);
+  }
+}
+
+TEST_F(ViewMappingTest, ActionsReadOnlyPresses) {
+  int run_count = 0;
+  scene_.AddUserProperty(std::make_unique<CallbackActionProperty>(
+      "user:value", [&run_count] { ++run_count; }));
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+  Move(fader_, 1.0);
+  Turn(pot_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(run_count, 0);
+
+  Tap(button_);
+  EXPECT_EQ(run_count, 1);
+  Tap(button_);
+  EXPECT_EQ(run_count, 2);
+}
+
+TEST_F(ViewMappingTest, TogglesReadEachInput) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+
+  // A value is on past halfway.
+  Move(fader_, 0.6);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_FALSE(property->GetBool());
+
+  // A delta turns it on or off by its direction.
+  Turn(pot_, 0.1);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+  Turn(pot_, -0.1);
+  surface_->Run();
+  EXPECT_FALSE(property->GetBool());
+
+  // A press flips it.
+  Tap(button_);
+  EXPECT_TRUE(property->GetBool());
+  Tap(button_);
+  EXPECT_FALSE(property->GetBool());
+}
+
+TEST_F(ViewMappingTest, PansReadEachInput) {
+  TestProperty* property = AddProperty(Type::kPan, 0.0);
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+
+  // A value spans hard left to hard right.
+  Move(fader_, 0.25);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), -0.5);
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), 1.0);
+
+  // A delta moves it, as far as hard left or right.
+  Turn(pot_, -0.25);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), 0.75);
+  Turn(pot_, 5.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), 1.0);
+  Turn(pot_, -5.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), -1.0);
+
+  // A press steps from hard left to the center, then hard right, and back.
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), 0.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), 1.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), -1.0);
+}
+
+TEST_F(ViewMappingTest, VolumesReadEachInput) {
+  TestProperty* property = AddProperty(Type::kVolume, 0.0);
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+
+  // A value spans silence to the loudest.
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), kMaxVolume / 2.0);
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), kMaxVolume);
+
+  // A delta moves it, as far as silence or the loudest.
+  Turn(pot_, -1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), kMaxVolume - 1.0);
+  Turn(pot_, 5.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), kMaxVolume);
+  Turn(pot_, -5.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 0.0);
+
+  // A press toggles between silence and unity gain.
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 1.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 0.0);
+}
+
+TEST_F(ViewMappingTest, NormalizedValuesReadEachInput) {
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+  Move(fader_, 0.25);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.25);
+
+  // A delta moves it, as far as 0 or 1.
+  Turn(pot_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.75);
+  Turn(pot_, 1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 1.0);
+  Turn(pot_, -5.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
+
+  // A press toggles between 0 and 1.
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 1.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
+}
+
+TEST_F(ViewMappingTest, EnumeratedValuesReadEachInput) {
+  TestProperty* property =
+      AddProperty(Type::kEnumerated, 0, "user:value", /*max_value=*/4);
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+
+  // A value is rounded to the nearest.
+  Move(fader_, 0.6);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 2);
+  Move(fader_, 0.65);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 3);
+
+  // A delta steps once whatever its size, as far as 0 or the highest.
+  Turn(pot_, 0.1);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 4);
+  Turn(pot_, 0.1);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 4);
+  Turn(pot_, -3.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 3);
+  Move(fader_, 0.0);
+  surface_->Run();
+  Turn(pot_, -0.1);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 0);
+
+  // A press steps to the next, wrapping around.
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 1);
+  Move(fader_, 1.0);
+  surface_->Run();
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 0);
+}
+
+TEST_F(ViewMappingTest, TextReadsAValueAndAPressInItsRange) {
+  TestProperty* property = AddProperty(Type::kText, std::string("C"));
+  TestProperty* unranged =
+      AddProperty(Type::kText, std::string("C"), "user:unranged");
+  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
+  Read("user:value", {"Fader", "Pot", "Button"},
+       {.read = {.property_min = std::string("A"),
+                 .property_max = std::string("B")}});
+  Read("user:unranged", {"Other"});
+  AddSurface();
+  Turn(pot_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetText(), "C");
+
+  // A value is written as a number.
+  Move(fader_, 0.25);
+  surface_->Run();
+  EXPECT_EQ(property->GetText(), "0.25");
+
+  // A press sets the end of the range it isn't at, and without a range does
+  // nothing.
+  Tap(button_);
+  EXPECT_EQ(property->GetText(), "B");
+  Tap(button_);
+  EXPECT_EQ(property->GetText(), "A");
+  Tap(other);
+  EXPECT_EQ(unranged->GetText(), "C");
+}
+
+TEST_F(ViewMappingTest, ColorsReadEachInput) {
+  TestProperty* property = AddProperty(Type::kColor, kBlack);
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+
+  // A value is a gray.
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_EQ(property->GetColor(), (Color{127, 127, 127}));
+  Move(fader_, 0.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetColor(), kBlack);
+
+  // A delta moves its luminance, as a gray.
+  Turn(pot_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetColor(), kWhite);
+  Turn(pot_, -0.5);
+  surface_->Run();
+  EXPECT_EQ(property->GetColor(), (Color{127, 127, 127}));
+
+  // A press makes a dark color white, and a bright one black.
+  Tap(button_);
+  EXPECT_EQ(property->GetColor(), kWhite);
+  Tap(button_);
+  EXPECT_EQ(property->GetColor(), kBlack);
+}
+
+TEST_F(ViewMappingTest, TimelinePositionsReadOnlyADelta) {
+  TestProperty* property =
+      AddProperty(Type::kTimelinePosition, TimelinePosition(1.0));
+  Read("user:value", {"Fader", "Pot", "Button"});
+  AddSurface();
+  Move(fader_, 0.5);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetTimelinePosition().GetValue(), 1.0);
+
+  Turn(pot_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetTimelinePosition().GetValue(), 1.5);
+  Turn(pot_, -1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetTimelinePosition().GetValue(), 0.5);
+}
+
+//==============================================================================
+// Reading in a range
+//==============================================================================
+
+TEST_F(ViewMappingTest, PansReadInTheirRange) {
+  TestProperty* property = AddProperty(Type::kPan, 0.0);
+  Read("user:value", {"Fader", "Pot", "Button"},
+       {.read = {.property_min = Value(-0.5), .property_max = Value(0.5)}});
+  AddSurface();
+  Move(fader_, 0.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), -0.5);
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), 0.5);
+  Turn(pot_, -2.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetPan(), -0.5);
+
+  // A press steps through the center, as the range has it.
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), 0.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), 0.5);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), -0.5);
+}
+
+TEST_F(ViewMappingTest, APressTogglesAPanInARangeToOneSide) {
+  TestProperty* property = AddProperty(Type::kPan, 0.0);
+  Read("user:value", {"Button"},
+       {.read = {.property_min = Value(0.0), .property_max = Value(1.0)}});
+  AddSurface();
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), 1.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetPan(), 0.0);
+}
+
+TEST_F(ViewMappingTest, VolumesReadInTheirRange) {
+  TestProperty* property = AddProperty(Type::kVolume, 0.0);
+  Read("user:value", {"Fader", "Pot", "Button"},
+       {.read = {.property_min = Value(0.5), .property_max = Value(2.0)}});
+  AddSurface();
+  Move(fader_, 0.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 0.5);
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 2.0);
+  Turn(pot_, -5.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 0.5);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 2.0);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetVolume(), 0.5);
+}
+
+TEST_F(ViewMappingTest, NormalizedValuesReadInTheirRange) {
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  Read("user:value", {"Fader", "Pot", "Button"},
+       {.read = {.property_min = Value(0.2), .property_max = Value(0.6)}});
+  AddSurface();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.4);
+  Turn(pot_, 1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.6);
+  Turn(pot_, -1.0);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.2);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.6);
+  Tap(button_);
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.2);
+}
+
+TEST_F(ViewMappingTest, EnumeratedValuesReadInTheirRange) {
+  TestProperty* property =
+      AddProperty(Type::kEnumerated, 0, "user:value", /*max_value=*/4);
+  Read("user:value", {"Fader", "Pot", "Button"},
+       {.read = {.property_min = Value(1), .property_max = Value(3)}});
+  AddSurface();
+  Move(fader_, 0.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 1);
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 3);
+  Turn(pot_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 3);
+  Turn(pot_, -1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetInt(), 2);
+
+  // A press wraps around within the range.
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 3);
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 1);
+}
+
+TEST_F(ViewMappingTest, PressTogglesSwitchAnEnumeratedValueBetweenItsEnds) {
+  TestProperty* property =
+      AddProperty(Type::kEnumerated, 1, "user:value", /*max_value=*/3);
+  TestProperty* ranged =
+      AddProperty(Type::kEnumerated, 0, "user:ranged", /*max_value=*/3);
+  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
+  Read("user:value", {"Button"}, {.read = {.press_toggles = true}});
+  Read("user:ranged", {"Other"},
+       {.read = {.property_min = Value(1),
+                 .property_max = Value(2),
+                 .press_toggles = true}});
+  AddSurface();
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 3);
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 0);
+  Tap(button_);
+  EXPECT_EQ(property->GetInt(), 3);
+
+  Tap(other);
+  EXPECT_EQ(ranged->GetInt(), 2);
+  Tap(other);
+  EXPECT_EQ(ranged->GetInt(), 1);
+}
+
+TEST_F(ViewMappingTest, ColorsReadInTheirRange) {
+  TestProperty* property = AddProperty(Type::kColor, kBlack);
+  TestProperty* max_only = AddProperty(Type::kColor, kBlack, "user:max_only");
+  TestProperty* min_only = AddProperty(Type::kColor, kBlack, "user:min_only");
+  FakeDevice::FakeControl max_fader = AddInputs("MaxFader", Input::kValue);
+  FakeDevice::FakeControl min_fader = AddInputs("MinFader", Input::kValue);
+  Read("user:value", {"Fader", "Button"},
+       {.read = {.property_min = kRed, .property_max = kBlue}});
+  Read("user:max_only", {"MaxFader"}, {.read = {.property_max = kRed}});
+  Read("user:min_only", {"MinFader"}, {.read = {.property_min = kRed}});
+  AddSurface();
+
+  // A value blends the ends.
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_EQ(property->GetColor(), (Color{127, 0, 127}));
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetColor(), kBlue);
+
+  // A press sets the end it isn't at.
+  Tap(button_);
+  EXPECT_EQ(property->GetColor(), kRed);
+  Tap(button_);
+  EXPECT_EQ(property->GetColor(), kBlue);
+
+  // With one end, the other is black or white.
+  Move(max_fader, 0.0);
+  Move(min_fader, 1.0);
+  surface_->Run();
+  EXPECT_EQ(max_only->GetColor(), kBlack);
+  EXPECT_EQ(min_only->GetColor(), kWhite);
+  Move(max_fader, 1.0);
+  Move(min_fader, 0.0);
+  surface_->Run();
+  EXPECT_EQ(max_only->GetColor(), kRed);
+  EXPECT_EQ(min_only->GetColor(), kRed);
+}
+
+//==============================================================================
+// Reading a press and release
+//==============================================================================
+
+TEST_F(ViewMappingTest, PressReleaseSetsTheMaxWhileHeld) {
+  // Pans, volumes, and text without a range don't read a press and release.
+  struct Row {
+    Type type;
+    Value initial;
+    ViewMapping::ReadConfig read;
+    Value held;
+    Value released;
+  };
+  const std::vector<Row> rows = {
+      {Type::kToggle, false, {}, true, false},
+      {Type::kNormalized, 0.5, {}, 1.0, 0.0},
+      {Type::kNormalized,
+       0.5,
+       {.property_min = Value(0.2), .property_max = Value(0.6)},
+       0.6,
+       0.2},
+      {Type::kEnumerated, 1, {}, 2, 0},
+      {Type::kEnumerated,
+       0,
+       {.property_min = Value(1), .property_max = Value(2)},
+       2,
+       1},
+      {Type::kText,
+       std::string("C"),
+       {.property_min = std::string("A"), .property_max = std::string("B")},
+       std::string("B"),
+       std::string("A")},
+      {Type::kColor, kBlue, {}, kWhite, kBlack},
+      {Type::kColor,
+       kBlack,
+       {.property_min = kRed, .property_max = kBlue},
+       kBlue,
+       kRed},
+      {Type::kPan, 0.0, {}, 0.0, 0.0},
+      {Type::kVolume, 1.0, {}, 1.0, 1.0},
+      {Type::kText, std::string("C"), {}, std::string("C"), std::string("C")},
+  };
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    ViewMapping::ReadConfig read = rows[i].read;
+    read.press_release = true;
+    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
+                                rows[i].initial, Input::kPress, read));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    Press(readers[i].control);
+    surface_->Run();
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].held));
+    Release(readers[i].control);
+    surface_->Run();
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].released));
+  }
+}
+
+TEST_F(ViewMappingTest, APressIsReadWhenPressedNotReleased) {
+  struct Row {
+    Type type;
+    Value initial;
+    ViewMapping::ReadConfig read;
+    Value pressed;
+  };
+  const std::vector<Row> rows = {
+      {Type::kToggle, false, {}, true},
+      {Type::kPan, -1.0, {}, 0.0},
+      {Type::kPan,
+       0.0,
+       {.property_min = Value(0.0), .property_max = Value(1.0)},
+       1.0},
+      {Type::kVolume, 0.0, {}, 1.0},
+      {Type::kNormalized, 0.0, {}, 1.0},
+      {Type::kEnumerated, 0, {}, 1},
+      {Type::kEnumerated, 0, {.press_toggles = true}, 2},
+      {Type::kText,
+       std::string("A"),
+       {.property_min = std::string("A"), .property_max = std::string("B")},
+       std::string("B")},
+      {Type::kColor, kBlack, {}, kWhite},
+      {Type::kColor,
+       kRed,
+       {.property_min = kRed, .property_max = kBlue},
+       kBlue},
+  };
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
+                                rows[i].initial, Input::kPress, rows[i].read));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    Press(readers[i].control);
+    surface_->Run();
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].pressed));
+    Release(readers[i].control);
+    surface_->Run();
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].pressed));
+  }
+}
+
+TEST_F(ViewMappingTest, PressReleaseNeedsARelease) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  FakeDevice::FakeControl pedal =
+      AddInputs("Pedal", Input::kPress, /*has_release=*/false);
+  Read("user:value", {"Pedal"}, {.read = {.press_release = true}});
+  AddSurface();
+  Tap(pedal);
+  EXPECT_FALSE(property->GetBool());
+}
+
+//==============================================================================
+// Reading with modifiers and press behaviors
+//==============================================================================
+
+TEST_F(ViewMappingTest, ARequiredModifierMustBeOn) {
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  Read("user:value", {"Fader"}, {.read = {.required_modifiers = kModShift}});
+  AddSurface();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
+
+  SetModifiers(kModShift, true);
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
+}
+
+TEST_F(ViewMappingTest, MappingsTakeTurnsOnAControlByTheirModifiers) {
+  // Input goes only to the mapping whose modifiers are all on, while no other
+  // modifier that another mapping needs is.
+  TestProperty* plain = AddProperty(Type::kNormalized, 0.0, "user:plain");
+  TestProperty* shift = AddProperty(Type::kNormalized, 0.0, "user:shift");
+  TestProperty* ctrl_shift =
+      AddProperty(Type::kNormalized, 0.0, "user:ctrl_shift");
+  Read("user:plain", {"Fader"});
+  Read("user:shift", {"Fader"}, {.read = {.required_modifiers = kModShift}});
+  Read("user:ctrl_shift", {"Fader"},
+       {.read = {.required_modifiers = kModShift | kModCtrl}});
+  AddSurface();
+
+  struct Row {
+    Modifiers modifiers;
+    double value;
+    double plain;
+    double shift;
+    double ctrl_shift;
+  };
+  for (const Row& row : std::vector<Row>{
+           {0, 0.25, 0.25, 0.0, 0.0},
+           {kModShift, 0.5, 0.25, 0.5, 0.0},
+           {kModShift | kModCtrl, 0.75, 0.25, 0.5, 0.75},
+           {kModCtrl, 1.0, 0.25, 0.5, 0.75},
+       }) {
+    SCOPED_TRACE(row.modifiers);
+    ResetModifiers();
+    SetModifiers(row.modifiers, true);
+    Move(fader_, row.value);
+    surface_->Run();
+    EXPECT_DOUBLE_EQ(plain->GetNormalized(), row.plain);
+    EXPECT_DOUBLE_EQ(shift->GetNormalized(), row.shift);
+    EXPECT_DOUBLE_EQ(ctrl_shift->GetNormalized(), row.ctrl_shift);
+  }
+}
+
+TEST_F(ViewMappingTest, TapsReadOnlyShortPresses) {
+  TestProperty* held = AddProperty(Type::kToggle, false, "user:held");
+  TestProperty* tapped = AddProperty(Type::kToggle, false, "user:tapped");
+  Read("user:held", {"Button"}, {.read = {.press_release = true}});
+  Read("user:tapped", {"Button"},
+       {.read = {.press_behavior = PressBehavior::kTap}});
+  AddSurface();
+  Hold(button_);
+  EXPECT_TRUE(held->GetBool());
+  Release(button_);
+  RunUntilShown();
+  EXPECT_FALSE(held->GetBool());
+  EXPECT_FALSE(tapped->GetBool());
+
+  Tap(button_);
+  EXPECT_TRUE(tapped->GetBool());
+}
+
+TEST_F(ViewMappingTest, DoublePressesReadOnlyTwoQuickPresses) {
+  TestProperty* once = AddProperty(Type::kToggle, false, "user:once");
+  TestProperty* twice = AddProperty(Type::kToggle, false, "user:twice");
+  Read("user:once", {"Button"});
+  Read("user:twice", {"Button"},
+       {.read = {.press_behavior = PressBehavior::kDoublePress}});
+  AddSurface();
+  Tap(button_);
+  EXPECT_TRUE(once->GetBool());
+  EXPECT_FALSE(twice->GetBool());
+
+  DoublePress(button_);
+  EXPECT_TRUE(once->GetBool());
+  EXPECT_TRUE(twice->GetBool());
+}
+
+TEST_F(ViewMappingTest, LongPressesReadOnlyHeldPresses) {
+  TestProperty* once = AddProperty(Type::kToggle, false, "user:once");
+  TestProperty* held = AddProperty(Type::kToggle, false, "user:held");
+  Read("user:once", {"Button"});
+  Read("user:held", {"Button"},
+       {.read = {.press_behavior = PressBehavior::kLongPress}});
+  AddSurface();
+  Tap(button_);
+  EXPECT_TRUE(once->GetBool());
+  EXPECT_FALSE(held->GetBool());
+
+  LongPress(button_);
+  EXPECT_TRUE(once->GetBool());
+  EXPECT_TRUE(held->GetBool());
+}
+
+//==============================================================================
+// Reading with a condition
+//==============================================================================
+
+TEST_F(ViewMappingTest, AConditionMustBeMetToRead) {
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  ToggleValueProperty* flag = AddFlag();
+  Read("user:value", {"Fader"},
+       {.condition = ViewCondition::Config{.property = "user:flag"}});
+  AddSurface();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
+
+  flag->SetBool(true);
+  surface_->Run();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
+}
+
+TEST_F(ViewMappingTest, InputForAnUnmetConditionGoesToNoOtherMapping) {
+  TestProperty* shift = AddProperty(Type::kToggle, false, "user:shift");
+  TestProperty* plain = AddProperty(Type::kToggle, false, "user:plain");
+  ToggleValueProperty* flag = AddFlag();
+  Read("user:shift", {"Button"},
+       {.read = {.required_modifiers = kModShift},
+        .condition = ViewCondition::Config{.property = "user:flag"}});
+  Read("user:plain", {"Button"});
+  AddSurface();
+  SetModifiers(kModShift, true);
+  Tap(button_);
+  EXPECT_FALSE(shift->GetBool());
+  EXPECT_FALSE(plain->GetBool());
+
+  flag->SetBool(true);
+  surface_->Run();
+  Tap(button_);
+  EXPECT_TRUE(shift->GetBool());
+  EXPECT_FALSE(plain->GetBool());
+}
+
+TEST_F(ViewMappingTest, PressReleaseReleasesOnlyWhatItHeld) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  ToggleValueProperty* flag = AddFlag();
+  flag->SetBool(true);
+  Read("user:value", {"Button"},
+       {.read = {.press_release = true},
+        .condition = ViewCondition::Config{.property = "user:flag"}});
+  AddSurface();
+
+  // A press it held is released after the condition is no longer met.
+  Press(button_);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+  flag->SetBool(false);
+  surface_->Run();
+  Release(button_);
+  surface_->Run();
+  EXPECT_FALSE(property->GetBool());
+
+  // A press while it isn't met isn't held, so its release changes nothing.
+  Press(button_);
+  surface_->Run();
+  EXPECT_FALSE(property->GetBool());
+  property->SetBool(true);
+  Release(button_);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+}
+
+//==============================================================================
+// Watching what it reads
+//==============================================================================
+
+TEST_F(ViewMappingTest, ReadsFromThePropertysValueWatchIt) {
+  // A read that changes the property from its value (a delta or a press)
+  // watches it, so a polled property is current, and a value never does. Text
+  // reads a press only with a range.
+  struct Row {
+    Type type;
+    Value initial;
+    bool by_delta;
+    bool by_press;
+  };
+  const std::vector<Row> rows = {
+      {Type::kToggle, false, false, true},
+      {Type::kPan, 0.0, true, true},
+      {Type::kVolume, 0.0, true, true},
+      {Type::kNormalized, 0.0, true, true},
+      {Type::kEnumerated, 0, true, true},
+      {Type::kText, std::string("A"), false, true},
+      {Type::kColor, kBlack, true, true},
+      {Type::kTimelinePosition, TimelinePosition(0.0), true, false},
+  };
+  const ViewMapping::ReadConfig read = {.property_min = std::string("A"),
+                                        .property_max = std::string("B")};
+  struct Readers {
+    Reader by_value;
+    Reader by_delta;
+    Reader by_press;
+  };
+  std::vector<Readers> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    const Row& row = rows[i];
+    readers.push_back({
+        AddReader(absl::StrCat("value", i), row.type, row.initial,
+                  Input::kValue, read),
+        AddReader(absl::StrCat("delta", i), row.type, row.initial,
+                  Input::kDelta, read),
+        AddReader(absl::StrCat("press", i), row.type, row.initial,
+                  Input::kPress, read),
+    });
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_FALSE(readers[i].by_value.property->IsWatched());
+    EXPECT_EQ(readers[i].by_delta.property->IsWatched(), rows[i].by_delta);
+    EXPECT_EQ(readers[i].by_press.property->IsWatched(), rows[i].by_press);
+  }
 }
 
 }  // namespace

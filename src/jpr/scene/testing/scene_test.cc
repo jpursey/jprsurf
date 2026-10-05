@@ -113,6 +113,16 @@ void SceneTest::Release(const FakeDevice::FakeControl& control) {
   input_.push_back([input = control.press_input] { input->Release(); });
 }
 
+void SceneTest::Move(const FakeDevice::FakeControl& control, double value) {
+  input_.push_back(
+      [input = control.value_input, value] { input->SetValue(value); });
+}
+
+void SceneTest::Turn(const FakeDevice::FakeControl& control, double delta) {
+  input_.push_back(
+      [input = control.delta_input, delta] { input->AddDelta(delta); });
+}
+
 void SceneTest::DeliverInput() {
   for (absl::AnyInvocable<void()>& input : input_) {
     input();

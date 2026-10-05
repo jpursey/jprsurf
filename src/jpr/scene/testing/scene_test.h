@@ -90,6 +90,12 @@ class SceneTest : public ::testing::Test {
   void Press(const FakeDevice::FakeControl& control);
   void Release(const FakeDevice::FakeControl& control);
 
+  // Sets the control's value input, in [0,1].
+  void Move(const FakeDevice::FakeControl& control, double value);
+
+  // Adds to the control's delta input.
+  void Turn(const FakeDevice::FakeControl& control, double delta);
+
   //----------------------------------------------------------------------------
   // Presses
   //

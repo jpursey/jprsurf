@@ -369,7 +369,7 @@ The fixes:
   overridden only to modes 5 and 8, whose highest values pick the same spread
   as before, so the surface shows the same.
 
-### CL13 [ ] scene: Mappings that read
+### CL13 [x] scene: Mappings that read
 
 Depends on: CL11.
 
@@ -377,9 +377,59 @@ Depends on: CL11.
   input type choice, property ranges, press_toggles, press_release, required
   modifiers and their mutual exclusion, taps, double and long presses, and
   read conditions.
+- `SceneTest` gains `Move()` and `Turn()`, which give a control's value and
+  delta inputs as `Press()` gives its press input.
 
 **Verify**
 - Standard checks.
+
+### CL14 [ ] scene: Read the configured input type
+
+Depends on: CL13.
+
+CL13 found that a mapping never reads `ReadConfig::input_type`: it always
+picks the input the property type prefers, so a configured input type is
+ignored. No mapping in JPRSurf's own surface configures one today.
+
+The fix:
+- `InitReadControl()` narrows the control's inputs to the configured type,
+  when there is one, and each `InitRead*SyncFunction()` picks from what is
+  left (in place of its own `GetInputs()`), in the type's usual order. So a
+  mapping reads nothing if the control doesn't have that input, or the
+  property type can't read it, and a press_release mapping reads nothing with
+  any type but a press.
+- `ReadConfig::input_type`'s comment says so.
+- Removing `input_type` instead is the other way, as nothing sets it, and
+  `docs/config_model.md` has no use for it yet. Which to do is decided before
+  this CL starts.
+- `view_mapping_test.cc`: a configured input type is read in place of the one
+  the type prefers, and a mapping configured with an input type the control
+  doesn't have reads nothing.
+
+**Verify**
+- Standard checks, and the new tests fail without the fix.
+
+### CL15 [ ] scene: A press between a range's ends goes to the nearer end
+
+Depends on: CL13.
+
+CL13 found that a press read into a pan (on one side of the center), volume,
+or normalized property whose value is between the ends of its range goes to
+the farther end: `ToggleDouble()` sends a value at or below the middle to the
+max, and one above it to the min. `ReadConfig::property_min` and
+`ToggleDouble()`'s comments say it goes to the nearer end, which is what is
+wanted. A value at either end still goes to the other. No mapping in JPRSurf's
+own surface reads a press into these types, so the surface isn't affected.
+
+The fix:
+- `ToggleDouble()` in `view_mapping.cc` toggles a value at an end to the other
+  end, and moves a value between them to the nearer end (the max, from the
+  middle).
+- `view_mapping_test.cc`: a press from between the ends, nearer each one, for
+  a pan, volume, and normalized property.
+
+**Verify**
+- Standard checks, and the new tests fail without the fix.
 
 ## Checks in REAPER
 
