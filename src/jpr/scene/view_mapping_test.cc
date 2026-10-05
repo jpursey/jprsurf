@@ -1072,6 +1072,74 @@ TEST_F(ViewMappingTest, APressGoesToTheOtherEndOrTheNearerOne) {
   }
 }
 
+TEST_F(ViewMappingTest, APressStepsAPanToItsNextStop) {
+  // A pan whose range spans the center steps through min, the center, and max
+  // (see PansReadEachInput and PansReadInTheirRange for presses from each).
+  // From between them it steps to the next, and from beyond an end as from
+  // that end.
+  struct Row {
+    Value initial;
+    ViewMapping::ReadConfig read;
+    double pressed;
+  };
+  const ViewMapping::ReadConfig half = {.property_min = Value(-0.5),
+                                        .property_max = Value(0.5)};
+  const std::vector<Row> rows = {
+      {-0.3, {}, 0.0},  {0.4, {}, 1.0},    {-0.2, half, 0.0},
+      {0.2, half, 0.5}, {-0.8, half, 0.0}, {0.8, half, -0.5},
+  };
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    readers.push_back(AddReader(absl::StrCat("value", i), Type::kPan,
+                                rows[i].initial, Input::kPress, rows[i].read));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    Tap(readers[i].control);
+    EXPECT_DOUBLE_EQ(readers[i].property->GetPan(), rows[i].pressed);
+  }
+}
+
+TEST_F(ViewMappingTest, PressesInOneRunEachStep) {
+  // Each starts between its ends or stops, so the presses don't come back to
+  // where they started.
+  struct Row {
+    Type type;
+    double initial;
+    ViewMapping::ReadConfig read;
+    int press_count;
+    double pressed;
+  };
+  const std::vector<Row> rows = {
+      {Type::kPan, -0.3, {}, 3, -1.0},
+      {Type::kPan,
+       0.3,
+       {.property_min = Value(0.0), .property_max = Value(1.0)},
+       2,
+       1.0},
+      {Type::kVolume, 0.3, {}, 2, 1.0},
+      {Type::kNormalized, 0.7, {}, 2, 0.0},
+  };
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
+                                rows[i].initial, Input::kPress, rows[i].read));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    for (int press = 0; press < rows[i].press_count; ++press) {
+      Press(readers[i].control);
+      Release(readers[i].control);
+    }
+    surface_->Run();
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].pressed));
+  }
+}
+
 TEST_F(ViewMappingTest, PansReadInTheirRange) {
   TestProperty* property = AddProperty(Type::kPan, 0.0);
   Read("user:value", {"Fader", "Pot", "Button"},

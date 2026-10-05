@@ -84,6 +84,30 @@ double ToggleDouble(double current, double min, double max) {
   return current < (min + max) / 2.0 ? min : max;
 }
 
+// Steps a pan whose range spans the center through min, the center, and max:
+// from below the center to it, from below max to max, and from max (or beyond)
+// to min.
+double StepPan(double current, double min, double max) {
+  if (current < 0.0) {
+    return 0.0;
+  }
+  if (current < max) {
+    return max;
+  }
+  return min;
+}
+
+// Returns the value after `press_count` presses, each of which steps it
+// between min and max (as ToggleDouble() or StepPan() do).
+using StepFunction = double(double current, double min, double max);
+double Press(StepFunction* step, double value, int press_count, double min,
+             double max) {
+  for (int i = 0; i < press_count; ++i) {
+    value = step(value, min, max);
+  }
+  return value;
+}
+
 }  // namespace
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
@@ -267,38 +291,16 @@ void ViewMapping::InitReadPanSyncFunction(Control::Inputs inputs) {
     double min = cfg_min.value_or(-1.0);
     double max = cfg_max.value_or(1.0);
     reads_property_ = true;
-    // Three-way toggle (min, 0, max) if zero is strictly between min and max.
-    if (min < 0.0 && max > 0.0) {
-      read_control_ = [min, max](ViewProperty& property, Control& control,
-                                 InputId id) {
-        int press_count = control.GetPressCount(id) % 3;
-        if (press_count == 0) {
-          return;
-        }
-        double current_pan = property.GetPan();
-        double new_pan = current_pan;
-        for (; press_count > 0; --press_count) {
-          if (new_pan <= min) {
-            new_pan = 0.0;
-          } else if (new_pan < max) {
-            new_pan = max;
-          } else {
-            new_pan = min;
-          }
-        }
-        if (new_pan != current_pan) {
-          property.SetPan(new_pan);
-        }
-      };
-    } else {
-      // Binary toggle between min and max.
-      read_control_ = [min, max](ViewProperty& property, Control& control,
-                                 InputId id) {
-        if (control.GetPressCount(id) % 2 != 0) {
-          property.SetPan(ToggleDouble(property.GetPan(), min, max));
-        }
-      };
-    }
+    // A three-way toggle (min, 0, max) if zero is strictly between min and
+    // max, and a binary toggle between min and max otherwise.
+    StepFunction* step = (min < 0.0 && max > 0.0) ? StepPan : ToggleDouble;
+    read_control_ = [step, min, max](ViewProperty& property, Control& control,
+                                     InputId id) {
+      int press_count = control.GetPressCount(id);
+      if (press_count > 0) {
+        property.SetPan(Press(step, property.GetPan(), press_count, min, max));
+      }
+    };
     return;
   }
 }
@@ -352,8 +354,10 @@ void ViewMapping::InitReadVolumeSyncFunction(Control::Inputs inputs) {
     reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
-      if (control.GetPressCount(id) % 2 != 0) {
-        property.SetVolume(ToggleDouble(property.GetVolume(), min, max));
+      int press_count = control.GetPressCount(id);
+      if (press_count > 0) {
+        property.SetVolume(
+            Press(ToggleDouble, property.GetVolume(), press_count, min, max));
       }
     };
     return;
@@ -418,9 +422,10 @@ void ViewMapping::InitReadNormalizedSyncFunction(Control::Inputs inputs) {
     reads_property_ = true;
     read_control_ = [min, max](ViewProperty& property, Control& control,
                                InputId id) {
-      if (control.GetPressCount(id) % 2 != 0) {
-        property.SetNormalized(
-            ToggleDouble(property.GetNormalized(), min, max));
+      int press_count = control.GetPressCount(id);
+      if (press_count > 0) {
+        property.SetNormalized(Press(ToggleDouble, property.GetNormalized(),
+                                     press_count, min, max));
       }
     };
     return;

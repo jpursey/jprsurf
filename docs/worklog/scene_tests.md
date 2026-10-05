@@ -429,6 +429,32 @@ The fix:
 **Verify**
 - Standard checks, and the new tests fail without the fix.
 
+### CL16 [x] scene: A press steps a pan to its next stop
+
+Depends on: CL15.
+
+A press read into a pan whose range spans the center steps it from min to the
+center, to max, and back to min. From a value between min and the center, it
+goes to max, skipping the center (found reviewing CL15). Also, presses in one
+run are counted modulo 3 (or modulo 2 for the binary toggles of a pan, volume,
+or normalized value), which assumes the value starts at a stop or an end, so
+from between them, 3 (or 2) presses do nothing. JPRSurf's own surface reads a
+press into a pan only to center it (min and max both 0), which doesn't step,
+so the surface isn't affected.
+
+The fix:
+- `StepPan()`, beside `ToggleDouble()`: a pan below the center goes to the
+  center, one at or above it (but below max) goes to max, and one at or
+  beyond max goes to min, so a press always goes to the next stop.
+- Each press in a run steps the value once (`Press()`), in place of the
+  modulo, for the pan, volume, and normalized press reads.
+- `view_mapping.h`: the `property_min` comment says so.
+- `view_mapping_test.cc`: a press from between the stops and from beyond the
+  ends, and several presses in one run from between them.
+
+**Verify**
+- Standard checks, and the new tests fail without the fix.
+
 ## Checks in REAPER
 
 None for the tests. The only plugin code that changes is two `TestReset`

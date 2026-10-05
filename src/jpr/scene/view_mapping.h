@@ -80,7 +80,9 @@ class ViewMapping final {
     //       - A pan, volume, or normalized value at (or beyond) either end goes
     //         to the other end, and one between them goes to the nearer end,
     //         or the max from the middle. A pan whose range spans the center
-    //         instead steps from min to the center, to max, and back to min.
+    //         instead steps through min, the center, and max: from below the
+    //         center to it, from below max to max, and from max (or beyond) to
+    //         min.
     //       - Text and color need both min and max specified, and go to the
     //         max unless they are already at it.
     //       - An enumerated property is different (see press_toggles).
