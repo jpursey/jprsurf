@@ -3,461 +3,213 @@
 Tests of `scene` on its own, for the detail the surface tests don't reach:
 properties against REAPER's state (track, route, state, command, and timeline
 properties), views (conditions, subjects, lists, references, and anchors),
-mappings (each property type each way, modifiers, taps, picks, and
-conditions), and `TrackActions` (every modifier, ranges, anchors, grouping,
-and batching). Each file in `scene` gets its own test, against the fake REAPER
-and a device of fake controls. The design is in
+mappings (each property type each way, modifiers, presses, and conditions),
+and `TrackActions` (every modifier, ranges, anchors, grouping, and batching).
+Each file in `scene` has its own test, against the fake REAPER and a device of
+fake controls. The design is in
 [testing_and_profiling.md](../testing_and_profiling.md) (Tests).
 
-There is no change in behavior. A bug a test finds is fixed in its own
-follow-up CL, with the test disabled until then, as in *Surface tests*.
+## Behavior
 
-## Design
+The tests found five bugs in `ViewMapping`, each fixed in a CL of its own
+after the tests. None of them reached JPRSurf's own surface, whose mappings
+don't use what was broken, so the surface is unchanged:
+- **Pans written to an even number of steps** (an output whose highest value
+  is odd, such as the X-Touch ring's spread mode) showed every pan between
+  hard left and hard right as hard left: `MapPanToEvenRange()` truncated the
+  pan to an int before scaling it.
+- **Steps in an overridden mode:** how a pan, volume, normalized, or color
+  value is spread over a DValue output's steps was picked once, from the
+  mapping's own mode, so a mode override to a mode with a different highest
+  value spread it wrongly. It is now picked from the mode each write resolves
+  to, as the toggle and enumerated writes already did.
+- **The configured input type** (`ReadConfig::input_type`) was never read, so
+  a mapping always read the input its property type prefers.
+  `InitReadControl()` now narrows the control's inputs to it, and each type
+  picks from what is left in its usual order, reading nothing if the control
+  lacks the input or the type can't read it. A `press_release` mapping reads
+  nothing with any input type but a press.
+- **A press between a range's ends** went to the farther end, where the
+  comments said the nearer. `ToggleDouble()` now sends a value at (or beyond)
+  an end to the other end, and one between them to the nearer end, or the max
+  from the middle. This is the binary toggle of a pan whose range is on one
+  side of the center, a volume, and a normalized value.
+- **A press of a pan whose range spans the center** went from between min and
+  the center to max, skipping the center. `StepPan()` now steps it to the next
+  of min, the center, and max. Presses in one run were also counted modulo 3
+  (or 2, for the binary toggles), which assumed the value started at a stop or
+  an end. Now each press steps the value once (`Press()`).
 
-### Names
+The rest of the feature is tests and test support, plus two changes to
+non-test code that tests needed:
+- `Scene::GetControl()` asks the device for the control, rather than keeping
+  its own copy of each device's controls from when the device was added, so a
+  device's controls can be added at any time.
+- `Device::AddControl()` returns the control it added, or null if the name is
+  taken.
+
+## Names
 
 | Name                          | What                                       | Might be confused with             |
 | ----------------------------- | ------------------------------------------ | ---------------------------------- |
 | `FakeProject::AddTracks()`    | Adds tracks named for where they are       | `FakeProject::AddTrack()`          |
-| `FakeDevice`                  | A `Device` of fake controls, with no MIDI  | `FakeXTouch`; `TestDevice`         |
+| `FakeDevice`                  | A `Device` of fake controls, with no MIDI  | `FakeXTouch`                       |
 | `jpr_device_fakes`            | The test-only library holding `FakeDevice` | `jpr_device_testing`               |
 | `SceneTest`                   | The fixture for scene tests                | `SurfaceTest`; `scene_test.cc`     |
 | `GetCachedTrack()`            | The track cache's track for a fake track   | `TrackCache::GetTrack()`           |
 | `FakeReaper::EndEntryPoint()` | Ends a call REAPER would have made         | `TestControlSurface`'s `EndCall()` |
 | `TestProperty`                | A property of any type holding a value     | `CreateConstProperty()`            |
 
-- `AddTracks()` names tracks T2 and T2.1, and moves from `SurfaceTest`.
-  `AddTrack()` takes the name.
-- `FakeXTouch` is the hardware end of an X-Touch's ports. `TestDevice`, in
-  `device_test.cc`, is replaced by `FakeDevice`.
-- `jpr_device_fakes` holds `fake_control_io.h` and `FakeDevice`, and links
-  `jpr_device`. `jpr_device_testing` holds `FakeXTouch`, and deliberately
-  doesn't link `jpr_device`.
-- `SceneTest` is to `scene` what `SurfaceTest` is to the plugin. Its header is
-  `scene/testing/scene_test.h`, while `scene_test.cc` holds `Scene`'s own
-  tests, which use it.
+## Structure
 
 ### Tests on fake controls, not a fake X-Touch
 
-The design doc planned scene tests on fake X-Touches. They test `scene`
+The design doc planned scene tests on fake X-Touches. They would test `scene`
 through `DeviceXTouch` and its protocol, though, where `scene` only uses
-`Device` and `Control`. Fake controls (`fake_control_io.h`) keep each test to
-the file it tests:
+`Device` and `Control`. Fake controls keep each test to the file it tests:
 - **Any control a mapping can meet.** A test builds the inputs and outputs it
-  needs (a press without release, a value and a delta together, outputs with
-  several modes), where the X-Touch has a fixed set.
+  needs (a press without release, every input at once, outputs with several
+  modes), where the X-Touch has a fixed set.
 - **Exact values.** A fader's value is the value the property gets, with no
   MCU fader curve, 7 character scribble strip, or ring positions between.
-- `DeviceXTouch` is already tested on the fake X-Touch, and surface tests test
-  the whole chain on it.
+- `DeviceXTouch` is tested on the fake X-Touch, and the surface tests test the
+  whole chain on it.
 
-### device: FakeDevice (device/testing/fake_device.h)
+### common/testing: The fake
 
-```
-// A device of fake controls, which a test adds by name, then drives and reads
-// through their fake inputs and outputs, with no MIDI or hardware.
-class FakeDevice final : public Device {
- public:
-  // The fakes a control is made of, as Control::Options takes them. The
-  // control has no input or output for any that is null.
-  struct ControlOptions {
-    std::string_view name;
-    std::unique_ptr<FakeValueInput> value_input;
-    ...  // Each input, the binding, and each output.
-  };
+- **`FakeProject::AddTracks(count, folder)`** names each track for where it is
+  (T2, T2.1), moved from `SurfaceTest`, which calls it.
+- **`FakeReaper::EndEntryPoint()`:** a test that calls JPRSurf's code directly,
+  outside a surface's run, ends each call REAPER would have made, so the fake
+  checks each on its own (such as the batching rule) rather than all of the
+  test's calls as one. `TestControlSurface` ends its calls with it.
+- **`GetCachedTrack(FakeTrack*)`** (`cached_track.h`, so the fake doesn't
+  depend on the cache) returns the track cache's track for a fake track, and
+  the stub track for null.
+- `reaper_trace_test.cc` runs on `FakeReaper`, with a `SurfaceNotifier`, in
+  place of its own small fake. The fake reads `IP_TRACKNUMBER`, and `P_NAME`
+  for every track but the master, which REAPER's documentation says reads as
+  null, and nobody has checked.
 
-  // A control added to the device, and its fakes, which are null for any it
-  // doesn't have.
-  struct FakeControl {
-    Control* control = nullptr;
-    FakeValueInput* value_input = nullptr;
-    ...  // Each input and output.
-  };
+### device/testing: FakeDevice (fake_device.h)
 
-  explicit FakeDevice(RunRegistry& run_registry);
+A `Device` of fake controls (`fake_control_io.h`), in the test-only
+`jpr_device_fakes` library. `jpr_device_testing` holds `FakeXTouch`, and
+deliberately doesn't link `jpr_device`.
+- `AddControl(ControlOptions)` adds a control made of fakes, and returns a
+  `FakeControl`: the control and its fakes, null for any it doesn't have.
+  `ControlOptions` mirrors `Control::Options` with the fake types, so a
+  control can only be made of fakes, with no cast. A new input or output type
+  in `Control` is added to it too.
+- `AddButton()`, `AddFader()`, `AddPot()`, and `AddDisplay()` add the common
+  kinds of control, as the hardware has them: a button has a light, a fader a
+  touch and a motor, a pot a ring.
+- `device_test.cc` uses it in place of its own `TestDevice`.
 
-  // Adds a control made of the fakes, and returns it. If the name is taken,
-  // every pointer returned is null.
-  FakeControl AddControl(ControlOptions options);
+### scene/testing: SceneTest (scene_test.h)
 
-  // Each adds a control of a common kind:
-  // - A button: a press input with release, and a light (a DValue output).
-  // - A fader: a value input, a touch (a press input), and a CValue output,
-  //   motorized.
-  // - A pot: a delta input, and a CValue output (its ring). A pot that can be
-  //   pushed has a button of its own, as Control::Options recommends.
-  // - A display: text and color outputs.
-  FakeControl AddButton(std::string_view name);
-  FakeControl AddFader(std::string_view name);
-  FakeControl AddPot(std::string_view name);
-  FakeControl AddDisplay(std::string_view name);
-};
-```
-
-- `ControlOptions` holds the fake types, so a control can only be made of
-  fakes, with no cast. It mirrors `Control::Options`, so a new input or output
-  type in `Control` is added to it too.
-- `Device::AddControl()` returns the control it added, or null if the name is
-  taken, which `FakeDevice` returns. `DeviceXTouch` ignores it.
-- `fake_control_io.h` moves from `jpr_device`'s test sources into
-  `jpr_device_fakes`, beside `FakeDevice`, in `jpr/device/testing`.
-  `jpr_device_testing` stays as it is, so `FakeXTouch` still can't reach
-  `jpr_device`.
-- `device_test.cc`'s `TestDevice` becomes `FakeDevice`.
-
-### scene: SceneTest (scene/testing/scene_test.h)
-
-A fixture in a test-only `jpr_scene_testing` library, as `SurfaceTest` is in
-`jpr_plugin_testing`:
-- The fake REAPER, with REAPER's actions (`AddReaperActions()`), a
-  `SurfaceNotifier`, a `Scene`, and a `FakeDevice` in it, which a test adds
-  its controls to. `Scene::GetControl()` now asks the device for a control,
-  rather than keeping its own copy of each device's controls from when the
-  device was added, so a control can be added at any time.
+The fixture for scene tests, in the test-only `jpr_scene_testing` library, as
+`SurfaceTest` is to the plugin. `scene_test.cc` holds `Scene`'s own tests,
+which use it.
+- The fake REAPER, with REAPER's actions, a `SurfaceNotifier`, a `Scene`, and
+  a `FakeDevice` in it (`device_`), which a test adds its controls to.
+  `GetControlName("X")` is the scene's name for one ("Device/X").
 - **The scene runs from a control surface,** as in the plugin. The scene reads
   REAPER through `TrackCache` and `ContinuousUndo`, which only a
-  `ControlSurface` keeps current, so `Scene`'s comment now says it must run
-  from a `ControlSurfaceListener`'s `OnRun()`. The fixture registers a surface
-  type whose listener activates the scene, and runs the devices, then the
-  input, then the scene, as `PluginSurface` does. `AddSurface()` and
+  `ControlSurface` keeps current, so `Scene`'s comment says it must run from a
+  `ControlSurfaceListener`'s `OnRun()`. The fixture registers a surface type
+  whose listener activates the scene, and runs the devices, then the input,
+  then the scene, as `PluginSurface` does. `AddSurface()` and
   `RemoveSurface()` add and remove it, as REAPER does at startup and exit. So
-  the notifier makes REAPER's calls back (selection, rec arm, the last touched
-  track), each run is an entry point the fake checks, and the notifier's UI
-  changes (`ClickTrack()`) work.
-- **Input is queued** (`Press()` and `Release()`), and arrives in the next run
-  between the controls and the scene, as MIDI input does. Each run, the
-  controls clear the input that arrived since they last ran.
-- `RunUntilShown()` is two runs, as for the surface. Presses that get the
-  clock right: `Tap()`, `DoublePress()`, `LongPress()`, and `Hold()`, waiting
-  for `Control::kLongPressDurationSecs` and `kDoublePressWindowSecs`, as
-  `SurfaceTest`'s do.
-- **A test of a property alone doesn't need the fixture.** It uses a plain
+  REAPER's calls back work, each run is an entry point the fake checks, and
+  the notifier's UI changes (`ClickTrack()`) work.
+- **Input is queued** (`Press()`, `Release()`, `Move()` for a value input, and
+  `Turn()` for a delta input), and arrives in the next run between the
+  controls and the scene, as MIDI input does. Each run, the controls clear
+  the input that arrived since they last ran.
+- `RunUntilShown()` is two runs, as for the surface. `Tap()`,
+  `DoublePress()`, `LongPress()`, and `Hold()` wait for
+  `Control::kLongPressDurationSecs` and `kDoublePressWindowSecs`.
+- **A test of a property alone doesn't use the fixture.** It uses a plain
   fixture (the fake, and a scene for the property), refreshes the track cache
-  or calls `UpdateState()` itself, and ends each call with
-  `EndEntryPoint()` where it needs to. The scene's polling of what is watched
-  is tested with the scene. Tests that need REAPER's calls back, such as for
-  the selected tracks' automation modes, use `SceneTest`.
+  or calls `UpdateState()` itself, and ends each call with `EndEntryPoint()`
+  where it needs to. The scene's polling of what is watched is tested with the
+  scene.
 - Anything logged at `ERROR` or above fails the test (`gb::LogErrorGuard`),
   unless the test takes it, as a mapping that fails to be added logs why.
 
 **Brittleness:** a test must give input through the fixture, never on a
 control's fakes, which would never reach the scene. The header says so.
 
+### scene/testing: TestProperty (test_property.h)
+
+A property of any type (`ViewProperty::Type`) that holds a value of that
+type, which its setters change, notifying only when it changes, with an
+enumerated property's highest value. It tests what reads and writes
+properties without depending on any particular one, from `ViewProperty`'s
+conversions to every mapping.
+
 ### scene: Process state
 
-`scene`'s globals get a `TestReset`, so no test sees another's:
+`scene`'s globals have a `TestReset`, so no test sees another's:
 `g_last_auto_override` (`state_properties.cc`), the override that turning
 `state:auto_override_active` on restores, and `g_next_const_id`
 (`const_property.cc`), so const: names are the same in every test. The
-process state table in the design doc gains them.
+process state table in the design doc has them.
 
-### Tests
+## Tests
 
 One file per source file, each against the fake, and fake controls where it
 needs them:
+- **`track_test.cc`** (`common`): `TrackRange` on its own, which ends make a
+  range, either order, the same parent rule, and the filter.
+- **`fake_device_test.cc`:** each kind of control has the inputs and outputs
+  it says, and a control keeps its fakes.
 - **`scene_test.cc`:** controls by device and name; property lookup in each
   namespace; user, const, and modifier properties and their name rules; the
   built in references; track references' fallback and follow; activation; and
   conditional views applied between runs.
-- **`track_properties_test.cc`:** each property read from and written to the
-  fake, the plain and ui_ ones, the meter, and the stub and deleted tracks.
-- **`route_properties_test.cc`:** each property of sends and receives, a route
-  past the end, the other track's fields, and the routes changing.
+- **`track_properties_test.cc`, `route_properties_test.cc`:** each property
+  read and written, plain and ui_ properties, the meter, folders, the stub and
+  deleted tracks, routes past the end, and the routes changing.
 - **`track_reference_test.cc`, `route_reference_test.cc`:** setting, versions,
   fields following the reference, and `Update()` refreshing only what is
   watched.
-- **`state_properties_test.cc`:** each polled toggle, the selected tracks'
-  automation modes, the override (and what turning it on restores), and the
-  timeline and ruler names.
-- **`polled_toggle_property_test.cc`:** polling only while watched, and
-  writing.
-- **`command_properties_test.cc`:** numeric and named commands, toggles and
-  actions, and an unknown command.
-- **`timeline_property_test.cc`:** each position source, playing and stopped,
-  and each ruler mode property, primary and secondary.
-- **`value_property_test.cc`** (adding to the existing tests): enumerated
-  values, and the callback properties.
-- **`track_actions_test.cc`:** select, toggles, volume, and pan with every
-  modifier; ranges by parent and filter; anchors; grouping; and one batch for
-  every change of more than one track.
-- **`track_anchor_property_test.cc`, `track_pick_property_test.cc`:** holding
-  and releasing an anchor, and picking from a source or the view.
-- **`view_test.cc`:** enabling, activity, and conditions; each subject; user
-  properties and their scope; the anchor released on a new subject or
-  deactivation; and mappings that fail.
-- **`view_list_test.cc`:** child tracks (scrolling, banks, navigating in, up,
-  and to the root, and reveal), routes (type rules, the toggle and its name,
-  and crossing to the other track), and the track list changing.
-- **`view_mapping_test.cc`:** writing each property type, with modes and mode
-  overrides; reading each type from each input, with ranges, press_toggles,
-  and press_release; modifiers; taps, double and long presses; and
-  conditions.
-
-## CLs
-
-### CL1 [x] common: AddTracks() on the fake project
-
-Depends on: nothing.
-
-- `FakeProject::AddTracks(count, folder)`, moved from `SurfaceTest`, which
-  calls it.
-- Test only, so no visible change.
-
-**Verify**
-- Standard checks (Release build, clang-format, ctest).
-- `fake_reaper_test.cc` checks the names and folders, with the tests moved
-  from `surface_test_test.cc`.
-
-### CL2 [x] device: FakeDevice
-
-Depends on: nothing.
-
-- `jpr_device_fakes` in `jpr/device/testing`: `fake_control_io.h`, moved, and
-  `FakeDevice`.
-- `device_test.cc` uses `FakeDevice` for its `TestDevice`, and every device
-  test that included `fake_control_io.h` links `jpr_device_fakes`.
-- `Device::AddControl()` returns the control it added, or null if the name is
-  taken.
-
-**Verify**
-- Standard checks.
-- `fake_device_test.cc`: each kind of control has the inputs and outputs it
-  says, and a control added from options keeps its fakes.
-
-### CL3 [x] scene: SceneTest, process state, and Scene's tests
-
-Depends on: CL1, CL2.
-
-- `TestReset`s for `g_last_auto_override` and `g_next_const_id`, and the
-  design doc's process state table.
-- `jpr_scene_testing` with `SceneTest`, and `scene_test_test.cc` for its
-  presses and `RunUntilShown()`.
-- `Scene`'s comment says it runs from a `ControlSurfaceListener`.
-- `Scene::GetControl()` asks the device for the control, and the scene no
-  longer keeps its own copy of the controls.
-- `scene_test.cc`.
-
-**Verify**
-- Standard checks.
-- A test that turning the override on restores Bypass in a new fake, after
-  an earlier fake saw Write.
-
-### CL4 [x] scene: Track and route properties, and references
-
-Depends on: CL3.
-
-- `track_properties_test.cc`, `route_properties_test.cc`,
-  `track_reference_test.cc`, and `route_reference_test.cc`.
-
-**Verify**
-- Standard checks.
-
-### CL5 [x] common: Entry points and cached tracks in the fake
-
-Depends on: nothing.
-
-- `FakeReaper::EndEntryPoint()`: a test that calls JPRSurf's code directly,
-  outside a surface's run, ends each call REAPER would have made, so the fake
-  checks each on its own (such as the batching rule) rather than all of the
-  test's calls as one. `TestControlSurface` ends its calls with it.
-- `GetCachedTrack(FakeTrack*)`, in its own `cached_track.h` so the fake
-  doesn't depend on the cache: the track cache's track for a fake track,
-  replacing the copies in each test that needed one.
-- `reaper_trace_test.cc` moves onto `FakeReaper`, with a `SurfaceNotifier`
-  for the calls back it checks, in place of its own small fake. The fake reads
-  `IP_TRACKNUMBER`, and reads `P_NAME` for every track but the master, which
-  REAPER's documentation says reads as null, and nobody has checked.
-
-**Verify**
-- Standard checks.
-- `fake_reaper_test.cc`: two changes to several tracks, each ended, pass, and
-  without the end fail.
-- `reaper_trace_test.cc` checks what it did before.
-
-### CL6 [x] scene: State, command, and timeline properties
-
-Depends on: CL3.
-
-- `state_properties_test.cc`, `polled_toggle_property_test.cc`,
-  `command_properties_test.cc`, `timeline_property_test.cc`, and additions to
-  `value_property_test.cc`.
-
-**Verify**
-- Standard checks.
-
-### CL7 [x] scene: Track actions, anchors, and picks
-
-Depends on: CL3, CL5.
-
-- `track_actions_test.cc`, `track_anchor_property_test.cc`, and
-  `track_pick_property_test.cc`. The fake fails any change of more than one
-  track outside one batch, so every multi-track action is checked for it.
-
-**Verify**
-- Standard checks.
-
-### CL8 [x] common: Tests of TrackRange
-
-Depends on: nothing.
-
-- `track_test.cc` tests `TrackRange` on its own: which ends make a range (an
-  end that is null, or isn't in the filter, makes none), either order, the
-  same parent rule, and tracks off the surface left out of `Contains()`. Its
-  rules were only tested through `TrackActions` (CL7).
-
-**Verify**
-- Standard checks.
-
-### CL9 [x] scene: Views
-
-Depends on: CL3.
-
-- `view_test.cc`.
-
-**Verify**
-- Standard checks.
-
-### CL10 [x] scene: View lists
-
-Depends on: CL9.
-
-- `view_list_test.cc`.
-
-**Verify**
-- Standard checks.
-
-### CL11 [x] scene: Mappings that write
-
-Depends on: CL3.
-
-- `view_mapping_test.cc`: each property type written to its output, modes and
-  mode overrides, conditions holding and releasing the output, and writes
-  when the property, its condition, or an override changes.
-- `TestProperty` (`scene/testing/test_property.h`), a property of any type
-  that holds a value its setters change, replaces `view_property_test.cc`'s
-  own copy, so mapping tests can write and read any type.
-
-**Verify**
-- Standard checks.
-
-### CL12 [x] scene: Fix steps written in some modes
-
-Depends on: CL11.
-
-CL11 found two bugs in writing a pan, volume, normalized, or color property
-to a DValue output, neither of which the X-Touch mappings reach today:
-- A pan written to an output whose highest value is odd (an even number of
-  steps, such as the X-Touch ring's spread mode) shows every pan between hard
-  left and hard right as hard left: `MapPanToEvenRange()` truncates the pan to
-  an int before scaling it.
-- How the value is spread over the steps is picked once, from the highest
-  value of the mapping's own mode, so a mode override to a mode with a
-  different highest value spreads it wrongly (a pan in a mode with 2 steps
-  overridden to one with 11 only ever lights the first 2).
-
-The fixes:
-- Fix `MapPanToEvenRange()` in `view_mapping.cc`.
-- Pick the spread from the highest value of the mode each write resolves to,
-  as the toggle and enumerated writes already do.
-- `view_mapping_test.cc`: the pan test gains a DValue output with four steps,
-  and a pan written with a mode override to a mode with a different highest
-  value.
-
-**Verify**
-- Standard checks, and the new tests fail without the fixes.
-- No check in REAPER: the X-Touch's pans are written in ring mode 1, and
-  overridden only to modes 5 and 8, whose highest values pick the same spread
-  as before, so the surface shows the same.
-
-### CL13 [x] scene: Mappings that read
-
-Depends on: CL11.
-
-- `view_mapping_test.cc`: each property type read from each input type,
-  input type choice, property ranges, press_toggles, press_release, required
-  modifiers and their mutual exclusion, taps, double and long presses, and
-  read conditions.
-- `SceneTest` gains `Move()` and `Turn()`, which give a control's value and
-  delta inputs as `Press()` gives its press input.
-
-**Verify**
-- Standard checks.
-
-### CL14 [x] scene: Read the configured input type
-
-Depends on: CL13.
-
-CL13 found that a mapping never reads `ReadConfig::input_type`: it always
-picks the input the property type prefers, so a configured input type is
-ignored. No mapping in JPRSurf's own surface configures one today.
-
-The fix:
-- `InitReadControl()` narrows the control's inputs to the configured type,
-  when there is one, and each `InitRead*SyncFunction()` picks from what is
-  left (in place of its own `GetInputs()`), in the type's usual order. So a
-  mapping reads nothing if the control doesn't have that input, or the
-  property type can't read it, and a press_release mapping reads nothing with
-  any type but a press.
-- `ReadConfig::input_type`'s comment says so.
-- `view_mapping_test.cc`: a configured input type is read in place of the one
-  the type prefers, and a mapping configured with an input type the control
-  doesn't have reads nothing.
-
-**Verify**
-- Standard checks, and the new tests fail without the fix.
-
-### CL15 [x] scene: A press between a range's ends goes to the nearer end
-
-Depends on: CL13.
-
-CL13 found that a press read into a pan (on one side of the center), volume,
-or normalized property whose value is between the ends of its range goes to
-the farther end: `ToggleDouble()` sends a value at or below the middle to the
-max, and one above it to the min. `ReadConfig::property_min` and
-`ToggleDouble()`'s comments say it goes to the nearer end, which is what is
-wanted. A value at either end still goes to the other. JPRSurf's own surface
-reads a press into these types only to center a pan (the pot pushes, with min
-and max both 0), which a press still sets, so the surface isn't affected.
-
-The fix:
-- `ToggleDouble()` in `view_mapping.cc` toggles a value at (or beyond) an end
-  to the other end, and moves a value between them to the nearer end (the
-  max, from the middle).
-- `view_mapping_test.cc`: a press from between the ends, nearer each one, for
-  a pan, volume, and normalized property.
-
-**Verify**
-- Standard checks, and the new tests fail without the fix.
-
-### CL16 [x] scene: A press steps a pan to its next stop
-
-Depends on: CL15.
-
-A press read into a pan whose range spans the center steps it from min to the
-center, to max, and back to min. From a value between min and the center, it
-goes to max, skipping the center (found reviewing CL15). Also, presses in one
-run are counted modulo 3 (or modulo 2 for the binary toggles of a pan, volume,
-or normalized value), which assumes the value starts at a stop or an end, so
-from between them, 3 (or 2) presses do nothing. JPRSurf's own surface reads a
-press into a pan only to center it (min and max both 0), which doesn't step,
-so the surface isn't affected.
-
-The fix:
-- `StepPan()`, beside `ToggleDouble()`: a pan below the center goes to the
-  center, one at or above it (but below max) goes to max, and one at or
-  beyond max goes to min, so a press always goes to the next stop.
-- Each press in a run steps the value once (`Press()`), in place of the
-  modulo, for the pan, volume, and normalized press reads.
-- `view_mapping.h`: the `property_min` comment says so.
-- `view_mapping_test.cc`: a press from between the stops and from beyond the
-  ends, and several presses in one run from between them.
-
-**Verify**
-- Standard checks, and the new tests fail without the fix.
+- **`state_properties_test.cc`, `polled_toggle_property_test.cc`,
+  `command_properties_test.cc`, `timeline_property_test.cc`,
+  `value_property_test.cc`:** each polled toggle and polling only while
+  watched, the selected tracks' automation modes, the override and what
+  turning it on restores, commands by number and name, each timeline position
+  source and ruler mode, and the enumerated and callback properties.
+- **`track_actions_test.cc`, `track_anchor_property_test.cc`,
+  `track_pick_property_test.cc`:** every modifier for select, the toggles,
+  volume, and pan; grouping; ranges; anchors, which take precedence over every
+  modifier; picks; and one batch for every change of more than one track.
+- **`view_test.cc`:** activity and conditions; subjects; user properties and
+  their scope; the anchor released on a new subject or deactivation; and
+  mappings that fail.
+- **`view_list_test.cc`:** child tracks (scrolling, banks, navigating, and
+  reveal), routes (type rules, the toggle and its name, and crossing to the
+  other track), actions seeing the subject, and the track list and routes
+  changing.
+- **`view_mapping_test.cc`:**
+  - Writing: the output each type suits best, each type to each output, steps
+    in a mode and an overridden mode, mode overrides, conditions holding and
+    releasing the output, and writing only on a change.
+  - Reading: the input each type suits best and a configured input type, each
+    type from each input, ranges, `press_toggles`, `press_release`, a press
+    read when pressed rather than released, presses between a range's ends
+    and between a pan's stops, several presses in one run, required modifiers
+    and how mappings take turns by them, taps, double and long presses,
+    conditions, and which reads watch their property.
+
+Mutation checks backed the mapping tests: every change tried to the read and
+write sides of `view_mapping.cc` (well over a hundred, such as a flipped
+comparison, a dropped clamp, or a changed default range) fails a test.
 
 ## Checks in REAPER
 
-None for the tests. The only plugin code that changes is two `TestReset`
-registrations, so REAPER loads the extension with no new errors in the log,
-and no profile is taken. A follow-up CL that fixes a bug a test found has its
-own checks.
+None. Outside the tests, the code that changed is in `scene` and `device`: two
+`TestReset` registrations, `Scene::GetControl()`, `Device::AddControl()`'s
+return value, and the `ViewMapping` fixes, none of which changes what
+JPRSurf's own mappings do. So there was no smoke test or profile.

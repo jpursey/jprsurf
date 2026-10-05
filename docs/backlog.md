@@ -693,6 +693,26 @@ so `scene` doesn't change. The names are part of the public spec, so the list
 is chosen with *Public config spec and user guide split* in mind, and numbers
 and named command IDs keep working for everything else.
 
+## Reversed read ranges
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [scene_tests.md](worklog/scene_tests.md)
+
+A read mapping's range (`ReadConfig::property_min` and `property_max`) with
+min above max works for a value input of a pan, volume, normalized, or color
+property, which then reads the control upside down, but nothing else expects
+it. A delta, and an enumerated property's value input, clamp with
+`std::clamp`, which is undefined for a reversed range. A press of a pan,
+volume, or normalized property only ever sets `property_max`, and an
+enumerated property's press only `property_min`. Nothing sets a reversed range
+today. Either support it (clamp and toggle between the
+lower and higher ends, keeping the value input inverted, which is useful for a
+fader that reads backwards), or reject it when the mapping is added, logging
+why.
+
 ## Read-only toggle mappings register for changes they ignore
 
 - **Layers:** scene
