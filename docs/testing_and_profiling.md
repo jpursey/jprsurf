@@ -586,13 +586,17 @@ surface about, and the surface doesn't follow it.
 
 Existing tests that need no REAPER stay as they are.
 
-**Call count tests** check performance where it is deterministic. A generated
-project (100+ tracks, with sends and receives) is run in the harness, and a
-test bounds the REAPER calls in a steady state run, and in each infrequent
-event (a track list refresh, a bank change, a mode change). A bound is set to
+**Call count tests** check performance where it is deterministic, for a
+config: JPRSurf's own surface, in `plugin/default_config`. A generated project
+(100+ tracks, with sends and receives) is run in the harness, and tests bound
+the REAPER calls in a steady state run, in each gesture, and in each
+infrequent event (a track list refresh, a bank change, a mode change). Every
+gesture also makes the fewest expensive calls that do what it asks: one UI
+refresh at most, one undo point at most, and no call twice. A bound is set to
 the count when the test is written, so a regression fails, and an improvement
-lowers it in the same change. Weighting the counts by each call's time in a
-local snapshot estimates the time they cost on that machine.
+lowers it in the same change. Weighting the counts by what each call costs in
+REAPER, measured on its own (*Measure REAPER's costs*), estimates what they
+cost.
 
 **What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees
@@ -618,6 +622,8 @@ JPRSurf's backlog items build the rest in order:
 8. *Check the fakes in REAPER*: contract tests of the fake and
    `SurfaceNotifier`, run against both.
 9. *REAPER call count tests*.
+10. *Measure REAPER's costs*: what each function costs in REAPER, which the
+    call count tests weigh calls by. The smoke profile then goes.
 
 One more waits until it is needed: *Profile snapshots on demand*, if a whole
 session mixes too much together.

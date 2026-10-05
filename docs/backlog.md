@@ -108,23 +108,36 @@ It needs REAPER, so it runs in the main checkout, never a side session.
 ## REAPER call count tests
 
 - **Layers:** plugin
-- **Size:** small
-- **Feature workflow:** no
+- **Size:** medium
+- **Feature workflow:** yes
 - **Depends on:** *Profiler*, *Surface tests*
 - **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Tests)
 
 Performance checks that are deterministic. JPRSurf controls only two things
 about its cost: which calls it makes to REAPER and how many, and its own code.
-This is the first. A generated project (100+ tracks, with sends and receives)
-runs in the surface harness, with the profiler over the fake. Tests bound the
-REAPER calls in a steady state run, and in a track list refresh, a bank change,
-and a mode change. Each bound starts at the count when the test is written, so
-a regression fails, and an improvement lowers it in the same change.
+This is the first. What a surface costs depends on its config, so these are
+tests of JPRSurf's own surface, in `plugin/default_config` beside its surface
+tests. A generated project (100+ tracks, with sends and receives) runs in the
+surface harness, with the profiler over the fake:
+- **Steady state:** an idle run makes no expensive calls, and its other calls
+  are bounded: what the surface polls, and nothing more.
+- **Each gesture** makes the fewest expensive calls that do what it asks. It
+  pays one UI refresh at most, however many tracks it changes (one setter, or
+  one `PreventUIRefresh()` batch), adds one undo point at most, and makes no
+  call twice (the same setter on the same track). These hold for every gesture
+  the surface tests make, so a new behavior that misses a batch, or repeats a
+  call, fails without a bound of its own.
+- **Bounds** on the calls in each gesture, and in a track list refresh, a bank
+  change, and a mode change. Each starts at the count when the test is
+  written, so a regression fails, and an improvement lowers it in the same
+  change. A feature that adds a gesture adds its bounds, as it adds its surface
+  tests.
 
 The calls are weighed by cost, in a few coarse categories, so a bound says
 what matters ("two UI refreshes") rather than a raw count. A checked-in table
 gives each function on the API list its category, from the per-call times in
-the `profiles/` snapshots of a real project:
+the `profiles/` snapshots of a real project, until *Measure REAPER's costs*
+measures them:
 - **Cheap reads**, such as `GetTrackState()` and `CountTracks()`.
 - **Moderate**, such as text formatting and route info.
 - **Expensive:** setters that refresh REAPER's UI (about 2-17ms each), the end
@@ -141,7 +154,40 @@ CLAUDE.md's Performance section asks of a CL that changes per-run work: call
 count bounds in `ctest` for every change, a benchmark when a change touches
 JPRSurf's own per-run work, and profiles in REAPER only occasionally, and at
 the end of a feature, with the log's "Slow run" warnings from the user's test.
-CLAUDE.md changes when both are done.
+CLAUDE.md changes when both are done. *Measure REAPER's costs* then retires the
+smoke profile.
+
+## Batch each run
+
+- **Layers:** common
+- **Size:** small
+- **Feature workflow:** yes
+- **Depends on:** *REAPER call count tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Seen
+  in traces)
+
+Every track setter already goes through a `TrackBatch`, even for one track.
+Wrapping each run in one `PreventUIRefresh()` pair, in `ControlSurface`, would
+also batch what isn't batched today: `CSurf_OnVolumeChangeEx()` and
+`CSurf_OnPanChangeEx()`, the send setters, and `Main_OnCommand()`, if they
+refresh REAPER's UI, and more than one gesture in a run, such as two faders
+moved at once. A new behavior would then need no rule to remember. It is a
+plain pair, not a `TrackBatch`, which also makes its gesture's undo point, so
+undo points stay one a gesture. The call count tests show what it saves.
+
+To confirm, in REAPER:
+- **What an empty pair costs.** It runs every run, idle or not. If REAPER
+  refreshes whenever the count goes back to zero, even with nothing changed,
+  the batch opens at the run's first write instead.
+- **Callbacks come later.** REAPER calls a batched setter's callbacks (such
+  as `SetSurfaceSelected()`) at the end of the batch, so they would all come
+  after the run's work, rather than after each gesture. `TrackBatch` keeps the
+  cache in line with JPRSurf's own changes, but what only a callback refreshes
+  (today, the selected tracks' automation modes) would show a run later. The
+  fake already defers these callbacks, so the surface tests show the effect.
+- **Actions inside a batch:** whether every action JPRSurf runs behaves the
+  same inside `PreventUIRefresh()`, such as Undo (which resends everything),
+  the ruler modes, and anything that scrolls or redraws.
 
 ## Benchmarks under the fake
 
@@ -166,6 +212,36 @@ with the same scenario every time. They miss REAPER's effect on JPRSurf's own
 code (the cache, and its UI work on the same thread), which an occasional
 profile in REAPER still shows.
 
+## Measure REAPER's costs
+
+- **Layers:** common
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** *Check the fakes in REAPER*, *REAPER call count tests*
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
+  (Profiler), [profiles/README.md](../profiles/README.md)
+
+What each function on the API list costs in REAPER, measured on its own, under
+the conditions its cost depends on, rather than through the default config's
+gestures: inside a `PreventUIRefresh()` batch or not, and as it scales with the
+project (tracks, selected tracks, and routes). The end of a batch, an undo
+point, and each action JPRSurf runs are measured the same way. No device or
+config is involved: the measurements call REAPER's API directly, on generated
+projects, in the test install and runner *Check the fakes in REAPER* builds.
+- **Deferred work:** some of a call's cost comes after it returns, in REAPER's
+  UI refresh. A measurement times the runs after the call too, against runs
+  with no call, so what REAPER puts off is still counted.
+- **The result** is the cost table *REAPER call count tests* weighs calls with:
+  each function's category, and how it scales. It is measured again when the
+  API list grows, or REAPER updates, rather than with each change.
+
+The smoke scenario and its profile (`profiles/smoke.txt`) then go: a gesture's
+cost is its calls, bounded by the call count tests and weighed by this table,
+and JPRSurf's own time, from *Benchmarks under the fake*. CLAUDE.md's smoke
+test, checked by hand at the end of a feature, no longer rides along with a
+profiled run. What isolated measurements miss, REAPER's effect on JPRSurf's own
+code, the log's "Slow run" warnings show in everyday use.
+
 ## Profiles after Game Bits' timing fix
 
 - **Layers:** none (docs and profiles)
@@ -180,7 +256,8 @@ allow for it. Game Bits' item finds out whether that is the profiler's tick
 rate or the core the run was on, and fixes or reports it. Afterwards:
 - If what a timed point or a frame costs changed, the profiler's budget in
   CLAUDE.md (the larger of 3us a run and 1% of the run) changes with it.
-- The bar (`profiles/idle.txt` and `smoke.txt`) is recorded again.
+- The bar (`profiles/idle.txt`, and `smoke.txt` unless *Measure REAPER's
+  costs* has retired it) is recorded again.
 - The 30% allowance in CLAUDE.md and `profiles/README.md` is replaced by what
   was found: removed, if it was the tick rate, or a rule for the conditions to
   profile in, if it was the core.
