@@ -92,8 +92,9 @@ A call point's count is its call count, so the MIDI messages sent are
   rewrites the header when it changes, so a build with no change recompiles
   nothing.
 - **The file** is written with `std::fopen`, as one string written once needs
-  no abstraction (and no iostreams). Its date uses `GetLocalTimeZone()`
-  (`local_time.h`), as `absl::LocalTimeZone()` is UTC inside REAPER.
+  no abstraction (and no iostreams). Its date uses Game Bits'
+  `GetLocalTimeZone()` (`gb/base/local_time.h`), as `absl::LocalTimeZone()` is
+  UTC inside REAPER.
 
 **Brittleness:** `gb::Profiler` CHECK-fails if a timed point ends out of order,
 or if it is reset or destroyed inside one. Every point is a scoped object; the
@@ -157,8 +158,8 @@ Found while building this, on an 81-track project:
   startup is done.
 - **`Runner(name)` (common/runner.h)**: a runner times its own runs, so a new
   kind of runnable only needs its own runner.
-- **`GetLocalTimeZone()` (common/local_time.h)**: the local time zone, for any
-  time JPRSurf writes, as `absl::LocalTimeZone()` is UTC inside REAPER.
+- **`gb::GetLocalTimeZone()` (gb/base/local_time.h)**: the local time zone, for
+  any time JPRSurf writes, as `absl::LocalTimeZone()` is UTC inside REAPER.
 - **`build_info.h` (generated in `jpr_common`)**: the build's commit, and
   whether it was modified.
 

@@ -9,8 +9,7 @@ set(jpr_common_SOURCE
   color.cc color.h
   control_surface.cc control_surface.h
   guid.cc guid.h
-  local_time.cc local_time.h
-  log_file.cc log_file.h
+  log_path.cc log_path.h
   midi_message.h
   midi_port.cc midi_port.h
   midi_ports.cc midi_ports.h
@@ -33,7 +32,6 @@ set(jpr_common_SOURCE
 set(jpr_common_DEPS
   absl::base
   absl::log
-  absl::log_initialize
   absl::time
   gb_base
   gb_config

@@ -24,8 +24,8 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "gb/base/local_time.h"
 #include "jpr/common/guid.h"
-#include "jpr/common/local_time.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -265,7 +265,7 @@ Tracer::Tracer(const std::filesystem::path& path)
   }
   file_ << "JPRSurf REAPER trace, started "
         << absl::FormatTime("%Y-%m-%d %H:%M:%S", start_time_,
-                            GetLocalTimeZone())
+                            gb::GetLocalTimeZone())
         << "\n";
   file_.flush();
   LOG(INFO) << "Tracing REAPER calls to " << path.string();

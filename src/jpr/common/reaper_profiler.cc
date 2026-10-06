@@ -16,10 +16,10 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
+#include "gb/base/local_time.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
 #include "jpr/common/build_info.h"
-#include "jpr/common/local_time.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -194,8 +194,8 @@ void ReaperProfiler::WriteSnapshot(const RunSplit& split) const {
   const std::string snapshot = absl::StrCat(
       "JPRSurf profile\n", "Build:    ", kBuildCommit,
       kBuildModified ? " (modified)" : "", "\n", "Date:     ",
-      absl::FormatTime("%Y-%m-%d %H:%M", start_time_, GetLocalTimeZone()), ", ",
-      absl::ToInt64Seconds(end_time - start_time_), "s\n",
+      absl::FormatTime("%Y-%m-%d %H:%M", start_time_, gb::GetLocalTimeZone()),
+      ", ", absl::ToInt64Seconds(end_time - start_time_), "s\n",
       "Per run:  ", FormatRunSplit(split.jprsurf, split.reaper), "\n\n",
       profiler_.GetReport());
 

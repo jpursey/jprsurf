@@ -13,21 +13,25 @@
 #include <memory>
 #include <string_view>
 
+#include "absl/base/log_severity.h"
 #include "absl/log/log.h"
-#include "jpr/common/log_file.h"
+#include "gb/base/init_logging.h"
+#include "gb/base/log_file.h"
+#include "jpr/common/log_path.h"
 #include "jpr/plugin/plugin.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
 namespace {
 
-std::unique_ptr<LogFile> g_log_file;
+std::unique_ptr<gb::LogFile> g_log_file;
 
 void Initialize() {
+  gb::InitLogging();
   const std::filesystem::path log_path = GetLogPath("jprsurf.log");
   if (!log_path.empty()) {
-    g_log_file =
-        std::make_unique<LogFile>(log_path, absl::LogSeverityAtLeast::kInfo);
+    g_log_file = std::make_unique<gb::LogFile>(log_path,
+                                               absl::LogSeverityAtLeast::kInfo);
   }
 }
 
