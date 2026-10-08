@@ -11,9 +11,9 @@
 #include "gtest/gtest.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
-#include "jpr/common/testing/reaper_actions.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/default_config/default_config_test.h"
 

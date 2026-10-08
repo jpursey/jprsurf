@@ -31,6 +31,9 @@ namespace jpr {
 // - contract_test_fake.cc: each test has its own FakeReaper, with REAPER's
 //   actions (AddReaperActions()), a SurfaceNotifier, and a RecordingSurface
 //   added.
+// - contract_test_reaper.cc: the tests run inside the test install of REAPER,
+//   from the RecordingSurface REAPER created (see "Contract tests in REAPER"
+//   in docs/testing_and_profiling.md).
 //==============================================================================
 
 class ContractTest : public ::testing::Test {

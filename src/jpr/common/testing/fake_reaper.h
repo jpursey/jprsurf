@@ -96,9 +96,6 @@ class FakeReaper final {
   // How many times a second REAPER runs a control surface.
   static constexpr int kRunsPerSecond = 30;
 
-  // Every project's tempo, REAPER's default.
-  static constexpr double kBeatsPerMinute = 120.0;
-
   // Returns how long each run is.
   static absl::Duration GetRunTime() {
     return absl::Seconds(1) / kRunsPerSecond;

@@ -53,6 +53,9 @@ struct FakeUndoPoint {
 
 class FakeProject final {
  public:
+  // Every project's tempo, REAPER's default.
+  static constexpr double kBeatsPerMinute = 120.0;
+
   // Creates a project outside any FakeReaper, such as one to write as a
   // project file (see WriteProjectFile()).
   static std::unique_ptr<FakeProject> Create();

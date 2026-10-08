@@ -5,17 +5,9 @@
 
 #pragma once
 
-#include "jpr/common/automation.h"
 #include "jpr/common/testing/fake_reaper.h"
 
 namespace jpr {
-
-// The automation mode actions, which set the selected tracks' automation mode:
-// Trim/Read to Latch, each setting the AutoMode of its offset from the first.
-inline constexpr int kFirstAutoModeAction = 40400;
-inline constexpr int kLastAutoModeAction = 40404;
-static_assert(kLastAutoModeAction - kFirstAutoModeAction ==
-              static_cast<int>(AutoMode::kLatch));
 
 //==============================================================================
 // REAPER's actions

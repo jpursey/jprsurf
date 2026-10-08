@@ -17,7 +17,6 @@
 #include "gtest/gtest.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/testing/fake_project.h"
-#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 
 namespace jpr {
@@ -163,7 +162,7 @@ void ProjectFileWriter::AppendProject() {
                   "\n");
   absl::StrAppend(&text_, "  GLOBAL_AUTO ", project_.GetAutomationOverride(),
                   "\n");
-  absl::StrAppend(&text_, "  TEMPO ", Number(FakeReaper::kBeatsPerMinute),
+  absl::StrAppend(&text_, "  TEMPO ", Number(FakeProject::kBeatsPerMinute),
                   " 4 4\n");
 }
 

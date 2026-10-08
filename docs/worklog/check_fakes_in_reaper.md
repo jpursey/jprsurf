@@ -119,11 +119,13 @@ registers `RecordingSurface`'s type.
   setup are untouched.
 - **Running:** the surface's first `Run()` runs every test
   (`RUN_ALL_TESTS()`), each finishing within the call, as it does under the
-  fake. gtest writes its results as XML to the path in an environment
-  variable. The next `Run()` opens an empty project with
-  `Main_openProject("noprompt:...")`, which closes the changed one without
-  asking, then quits REAPER (File: Quit REAPER, 40004), with nothing left to
-  save. Nothing is torn down from inside the call that ran the tests.
+  fake. gtest's output, the result, and a log of how far the DLL got go to the
+  folder in the `JPRSURF_CHECK_DIR` environment variable, which the runner
+  sets. Then it opens an empty project with `Main_openProject("noprompt:...")`,
+  which closes the changed one without asking. The next `Run()` posts File:
+  Quit REAPER (40004) to REAPER's main window, so REAPER quits after the run
+  returns, with nothing left to save. Quitting from inside the run destroys
+  the surface while it is still running, which crashes.
 - **Main session only:** it runs REAPER, so it runs in the main checkout, one
   run at a time, as other work that needs REAPER does. Claude runs it, as it
   doesn't touch the user's REAPER. Most work doesn't need it: a CL that
@@ -137,10 +139,10 @@ registers `RecordingSurface`'s type.
   finishes within one call; anything that reads the machine (MIDI ports,
   `time_precise()`) or opens a window (`ShowConsoleMsg()`), which stay fake
   only.
-- `Main_openProject()` is the only function the DLL calls that isn't on the
-  API list. It loads it by name in `contract_test_reaper.cc`, rather than
-  adding it to the list, as JPRSurf never calls it and the fake must never
-  fake it.
+- `Main_openProject()`, `GetMainHwnd()`, and `CSurf_FlushUndo()` are the only
+  functions the DLL calls that aren't on the API list. It loads them by name
+  in `contract_test_reaper.cc`, rather than adding them to the list, as
+  JPRSurf never calls them and the fake must never fake them.
 
 It isn't for performance: the tests' calls aren't JPRSurf's, and the DLL has no
 profiler.
@@ -172,20 +174,57 @@ review checks it against `JPR_REAPER_API`.
 ### To confirm
 
 Checked in REAPER, with the test install, before the CLs that rely on them:
-1. **The test install runs unattended:** no license or evaluation prompt, no
-   first run dialogs, and no audio device error with the dummy device, and it
-   starts as its own instance while the user's REAPER is open (`-newinst`).
-   The transport still plays and stops on the dummy device, for the play
-   state's tests.
-2. **Opening a project from inside `Run()`** with `Main_openProject("noprompt:")`
-   finishes within the call, and the project reads back as written, GUIDs
-   included. What REAPER calls on the surface while it opens.
-3. **Quitting:** opening an empty project with `noprompt:`, then File: Quit
-   REAPER from the next `Run()`, exits without any prompt.
+1. **The test install runs unattended:** confirmed (2026-10-08). Registered
+   with the user's license and set to the dummy audio device, it starts with
+   no dialogs, and with `-newinst` runs as its own instance beside the user's
+   REAPER, which is untouched. REAPER only creates a control surface whose
+   line in `reaper.ini` has a config string after its type, so the runner
+   writes `csurf_0=RECORDING null`, as the user's has `JPRSurf null`. Still to
+   check, with the play state's tests: the transport plays and stops on the
+   dummy device.
+2. **Opening a project from inside `Run()`** with
+   `Main_openProject("noprompt:")`: confirmed (2026-10-08). It finishes within
+   the call, in about 0.55 seconds, and the notifier's tests read the project
+   back as written. GUIDs are checked with the tracks' tests. REAPER holds open
+   the undo point of a volume or pan change made with `CSurf_On*ChangeEx()`,
+   and if the project it is in is closed first, REAPER crashes after the run.
+   So the DLL calls `CSurf_FlushUndo(true)` before it opens each project.
+3. **Quitting:** confirmed (2026-10-08). Opening an empty project with
+   `noprompt:`, then posting File: Quit REAPER, exits with no prompt. Quitting
+   from inside a run crashed REAPER.
 4. **Undo:** what Edit: Undo restores after each setter on the API list (mute,
    solo, rec arm, selection, volume, pan, the send setters, and the override),
    which settles whether the fake models undo. These are contract tests that
    fail under the fake until it does, so they are checked in REAPER first.
+
+### Found in REAPER
+
+The notifier's contract tests, run in REAPER first (2026-10-08), with 8 of 13
+failing. Each is a gap in the notifier, fixed in CL4:
+- **Mute and solo outside a batch:** during the call, REAPER only sends the
+  master's solo. The track's own mute and solo come later, not in the call.
+- **Rec arm outside a batch:** REAPER sends the track's rec arm, mute, solo,
+  volume, and pan first, then the track list change, every track's state, and
+  more.
+- **Rec arm in a batch:** the calls in the call are as traced, but the end of
+  the batch sends the master's state, then for each track its title, rec arm,
+  and selection, then its rec arm, mute, solo, volume, and pan, rather than
+  every track's state.
+- **The automation mode actions with no track selected** only send
+  `SetAutoMode()`. The traces had tracks selected, so the resend is probably
+  only for the tracks whose mode changes.
+- **Undo and Redo** send 45 calls where the notifier sends 47, with some of a
+  track's calls missing in the first round.
+- **`Extended(CSURF_EXT_SETPAN_EX)` sends pan mode 0** for the test projects'
+  tracks, where the traces' tracks had 3, even with `PANMODE 3` in the project
+  file. What sets it (each track's own pan mode, perhaps) is found in CL4, and
+  the project file writes it.
+- **Send volume and pan changes do notify,** where the traces said sends
+  notify nothing: `Extended(CSURF_EXT_SETSENDVOLUME)` and `SETSENDPAN` for the
+  source track, and `SETRECVVOLUME` and `SETRECVPAN` for the destination. Mute
+  sends nothing. JPRSurf polls every route each run on the belief that REAPER
+  doesn't report them, which *Poll only the routes a routes list shows* in the
+  backlog should now weigh.
 
 ## CLs
 
@@ -217,7 +256,7 @@ Depends on: CL1.
 - Standard checks.
 - The notifier's tests pass unchanged on the new fixture.
 
-### CL3 [ ] common/testing: Run the contract tests in REAPER
+### CL3 [x] common/testing: Run the contract tests in REAPER
 
 Depends on: CL2.
 
@@ -234,16 +273,36 @@ Depends on: CL2.
   license, `JPR_REAPER_CHECK_DIR`, and its `reaper.ini`: the dummy audio
   device and the `RecordingSurface`), and how to run it, in
   `testing_and_profiling.md`.
-- Any notifier test that fails in REAPER is a gap in the notifier, fixed here
-  with its test, or in its own CL if it is more than a line.
+- The notifier's tests that fail in REAPER (see Found in REAPER) are fixed in
+  CL4, so they fail in REAPER until then.
 
 **Verify**
 - Standard checks.
-- `check_in_reaper` passes, and fails with a test made to fail.
+- `check_in_reaper` runs the notifier's contract tests in REAPER, and reports
+  the failures above, with REAPER quitting cleanly. A run of only the tests
+  that pass (`GTEST_FILTER`) passes.
 
-### CL4 [ ] common/testing: Contract tests of tracks
+### CL4 [ ] common/testing: Make the notifier match REAPER
 
 Depends on: CL3.
+
+- `SurfaceNotifier`, and its contract tests, follow what REAPER does (see Found
+  in REAPER), and its comments and "Seen in traces" in
+  `testing_and_profiling.md` say so. A call REAPER makes later, outside the
+  call, isn't made, as no test spans runs.
+- The automation mode actions are tested with tracks selected too.
+- The route tests get a fixture of their own that opens the project with a
+  send, rather than opening a second project, as each open takes about half a
+  second in REAPER.
+- Surface tests that relied on the old calls are updated, or show a change in
+  the surface, which is its own follow-up.
+
+**Verify**
+- Standard checks, and `check_in_reaper` passes.
+
+### CL5 [ ] common/testing: Contract tests of tracks
+
+Depends on: CL4.
 
 - `CountTracks`, `GetTrack`, `GetMasterTrack`, `GetParentTrack`,
   `GetTrackGUID`, `GetTrackState`, `GetMediaTrackInfo_Value`,
@@ -255,9 +314,9 @@ Depends on: CL3.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL5 [ ] common/testing: Contract tests of track changes and selection
+### CL6 [ ] common/testing: Contract tests of track changes and selection
 
-Depends on: CL4.
+Depends on: CL5.
 
 - The track setters, grouping, `PreventUIRefresh`, `AnyTrackSolo`, and the
   selection functions.
@@ -265,9 +324,9 @@ Depends on: CL4.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL6 [ ] common/testing: Contract tests of routes
+### CL7 [ ] common/testing: Contract tests of routes
 
-Depends on: CL4.
+Depends on: CL5.
 
 - Route counts and indexing (hardware outputs before sends, receives as
   negative indexes), `P_DESTTRACK` and `P_SRCTRACK`, and the route getters and
@@ -276,9 +335,9 @@ Depends on: CL4.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL7 [ ] common/testing: Contract tests of actions, the timeline, and text
+### CL8 [ ] common/testing: Contract tests of actions, the timeline, and text
 
-Depends on: CL4.
+Depends on: CL5.
 
 - `Main_OnCommand` and the actions `AddReaperActions()` adds (their text,
   toggle states, and the effects of those with handlers: the ruler and
@@ -289,9 +348,9 @@ Depends on: CL4.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL8 [ ] common/testing: Undo
+### CL9 [ ] common/testing: Undo
 
-Depends on: CL5, CL6.
+Depends on: CL6, CL7.
 
 - To confirm 4. Then either the fake models what Undo restores, with the
   contract tests passing under both, or it doesn't, and why is recorded here
@@ -300,9 +359,9 @@ Depends on: CL5, CL6.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL9 [ ] docs: Coverage, and CLAUDE.md
+### CL10 [ ] docs: Coverage, and CLAUDE.md
 
-Depends on: CL3 to CL8.
+Depends on: CL3 to CL9.
 
 - The Coverage table complete, against `JPR_REAPER_API`.
 - CLAUDE.md's Checking in REAPER: a fact about REAPER's API is checked with a

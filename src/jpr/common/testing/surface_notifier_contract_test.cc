@@ -16,10 +16,10 @@
 #include "gtest/gtest.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
-#include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/testing/recording_surface.h"
 #include "sdk/reaper_plugin.h"
 

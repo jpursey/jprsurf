@@ -61,7 +61,7 @@ constexpr int kSamplesMode = 4;
 constexpr int kFramesMode = 5;
 
 // The project's time signature and rates, which are REAPER's defaults, as its
-// tempo is (FakeReaper::kBeatsPerMinute).
+// tempo is (FakeProject::kBeatsPerMinute).
 constexpr int kBeatsPerMeasure = 4;
 constexpr int kFramesPerSecond = 30;
 constexpr double kSamplesPerSecond = 44100.0;
@@ -469,7 +469,7 @@ class FakeReaper::Api final {
       case kBeatsMode: {
         // Measure.beat.hundredths of a beat, from 1.1.00.
         const int64_t total =
-            std::llround(seconds * kBeatsPerMinute / 60.0 * 100.0);
+            std::llround(seconds * FakeProject::kBeatsPerMinute / 60.0 * 100.0);
         const int64_t beats = total / 100;
         absl::SNPrintF(text, text_size, "%s%d.%d.%02d", sign,
                        beats / kBeatsPerMeasure + 1,

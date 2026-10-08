@@ -12,10 +12,10 @@
 #include "absl/container/flat_hash_set.h"
 #include "gtest/gtest.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
-#include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/testing/test_control_surface.h"
 #include "sdk/reaper_plugin.h"
 
@@ -337,7 +337,7 @@ void SurfaceNotifier::SendUndo(IReaperControlSurface& surface) {
   // The master, and the project.
   SendMasterMuteVolumeAndPan(surface);
   surface.SetRepeatState(reaper_->GetToggleState(kRepeatCommand) == 1);
-  double bpm = FakeReaper::kBeatsPerMinute;
+  double bpm = FakeProject::kBeatsPerMinute;
   surface.Extended(CSURF_EXT_SETBPMANDPLAYRATE, &bpm, nullptr, nullptr);
 
   // Every track's state, as a track list change.

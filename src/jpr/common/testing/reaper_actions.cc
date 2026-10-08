@@ -12,6 +12,7 @@
 #include "absl/types/span.h"
 #include "gtest/gtest.h"
 #include "jpr/common/automation.h"
+#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"

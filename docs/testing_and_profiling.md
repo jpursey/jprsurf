@@ -58,6 +58,7 @@ profiler writes.
 | REAPER's actions | The actions JPRSurf uses, as traced, and the effects tests need            | `jpr/common/testing`      |
 | Fake X-Touch     | The hardware end of an X-Touch's MIDI ports                                | `jpr/device/testing`      |
 | Surface harness  | The plugin loaded into the fake, with fake X-Touches                       | `jpr/plugin/testing`      |
+| Contract tests   | Tests of the fakes through REAPER's API, run under the fake and in REAPER  | `jpr/common/testing`      |
 
 The `testing` directories are test-only libraries, linked by unit tests and
 never by the plugin.
@@ -577,6 +578,60 @@ calls back (the selected tracks' automation modes) a test changes through the
 surface or REAPER's API, so the notifier makes the call that refreshes it.
 Setting the fake directly for those is a change REAPER would have told the
 surface about, and the surface doesn't follow it.
+
+## Contract tests in REAPER
+
+Contract tests act only through REAPER's API, so the same tests run under the
+fake, in `ctest`, and inside REAPER, which checks the fake and
+`SurfaceNotifier` against REAPER. Each derives from `ContractTest`
+(`jpr/common/testing/contract_test.h`), and builds the project it starts from
+as a `FakeProject`, which REAPER opens from a project file. The design is in
+[check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md).
+
+In REAPER, they run in a test install: a portable REAPER of their own, with
+the `reaper_jprsurf_check` DLL in its `UserPlugins`, and not the plugin. The
+user's own REAPER and its settings are never touched.
+
+### Setting up the test install
+
+Once, by hand:
+1. Run REAPER's installer, choose **Portable install**, and install it in a
+   folder of its own, outside the repositories, such as
+   `E:\Projects\reaper-check`.
+2. Set the user environment variable `JPR_REAPER_CHECK_DIR` to that folder,
+   and open a new shell (or restart Visual Studio) so it is seen.
+3. Run `reaper.exe` in that folder once:
+   - Register it with your REAPER license, so it starts without the
+     evaluation reminder.
+   - Answer any first run questions, so they aren't asked again.
+   - In Preferences, Audio, Device, set the audio system to **Dummy Audio**,
+     so it never takes an audio device from your own REAPER.
+   - Quit.
+
+Each run sets up the rest: it copies `reaper_jprsurf_check.dll` into the test
+install's `UserPlugins`, and makes the recording surface its only control
+surface in its `reaper.ini`.
+
+### Running them
+
+```
+cmake --build out/build/x64-Release --target check_in_reaper
+```
+
+It builds the DLL, and runs REAPER in the test install, which runs every
+contract test and quits. It prints what gtest printed, and fails if a test
+failed, REAPER didn't quit within five minutes (or the seconds
+`JPR_REAPER_CHECK_TIMEOUT` sets), or no tests ran. Each test takes about half
+a second, opening its project. Setting `GTEST_FILTER` runs only the tests it
+names, as for any gtest binary. The
+files from the last run are in the test install's `check` folder: gtest's
+output, the result, a log of how far the DLL got (which a failed run prints
+too), and the last project file opened.
+
+It runs REAPER, so it runs from the main checkout only, one run at a time, as
+other work that needs REAPER does. It doesn't touch the user's REAPER, so
+Claude runs it to verify a change to the fake or the notifier. A change that
+doesn't touch them is verified under the fake alone.
 
 ## Tests
 
