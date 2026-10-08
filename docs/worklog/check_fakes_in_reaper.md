@@ -203,7 +203,7 @@ Depends on: nothing.
 - `project_file_test.cc`: each field's text, and the state it can't write
   failing the test.
 
-### CL2 [ ] common/testing: ContractTest, with the notifier's tests on it
+### CL2 [x] common/testing: ContractTest, with the notifier's tests on it
 
 Depends on: CL1.
 
@@ -222,6 +222,12 @@ Depends on: CL1.
 Depends on: CL2.
 
 - To confirm 1 to 3, with the user, as the runner is built.
+- A library without the fake, for what the DLL links: `RecordingSurface`,
+  `FakeProject`, `WriteProjectFile()`, and `contract_test.h`, which
+  `jpr_common_testing` then depends on. What its files take from the fake's
+  headers moves out with them: `FakeReaper::kBeatsPerMinute`, and the action
+  IDs in `reaper_actions.h` that contract tests use. Then a contract test that
+  uses the fake doesn't build into the DLL.
 - `contract_test_reaper.cc`, the `reaper_jprsurf_check` DLL, and the
   `check_in_reaper` target and script.
 - How to install the test install and set it up (the portable install, the
