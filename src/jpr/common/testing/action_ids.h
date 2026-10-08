@@ -12,6 +12,10 @@ namespace jpr {
 // The IDs of REAPER's actions that tests run, which REAPER and the fake both
 // have (see AddReaperActions()).
 
+inline constexpr int kRepeatAction = 1068;  // Transport: Toggle repeat
+inline constexpr int kUndoAction = 40029;   // Edit: Undo
+inline constexpr int kRedoAction = 40030;   // Edit: Redo
+
 // The automation mode actions, which set the selected tracks' automation mode:
 // Trim/Read to Latch, each setting the AutoMode of its offset from the first.
 inline constexpr int kFirstAutoModeAction = 40400;

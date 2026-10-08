@@ -26,7 +26,6 @@
 namespace jpr {
 namespace {
 
-using ::testing::Contains;
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::IsEmpty;
@@ -41,10 +40,11 @@ void BuildProject(FakeProject& project) {
   project.AddTrack("B");
 }
 
-// Tracks A and B, with a send from A to B.
-void BuildProjectWithSend(FakeProject& project) {
+// Tracks A and B, with a hardware output from A, then a send from A to B.
+void BuildProjectWithRoutes(FakeProject& project) {
   FakeTrack* a = project.AddTrack("A");
   FakeTrack* b = project.AddTrack("B");
+  project.AddHardwareOutput(a);
   project.AddSend(a, b);
 }
 
@@ -67,6 +67,11 @@ int GetFlags(MediaTrack* track) {
   int flags = 0;
   GetTrackState(track, &flags);
   return flags;
+}
+
+void Append(std::vector<std::string>& calls,
+            const std::vector<std::string>& more) {
+  calls.insert(calls.end(), more.begin(), more.end());
 }
 
 // The calls that send a track's volume and pan.
@@ -117,25 +122,62 @@ std::vector<MediaTrack*> GetTracks() {
   return tracks;
 }
 
-void Append(std::vector<std::string>& calls,
-            const std::vector<std::string>& more) {
-  calls.insert(calls.end(), more.begin(), more.end());
+// A track's mute, and its solo unless it is the master.
+std::vector<std::string> MuteAndSolo(MediaTrack* track) {
+  if (track == GetMasterTrack(nullptr)) {
+    return {Mute(track)};
+  }
+  return {Mute(track), Solo(track)};
 }
 
-// Every track's whole state, as after a track list change.
-std::vector<std::string> EveryState() {
+// The end of a track's state: its title, rec arm, and selection.
+std::vector<std::string> TitleRecArmAndSelected(MediaTrack* track) {
+  int flags = 0;
+  return {absl::StrCat("SetTrackTitle(", Name(track), ", ",
+                       GetTrackState(track, &flags), ")"),
+          RecArm(track), Selected(track)};
+}
+
+// A track's whole state, as after a track list change, leaving out its mute
+// and solo if `unsent`, as they aren't sent yet.
+std::vector<std::string> State(MediaTrack* track, bool unsent = false) {
+  std::vector<std::string> calls = VolumeAndPan(track);
+  if (!unsent) {
+    Append(calls, MuteAndSolo(track));
+  }
+  Append(calls, TitleRecArmAndSelected(track));
+  return calls;
+}
+
+// Every track's whole state, leaving out the mute and solo of `unsent`.
+std::vector<std::string> EveryState(MediaTrack* unsent = nullptr) {
   std::vector<std::string> calls;
   for (MediaTrack* track : GetTracks()) {
-    Append(calls, VolumeAndPan(track));
-    calls.push_back(Mute(track));
-    if (track != GetMasterTrack(nullptr)) {
-      calls.push_back(Solo(track));
-    }
-    int flags = 0;
-    calls.push_back(absl::StrCat("SetTrackTitle(", Name(track), ", ",
-                                 GetTrackState(track, &flags), ")"));
-    calls.push_back(RecArm(track));
-    calls.push_back(Selected(track));
+    Append(calls, State(track, track == unsent));
+  }
+  return calls;
+}
+
+// A change to a track's rec arm.
+std::vector<std::string> RecArmChange(MediaTrack* track) {
+  std::vector<std::string> calls = {RecArm(track)};
+  Append(calls, MuteAndSolo(track));
+  Append(calls, VolumeAndPan(track));
+  return calls;
+}
+
+// What a rec arm of `track` outside a batch sends: its change, the track list
+// change with every track's state, leaving out the mute and solo of `unsent`,
+// the master's solo, and then the change of each of `changed`.
+std::vector<std::string> RecArmOutsideABatch(
+    MediaTrack* track, const std::vector<MediaTrack*>& changed,
+    MediaTrack* unsent = nullptr) {
+  std::vector<std::string> calls = RecArmChange(track);
+  calls.push_back("SetTrackListChange()");
+  Append(calls, EveryState(unsent));
+  calls.push_back(MasterSolo());
+  for (MediaTrack* changed_track : changed) {
+    Append(calls, RecArmChange(changed_track));
   }
   return calls;
 }
@@ -158,26 +200,29 @@ class SurfaceNotifierContractTest : public ContractTest {
  protected:
   SurfaceNotifierContractTest() {
     OpenProject(BuildProject);
+    master_ = GetMasterTrack(nullptr);
     a_ = GetTrack(nullptr, 0);
     b_ = GetTrack(nullptr, 1);
   }
 
+  MediaTrack* master_ = nullptr;
   MediaTrack* a_ = nullptr;
   MediaTrack* b_ = nullptr;
 };
 
-TEST_F(SurfaceNotifierContractTest, MuteSendsTheMastersSoloThenTheTracks) {
+TEST_F(SurfaceNotifierContractTest, MuteSendsOnlyTheMastersSolo) {
   SetTrackUIMute(a_, 1, 0);
-  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)",
-                                       "SetSurfaceMute(A, true)",
-                                       "SetSurfaceSolo(A, false)"));
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)"));
 }
 
-TEST_F(SurfaceNotifierContractTest, SoloSendsAsMuteDoes) {
+TEST_F(SurfaceNotifierContractTest, SoloSendsOnlyTheMastersSolo) {
   SetTrackUISolo(b_, 1, 0);
-  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, true)",
-                                       "SetSurfaceMute(B, false)",
-                                       "SetSurfaceSolo(B, true)"));
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, true)"));
+}
+
+TEST_F(SurfaceNotifierContractTest, MuteThatChangesNothingSendsTheMastersSolo) {
+  SetTrackUIMute(a_, 0, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)"));
 }
 
 TEST_F(SurfaceNotifierContractTest, MuteAndSoloInABatchSendTheTracksAtItsEnd) {
@@ -198,26 +243,160 @@ TEST_F(SurfaceNotifierContractTest, MuteAndSoloInABatchSendTheTracksAtItsEnd) {
                   "SetSurfaceMute(B, true)", "SetSurfaceSolo(B, false)"));
 }
 
-TEST_F(SurfaceNotifierContractTest,
-       RecArmChangesTheTrackListAndSendsEveryTrack) {
-  SetTrackUIRecArm(a_, 1, 0);
-  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo(),
-                                       "SetTrackListChange()", MasterSolo()};
-  Append(expected, EveryState());
-  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
-  EXPECT_THAT(expected, Contains("SetSurfaceRecArm(A, true)"));
+TEST_F(SurfaceNotifierContractTest, MuteOutsideABatchIsSentAtABatchsEnd) {
+  SetTrackUIMute(a_, 1, 0);
+  TakeCalls();
+  EndEntryPoint();
+
+  PreventUIRefresh(1);
+  SetTrackUISolo(b_, 1, 0);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(
+      TakeCalls(),
+      ElementsAre("SetSurfaceSolo(master, true)", "SetSurfaceMute(A, true)",
+                  "SetSurfaceSolo(A, false)", "SetSurfaceMute(B, false)",
+                  "SetSurfaceSolo(B, true)"));
 }
 
-TEST_F(SurfaceNotifierContractTest, RecArmInABatchSendsEveryTrackOnceAtItsEnd) {
+TEST_F(SurfaceNotifierContractTest, MuteChangedBackIsNeverSent) {
+  SetTrackUIMute(a_, 1, 0);
+  TakeCalls();
+
+  PreventUIRefresh(1);
+  SetTrackUIMute(a_, 0, 0);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)"));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmSendsTheTrackThenTheTrackListChangeThenTheTrackAgain) {
+  SetTrackUIRecArm(a_, 1, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_})));
+}
+
+TEST_F(SurfaceNotifierContractTest, EveryStateLeavesOutAMuteNotSentYet) {
+  SetTrackUIMute(b_, 1, 0);
+  TakeCalls();
+  EndEntryPoint();
+
+  SetTrackUIRecArm(a_, 1, 0);
+  EXPECT_THAT(TakeCalls(),
+              ElementsAreArray(RecArmOutsideABatch(a_, {a_}, /*unsent=*/b_)));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmOfASelectedTrackIsSentAsAChangeToEveryTrack) {
+  SetTrackSelected(a_, true);
+  TakeCalls();
+  EndEntryPoint();
+
+  SetTrackUIRecArm(a_, 1, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_, b_})));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmOfASelectedTrackWithoutGangingIsSentAsAChangeToIt) {
+  SetTrackSelected(a_, true);
+  TakeCalls();
+  EndEntryPoint();
+
+  SetTrackUIRecArm(a_, 1, kPreventSelectionGanging);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_})));
+}
+
+TEST_F(SurfaceNotifierContractTest, RecArmThatChangesNothingSendsNothing) {
+  SetTrackUIRecArm(a_, 0, 0);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+
+  PreventUIRefresh(1);
+  SetTrackUIRecArm(a_, 0, 0);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmInABatchSendsTheTrackListChangeAtItsEnd) {
   PreventUIRefresh(1);
   SetTrackUIRecArm(a_, 1, 0);
   SetTrackUIRecArm(b_, 1, 0);
   EXPECT_THAT(TakeCalls(), ElementsAre("SetTrackListChange()", MasterSolo(),
                                        "SetTrackListChange()", MasterSolo()));
 
+  // Each track whose rec arm changed is sent as it is outside a batch.
   PreventUIRefresh(-1);
   std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
-  Append(expected, EveryState());
+  Append(expected, State(master_));
+  for (MediaTrack* track : {a_, b_}) {
+    Append(expected, TitleRecArmAndSelected(track));
+    Append(expected, RecArmChange(track));
+  }
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest, RecArmChangedBackInABatchIsStillSent) {
+  PreventUIRefresh(1);
+  SetTrackUIRecArm(a_, 1, 0);
+  SetTrackUIRecArm(a_, 0, 0);
+  TakeCalls();
+
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  Append(expected, State(master_));
+  Append(expected, TitleRecArmAndSelected(a_));
+  Append(expected, RecArmChange(a_));
+  Append(expected, State(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmInABatchSendsAnotherTracksMuteAfterItsState) {
+  PreventUIRefresh(1);
+  SetTrackUIMute(a_, 1, 0);
+  SetTrackUIRecArm(b_, 1, 0);
+  TakeCalls();
+
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  Append(expected, State(master_));
+  Append(expected, State(a_, /*unsent=*/true));
+  Append(expected, MuteAndSolo(a_));
+  Append(expected, TitleRecArmAndSelected(b_));
+  Append(expected, RecArmChange(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmOfASelectedTrackInABatchIsSentAsAChangeToEveryTrack) {
+  PreventUIRefresh(1);
+  SetTrackSelected(b_, true);
+  SetTrackUIRecArm(b_, 1, 0);
+  TakeCalls();
+
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  Append(expected, State(master_));
+  for (MediaTrack* track : {a_, b_}) {
+    Append(expected, TitleRecArmAndSelected(track));
+    Append(expected, RecArmChange(track));
+  }
+  expected.push_back(Selected(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmInABatchSendsAnotherTracksSelectionAgain) {
+  PreventUIRefresh(1);
+  SetTrackSelected(a_, true);
+  SetTrackUIRecArm(b_, 1, 0);
+  TakeCalls();
+
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  Append(expected, State(master_));
+  Append(expected, State(a_));
+  expected.push_back(Selected(a_));
+  Append(expected, TitleRecArmAndSelected(b_));
+  Append(expected, RecArmChange(b_));
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
 
@@ -262,15 +441,38 @@ TEST_F(SurfaceNotifierContractTest,
        AutomationOverrideSendsVolumePanAndSelection) {
   SetGlobalAutomationOverride(3);
   EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange()));
+
+  // Even when it changes nothing.
+  SetGlobalAutomationOverride(3);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange()));
 }
 
-TEST_F(SurfaceNotifierContractTest, AutomationModeActionsSendTheModeFirst) {
+TEST_F(SurfaceNotifierContractTest,
+       AutomationModeActionsSendTheModeThenWhatChanged) {
+  SetTrackSelected(a_, true);
+  TakeCalls();
+  for (AutoMode mode : {AutoMode::kRead, AutoMode::kTouch, AutoMode::kWrite,
+                        AutoMode::kLatch, AutoMode::kTrimRead}) {
+    Main_OnCommand(kFirstAutoModeAction + static_cast<int>(mode), 0);
+    std::vector<std::string> expected = {
+        absl::StrCat("SetAutoMode(", static_cast<int>(mode), ")")};
+    Append(expected, AutomationChange());
+    EXPECT_THAT(TakeCalls(), ElementsAreArray(expected))
+        << "Mode " << static_cast<int>(mode);
+  }
+
+  // A mode the selected tracks already have changes nothing.
+  Main_OnCommand(kFirstAutoModeAction, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetAutoMode(0)"));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       AutomationModeActionsWithNoTrackSelectedOnlySendTheMode) {
   for (int mode = 0; mode <= static_cast<int>(AutoMode::kLatch); ++mode) {
     Main_OnCommand(kFirstAutoModeAction + mode, 0);
-    std::vector<std::string> expected = {
-        absl::StrCat("SetAutoMode(", mode, ")")};
-    Append(expected, AutomationChange());
-    EXPECT_THAT(TakeCalls(), ElementsAreArray(expected)) << "Mode " << mode;
+    EXPECT_THAT(TakeCalls(),
+                ElementsAre(absl::StrCat("SetAutoMode(", mode, ")")))
+        << "Mode " << mode;
   }
 }
 
@@ -280,22 +482,22 @@ TEST_F(SurfaceNotifierContractTest, UndoAndRedoSendEverything) {
   CSurf_OnPanChangeEx(b_, -0.25, false, true);
   SetTrackUIMute(b_, 1, 0);
 
-  MediaTrack* master = GetMasterTrack(nullptr);
-  for (int command : {40029, 40030}) {
+  for (int command : {kUndoAction, kRedoAction}) {
     TakeCalls();
     Main_OnCommand(command, 0);
 
-    std::vector<std::string> expected = {Mute(master)};
-    Append(expected, VolumeAndPan(master));
+    // B's mute isn't sent yet at the undo, so every track's state leaves it
+    // out, and the undo then sends it.
+    std::vector<std::string> expected = {Mute(master_)};
+    Append(expected, VolumeAndPan(master_));
     Append(expected,
            {"SetRepeatState(false)", "Extended(SETBPMANDPLAYRATE, 120, null)",
             "SetTrackListChange()"});
-    Append(expected, EveryState());
-    Append(expected, {MasterSolo(), Mute(master)});
-    Append(expected, VolumeAndPan(master));
+    Append(expected, EveryState(command == kUndoAction ? b_ : nullptr));
+    Append(expected, {MasterSolo(), Mute(master_)});
+    Append(expected, VolumeAndPan(master_));
     for (MediaTrack* track : {a_, b_}) {
-      Append(expected, {RecArm(track), Mute(track), Solo(track)});
-      Append(expected, VolumeAndPan(track));
+      Append(expected, RecArmChange(track));
     }
     EXPECT_THAT(TakeCalls(), ElementsAreArray(expected))
         << "Action " << command;
@@ -310,13 +512,72 @@ TEST_F(SurfaceNotifierContractTest, OtherActionsSendNothing) {
   EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 
-TEST_F(SurfaceNotifierContractTest, RouteChangesSendNothing) {
-  OpenProject(BuildProjectWithSend);
-  MediaTrack* a = GetTrack(nullptr, 0);
+class SurfaceNotifierRouteContractTest : public ContractTest {
+ protected:
+  // The *TrackSendUI* functions index A's hardware output, then its send.
+  static constexpr int kOutputIndex = 0;
+  static constexpr int kSendIndex = 1;
+  static constexpr int kReceiveIndex = -1;
 
-  SetTrackSendUIVol(a, 0, 0.5, 0);
-  SetTrackSendUIPan(a, 0, -0.25, 0);
-  ToggleTrackSendUIMute(a, 0);
+  SurfaceNotifierRouteContractTest() {
+    OpenProject(BuildProjectWithRoutes);
+    a_ = GetTrack(nullptr, 0);
+    b_ = GetTrack(nullptr, 1);
+  }
+
+  MediaTrack* a_ = nullptr;
+  MediaTrack* b_ = nullptr;
+};
+
+TEST_F(SurfaceNotifierRouteContractTest, SendChangesSendBothEnds) {
+  SetTrackSendUIVol(a_, kSendIndex, 0.5, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDVOLUME, A, 1, 0.5)",
+                                       "Extended(SETRECVVOLUME, B, 0, 0.5)"));
+
+  SetTrackSendUIPan(a_, kSendIndex, -0.25, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDPAN, A, 1, -0.25)",
+                                       "Extended(SETRECVPAN, B, 0, -0.25)"));
+
+  // Even when they change nothing.
+  SetTrackSendUIVol(a_, kSendIndex, 0.5, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDVOLUME, A, 1, 0.5)",
+                                       "Extended(SETRECVVOLUME, B, 0, 0.5)"));
+}
+
+TEST_F(SurfaceNotifierRouteContractTest, ReceiveChangesSendAsSendChangesDo) {
+  SetTrackSendUIVol(b_, kReceiveIndex, 0.75, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDVOLUME, A, 1, 0.75)",
+                                       "Extended(SETRECVVOLUME, B, 0, 0.75)"));
+
+  SetTrackSendUIPan(b_, kReceiveIndex, 0.5, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDPAN, A, 1, 0.5)",
+                                       "Extended(SETRECVPAN, B, 0, 0.5)"));
+}
+
+TEST_F(SurfaceNotifierRouteContractTest, HardwareOutputChangesSendTheSource) {
+  SetTrackSendUIVol(a_, kOutputIndex, 0.5, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDVOLUME, A, 0, 0.5)"));
+
+  SetTrackSendUIPan(a_, kOutputIndex, 0.25, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDPAN, A, 0, 0.25)"));
+}
+
+TEST_F(SurfaceNotifierRouteContractTest, AnInstantChangeSendsAsAnyChangeDoes) {
+  SetTrackSendUIVol(a_, kSendIndex, 0.5, -1);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDVOLUME, A, 1, 0.5)",
+                                       "Extended(SETRECVVOLUME, B, 0, 0.5)"));
+}
+
+TEST_F(SurfaceNotifierRouteContractTest, EndingAnEditSendsNothing) {
+  SetTrackSendUIVol(a_, kSendIndex, 0.5, 1);
+  SetTrackSendUIPan(a_, kSendIndex, 0.5, 1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+TEST_F(SurfaceNotifierRouteContractTest, MuteChangesSendNothing) {
+  ToggleTrackSendUIMute(a_, kOutputIndex);
+  ToggleTrackSendUIMute(a_, kSendIndex);
+  ToggleTrackSendUIMute(b_, kReceiveIndex);
   EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 

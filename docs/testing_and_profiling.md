@@ -350,32 +350,52 @@ Tests are then of two kinds, which need little of REAPER's own behavior:
 ### Seen in traces
 
 Traces of an 81-track project with one JPRSurf surface (2026-09-28, and the
-smoke scenario on 2026-09-29) showed the following. `SurfaceNotifier` and tests
-that make REAPER's calls on the surface follow these.
+smoke scenario on 2026-09-29) showed the following. The notifier's contract
+tests (`surface_notifier_contract_test.cc`), run in the test install
+(2026-10-08), corrected what REAPER calls from inside its own functions, and
+are now the record of those calls. `SurfaceNotifier` and tests that make
+REAPER's calls on the surface follow these.
 
-- **Surface setters notify at the end of the batch.** JPRSurf muting a track
-  calls `SetTrackUIMute()` inside `PreventUIRefresh(1)` and
-  `PreventUIRefresh(-1)`. During the setter, REAPER only called
-  `SetSurfaceSolo(master)`. The track's `SetSurfaceMute()` and
-  `SetSurfaceSolo()` came during `PreventUIRefresh(-1)`, for each track
-  changed, in track order. The surface that made the change is notified too.
-  `SetTrackUISolo()` notifies as mute does.
+- **Mute and solo notify at the next refresh.** During `SetTrackUIMute()` and
+  `SetTrackUISolo()`, REAPER only calls `SetSurfaceSolo(master)`, even if
+  nothing changed. A track's `SetSurfaceMute()` and `SetSurfaceSolo()` come at
+  the refresh, for each track whose mute or solo differs from what was last
+  sent, in track order: at `PreventUIRefresh(-1)` for the outermost batch, or
+  outside a batch, before the next run. Until then, every track's state leaves
+  them out. The surface that made the change is notified too.
 - **Selection notifies each track whose selection changed,** in track order:
-  `SetOnlyTrackSelected()` during the call (a track already selected isn't
-  sent), and `SetTrackSelected()` in a batch at `PreventUIRefresh(-1)`.
-- **Rec arm changes the track list.** During `SetTrackUIRecArm()`, REAPER
-  called `SetTrackListChange()` and `SetSurfaceSolo(master)`. At
-  `PreventUIRefresh(-1)` came `Extended(CSURF_EXT_SETMIXERSCROLL)`,
-  `SetTrackListChange()`, `SetSurfaceSolo(master)`, and every track's state
-  (below), once for the batch.
-- **Sends don't notify.** `SetTrackSendUIVol()`, `SetTrackSendUIPan()`, and
-  `ToggleTrackSendUIMute()` called nothing back.
+  outside a batch during the call (a track already selected isn't sent), and
+  in a batch at `PreventUIRefresh(-1)`.
+- **Rec arm changes the track list,** if it changes a track. A track's change
+  is its `SetSurfaceRecArm()`, `SetSurfaceMute()`, `SetSurfaceSolo()`, and
+  volume and pan (as in every track's state, below). Outside a batch, during
+  `SetTrackUIRecArm()`, REAPER sends the track's change,
+  `SetTrackListChange()`, every track's state, `SetSurfaceSolo(master)`, and
+  the track's change again. In a batch, it calls `SetTrackListChange()` and
+  `SetSurfaceSolo(master)`, and at `PreventUIRefresh(-1)` come
+  `Extended(CSURF_EXT_SETMIXERSCROLL)`, `SetTrackListChange()`,
+  `SetSurfaceSolo(master)`, and every track's state, once for the batch. In
+  it, a track whose rec arm changed has only its title, rec arm, and
+  selection, then its change. A track whose mute or solo is still to be sent
+  has them after its selection, and one whose selection changed has its
+  selection again.
+- **Selection ganging:** with the setters' group flags without `&2`, a mute,
+  solo, or rec arm of a selected track changes every selected track, and a
+  rec arm is then sent as a change to every track.
+- **Send volume and pan notify,** even if nothing changed.
+  `SetTrackSendUIVol()` and `SetTrackSendUIPan()` call
+  `Extended(CSURF_EXT_SETSENDVOLUME)` or `SETSENDPAN` with the source track,
+  the route's index as these functions index it (hardware outputs first), and
+  the value, then for a send to a track, `SETRECVVOLUME` or `SETRECVPAN` with
+  the destination and its index among its receives. A call that ends an edit
+  (isend 1) calls nothing back, and neither does `ToggleTrackSendUIMute()`.
 - **Automation modes resend volume, pan, and selection.** Inside
   `Main_OnCommand()` for the automation mode actions (40400 to 40404),
-  REAPER called `SetAutoMode()` with the mode (0 to 4), then for every track,
-  master first, `SetSurfaceVolume()`, `SetSurfacePan()`,
-  `Extended(CSURF_EXT_SETPAN_EX)`, and `SetSurfaceSelected()`.
-  `SetGlobalAutomationOverride()` called the same, without `SetAutoMode()`.
+  REAPER called `SetAutoMode()` with the mode (0 to 4), then, if a selected
+  track's mode changed, for every track, master first, `SetSurfaceVolume()`,
+  `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`, and
+  `SetSurfaceSelected()`. `SetGlobalAutomationOverride()` calls the same,
+  without `SetAutoMode()`, even if nothing changed.
 - **`SetSurfaceSolo(master, on)`** reports whether any track is soloed, as the
   SDK says.
 - **Faders and pans don't notify.** `CSurf_OnVolumeChangeEx()` and
@@ -392,7 +412,8 @@ that make REAPER's calls on the surface follow these.
   called the same, with only that track's `SetSurfaceSelected()`. Each click
   was followed, a run later, by `Extended(CSURF_EXT_SETMIXERSCROLL)` with the
   track. Setting the global automation override in REAPER called what
-  `SetGlobalAutomationOverride()` does.
+  `SetGlobalAutomationOverride()` does. In the test install, REAPER called
+  `IsKeyDown(VK_SHIFT)` before every run.
 - **Undo resends everything, during the call.** Inside `Main_OnCommand()` for
   Edit: Undo, REAPER called the master's `SetSurfaceMute()`,
   `SetSurfaceVolume()`, and `SetSurfacePan()`, `SetRepeatState()`,
@@ -401,11 +422,13 @@ that make REAPER's calls on the surface follow these.
   master's solo, mute, volume, and pan again, then each track's rec arm, input
   monitor, mute, solo, volume, and pan. The second round's volumes were the
   project's after the undo, where the first round's weren't always. Edit: Redo
-  hasn't been traced. The ruler's time unit actions (40365, 40369, 40370), and
+  calls the same. The ruler's time unit actions (40365, 40369, 40370), and
   every other action the smoke scenario ran, called nothing back.
 - **Every track's state** is sent master first, then each track in order:
   `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`
-  (mode 3), `SetSurfaceMute()`, `SetSurfaceSolo()` (not for the master),
+  (with the track's pan mode: 3, REAPER 4 and later's balance, in a project
+  file with `PANMODE 3`, and 0 without it), `SetSurfaceMute()`,
+  `SetSurfaceSolo()` (not for the master),
   `SetTrackTitle()`, `SetSurfaceRecArm()`, `Extended(CSURF_EXT_SETINPUTMONITOR)`,
   and `SetSurfaceSelected()`.
 - **Creating the surface:** at startup, REAPER calls `create` with the saved

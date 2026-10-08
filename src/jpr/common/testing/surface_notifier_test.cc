@@ -83,7 +83,25 @@ TEST_F(SurfaceNotifierTest, SendsNothingWithNoSurfaceOpen) {
   ASSERT_EQ(RecordingSurface::Get(), nullptr);
   SetTrackUIMute(a_, 1, 0);
   SetTrackUIRecArm(a_, 1, 0);
-  Main_OnCommand(40029, 0);
+  Main_OnCommand(kUndoAction, 0);
+}
+
+// A mute or solo outside a batch is sent before the next run, which isn't made
+// (see SurfaceNotifier), so the next run's batch doesn't send it.
+TEST_F(SurfaceNotifierTest, MuteOutsideABatchIsForgottenAtTheNextRun) {
+  SetTrackUIMute(a_, 1, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)"));
+  reaper_.EndEntryPoint();
+
+  RecordingSurface::Get()->SetOnRun([this] {
+    PreventUIRefresh(1);
+    SetTrackUISolo(b_, 1, 0);
+    PreventUIRefresh(-1);
+  });
+  surface_->Run();
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, true)",
+                                       "SetSurfaceMute(B, false)",
+                                       "SetSurfaceSolo(B, true)"));
 }
 
 // REAPER's own actions can't be given a handler.
@@ -101,8 +119,8 @@ TEST_F(SurfaceNotifierTest, ActionsSendAfterTheirHandler) {
 
 // REAPER's repeat state is the user's.
 TEST_F(SurfaceNotifierTest, UndoSendsTheRepeatState) {
-  reaper_.AddCommand({.id = 1068, .toggle_state = 1});
-  Main_OnCommand(40029, 0);
+  reaper_.AddCommand({.id = kRepeatAction, .toggle_state = 1});
+  Main_OnCommand(kUndoAction, 0);
   EXPECT_THAT(TakeCalls(), Contains("SetRepeatState(true)"));
 }
 

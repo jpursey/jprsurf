@@ -50,10 +50,12 @@ TEST(ProjectFileTest, AnEmptyProjectIsTheMaster) {
             "  CURSOR 0\n"
             "  GLOBAL_AUTO -1\n"
             "  TEMPO 120 4 4\n"
+            "  PANMODE 3\n"
             "  MASTERAUTOMODE 0\n"
             "  MASTERPEAKCOL 16576\n"
             "  MASTERMUTESOLO 0\n"
             "  MASTER_VOLUME 1 0 -1 -1 1\n"
+            "  MASTER_PANMODE 3\n"
             "  MASTER_SEL 0\n"
             ">\n");
 }
@@ -74,10 +76,12 @@ TEST(ProjectFileTest, WritesTheProjectsState) {
             "  CURSOR 2.5\n"
             "  GLOBAL_AUTO 3\n"
             "  TEMPO 120 4 4\n"
+            "  PANMODE 3\n"
             "  MASTERAUTOMODE 1\n"
             "  MASTERPEAKCOL 16777471\n"
             "  MASTERMUTESOLO 1\n"
             "  MASTER_VOLUME 0.5 -0.25 -1 -1 1\n"
+            "  MASTER_PANMODE 3\n"
             "  MASTER_SEL 1\n"
             ">\n");
 }

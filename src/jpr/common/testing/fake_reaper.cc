@@ -208,7 +208,7 @@ class FakeReaper::Api final {
 
   static bool GetTrackSendUIVolPan(MediaTrack* track_id, int index,
                                    double* volume, double* pan) {
-    return GetRouteVolPan(GetUiRoute(track_id, index), volume, pan);
+    return GetRouteVolPan(GetTrackSendUiRoute(track_id, index), volume, pan);
   }
 
   static bool GetTrackReceiveUIVolPan(MediaTrack* track_id, int index,
@@ -217,7 +217,7 @@ class FakeReaper::Api final {
   }
 
   static bool GetTrackSendUIMute(MediaTrack* track_id, int index, bool* mute) {
-    return GetRouteMute(GetUiRoute(track_id, index), mute);
+    return GetRouteMute(GetTrackSendUiRoute(track_id, index), mute);
   }
 
   static bool GetTrackReceiveUIMute(MediaTrack* track_id, int index,
@@ -238,7 +238,7 @@ class FakeReaper::Api final {
   }
 
   static bool ToggleTrackSendUIMute(MediaTrack* track_id, int index) {
-    FakeRoute* route = GetUiRoute(track_id, index);
+    FakeRoute* route = GetTrackSendUiRoute(track_id, index);
     if (route == nullptr) {
       return false;
     }
@@ -581,9 +581,6 @@ class FakeReaper::Api final {
   }
 
  private:
-  // SetTrackUI*()'s group flag that keeps a change to its own track.
-  static constexpr int kPreventTrackGrouping = 1;
-
   // Sets a track's mute, solo, or rec arm as SetTrackUIMute() and the like
   // do: `value` toggles it if negative, and otherwise sets it to `value > 0`.
   // Returns the new value.
@@ -662,19 +659,9 @@ class FakeReaper::Api final {
 
   // Returns `track_id`'s route at `index` as the *TrackSendUI* functions index
   // them (see Routes), or null if there is none.
-  static FakeRoute* GetUiRoute(MediaTrack* track_id, int index) {
+  static FakeRoute* GetTrackSendUiRoute(MediaTrack* track_id, int index) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
-    const FakeProject& project = s_instance_->GetProjectOf(track);
-    if (index < 0) {
-      return GetRouteAt(project.GetReceives(&track), -1 - index);
-    }
-    const absl::Span<FakeRoute* const> outputs =
-        project.GetHardwareOutputs(&track);
-    if (index < static_cast<int>(outputs.size())) {
-      return outputs[index];
-    }
-    return GetRouteAt(project.GetSends(&track),
-                      index - static_cast<int>(outputs.size()));
+    return s_instance_->GetProjectOf(track).GetTrackSendUiRoute(&track, index);
   }
 
   // Reads `route`'s values, returning false if there is no route.
@@ -700,7 +687,7 @@ class FakeReaper::Api final {
   // *TrackSendUI* functions index them, returning false if there is none.
   static bool SetRouteDouble(MediaTrack* track_id, int index,
                              double FakeRoute::*property, double value) {
-    FakeRoute* route = GetUiRoute(track_id, index);
+    FakeRoute* route = GetTrackSendUiRoute(track_id, index);
     if (route == nullptr) {
       return false;
     }

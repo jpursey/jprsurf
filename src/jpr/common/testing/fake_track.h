@@ -53,9 +53,24 @@ struct FakeTrack {
   std::array<double, 2> peak = {};
 };
 
+// CSURF_EXT_SETPAN_EX's pan mode for REAPER 4 and later's balance, which every
+// fake track has, as every track in the traces did.
+inline constexpr int kBalancePanMode = 3;
+
+// The group flags of SetTrackUIMute(), SetTrackUISolo(), and
+// SetTrackUIRecArm().
+inline constexpr int kPreventTrackGrouping = 1;
+inline constexpr int kPreventSelectionGanging = 2;
+
 // Returns the MediaTrack* the fake hands out for `track`.
 inline MediaTrack* ToMediaTrack(FakeTrack* track) {
   return reinterpret_cast<MediaTrack*>(track);
+}
+
+// Returns the track `track_id` points to, which must be one the fake handed
+// out (see ToMediaTrack()).
+inline FakeTrack* ToFakeTrack(MediaTrack* track_id) {
+  return reinterpret_cast<FakeTrack*>(track_id);
 }
 
 }  // namespace jpr

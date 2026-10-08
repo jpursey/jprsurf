@@ -160,6 +160,9 @@ class FakeReaper final {
   // or the test advances it.
   double GetTime() const;
 
+  // How many times the surface has run.
+  int64_t GetRuns() const { return run_count_; }
+
   // Advances the clock by `duration`.
   void AdvanceTime(absl::Duration duration) { advanced_time_ += duration; }
 

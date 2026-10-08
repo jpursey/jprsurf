@@ -5,9 +5,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "gb/base/function_hook.h"
 #include "jpr/common/reaper_api.h"
@@ -22,39 +24,51 @@ namespace jpr {
 // SurfaceNotifier
 //
 // Makes the calls REAPER makes on the open control surface from inside its own
-// functions, as traces showed (see "Seen in traces" in
-// docs/testing_and_profiling.md), for as long as it exists, and those for the
-// changes made in REAPER's own UI that tests make (see below). A test of a
-// whole surface creates one before the plugin loads, so its hooks are under the
-// profiler's and the trace's, as REAPER's own functions are. A test of
-// ControlSurface itself makes the calls it needs by hand, and has none.
+// functions, as the contract tests in surface_notifier_contract_test.cc show
+// (see also "Seen in traces" in docs/testing_and_profiling.md), for as long as
+// it exists, and those for the changes made in REAPER's own UI that tests make
+// (see below). A test of a whole surface creates one before the plugin loads,
+// so its hooks are under the profiler's and the trace's, as REAPER's own
+// functions are. A test of ControlSurface itself makes the calls it needs by
+// hand, and has none.
 //
 // It hooks these functions over the fake, and calls back:
 // - SetTrackUIMute() and SetTrackUISolo(): the master's solo (whether any track
-//   is soloed), then the mute and solo of each track whose mute or solo
-//   changed.
-// - SetTrackUIRecArm(): SetTrackListChange() and the master's solo, then the
-//   same again, and every track's state.
+//   is soloed), even if nothing changed. A track's own mute and solo are sent
+//   at the next refresh (see below).
+// - SetTrackUIRecArm(), if a track's rec arm changed: outside a batch, the
+//   track's change (its rec arm, mute, solo, volume, and pan), then
+//   SetTrackListChange() and every track's state, then the master's solo and
+//   the change of each track whose rec arm changed. In a batch,
+//   SetTrackListChange() and the master's solo, and the rest at the refresh.
+//   With selection ganging (group flags without &2), a selected track's
+//   change is sent as a change to every track. REAPER also changes the other
+//   selected tracks then, which the fake doesn't.
 // - SetOnlyTrackSelected() and SetTrackSelected(): the selection of each track
-//   whose selection changed.
+//   whose selection changed, outside a batch, and otherwise at the refresh.
 // - CSurf_OnVolumeChangeEx() and CSurf_OnPanChangeEx(): IsKeyDown(VK_SHIFT),
 //   then the track as the last touched.
-// - SetGlobalAutomationOverride(): every track's volume, pan, and selection.
+// - SetTrackSendUIVol() and SetTrackSendUIPan(), unless they end an edit
+//   (isend 1): the new value as the source track's send, and for a send to a
+//   track, as the destination's receive. A route's mute sends nothing.
+// - SetGlobalAutomationOverride(): every track's volume, pan, and selection,
+//   even if nothing changed.
 // - Main_OnCommand(), after the action's handler: for the automation mode
 //   actions (40400-40404), SetAutoMode() with the mode, then as the override
-//   does. For Edit: Undo and Edit: Redo (40029, 40030), everything (see
-//   SendUndo()). Redo is taken to call back as Undo does, which no trace has
-//   shown.
+//   does if any track's mode changed. For Edit: Undo and Edit: Redo (40029,
+//   40030), everything (see SendUndo()).
 //
-// The track setters make their calls in two parts: the master's solo (and for
-// rec arm, the track list change) in the call, and the rest when the
-// outermost PreventUIRefresh() scope ends, or in the call when there is none.
-// Everything else is in the call.
+// The refresh is when the outermost PreventUIRefresh() scope ends. Outside a
+// batch, REAPER sends a track's mute and solo before the next run, which a
+// contract test can't span, so it isn't made: they are forgotten when the
+// surface next runs. Until they are sent, every track's state leaves them out.
+// They are only sent if they differ from what was last sent.
 //
 // Tracks are sent master first, then in order, from the current project. It
-// makes every call the traces showed, not just those ControlSurface acts on,
-// except those about state the fake doesn't hold: the mixer's scroll, and
-// input monitoring.
+// makes every call the contract tests show, not just those ControlSurface acts
+// on, except those about state the fake doesn't hold: the mixer's scroll, and
+// input monitoring. REAPER also calls IsKeyDown(VK_SHIFT) before each run,
+// which isn't made either.
 //
 // Calls from inside a function are made on the surface the open
 // TestControlSurface wraps (see TestControlSurface::GetWrapped()), so they are
@@ -139,6 +153,12 @@ class SurfaceNotifier final {
   double OnVolumeOrPanChange(decltype(CSurf_OnVolumeChangeEx) original,
                              MediaTrack* track, double value, bool relative,
                              bool allow_gang);
+  bool OnSetTrackSendUIVol(decltype(SetTrackSendUIVol) original,
+                           MediaTrack* track, int index, double volume,
+                           int end_edit);
+  bool OnSetTrackSendUIPan(decltype(SetTrackSendUIPan) original,
+                           MediaTrack* track, int index, double pan,
+                           int end_edit);
   void OnSetGlobalAutomationOverride(
       decltype(SetGlobalAutomationOverride) original, int mode);
   void OnMainOnCommand(decltype(Main_OnCommand) original, int command,
@@ -155,17 +175,24 @@ class SurfaceNotifier final {
   struct TrackFlags {
     bool mute = false;
     bool solo = false;
+    bool rec_arm = false;
     bool selected = false;
+    int auto_mode = 0;
 
     bool operator==(const TrackFlags&) const = default;
   };
 
-  // Returns GetTracks()' flags, to compare with after a change.
+  // Returns GetTracks()' flags, to compare with after a change, or one track's.
   std::vector<TrackFlags> GetFlags();
+  static TrackFlags GetFlags(const FakeTrack& track);
 
-  // Adds each track whose flags differ from `before` to `changed`.
-  void AddChanges(const std::vector<TrackFlags>& before,
-                  absl::flat_hash_set<const FakeTrack*>& changed);
+  // Returns the tracks whose flags differ from `before`, in order. None of
+  // the hooked functions adds or removes tracks.
+  std::vector<FakeTrack*> GetChanges(const std::vector<TrackFlags>& before);
+
+  // Sends the selection of each of `changed`, or leaves it for the refresh in
+  // a batch.
+  void SendSelectionChanges(const std::vector<FakeTrack*>& changed);
 
   // Selects `clicked`, and only it if `only` is true, as a click on it
   // in REAPER does, and calls back.
@@ -184,10 +211,28 @@ class SurfaceNotifier final {
   // none is open.
   IReaperControlSurface* GetWrappedSurface();
 
-  // Sends what the track setters left for the end of the batch, unless a
-  // PreventUIRefresh() scope is open in the fake.
-  void SendIfNoBatch();
-  void SendPending();
+  //----------------------------------------------------------------------------
+  // What isn't sent yet
+  //----------------------------------------------------------------------------
+
+  // The mute and solo last sent for a track whose mute or solo changed since.
+  struct Unsent {
+    bool mute = false;
+    bool solo = false;
+  };
+
+  // Returns the tracks whose mute and solo aren't sent yet, and what was last
+  // sent for each. Those of an earlier run are forgotten, as REAPER sent them
+  // before it.
+  absl::flat_hash_map<const FakeTrack*, Unsent>& GetUnsent();
+
+  // Records each track whose mute or solo differs from `before`, and what
+  // was last sent for it.
+  void AddUnsent(const std::vector<TrackFlags>& before);
+
+  // Sends `track`'s mute and solo at the refresh (see the class comment), if
+  // they aren't sent yet, and differ from what was.
+  void SendRefresh(IReaperControlSurface& surface, FakeTrack* track);
 
   //----------------------------------------------------------------------------
   // Calls on the surface
@@ -199,26 +244,45 @@ class SurfaceNotifier final {
   // Sends the master's mute, volume, and pan, as undo does.
   void SendMasterMuteVolumeAndPan(IReaperControlSurface& surface);
 
+  // Sends a track's mute, and solo unless it is the master, which are then
+  // sent.
+  void SendMuteAndSolo(IReaperControlSurface& surface, FakeTrack* track);
+
   // Sends a track's volume and pan, each way REAPER does.
   void SendVolumeAndPan(IReaperControlSurface& surface, FakeTrack* track);
 
-  // Sends a track's whole state, as after a track list change.
+  // Sends a track's whole state, as after a track list change, without its
+  // mute and solo if they aren't sent yet.
   void SendState(IReaperControlSurface& surface, FakeTrack* track);
+
+  // Sends a track's title, rec arm, and selection, the end of its state.
+  void SendTitleRecArmAndSelected(IReaperControlSurface& surface,
+                                  FakeTrack* track);
+
+  // Sends a change to a track's rec arm: its rec arm, mute, solo, volume, and
+  // pan.
+  void SendRecArmChange(IReaperControlSurface& surface, FakeTrack* track);
 
   // Sends every track's volume, pan, and selection, as after a change to
   // automation modes.
   void SendAutomationChange(IReaperControlSurface& surface);
+
+  // Sends the new value of `track`'s route at `index`, as the *TrackSendUI*
+  // functions index them, from each end.
+  void SendRouteChange(MediaTrack* track, int index, bool pan);
 
   // Sends what Edit: Undo did (see "Seen in traces").
   void SendUndo(IReaperControlSurface& surface);
 
   FakeReaper* const reaper_;
 
-  // What the track setters left to send when the PreventUIRefresh() scopes
-  // end.
-  absl::flat_hash_set<const FakeTrack*> pending_mute_solo_;
-  absl::flat_hash_set<const FakeTrack*> pending_selected_;
-  bool pending_track_list_ = false;
+  // See GetUnsent(), which forgets them when the run isn't `unsent_run_`.
+  absl::flat_hash_map<const FakeTrack*, Unsent> unsent_;
+  int64_t unsent_run_ = 0;
+
+  // The tracks whose rec arm or selection changed in the batch.
+  absl::flat_hash_set<const FakeTrack*> batch_rec_arm_;
+  absl::flat_hash_set<const FakeTrack*> batch_selected_;
 
   gb::FunctionHook<&PreventUIRefresh,
                    Hook<&SurfaceNotifier::OnPreventUIRefresh>>
@@ -242,6 +306,12 @@ class SurfaceNotifier final {
   gb::FunctionHook<&CSurf_OnPanChangeEx,
                    Hook<&SurfaceNotifier::OnVolumeOrPanChange>>
       pan_change_hook_{this};
+  gb::FunctionHook<&SetTrackSendUIVol,
+                   Hook<&SurfaceNotifier::OnSetTrackSendUIVol>>
+      set_track_send_ui_vol_hook_{this};
+  gb::FunctionHook<&SetTrackSendUIPan,
+                   Hook<&SurfaceNotifier::OnSetTrackSendUIPan>>
+      set_track_send_ui_pan_hook_{this};
   gb::FunctionHook<&SetGlobalAutomationOverride,
                    Hook<&SurfaceNotifier::OnSetGlobalAutomationOverride>>
       set_global_automation_override_hook_{this};

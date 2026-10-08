@@ -164,6 +164,10 @@ void ProjectFileWriter::AppendProject() {
                   "\n");
   absl::StrAppend(&text_, "  TEMPO ", Number(FakeProject::kBeatsPerMinute),
                   " 4 4\n");
+
+  // The pan mode every fake track has, for the tracks, and in AppendMaster(),
+  // the master. Without them, a project has REAPER 3's.
+  absl::StrAppend(&text_, "  PANMODE ", kBalancePanMode, "\n");
 }
 
 void ProjectFileWriter::AppendMaster() {
@@ -188,6 +192,7 @@ void ProjectFileWriter::AppendMaster() {
   absl::StrAppend(&text_, "  MASTERPEAKCOL ", PeakColor(master), "\n");
   absl::StrAppend(&text_, "  MASTERMUTESOLO ", Flag(master->mute), "\n");
   absl::StrAppend(&text_, "  MASTER_VOLUME ", VolumePan(master), "\n");
+  absl::StrAppend(&text_, "  MASTER_PANMODE ", kBalancePanMode, "\n");
   absl::StrAppend(&text_, "  MASTER_SEL ", Flag(master->selected), "\n");
   AppendHardwareOutputs("MASTERHWOUT", master, "  ");
 }

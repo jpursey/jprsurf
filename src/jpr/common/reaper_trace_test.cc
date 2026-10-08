@@ -220,8 +220,6 @@ TEST_F(ReaperTraceTest, TracesSurfaceCallsInsideCalls) {
           AllOf(StartsWith(kCreateLine), EndsWith("; out: 0")), "csurf/Run()",
           R"(  SetTrackUIMute(track 3 "Drums", 1, 0))",
           R"(    csurf/SetSurfaceSolo(master, false))",
-          R"(    csurf/SetSurfaceMute(track 3 "Drums", true))",
-          R"(    csurf/SetSurfaceSolo(track 3 "Drums", false))",
           R"(  SetTrackUIMute -> 1)",
           R"(csurf/Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, track 3 "Drums", null, null) -> 1)",
           "csurf/Destroy()"));

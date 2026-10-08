@@ -6,6 +6,7 @@
 #include "jpr/common/testing/recording_surface.h"
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,21 @@ reaper_csurf_reg_t g_registration = {"RECORDING", "Recording surface",
 // Formats a double that may be null.
 std::string GetOptionalText(void* value) {
   return value != nullptr ? absl::StrCat(*static_cast<double*>(value)) : "null";
+}
+
+// Returns the name of an Extended() call about a route.
+std::string_view GetRouteCallText(int call) {
+  switch (call) {
+    case CSURF_EXT_SETSENDVOLUME:
+      return "SETSENDVOLUME";
+    case CSURF_EXT_SETSENDPAN:
+      return "SETSENDPAN";
+    case CSURF_EXT_SETRECVVOLUME:
+      return "SETRECVVOLUME";
+    case CSURF_EXT_SETRECVPAN:
+      return "SETRECVPAN";
+  }
+  return "?";
 }
 
 }  // namespace
@@ -163,6 +179,16 @@ int RecordingSurface::Extended(int call, void* param1, void* param2,
                        GetTrackText(static_cast<MediaTrack*>(param1)), ", ",
                        *static_cast<double*>(param2), ", ",
                        *static_cast<int*>(param3), ")"));
+      break;
+    case CSURF_EXT_SETSENDVOLUME:
+    case CSURF_EXT_SETSENDPAN:
+    case CSURF_EXT_SETRECVVOLUME:
+    case CSURF_EXT_SETRECVPAN:
+      calls_.push_back(
+          absl::StrCat("Extended(", GetRouteCallText(call), ", ",
+                       GetTrackText(static_cast<MediaTrack*>(param1)), ", ",
+                       *static_cast<int*>(param2), ", ",
+                       *static_cast<double*>(param3), ")"));
       break;
     case CSURF_EXT_SETBPMANDPLAYRATE:
       calls_.push_back(absl::StrCat("Extended(SETBPMANDPLAYRATE, ",

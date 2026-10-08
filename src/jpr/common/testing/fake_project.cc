@@ -13,9 +13,19 @@
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
 #include "gtest/gtest.h"
 
 namespace jpr {
+namespace {
+
+// Returns where `route` is in `routes`, which has it.
+int IndexOf(absl::Span<FakeRoute* const> routes, const FakeRoute* route) {
+  return static_cast<int>(std::find(routes.begin(), routes.end(), route) -
+                          routes.begin());
+}
+
+}  // namespace
 
 std::unique_ptr<FakeProject> FakeProject::Create() {
   return absl::WrapUnique(new FakeProject(1));
@@ -335,6 +345,38 @@ absl::Span<FakeRoute* const> FakeProject::GetHardwareOutputs(
     return {};
   }
   return record->hardware_outputs;
+}
+
+FakeRoute* FakeProject::GetTrackSendUiRoute(const FakeTrack* track,
+                                            int index) const {
+  if (index < 0) {
+    const absl::Span<FakeRoute* const> receives = GetReceives(track);
+    return -1 - index < static_cast<int>(receives.size()) ? receives[-1 - index]
+                                                          : nullptr;
+  }
+  const absl::Span<FakeRoute* const> outputs = GetHardwareOutputs(track);
+  const int output_count = static_cast<int>(outputs.size());
+  if (index < output_count) {
+    return outputs[index];
+  }
+  const absl::Span<FakeRoute* const> sends = GetSends(track);
+  return index - output_count < static_cast<int>(sends.size())
+             ? sends[index - output_count]
+             : nullptr;
+}
+
+int FakeProject::GetTrackSendUiIndex(const FakeRoute* route) const {
+  const absl::Span<FakeRoute* const> outputs =
+      GetHardwareOutputs(route->source);
+  if (route->destination == nullptr) {
+    return IndexOf(outputs, route);
+  }
+  return static_cast<int>(outputs.size()) +
+         IndexOf(GetSends(route->source), route);
+}
+
+int FakeProject::GetReceiveIndex(const FakeRoute* route) const {
+  return IndexOf(GetReceives(route->destination), route);
 }
 
 }  // namespace jpr

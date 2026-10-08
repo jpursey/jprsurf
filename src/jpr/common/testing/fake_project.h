@@ -157,6 +157,19 @@ class FakeProject final {
   absl::Span<FakeRoute* const> GetReceives(const FakeTrack* track) const;
   absl::Span<FakeRoute* const> GetHardwareOutputs(const FakeTrack* track) const;
 
+  // Returns `track`'s route at `index` as the *TrackSendUI* functions index
+  // them: from 0, its hardware outputs, then its sends, and from -1 down, its
+  // receives. Returns null if there is none.
+  FakeRoute* GetTrackSendUiRoute(const FakeTrack* track, int index) const;
+
+  // Returns `route`'s index at its source, as the *TrackSendUI* functions
+  // index it: a hardware output's among the outputs, and a send's after them.
+  int GetTrackSendUiIndex(const FakeRoute* route) const;
+
+  // Returns a send's index at its destination, among its receives, from 0, as
+  // the GetTrackReceiveUI* functions index it.
+  int GetReceiveIndex(const FakeRoute* route) const;
+
   //----------------------------------------------------------------------------
   // Transport
   //----------------------------------------------------------------------------

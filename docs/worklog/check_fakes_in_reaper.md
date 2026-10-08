@@ -200,7 +200,7 @@ Checked in REAPER, with the test install, before the CLs that rely on them:
 ### Found in REAPER
 
 The notifier's contract tests, run in REAPER first (2026-10-08), with 8 of 13
-failing. Each is a gap in the notifier, fixed in CL4:
+failing. Each was a gap in the notifier, fixed in CL4:
 - **Mute and solo outside a batch:** during the call, REAPER only sends the
   master's solo. The track's own mute and solo come later, not in the call.
 - **Rec arm outside a batch:** REAPER sends the track's rec arm, mute, solo,
@@ -216,15 +216,35 @@ failing. Each is a gap in the notifier, fixed in CL4:
 - **Undo and Redo** send 45 calls where the notifier sends 47, with some of a
   track's calls missing in the first round.
 - **`Extended(CSURF_EXT_SETPAN_EX)` sends pan mode 0** for the test projects'
-  tracks, where the traces' tracks had 3, even with `PANMODE 3` in the project
-  file. What sets it (each track's own pan mode, perhaps) is found in CL4, and
-  the project file writes it.
+  tracks, where the traces' tracks had 3. `PANMODE 3` in the project file sets
+  the tracks' mode, and `MASTER_PANMODE 3` the master's, which was still 0
+  when it seemed `PANMODE` changed nothing.
 - **Send volume and pan changes do notify,** where the traces said sends
   notify nothing: `Extended(CSURF_EXT_SETSENDVOLUME)` and `SETSENDPAN` for the
   source track, and `SETRECVVOLUME` and `SETRECVPAN` for the destination. Mute
   sends nothing. JPRSurf polls every route each run on the belief that REAPER
   doesn't report them, which *Poll only the routes a routes list shows* in the
   backlog should now weigh.
+
+CL4 explored each of these in the test install with temporary tests, and found
+the rule behind them (see "Seen in traces" in `testing_and_profiling.md`, and
+`SurfaceNotifier`):
+- **A track's mute and solo wait for the refresh:** the end of the outermost
+  batch, or outside a batch, before the next run, when REAPER sends those that
+  differ from what it last sent. Until then, every track's state leaves them
+  out, which is why Undo sent 45 calls.
+- **Rec arm** sends the track's change around every track's state outside a
+  batch, and in a batch sends each changed track's change in every track's
+  state at its end. A rec arm that changes nothing sends nothing.
+- **The automation mode actions** resend only if a selected track's mode
+  changed.
+- **Selection ganging:** with the setters' group flags without `&2`, as
+  JPRSurf passes for a grouped change, a mute, solo, or rec arm of a selected
+  track changes every selected track, which the fake doesn't do (see CL6), and
+  a rec arm is then sent as a change to every track.
+- **Undo** with nothing to undo calls nothing back: after only
+  `CSurf_OnVolumeChangeEx()`, or only `SetTrackUIMute()` outside a batch,
+  there was nothing to undo (see CL9).
 
 ## CLs
 
@@ -282,20 +302,23 @@ Depends on: CL2.
   the failures above, with REAPER quitting cleanly. A run of only the tests
   that pass (`GTEST_FILTER`) passes.
 
-### CL4 [ ] common/testing: Make the notifier match REAPER
+### CL4 [x] common/testing: Make the notifier match REAPER
 
 Depends on: CL3.
 
 - `SurfaceNotifier`, and its contract tests, follow what REAPER does (see Found
   in REAPER), and its comments and "Seen in traces" in
   `testing_and_profiling.md` say so. A call REAPER makes later, outside the
-  call, isn't made, as no test spans runs.
+  call, isn't made, as no test spans runs: a mute or solo left for the next
+  run is forgotten when the surface runs (`FakeReaper::GetRuns()`).
 - The automation mode actions are tested with tracks selected too.
 - The route tests get a fixture of their own that opens the project with a
   send, rather than opening a second project, as each open takes about half a
-  second in REAPER.
+  second in REAPER. `RecordingSurface` names the route calls.
+- The project file writes `PANMODE 3` and `MASTER_PANMODE 3`.
 - Surface tests that relied on the old calls are updated, or show a change in
-  the surface, which is its own follow-up.
+  the surface, which is its own follow-up. Only the trace's test relied on
+  them.
 
 **Verify**
 - Standard checks, and `check_in_reaper` passes.
@@ -320,6 +343,8 @@ Depends on: CL5.
 
 - The track setters, grouping, `PreventUIRefresh`, `AnyTrackSolo`, and the
   selection functions.
+- Selection ganging (see Found in REAPER), which the fake then models, and
+  `SurfaceNotifier`'s comment no longer excepts.
 
 **Verify**
 - Standard checks, and `check_in_reaper`.
@@ -355,6 +380,9 @@ Depends on: CL6, CL7.
 - To confirm 4. Then either the fake models what Undo restores, with the
   contract tests passing under both, or it doesn't, and why is recorded here
   and in the fake's class comment.
+- Which setters leave an undo point, as an undo with nothing to undo calls
+  nothing back, where `SurfaceNotifier` always sends Undo's calls (see Found
+  in REAPER).
 
 **Verify**
 - Standard checks, and `check_in_reaper`.
