@@ -53,6 +53,10 @@ struct FakeUndoPoint {
 
 class FakeProject final {
  public:
+  // Creates a project outside any FakeReaper, such as one to write as a
+  // project file (see WriteProjectFile()).
+  static std::unique_ptr<FakeProject> Create();
+
   FakeProject(const FakeProject&) = delete;
   FakeProject& operator=(const FakeProject&) = delete;
   ~FakeProject() = default;
@@ -62,11 +66,15 @@ class FakeProject final {
   //----------------------------------------------------------------------------
 
   // The master track, which every project has.
-  FakeTrack* GetMasterTrack() { return master_track_; }
+  FakeTrack* GetMasterTrack() const { return master_track_; }
 
   // The project's tracks, in order, not including the master.
   int GetTrackCount() const { return static_cast<int>(tracks_.size()); }
-  FakeTrack* GetTrack(int index) { return tracks_[index]; }
+  FakeTrack* GetTrack(int index) const { return tracks_[index]; }
+
+  // Returns the index of `track` in the project's tracks, or -1 if it isn't
+  // one of them, such as the master.
+  int FindTrack(const FakeTrack* track) const;
 
   // Adds a track called `name` after the last track in `parent`'s folder, or
   // at the end of the project if `parent` is null, and returns it. If `parent`
@@ -150,12 +158,15 @@ class FakeProject final {
   // Transport
   //----------------------------------------------------------------------------
 
-  // Sets what GetPlayState() returns: &1 playing, &2 paused, and &4 recording.
+  // What GetPlayState() returns: &1 playing, &2 paused, and &4 recording.
+  int GetPlayState() const { return play_state_; }
   void SetPlayState(int play_state) { play_state_ = play_state; }
 
-  // Sets the play position, and the edit cursor's, in seconds, as
+  // The play position, and the edit cursor's, in seconds, as
   // GetPlayPosition() and GetCursorPosition() return them.
+  double GetPlayPosition() const { return play_position_; }
   void SetPlayPosition(double position) { play_position_ = position; }
+  double GetCursorPosition() const { return cursor_position_; }
   void SetCursorPosition(double position) { cursor_position_ = position; }
 
   //----------------------------------------------------------------------------
@@ -175,19 +186,22 @@ class FakeProject final {
   // The undo points added to the project, in order.
   absl::Span<const FakeUndoPoint> GetUndoPoints() const { return undo_points_; }
 
-  // Sets the undo point Edit: Redo would redo, as Undo_CanRedo2() returns it,
-  // or empty if there is none.
+  // The undo point Edit: Redo would redo, as Undo_CanRedo2() returns it, or
+  // empty if there is none.
+  const std::string& GetRedo() const { return redo_; }
   void SetRedo(std::string_view name) { redo_ = name; }
 
-  // Sets whether the project has changes to save, as IsProjectDirty() returns.
+  // Whether the project has changes to save, as IsProjectDirty() returns.
+  bool IsDirty() const { return dirty_; }
   void SetDirty(bool dirty) { dirty_ = dirty; }
 
   //----------------------------------------------------------------------------
   // Media items
   //----------------------------------------------------------------------------
 
-  // Sets how many media items are selected, as CountSelectedMediaItems()
-  // returns. The fake has no media items otherwise.
+  // How many media items are selected, as CountSelectedMediaItems() returns.
+  // The fake has no media items otherwise.
+  int GetSelectedItemCount() const { return selected_item_count_; }
   void SetSelectedItemCount(int count) { selected_item_count_ = count; }
 
  private:
@@ -226,9 +240,6 @@ class FakeProject final {
   // Adds a track with `guid` after the last track in `parent`'s folder, or at
   // the end of the project if `parent` is null, and returns it.
   FakeTrack* InsertTrack(const GUID& guid, FakeTrack* parent);
-
-  // Returns the index of `track` in tracks_, or -1 if it isn't there.
-  int FindTrack(const FakeTrack* track) const;
 
   // Returns true if `track` is in `folder`, directly or in one of its folders.
   bool IsInFolder(const FakeTrack* track, const FakeTrack* folder) const;

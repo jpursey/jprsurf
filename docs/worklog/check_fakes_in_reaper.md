@@ -148,8 +148,14 @@ profiler.
 **Risks**, accepted: contract tests only check what someone thought to check,
 where running whole surface tests in REAPER would also find what nobody
 expected; the test install's preferences aren't the user's; the fake X-Touch
-against the hardware stays a check by hand; and what REAPER calls while
-creating the surface and loading the project is only seen in traces.
+against the hardware stays a check by hand; what REAPER calls while
+creating the surface and loading the project is only seen in traces; and
+`WriteProjectFile()` grows with every field `FakeProject` gains, in a format
+REAPER doesn't document. A field it can't write fails the test, and every
+contract test reads its fields back in REAPER, so a gap shows the first time a
+test uses it. If it becomes a burden, the alternative is building the project
+with REAPER's own calls, which puts more functions on the API list, each with
+a fake and a contract test of its own.
 
 ### Coverage
 
@@ -183,7 +189,7 @@ Checked in REAPER, with the test install, before the CLs that rely on them:
 
 ## CLs
 
-### CL1 [ ] common/testing: Write a FakeProject as an RPP file
+### CL1 [x] common/testing: Write a FakeProject as an RPP file
 
 Depends on: nothing.
 

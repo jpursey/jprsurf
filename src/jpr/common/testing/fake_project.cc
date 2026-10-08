@@ -11,10 +11,15 @@
 #include <string_view>
 #include <vector>
 
+#include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "gtest/gtest.h"
 
 namespace jpr {
+
+std::unique_ptr<FakeProject> FakeProject::Create() {
+  return absl::WrapUnique(new FakeProject(1));
+}
 
 FakeProject::FakeProject(int number) : number_(number) {
   master_track_ = CreateTrack(MakeGuid(), nullptr);

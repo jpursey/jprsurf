@@ -11,6 +11,7 @@ set(jpr_common_testing_SOURCE
   fake_project.cc fake_project.h
   fake_reaper.cc fake_reaper.h
   fake_track.h
+  project_file.cc project_file.h
   reaper_actions.cc reaper_actions.h
   surface_notifier.cc surface_notifier.h
   test_control_surface.cc test_control_surface.h
@@ -34,6 +35,7 @@ set(jpr_common_testing_DEPS
 set(jpr_common_testing_TEST_SOURCE
   fake_midi_test.cc
   fake_reaper_test.cc
+  project_file_test.cc
   reaper_actions_test.cc
   surface_notifier_test.cc
 )
