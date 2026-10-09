@@ -11,9 +11,9 @@
 
 #include "absl/types/span.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
@@ -72,10 +72,9 @@ TEST_F(ReaperActionsContractTest, AutomationModeActionsSetTheSelectedTracks) {
   MediaTrack* master = GetMasterTrack(nullptr);
   MediaTrack* selected = GetTrack(nullptr, 0);
   MediaTrack* not_selected = GetTrack(nullptr, 1);
-  for (int id = kLastAutoModeAction; id >= kFirstAutoModeAction; --id) {
-    SCOPED_TRACE(id);
-    Main_OnCommand(id, 0);
-    const double mode = id - kFirstAutoModeAction;
+  for (int mode = kAutoModeCount - 1; mode >= 0; --mode) {
+    SCOPED_TRACE(mode);
+    Main_OnCommand(GetAutoModeAction(static_cast<AutoMode>(mode)), 0);
     EXPECT_EQ(GetMediaTrackInfo_Value(master, "I_AUTOMODE"), mode);
     EXPECT_EQ(GetMediaTrackInfo_Value(selected, "I_AUTOMODE"), mode);
     EXPECT_EQ(GetMediaTrackInfo_Value(not_selected, "I_AUTOMODE"),

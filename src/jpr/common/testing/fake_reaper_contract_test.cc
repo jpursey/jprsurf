@@ -16,9 +16,10 @@
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
+#include "jpr/common/automation.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/reaper_api.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
@@ -1202,11 +1203,11 @@ TEST_F(UndoContractTest, ASurfaceChangeStaysHeldThroughOtherPointsAndUndo) {
 }
 
 TEST_F(UndoContractTest, AutomationModeActionsAddAPointIfAModeChanges) {
-  constexpr int kTouchAction = kFirstAutoModeAction + 2;
+  constexpr int kTouchAction = GetAutoModeAction(AutoMode::kTouch);
   Main_OnCommand(kTouchAction, 0);
   EXPECT_EQ(IsProjectDirty(nullptr), 0);
   SetTrackSelected(a_, true);
-  Main_OnCommand(kFirstAutoModeAction, 0);
+  Main_OnCommand(GetAutoModeAction(AutoMode::kTrimRead), 0);
   EXPECT_EQ(IsProjectDirty(nullptr), 0);
 
   Main_OnCommand(kTouchAction, 0);

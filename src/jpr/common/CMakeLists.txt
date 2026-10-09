@@ -4,6 +4,7 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 set(jpr_common_SOURCE
+  action_ids.h
   anchor.cc anchor.h
   automation.cc automation.h
   color.cc color.h

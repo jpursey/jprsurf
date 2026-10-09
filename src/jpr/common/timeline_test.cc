@@ -9,6 +9,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
 
@@ -36,11 +37,11 @@ class TimelineTest : public ::testing::Test {
 
 TEST_F(TimelineTest, ReadsTheRulerMode) {
   EXPECT_EQ(GetRulerMode(), TimelineMode::kBeats);
-  Select(40368);  // Seconds.
+  Select(kRulerSeconds);
   EXPECT_EQ(GetRulerMode(), TimelineMode::kTime);
-  Select(41973);  // Absolute frames.
+  Select(kRulerAbsoluteFrames);
   EXPECT_EQ(GetRulerMode(), TimelineMode::kFrames);
-  Select(40369);
+  Select(kRulerSamples);
   EXPECT_EQ(GetRulerMode(), TimelineMode::kSamples);
   EXPECT_TRUE(IsCurrentRulerMode(TimelineMode::kSamples));
 }
@@ -52,17 +53,19 @@ TEST_F(TimelineTest, SetsTheRulerModeOnlyIfItChanges) {
   // The first action of each mode is its default.
   SetRulerMode(TimelineMode::kTime);
   SetRulerMode(TimelineMode::kFrames);
-  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(43204, 40370));
+  EXPECT_THAT(reaper_.GetCommandsRun(),
+              ElementsAre(kRulerMinutesSecondsMinimal, kRulerFrames));
   EXPECT_EQ(GetRulerMode(), TimelineMode::kFrames);
 }
 
 TEST_F(TimelineTest, SetsTheLastRulerModeSeenOfEachKind) {
-  Select(40368);  // Seconds.
+  Select(kRulerSeconds);
   EXPECT_EQ(GetRulerMode(), TimelineMode::kTime);
 
   SetRulerMode(TimelineMode::kBeats);
   SetRulerMode(TimelineMode::kTime);
-  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(41916, 40368));
+  EXPECT_THAT(reaper_.GetCommandsRun(),
+              ElementsAre(kRulerMeasuresBeatsMinimal, kRulerSeconds));
 }
 
 TEST_F(TimelineTest, ReadsAndSetsTheSecondaryMode) {
@@ -76,11 +79,13 @@ TEST_F(TimelineTest, ReadsAndSetsTheSecondaryMode) {
   // Beats can't be a secondary mode, so it clears it.
   SetRulerSecondaryMode(TimelineMode::kBeats);
   EXPECT_EQ(GetRulerSecondaryMode(), std::nullopt);
-  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(42364, 42360));
+  EXPECT_THAT(reaper_.GetCommandsRun(),
+              ElementsAre(kRulerSecondaryFrames, kRulerSecondaryNone));
 
   // Clearing it when there is none runs nothing.
   ClearRulerSecondaryMode();
-  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(42364, 42360));
+  EXPECT_THAT(reaper_.GetCommandsRun(),
+              ElementsAre(kRulerSecondaryFrames, kRulerSecondaryNone));
 }
 
 //------------------------------------------------------------------------------

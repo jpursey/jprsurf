@@ -5,6 +5,7 @@
 
 #include "jpr/common/testing/surface_notifier.h"
 
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -12,8 +13,9 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
+#include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -26,6 +28,18 @@ namespace {
 
 // The key IsKeyDown() is asked about during a volume or pan change (VK_SHIFT).
 constexpr int kShiftKey = 0x10;
+
+// Returns the automation mode `command` sets, if it is an automation mode
+// action.
+std::optional<AutoMode> FindAutoMode(int command) {
+  for (int i = 0; i < kAutoModeCount; ++i) {
+    const AutoMode mode = static_cast<AutoMode>(i);
+    if (GetAutoModeAction(mode) == command) {
+      return mode;
+    }
+  }
+  return std::nullopt;
+}
 
 }  // namespace
 
@@ -182,10 +196,9 @@ void SurfaceNotifier::OnSetGlobalAutomationOverride(
 
 void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
                                       int command, int flag) {
-  const bool auto_mode_action =
-      command >= kFirstAutoModeAction && command <= kLastAutoModeAction;
+  const std::optional<AutoMode> auto_mode = FindAutoMode(command);
   std::vector<TrackFlags> before;
-  if (auto_mode_action) {
+  if (auto_mode.has_value()) {
     before = GetFlags();
   }
   const int undo_count = reaper_->GetProject().GetUndoCount();
@@ -198,8 +211,8 @@ void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
     if (reaper_->GetProject().GetUndoCount() != undo_count) {
       SendUndo(*surface);
     }
-  } else if (auto_mode_action) {
-    surface->SetAutoMode(command - kFirstAutoModeAction);
+  } else if (auto_mode.has_value()) {
+    surface->SetAutoMode(static_cast<int>(*auto_mode));
     if (!GetChanges(before).empty()) {
       SendAutomationChange(*surface);
     }

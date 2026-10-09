@@ -6,7 +6,8 @@
 #pragma once
 
 #include "absl/types/span.h"
-#include "jpr/common/testing/action_ids.h"
+#include "jpr/common/action_ids.h"
+#include "jpr/common/automation.h"
 
 namespace jpr {
 
@@ -48,15 +49,16 @@ inline constexpr ReaperAction kReaperActions[] = {
     {40289, "Item: Unselect (clear selection of) all items", -1},
     {40340, "Track: Unsolo all tracks", -1},
     {40364, "Options: Toggle metronome", 0},
-    {kFirstAutoModeAction, "Automation: Set track automation mode to trim/read",
-     -1},
-    {kFirstAutoModeAction + 1, "Automation: Set track automation mode to read",
-     -1},
-    {kFirstAutoModeAction + 2, "Automation: Set track automation mode to touch",
-     -1},
-    {kFirstAutoModeAction + 3, "Automation: Set track automation mode to write",
-     -1},
-    {kLastAutoModeAction, "Automation: Set track automation mode to latch", -1},
+    {GetAutoModeAction(AutoMode::kTrimRead),
+     "Automation: Set track automation mode to trim/read", -1},
+    {GetAutoModeAction(AutoMode::kRead),
+     "Automation: Set track automation mode to read", -1},
+    {GetAutoModeAction(AutoMode::kTouch),
+     "Automation: Set track automation mode to touch", -1},
+    {GetAutoModeAction(AutoMode::kWrite),
+     "Automation: Set track automation mode to write", -1},
+    {GetAutoModeAction(AutoMode::kLatch),
+     "Automation: Set track automation mode to latch", -1},
     {40745, "Options: Solo in front", 0},
     {41040, "Move edit cursor to start of next measure", -1},
     {41041, "Move edit cursor to start of current/previous measure", -1},
@@ -64,29 +66,36 @@ inline constexpr ReaperAction kReaperActions[] = {
      "File: Save new version of project (automatically increment project "
      "name)",
      -1},
+    {GetAutoModeAction(AutoMode::kLatchPreview),
+     "Automation: Set track automation mode to latch preview", -1},
 };
 
 // The ruler's time unit actions, and its secondary ones, each a radio group.
 inline constexpr RulerMode kRulerModes[] = {
-    {41916, "View: Time unit for ruler: Measures.Beats (minimal)"},
+    {kRulerMeasuresBeatsMinimal,
+     "View: Time unit for ruler: Measures.Beats (minimal)"},
     {kRulerMeasuresBeats, "View: Time unit for ruler: Measures.Beats"},
-    {43205, "View: Time unit for ruler: Measures.Fractions"},
-    {43204, "View: Time unit for ruler: Minutes:Seconds (minimal)"},
-    {40365, "View: Time unit for ruler: Minutes:Seconds"},
+    {kRulerMeasuresFractions, "View: Time unit for ruler: Measures.Fractions"},
+    {kRulerMinutesSecondsMinimal,
+     "View: Time unit for ruler: Minutes:Seconds (minimal)"},
+    {kRulerMinutesSeconds, "View: Time unit for ruler: Minutes:Seconds"},
     {kRulerSeconds, "View: Time unit for ruler: Seconds"},
-    {40370, "View: Time unit for ruler: Hours:Minutes:Seconds:Frames"},
-    {41973, "View: Time unit for ruler: Absolute frames"},
-    {40369, "View: Time unit for ruler: Samples"},
+    {kRulerFrames, "View: Time unit for ruler: Hours:Minutes:Seconds:Frames"},
+    {kRulerAbsoluteFrames, "View: Time unit for ruler: Absolute frames"},
+    {kRulerSamples, "View: Time unit for ruler: Samples"},
 };
 inline constexpr RulerMode kRulerSecondaryModes[] = {
     {kRulerSecondaryNone, "View: Secondary time unit for ruler: None"},
-    {43705, "View: Secondary time unit for ruler: Minutes:Seconds (minimal)"},
-    {42361, "View: Secondary time unit for ruler: Minutes:Seconds"},
-    {42362, "View: Secondary time unit for ruler: Seconds"},
+    {kRulerSecondaryMinutesSecondsMinimal,
+     "View: Secondary time unit for ruler: Minutes:Seconds (minimal)"},
+    {kRulerSecondaryMinutesSeconds,
+     "View: Secondary time unit for ruler: Minutes:Seconds"},
+    {kRulerSecondarySeconds, "View: Secondary time unit for ruler: Seconds"},
     {kRulerSecondaryFrames,
      "View: Secondary time unit for ruler: Hours:Minutes:Seconds:Frames"},
-    {42365, "View: Secondary time unit for ruler: Absolute frames"},
-    {42363, "View: Secondary time unit for ruler: Samples"},
+    {kRulerSecondaryAbsoluteFrames,
+     "View: Secondary time unit for ruler: Absolute frames"},
+    {kRulerSecondarySamples, "View: Secondary time unit for ruler: Samples"},
 };
 inline constexpr absl::Span<const RulerMode> kRulerGroups[] = {
     kRulerModes, kRulerSecondaryModes};

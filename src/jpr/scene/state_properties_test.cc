@@ -11,6 +11,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
@@ -257,15 +258,15 @@ TEST_F(StatePropertiesTest, TimelinePositionsAreEachSource) {
 TEST_F(StatePropertiesTest, RulersAreEachMode) {
   // The command that selects each mode.
   const Row<int> kModes[] = {
-      {kStateRulerBeats, 40367},
-      {kStateRulerTime, 40365},
-      {kStateRulerFrames, 40370},
-      {kStateRulerSamples, 40369},
+      {kStateRulerBeats, kRulerMeasuresBeats},
+      {kStateRulerTime, kRulerMinutesSeconds},
+      {kStateRulerFrames, kRulerFrames},
+      {kStateRulerSamples, kRulerSamples},
   };
   const Row<int> kSecondaryModes[] = {
-      {kStateSecondaryRulerTime, 42361},
-      {kStateSecondaryRulerFrames, 42364},
-      {kStateSecondaryRulerSamples, 42363},
+      {kStateSecondaryRulerTime, kRulerSecondaryMinutesSeconds},
+      {kStateSecondaryRulerFrames, kRulerSecondaryFrames},
+      {kStateSecondaryRulerSamples, kRulerSecondarySamples},
   };
   AddSurface();
   ViewProperty* mode = Watch(kStateRulerMode);

@@ -8,8 +8,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/reaper_api.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_reaper.h"
 
 namespace jpr {
@@ -32,8 +32,8 @@ TEST_F(ReaperActionsTest, TheRulerIsMeasuresBeatsWithNoSecondaryUnit) {
 }
 
 TEST_F(ReaperActionsTest, SelectingARulerModeRunsNothing) {
-  SelectRulerMode(&reaper_, 40369);  // Samples.
-  EXPECT_EQ(GetToggleCommandState(40369), 1);
+  SelectRulerMode(&reaper_, kRulerSamples);
+  EXPECT_EQ(GetToggleCommandState(kRulerSamples), 1);
   EXPECT_EQ(GetToggleCommandState(kRulerMeasuresBeats), 0);
   EXPECT_THAT(reaper_.GetCommandsRun(), IsEmpty());
 

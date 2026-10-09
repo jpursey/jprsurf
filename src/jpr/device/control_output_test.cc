@@ -11,6 +11,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/color.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
@@ -120,9 +121,6 @@ class FormattedTextOutput final : public ControlTextOutput {
 
 class ControlTextOutputTest : public ::testing::Test {
  protected:
-  // The ruler's "Seconds" time unit action.
-  static constexpr int kRulerSeconds = 40368;
-
   // The ruler shows seconds.
   ControlTextOutputTest() {
     AddReaperActions(&reaper_);

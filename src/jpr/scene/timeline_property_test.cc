@@ -9,6 +9,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
@@ -72,7 +73,7 @@ TEST_F(TimelinePropertyTest, PositionsNotifyWhenThePositionOrRulerChanges) {
   EXPECT_EQ(property.GetTimelinePosition().GetValue(), 3.0);
 
   changed_ = false;
-  SelectRulerMode(&reaper_, 40365);  // Minutes:Seconds.
+  SelectRulerMode(&reaper_, kRulerMinutesSeconds);
   property.UpdateState();
   EXPECT_TRUE(changed_);
   property.UnregisterFlag(&changed_);
@@ -87,8 +88,9 @@ TEST_F(TimelinePropertyTest, RulerModeIsEachMode) {
     const char* text;
   };
   for (const Mode& mode :
-       {Mode{40367, 0, "Beats"}, Mode{40365, 1, "Time"},
-        Mode{40370, 2, "Frames"}, Mode{40369, 3, "Samples"}}) {
+       {Mode{kRulerMeasuresBeats, 0, "Beats"},
+        Mode{kRulerMinutesSeconds, 1, "Time"}, Mode{kRulerFrames, 2, "Frames"},
+        Mode{kRulerSamples, 3, "Samples"}}) {
     SelectRulerMode(&reaper_, mode.command);
     property.UpdateState();
     EXPECT_EQ(property.GetInt(), mode.value) << mode.text;

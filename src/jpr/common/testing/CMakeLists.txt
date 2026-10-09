@@ -8,7 +8,6 @@
 # there. Only tests link this, never the plugin.
 
 set(jpr_common_contract_SOURCE
-  action_ids.h
   contract_test.h
   fake_project.cc fake_project.h
   fake_track.h

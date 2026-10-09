@@ -60,8 +60,9 @@ doesn't link the fake, and a contract test that reaches for it
 - `contract_test.h`, `FakeProject` and `FakeTrack`, `WriteProjectFile()`, and
   `RecordingSurface`.
 - `reaper_action_list.h`: every action JPRSurf uses, with REAPER's text and
-  default toggle state, which a contract test checks against REAPER, and the
-  IDs tests use, named in `action_ids.h`.
+  default toggle state, which a contract test checks against REAPER. The IDs
+  named in more than one place are in `common/action_ids.h`, which the plugin
+  and the list both use, so a wrong ID in the plugin fails a contract test.
 - `jpr_common_testing` (the fake) depends on it. The contract tests
   (`jpr_common_contract_TESTS`) build into both `jpr_common_testing_test` and
   `reaper_jprsurf_check`.

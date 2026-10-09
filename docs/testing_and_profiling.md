@@ -392,11 +392,11 @@ REAPER's calls on the surface follow these.
   the destination and its index among its receives. A call that ends an edit
   (isend 1) calls nothing back, and neither does `ToggleTrackSendUIMute()`.
 - **Automation modes resend volume, pan, and selection.** Inside
-  `Main_OnCommand()` for the automation mode actions (40400 to 40404),
-  REAPER called `SetAutoMode()` with the mode (0 to 4), then, if a selected
-  track's mode changed, for every track, master first, `SetSurfaceVolume()`,
-  `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`, and
-  `SetSurfaceSelected()`. `SetGlobalAutomationOverride()` calls the same,
+  `Main_OnCommand()` for the automation mode actions (40400 to 40404, and
+  42023 for Latch Preview), REAPER called `SetAutoMode()` with the mode (0 to
+  5), then, if a selected track's mode changed, for every track, master first,
+  `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`,
+  and `SetSurfaceSelected()`. `SetGlobalAutomationOverride()` calls the same,
   without `SetAutoMode()`, even if nothing changed.
 - **`SetSurfaceSolo(master, on)`** reports whether any track is soloed, as the
   SDK says.

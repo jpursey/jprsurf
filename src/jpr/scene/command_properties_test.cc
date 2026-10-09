@@ -11,6 +11,7 @@
 #include "gb/test/log_error_guard.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/scene/scene.h"
@@ -50,7 +51,7 @@ TEST_F(CommandPropertiesTest, CommandsWithoutAToggleStateAreActions) {
   EXPECT_EQ(undo->GetName(), kCmdUndo);
 
   undo->RunAction();
-  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(40029));
+  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(kUndoAction));
 }
 
 TEST_F(CommandPropertiesTest, CommandsWithAToggleStateAreToggles) {

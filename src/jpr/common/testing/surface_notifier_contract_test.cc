@@ -14,9 +14,9 @@
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
@@ -439,9 +439,10 @@ TEST_F(SurfaceNotifierContractTest,
        AutomationModeActionsSendTheModeThenWhatChanged) {
   SetTrackSelected(a_, true);
   TakeCalls();
-  for (AutoMode mode : {AutoMode::kRead, AutoMode::kTouch, AutoMode::kWrite,
-                        AutoMode::kLatch, AutoMode::kTrimRead}) {
-    Main_OnCommand(kFirstAutoModeAction + static_cast<int>(mode), 0);
+  for (AutoMode mode :
+       {AutoMode::kRead, AutoMode::kTouch, AutoMode::kWrite, AutoMode::kLatch,
+        AutoMode::kLatchPreview, AutoMode::kTrimRead}) {
+    Main_OnCommand(GetAutoModeAction(mode), 0);
     std::vector<std::string> expected = {
         absl::StrCat("SetAutoMode(", static_cast<int>(mode), ")")};
     Append(expected, AutomationChange());
@@ -450,14 +451,14 @@ TEST_F(SurfaceNotifierContractTest,
   }
 
   // A mode the selected tracks already have changes nothing.
-  Main_OnCommand(kFirstAutoModeAction, 0);
+  Main_OnCommand(GetAutoModeAction(AutoMode::kTrimRead), 0);
   EXPECT_THAT(TakeCalls(), ElementsAre("SetAutoMode(0)"));
 }
 
 TEST_F(SurfaceNotifierContractTest,
        AutomationModeActionsWithNoTrackSelectedOnlySendTheMode) {
-  for (int mode = 0; mode <= static_cast<int>(AutoMode::kLatch); ++mode) {
-    Main_OnCommand(kFirstAutoModeAction + mode, 0);
+  for (int mode = 0; mode < kAutoModeCount; ++mode) {
+    Main_OnCommand(GetAutoModeAction(static_cast<AutoMode>(mode)), 0);
     EXPECT_THAT(TakeCalls(),
                 ElementsAre(absl::StrCat("SetAutoMode(", mode, ")")))
         << "Mode " << mode;
@@ -501,7 +502,7 @@ TEST_F(SurfaceNotifierContractTest, UndoAndRedoWithNothingToDoSendNothing) {
 
 TEST_F(SurfaceNotifierContractTest, OtherActionsSendNothing) {
   // The ruler's time unit actions.
-  for (int command : {40365, 40369, 40370}) {
+  for (int command : {kRulerMinutesSeconds, kRulerSamples, kRulerFrames}) {
     Main_OnCommand(command, 0);
   }
   EXPECT_THAT(TakeCalls(), IsEmpty());

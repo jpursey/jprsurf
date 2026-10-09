@@ -77,7 +77,7 @@ traces" in the design doc, and REAPER facts below):
 | `CSurf_OnVolumeChangeEx`            | The last touched track (`Extended()`)              |
 | `CSurf_OnPanChangeEx`               | The last touched track (`Extended()`)              |
 | `SetGlobalAutomationOverride`       | Every track's volume, pan, and selection           |
-| Automation modes (40400-40404)      | `SetAutoMode()`, then as the override does         |
+| Automation modes (40400-40404, 42023) | `SetAutoMode()`, then as the override does       |
 | Undo and redo (40029, 40030)        | Everything                                         |
 
 - **When:** a track setter's calls come at the end of its batch

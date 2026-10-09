@@ -9,9 +9,9 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/reaper_api.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/device/testing/fake_xtouch.h"
@@ -82,12 +82,12 @@ INSTANTIATE_TEST_SUITE_P(
         ButtonAction{Button::kStop, {}, 1016, "Stop"},
         ButtonAction{Button::kPlay, {}, 40073, "PlayPause"},
         ButtonAction{Button::kRecord, {}, 1013, "Record"},
-        ButtonAction{Button::kCycle, {}, 1068, "Repeat"},
+        ButtonAction{Button::kCycle, {}, kRepeatAction, "Repeat"},
         ButtonAction{Button::kClick, {}, 40364, "Metronome"},
         ButtonAction{Button::kSolo, {}, 40745, "SoloInFront"},
         // Utility
-        ButtonAction{Button::kUndo, {}, 40029, "Undo"},
-        ButtonAction{Button::kUndo, Button::kShift, 40030, "ShiftRedo"},
+        ButtonAction{Button::kUndo, {}, kUndoAction, "Undo"},
+        ButtonAction{Button::kUndo, Button::kShift, kRedoAction, "ShiftRedo"},
         ButtonAction{Button::kSave, {}, 40026, "SaveProject"},
         ButtonAction{Button::kSave, Button::kShift, 41895,
                      "ShiftSaveNewVersion"},
@@ -164,16 +164,16 @@ struct ToggleLight {
 class ToggleLightTest : public GlobalTest,
                         public WithParamInterface<ToggleLight> {};
 
-INSTANTIATE_TEST_SUITE_P(Global, ToggleLightTest,
-                         Values(ToggleLight{Button::kPlay, 1007, "Play"},
-                                ToggleLight{Button::kRecord, 1013, "Record"},
-                                ToggleLight{Button::kCycle, 1068, "Repeat"},
-                                ToggleLight{Button::kClick, 40364, "Metronome"},
-                                ToggleLight{Button::kSolo, 40745,
-                                            "SoloInFront"}),
-                         [](const TestParamInfo<ToggleLight>& info) {
-                           return info.param.test_name;
-                         });
+INSTANTIATE_TEST_SUITE_P(
+    Global, ToggleLightTest,
+    Values(ToggleLight{Button::kPlay, 1007, "Play"},
+           ToggleLight{Button::kRecord, 1013, "Record"},
+           ToggleLight{Button::kCycle, kRepeatAction, "Repeat"},
+           ToggleLight{Button::kClick, 40364, "Metronome"},
+           ToggleLight{Button::kSolo, 40745, "SoloInFront"}),
+    [](const TestParamInfo<ToggleLight>& info) {
+      return info.param.test_name;
+    });
 
 TEST_P(ToggleLightTest, LightShowsTheAction) {
   EXPECT_EQ(xtouch_.GetLight(GetParam().button), Light::kOff);
@@ -313,10 +313,10 @@ TEST_F(GlobalTest, TimeBeatsStepsThroughTheRulerModes) {
     Light smpte;
   };
   const RulerMode kModes[] = {
-      {43204, "    0.03.500", Light::kOff, Light::kOff},  // Time.
-      {40370, " 00.00.03.15 ", Light::kOff, Light::kOn},  // Frames.
-      {40369, "    154350", Light::kOff, Light::kOff},    // Samples.
-      {40367, "  2 4.00   ", Light::kOn, Light::kOff},    // Beats.
+      {kRulerMinutesSecondsMinimal, "    0.03.500", Light::kOff, Light::kOff},
+      {kRulerFrames, " 00.00.03.15 ", Light::kOff, Light::kOn},
+      {kRulerSamples, "    154350", Light::kOff, Light::kOff},
+      {kRulerMeasuresBeats, "  2 4.00   ", Light::kOn, Light::kOff},
   };
 
   EXPECT_EQ(xtouch_.GetLight(Led::kBeats), Light::kOn);
@@ -350,9 +350,8 @@ TEST_F(GlobalTest, TimeBeatsStepsThroughTheRulerModes) {
 TEST_F(GlobalTest, ModeButtonSetsTheSelectedTracks) {
   SelectRange(1, 2);
   Tap(xtouch_, Button::kAutoWrite);
-  EXPECT_THAT(
-      reaper_.GetCommandsRun(),
-      ElementsAre(kFirstAutoModeAction + static_cast<int>(AutoMode::kWrite)));
+  EXPECT_THAT(reaper_.GetCommandsRun(),
+              ElementsAre(GetAutoModeAction(AutoMode::kWrite)));
   EXPECT_EQ(tracks_[0]->auto_mode, static_cast<int>(AutoMode::kTrimRead));
   EXPECT_EQ(tracks_[1]->auto_mode, static_cast<int>(AutoMode::kWrite));
   EXPECT_EQ(tracks_[2]->auto_mode, static_cast<int>(AutoMode::kWrite));

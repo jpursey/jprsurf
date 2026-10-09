@@ -8,6 +8,8 @@
 #include <memory>
 #include <string_view>
 
+#include "jpr/common/action_ids.h"
+#include "jpr/common/automation.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/scene_state_property.h"
 #include "jpr/scene/view_property.h"
@@ -25,7 +27,7 @@ namespace jpr {
 // CommandActionProperty otherwise.
 inline constexpr std::string_view kCmdSoloInFront = kCmdName<40745>;
 inline constexpr std::string_view kCmdMetronome = kCmdName<40364>;
-inline constexpr std::string_view kCmdTransportRepeat = kCmdName<1068>;
+inline constexpr std::string_view kCmdTransportRepeat = kCmdName<kRepeatAction>;
 inline constexpr std::string_view kCmdTransportPlay = kCmdName<1007>;
 inline constexpr std::string_view kCmdTransportPause = kCmdName<1008>;
 inline constexpr std::string_view kCmdTransportPlayPause = kCmdName<40073>;
@@ -46,13 +48,18 @@ inline constexpr std::string_view kCmdGoPrevMarker = kCmdName<40172>;
 inline constexpr std::string_view kCmdGoNextMarker = kCmdName<40173>;
 inline constexpr std::string_view kCmdGoStart = kCmdName<40042>;
 inline constexpr std::string_view kCmdGoEnd = kCmdName<40043>;
-inline constexpr std::string_view kCmdAutoModeLatch = kCmdName<40404>;
-inline constexpr std::string_view kCmdAutoModeRead = kCmdName<40401>;
-inline constexpr std::string_view kCmdAutoModeTouch = kCmdName<40402>;
-inline constexpr std::string_view kCmdAutoModeTrim = kCmdName<40400>;
-inline constexpr std::string_view kCmdAutoModeWrite = kCmdName<40403>;
-inline constexpr std::string_view kCmdUndo = kCmdName<40029>;
-inline constexpr std::string_view kCmdRedo = kCmdName<40030>;
+inline constexpr std::string_view kCmdAutoModeLatch =
+    kCmdName<GetAutoModeAction(AutoMode::kLatch)>;
+inline constexpr std::string_view kCmdAutoModeRead =
+    kCmdName<GetAutoModeAction(AutoMode::kRead)>;
+inline constexpr std::string_view kCmdAutoModeTouch =
+    kCmdName<GetAutoModeAction(AutoMode::kTouch)>;
+inline constexpr std::string_view kCmdAutoModeTrim =
+    kCmdName<GetAutoModeAction(AutoMode::kTrimRead)>;
+inline constexpr std::string_view kCmdAutoModeWrite =
+    kCmdName<GetAutoModeAction(AutoMode::kWrite)>;
+inline constexpr std::string_view kCmdUndo = kCmdName<kUndoAction>;
+inline constexpr std::string_view kCmdRedo = kCmdName<kRedoAction>;
 inline constexpr std::string_view kCmdSaveProject = kCmdName<40026>;
 inline constexpr std::string_view kCmdSaveNewProjectVersion = kCmdName<41895>;
 inline constexpr std::string_view kCmdUnselectAllItems = kCmdName<40289>;

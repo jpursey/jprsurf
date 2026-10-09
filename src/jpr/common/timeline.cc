@@ -9,6 +9,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/test_reset.h"
 
@@ -20,37 +21,34 @@ namespace jpr {
 
 namespace {
 
-// Actions IDs for the different time modes of the ruler. These are used to
-// query and switch the ruler to the specified mode.
+// The ruler's time units for each TimelineMode, which are used to query and
+// switch the ruler to the specified mode. kSamples has only kRulerSamples.
 constexpr int kRulerBeatsModes[] = {
-    41916,  // "Measure.Beats (minimal)".
-    40367,  // "Measure.Beats".
-    43205,  // "Measure.Fractions".
+    kRulerMeasuresBeatsMinimal,
+    kRulerMeasuresBeats,
+    kRulerMeasuresFractions,
 };
 constexpr int kRulerTimeModes[] = {
-    43204,  // "Minutes:Seconds (minimal)".
-    40365,  // "Minutes:Seconds".
-    40368,  // "Seconds".
+    kRulerMinutesSecondsMinimal,
+    kRulerMinutesSeconds,
+    kRulerSeconds,
 };
 constexpr int kRulerFramesModes[] = {
-    40370,  // "Hours:Minutes:Seconds:Frame".
-    41973,  // "Absolute Frames".
+    kRulerFrames,
+    kRulerAbsoluteFrames,
 };
-constexpr int kRulerSamplesMode = 40369;  // "Samples".
 
-// Actions IDs for the different secondary time modes of the ruler. These are
-// used to query and switch the ruler to the specified mode.
-constexpr int kRulerSecondaryNoneMode = 42360;  // No secondary mode.
+// The ruler's secondary time units for each TimelineMode, as above. kSamples
+// has only kRulerSecondarySamples, and kBeats has none.
 constexpr int kRulerSecondaryTimeModes[] = {
-    43705,  // "Minutes:Seconds (minimal)".
-    42361,  // "Minutes:Seconds".
-    42362,  // "Seconds".
+    kRulerSecondaryMinutesSecondsMinimal,
+    kRulerSecondaryMinutesSeconds,
+    kRulerSecondarySeconds,
 };
 constexpr int kRulerSecondaryFramesModes[] = {
-    42364,  // "Hours:Minutes:Seconds:Frame".
-    42365,  // "Absolute Frames".
+    kRulerSecondaryFrames,
+    kRulerSecondaryAbsoluteFrames,
 };
-constexpr int kRulerSecondarySamplesMode = 42363;  // "Samples".
 
 // The last selected ruler mode for each TimelineMode, which starts as the
 // first of each.
@@ -85,7 +83,7 @@ TimelineMode GetRulerMode() {
       return TimelineMode::kFrames;
     }
   }
-  if (GetToggleCommandState(kRulerSamplesMode) > 0) {
+  if (GetToggleCommandState(kRulerSamples) > 0) {
     return TimelineMode::kSamples;
   }
   // This should never happen, but if it does, default to beats mode.
@@ -109,7 +107,7 @@ void SetRulerMode(TimelineMode mode) {
       Main_OnCommand(g_last_ruler_modes.frames, 0);
       break;
     case TimelineMode::kSamples:
-      Main_OnCommand(kRulerSamplesMode, 0);
+      Main_OnCommand(kRulerSamples, 0);
       break;
   }
 }
@@ -127,7 +125,7 @@ std::optional<TimelineMode> GetRulerSecondaryMode() {
       return TimelineMode::kFrames;
     }
   }
-  if (GetToggleCommandState(kRulerSecondarySamplesMode) > 0) {
+  if (GetToggleCommandState(kRulerSecondarySamples) > 0) {
     return TimelineMode::kSamples;
   }
   // It isn't a known secondary mode, or it is none.
@@ -155,7 +153,7 @@ void SetRulerSecondaryMode(TimelineMode mode) {
       Main_OnCommand(g_last_ruler_modes.secondary_frames, 0);
       break;
     case TimelineMode::kSamples:
-      Main_OnCommand(kRulerSecondarySamplesMode, 0);
+      Main_OnCommand(kRulerSecondarySamples, 0);
       break;
   }
 }
@@ -166,7 +164,7 @@ void ClearRulerSecondaryMode() {
   if (!GetRulerSecondaryMode().has_value()) {
     return;
   }
-  Main_OnCommand(kRulerSecondaryNoneMode, 0);
+  Main_OnCommand(kRulerSecondaryNone, 0);
 }
 
 bool IsCurrentRulerMode(TimelineMode mode) { return GetRulerMode() == mode; }

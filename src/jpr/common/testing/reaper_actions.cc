@@ -10,8 +10,8 @@
 
 #include "absl/types/span.h"
 #include "gtest/gtest.h"
+#include "jpr/common/action_ids.h"
 #include "jpr/common/automation.h"
-#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -62,16 +62,18 @@ void AddReaperActions(FakeReaper* reaper) {
     FakeCommand command = {.id = action.id,
                            .text = action.text,
                            .toggle_state = action.toggle_state};
-    if (action.id >= kFirstAutoModeAction && action.id <= kLastAutoModeAction) {
-      const AutoMode mode =
-          static_cast<AutoMode>(action.id - kFirstAutoModeAction);
-      command.on_run = [reaper, mode] { SetSelectedAutoModes(reaper, mode); };
-    } else if (action.id == kUndoAction) {
+    if (action.id == kUndoAction) {
       command.on_run = [reaper] { reaper->GetProject().Undo(); };
     } else if (action.id == kRedoAction) {
       command.on_run = [reaper] { reaper->GetProject().Redo(); };
     }
     reaper->AddCommand(std::move(command));
+  }
+  for (int i = 0; i < kAutoModeCount; ++i) {
+    const AutoMode mode = static_cast<AutoMode>(i);
+    reaper->SetCommandHandler(GetAutoModeAction(mode), [reaper, mode] {
+      SetSelectedAutoModes(reaper, mode);
+    });
   }
   AddRulerGroup(reaper, kRulerModes, kRulerMeasuresBeats);
   AddRulerGroup(reaper, kRulerSecondaryModes, kRulerSecondaryNone);
