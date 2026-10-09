@@ -14,6 +14,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
@@ -672,12 +673,29 @@ TEST_F(DeviceXTouchTest, ScribbleColorsAreTheNearestInThePalette) {
 
 // The fake's project is at 120 BPM in 4/4, with 30 frames and 44100 samples a
 // second.
-TEST_F(DeviceXTouchTest, TimecodeShowsEachTimelineMode) {
+class DeviceXTouchTimecodeTest : public DeviceXTouchTest {
+ protected:
+  // A timeline position, and what the display shows for it.
   struct Timecode {
     int mode;  // See ControlTextOutput::SetTimelineText().
     double position;
     std::string_view shown;
   };
+
+  // Shows each of `timecodes` in turn, and checks what the display shows.
+  void ExpectTimecodes(absl::Span<const Timecode> timecodes) {
+    Control* control = device_.GetControl(DeviceXTouch::kTimecode);
+    ASSERT_NE(control, nullptr);
+    for (const Timecode& entry : timecodes) {
+      SCOPED_TRACE(absl::StrCat("mode ", entry.mode, " at ", entry.position));
+      control->SetTimelineText(TimelinePosition(entry.position), entry.mode);
+      Run();
+      EXPECT_EQ(xtouch_.GetTimecode(), entry.shown);
+    }
+  }
+};
+
+TEST_F(DeviceXTouchTimecodeTest, ShowsEachTimelineMode) {
   constexpr Timecode kTimecodes[] = {
       {1, 3.5, "  2 4.00   "},       // Beats: measure 2, beat 4.
       {2, 3.5, "    0.03.500"},      // Time.
@@ -685,17 +703,44 @@ TEST_F(DeviceXTouchTest, TimecodeShowsEachTimelineMode) {
       {3, 3725.5, " 01.02.05.15 "},  // Frames.
       {4, 3.5, "    154350"},        // Samples.
   };
-  Control* control = device_.GetControl(DeviceXTouch::kTimecode);
-  ASSERT_NE(control, nullptr);
-  for (const Timecode& entry : kTimecodes) {
-    SCOPED_TRACE(absl::StrCat("mode ", entry.mode, " at ", entry.position));
-    control->SetTimelineText(TimelinePosition(entry.position), entry.mode);
-    Run();
-    EXPECT_EQ(xtouch_.GetTimecode(), entry.shown);
-  }
+  ExpectTimecodes(kTimecodes);
 }
 
-TEST_F(DeviceXTouchTest, TimecodeShowsText) {
+// Before the start, beats and frames count measures and hours down from 0, and
+// time is the distance from the start.
+TEST_F(DeviceXTouchTimecodeTest, ShowsPositionsBeforeTheStart) {
+  constexpr Timecode kTimecodes[] = {
+      {1, -0.25, "  0 4.50   "},      // Beats: "0.4.50".
+      {1, -65.5, "-32 2.00   "},      // Beats: "-32.2.00".
+      {2, -65.5, "   -1.05.500"},     // Time: "-1:05.500".
+      {2, -3725.5, " -1.02.05.500"},  // Time: "-1:02:05.500".
+      {3, -0.05, "-01.59.59.28 "},    // Frames: "-1:59:59:28".
+      {3, -7300.0, "-03.58.20.00 "},  // Frames: "-3:58:20:00".
+  };
+  ExpectTimecodes(kTimecodes);
+}
+
+// Measures and hours have 3 digits, one of them the sign before the start, and
+// show "---" when they don't fit.
+TEST_F(DeviceXTouchTimecodeTest, ShowsDashesForMeasuresAndHoursThatDontFit) {
+  constexpr Timecode kTimecodes[] = {
+      {1, 1997.5, "999 4.00   "},       // Beats: "999.4.00".
+      {1, 1998.0, "--- 1.00   "},       // Beats: "1000.1.00".
+      {1, -199.5, "-99 2.00   "},       // Beats: "-99.2.00".
+      {1, -201.5, "--- 2.00   "},       // Beats: "-100.2.00".
+      {2, 3599999.5, "999.59.59.500"},  // Time: "999:59:59.500".
+      {2, 3600000.5, "---.00.00.500"},  // Time: "1000:00:00.500".
+      {2, -359999.5, "-99.59.59.500"},  // Time: "-99:59:59.500".
+      {2, -360000.5, "---.00.00.500"},  // Time: "-100:00:00.500".
+      {3, 3599999.5, "999.59.59.15 "},  // Frames: "999:59:59:15".
+      {3, 3600000.5, "---.00.00.15 "},  // Frames: "1000:00:00:15".
+      {3, -352800.5, "-99.59.59.15 "},  // Frames: "-99:59:59:15".
+      {3, -356400.5, "---.59.59.15 "},  // Frames: "-100:59:59:15".
+  };
+  ExpectTimecodes(kTimecodes);
+}
+
+TEST_F(DeviceXTouchTimecodeTest, ShowsText) {
   Control* control = device_.GetControl(DeviceXTouch::kTimecode);
   ASSERT_NE(control, nullptr);
 

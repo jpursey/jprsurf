@@ -263,6 +263,16 @@ class XTouchTimecodeDisplay final : public ControlTextOutput {
   // Sends the 10 encoded digit bytes to the display.
   void SendCodes(const uint8_t text[kTimecodeDigitCount]);
 
+  // Writes `value` right-justified into a 3 digit field, zero padded to at
+  // least `min_digits`, or "---" if it doesn't fit.
+  static void FormatWideField(char field[4], int value, int min_digits = 1) {
+    if (value < -99 || value > 999) {
+      snprintf(field, 4, "---");
+    } else {
+      snprintf(field, 4, "%3.*d", min_digits, value);
+    }
+  }
+
   // Encodes one character for the MCU 7-segment display.
   // Bits 5-0: the character's display code, which is the low 6 bits of its
   // ASCII (0x20-0x5F): '@' to '_' are 0x00-0x1F, and ' ' to '?' are
@@ -290,15 +300,10 @@ void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
 
   switch (mode) {
     case TimelineMode::kBeats: {
+      // Before the start, measures count down from 0, so a negative measure
+      // is never 0.
       BeatsPosition b = position.ToBeats();
-      b.measure %= 1000;  // Wrap measures at 1000 for display purposes.
-      if (!b.negative) {
-        snprintf(fields[0], 4, "%3d", b.measure);
-      } else if (b.measure == 0) {
-        snprintf(fields[0], 4, " -0");
-      } else {
-        snprintf(fields[0], 4, "%3d", -b.measure);
-      }
+      FormatWideField(fields[0], b.negative ? -b.measure : b.measure);
       snprintf(fields[1], 3, "%2d", b.beat);
       dots[1] = true;
       snprintf(fields[2], 3, "%02d", b.division);
@@ -308,11 +313,7 @@ void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
     case TimelineMode::kTime: {
       TimePosition t = position.ToTime();
       if (t.hours > 0) {
-        if (!t.negative) {
-          snprintf(fields[0], 4, "%3d", t.hours);
-        } else {
-          snprintf(fields[0], 4, " %3d", -t.hours);
-        }
+        FormatWideField(fields[0], t.negative ? -t.hours : t.hours);
         dots[0] = true;
         snprintf(fields[1], 3, "%02d", t.minutes);
       } else if (!t.negative) {
@@ -332,12 +333,11 @@ void XTouchTimecodeDisplay::OnTimelineTextChanged(TimelinePosition position,
       break;
     }
     case TimelineMode::kFrames: {
+      // Before the start, hours count down from 0, so a negative hour is never
+      // 0.
       FramesPosition f = position.ToFrames();
-      if (f.hours >= 100) {
-        snprintf(fields[0], 4, "%d", f.hours);
-      } else {
-        snprintf(fields[0], 4, "%c%02d", (f.negative ? '-' : ' '), f.hours);
-      }
+      FormatWideField(fields[0], f.negative ? -f.hours : f.hours,
+                      /*min_digits=*/2);
       dots[0] = true;
       snprintf(fields[1], 3, "%02d", f.minutes);
       dots[1] = true;
