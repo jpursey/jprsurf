@@ -254,6 +254,10 @@ class Control final {
   // output, this does nothing.
   void SetDValue(int value, int mode = 0);
 
+  // Returns how many characters the Text output shows, or 0 if it has no limit
+  // or there is no Text output (see ControlTextOutput::GetWidth()).
+  int GetTextWidth() const;
+
   // Sets the text of the Text output, if it exists. If there is no Text
   // output, this does nothing.
   void SetText(std::string_view text, int mode = 0);

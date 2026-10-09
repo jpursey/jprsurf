@@ -160,6 +160,13 @@ void Control::SetDValue(int value, int mode) {
   }
 }
 
+int Control::GetTextWidth() const {
+  if (text_output_ == nullptr) {
+    return 0;
+  }
+  return text_output_->GetWidth();
+}
+
 void Control::SetText(std::string_view text, int mode) {
   if (text_output_ == nullptr) {
     return;

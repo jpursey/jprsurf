@@ -11,11 +11,39 @@
 #include <type_traits>
 #include <variant>
 
+#include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/strip.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
+
+namespace {
+
+// Shortens volume text, such as REAPER's "-124.0dB", to fit `width`
+// characters: first by dropping decimal digits ("-124dB"), then by dropping
+// the unit ("-124").
+std::string FitVolumeText(std::string_view text, int width) {
+  std::string_view number = text;
+  std::string_view unit;
+  if (absl::ConsumeSuffix(&number, "dB")) {
+    unit = "dB";
+  }
+  while (static_cast<int>(number.size() + unit.size()) > width &&
+         absl::StrContains(number, '.')) {
+    number.remove_suffix(1);
+    absl::ConsumeSuffix(&number, ".");
+  }
+  if (static_cast<int>(number.size() + unit.size()) > width) {
+    unit = {};
+    number = absl::StripTrailingAsciiWhitespace(number);  // "-inf dB"
+  }
+  return absl::StrCat(number, unit);
+}
+
+}  // namespace
 
 ViewProperty::ViewProperty(std::string_view name, Type type)
     : name_(name), type_(type) {}
@@ -211,6 +239,15 @@ std::string ViewProperty::GetText() const {
       return absl::StrCat(ReadInt());
   }
   return "";
+}
+
+std::string ViewProperty::GetFittedText(int width) const {
+  std::string text = GetText();
+  if (type_ != Type::kVolume || width <= 0 ||
+      static_cast<int>(text.size()) <= width) {
+    return text;
+  }
+  return FitVolumeText(text, width);
 }
 
 Color ViewProperty::GetColor() const {

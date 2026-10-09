@@ -207,6 +207,15 @@ class ViewProperty {
   virtual Color GetColor() const;
   virtual TimelinePosition GetTimelinePosition() const;
 
+  // Returns GetText(), shortened to fit `width` characters (0 for no limit)
+  // where the property's type has a shorter form: a volume drops decimal
+  // digits, then its "dB". Text that still doesn't fit is returned as short as
+  // it can be made, for the control to cut.
+  //
+  // A derived class that knows a shorter form of its own text may override
+  // this, calling this version for any text it doesn't shorten itself.
+  virtual std::string GetFittedText(int width) const;
+
   // Adapter functions that set the value of the property as a specific type.
   // These will reinterpret the passed in value as the underlying type of the
   // property (for instance mapping a double value greater than 0.5 to an on

@@ -98,7 +98,8 @@ class FakeDValueOutput final : public ControlDValueOutput {
 // A timeline position is kept as it was set, and not formatted as text.
 class FakeTextOutput final : public ControlTextOutput {
  public:
-  explicit FakeTextOutput(int mode_count = 1) : ControlTextOutput(mode_count) {}
+  explicit FakeTextOutput(int mode_count = 1, int width = 0)
+      : ControlTextOutput(mode_count, width) {}
 
   // The text it was last set to, or empty if the last was a position.
   const std::string& GetText() const { return text_; }

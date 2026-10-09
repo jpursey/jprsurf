@@ -73,7 +73,8 @@ class ViewMappingTest : public SceneTest {
   }
 
   // Each adds a control with only the output: a DValue output whose modes
-  // have the max values, or an output with `mode_count` modes.
+  // have the max values, or an output with `mode_count` modes (and a text
+  // output's `width`).
   FakeDevice::FakeControl AddDValue(std::string_view name,
                                     std::vector<int> max_values = {1}) {
     return device_->AddControl(
@@ -84,10 +85,11 @@ class ViewMappingTest : public SceneTest {
     return device_->AddControl(
         {.name = name, .cvalue_output = std::make_unique<FakeCValueOutput>()});
   }
-  FakeDevice::FakeControl AddText(std::string_view name, int mode_count = 1) {
+  FakeDevice::FakeControl AddText(std::string_view name, int mode_count = 1,
+                                  int width = 0) {
     return device_->AddControl(
         {.name = name,
-         .text_output = std::make_unique<FakeTextOutput>(mode_count)});
+         .text_output = std::make_unique<FakeTextOutput>(mode_count, width)});
   }
   FakeDevice::FakeControl AddColor(std::string_view name) {
     return device_->AddControl(
@@ -317,6 +319,16 @@ TEST_F(ViewMappingTest, PansWriteSteps) {
     EXPECT_EQ(five.dvalue_output->GetValue(), row.five);
     EXPECT_NEAR(cvalue_.cvalue_output->GetValue(), (row.pan + 1.0) / 2.0, 1e-9);
   }
+}
+
+TEST_F(ViewMappingTest, VolumesWriteTextThatFitsTheControl) {
+  AddProperty(Type::kVolume, 0.000000631);  // "-124.0dB".
+  FakeDevice::FakeControl strip =
+      AddText("Strip", /*mode_count=*/1, /*width=*/7);
+  Write("user:value", {"Text", "Strip"});
+  AddSurface();
+  EXPECT_EQ(text_.text_output->GetText(), "-124.0dB");
+  EXPECT_EQ(strip.text_output->GetText(), "-124dB");
 }
 
 TEST_F(ViewMappingTest, VolumesWriteStepsUpToTheMax) {

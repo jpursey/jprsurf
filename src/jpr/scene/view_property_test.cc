@@ -9,6 +9,7 @@
 
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/timeline.h"
 #include "jpr/scene/testing/test_property.h"
 
@@ -72,6 +73,38 @@ TEST(ViewPropertyTest, EqualsTimelinePositionOnlyOnTimeline) {
 TEST(ViewPropertyTest, EqualsNeverWithoutValue) {
   EXPECT_FALSE(
       TestProperty(Type::kAction, std::monostate()).Equals(std::monostate()));
+}
+
+TEST(ViewPropertyTest, FittedVolumeDropsDecimalsThenTheUnit) {
+  FakeReaper reaper;
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.000000631).GetFittedText(7),
+            "-124dB");  // "-124.0dB".
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.3163).GetFittedText(7),
+            "-10.0dB");  // "-10.00dB".
+  EXPECT_EQ(TestProperty(Type::kVolume, 3.162).GetFittedText(7),
+            "+10.0dB");  // "+10.00dB".
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.5).GetFittedText(4), "-6dB");
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.0000001).GetFittedText(4), "-140");
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.0).GetFittedText(4), "-inf");
+}
+
+TEST(ViewPropertyTest, FittedVolumeIsUnchangedWhenItFits) {
+  FakeReaper reaper;
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.5).GetFittedText(7), "-6.02dB");
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.0).GetFittedText(7), "-inf dB");
+
+  // A width of 0 is no limit.
+  EXPECT_EQ(TestProperty(Type::kVolume, 0.000000631).GetFittedText(0),
+            "-124.0dB");
+}
+
+// Text that has no shorter form is left for the control to cut.
+TEST(ViewPropertyTest, FittedTextOfOtherTypesIsUnchanged) {
+  FakeReaper reaper;
+  EXPECT_EQ(
+      TestProperty(Type::kText, std::string("Vocal Bus")).GetFittedText(7),
+      "Vocal Bus");
+  EXPECT_EQ(TestProperty(Type::kPan, -0.25).GetFittedText(3), "25%L");
 }
 
 }  // namespace

@@ -611,6 +611,7 @@ TEST_P(DeviceXTouchModelTest, ScribbleStripsShowBothLines) {
 TEST_F(DeviceXTouchTest, ScribbleTextIsCutToFit) {
   Control* control = device_.GetControl(DeviceXTouch::kScribble1Line1);
   ASSERT_NE(control, nullptr);
+  EXPECT_EQ(control->GetTextWidth(), 7);
   control->SetText("Vocal Bus");
   Run();
   EXPECT_EQ(xtouch_.GetScribble(0, 0), "Vocal B");

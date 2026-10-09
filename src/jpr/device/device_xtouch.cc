@@ -576,7 +576,8 @@ class XTouchTrackScribbleText final : public ControlTextOutput {
 XTouchTrackScribbleText::XTouchTrackScribbleText(SysexPrefix prefix,
                                                  MidiOut* midi_out, int track,
                                                  int line)
-    : prefix_(prefix),
+    : ControlTextOutput(/*mode_count=*/1, kScribbleTrackLineLength),
+      prefix_(prefix),
       midi_out_(midi_out),
       config_({.line = line,
                .offset = track * kScribbleTrackLineLength,

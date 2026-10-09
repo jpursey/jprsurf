@@ -18,6 +18,11 @@ namespace {
 
 void NoOpSyncFunction(ViewProperty& property, Control& control, int mode) {}
 
+// Writes the property's text, fitted to the control's text width.
+void WriteFittedText(ViewProperty& property, Control& control, int mode) {
+  control.SetText(property.GetFittedText(control.GetTextWidth()), mode);
+}
+
 // 10dB above unity gain, which matches the X-Touch faders.
 constexpr double kMaxVolume = 3.16228;
 
@@ -738,9 +743,7 @@ void ViewMapping::InitWriteToggleSyncFunction() {
   // If there is a text output, we set it to "On" when the property is true, and
   // "Off" when the property is false.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 
@@ -859,9 +862,7 @@ void ViewMapping::InitWritePanSyncFunction() {
 
   // If there is a text output, let the property convert the pan value to text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 
@@ -944,9 +945,7 @@ void ViewMapping::InitWriteVolumeSyncFunction() {
   // If there is a text output, let the property convert the volume value to
   // text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 
@@ -1027,9 +1026,7 @@ void ViewMapping::InitWriteNormalizedSyncFunction() {
   // If there is a text output, let the property convert the normalized value to
   // text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 
@@ -1048,9 +1045,7 @@ void ViewMapping::InitWriteTextSyncFunction() {
 
   // If there is a text output, use it.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 
@@ -1072,9 +1067,7 @@ void ViewMapping::InitWriteColorSyncFunction() {
   // If there is a text output, let the property convert the color value to
   // text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 
@@ -1141,9 +1134,7 @@ void ViewMapping::InitWriteEnumeratedSyncFunction() {
 
   // If there is a text output, let the property convert the value to text.
   if (outputs.IsSet(ControlOutput::Type::kText)) {
-    write_control_ = [](ViewProperty& property, Control& control, int mode) {
-      control.SetText(property.GetText(), mode);
-    };
+    write_control_ = WriteFittedText;
     return;
   }
 

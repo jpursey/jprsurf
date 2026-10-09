@@ -74,8 +74,8 @@ class ControlTest : public ::testing::Test {
   FakeDValueOutput* AddDValueOutput(absl::Span<const int> max_values = {1}) {
     return Add<FakeDValueOutput>(options_.dvalue_output, max_values);
   }
-  FakeTextOutput* AddTextOutput(int mode_count = 1) {
-    return Add<FakeTextOutput>(options_.text_output, mode_count);
+  FakeTextOutput* AddTextOutput(int mode_count = 1, int width = 0) {
+    return Add<FakeTextOutput>(options_.text_output, mode_count, width);
   }
   FakeColorOutput* AddColorOutput(int mode_count = 1) {
     return Add<FakeColorOutput>(options_.color_output, mode_count);
@@ -657,11 +657,20 @@ TEST_F(ControlTest, ModesAreTheMostOfItsOutputs) {
   EXPECT_EQ(control->GetDValueMaxValue(/*mode=*/2), 10);
 }
 
+TEST_F(ControlTest, TextWidthIsItsOutputs) {
+  AddTextOutput(/*mode_count=*/1, /*width=*/7);
+  EXPECT_EQ(Create()->GetTextWidth(), 7);
+
+  AddTextOutput();
+  EXPECT_EQ(Create()->GetTextWidth(), 0);
+}
+
 TEST_F(ControlTest, SettingAMissingOutputDoesNothing) {
   AddPressInput();
   Control* control = Create();
   EXPECT_EQ(control->GetModeCount(), 1);
   EXPECT_EQ(control->GetDValueMaxValue(), 0);
+  EXPECT_EQ(control->GetTextWidth(), 0);
   control->SetCValue(0.5);
   control->SetDValue(1);
   control->SetText("Bass");

@@ -181,11 +181,17 @@ class ControlTextOutput : public ControlOutput {
   //   mode = 4: TimelineMode::kSamples
   void SetTimelineText(TimelinePosition position, int mode = 0);
 
+  // Returns how many characters the display shows, or 0 if it has no limit.
+  // Longer text is cut or altered by the control, so a caller that can shorten
+  // its text to fit should.
+  int GetWidth() const { return width_; }
+
   // Implements ControlOutput.
   Type GetType() const override { return Type::kText; }
 
  protected:
-  explicit ControlTextOutput(int mode_count = 1) : ControlOutput(mode_count) {}
+  explicit ControlTextOutput(int mode_count = 1, int width = 0)
+      : ControlOutput(mode_count), width_(width) {}
 
   // Derived classes can optionally override this to update the text of the
   // physical output based on a timeline position. If this is not overridden,
@@ -197,6 +203,9 @@ class ControlTextOutput : public ControlOutput {
   // Derived classes should override this to update the text of the physical
   // output. The mode is guaranteed to be in the range [0, GetModeCount()).
   virtual void OnTextChanged(std::string_view text, int mode) = 0;
+
+ private:
+  const int width_;
 };
 
 //==============================================================================
