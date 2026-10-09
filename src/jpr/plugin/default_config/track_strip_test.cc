@@ -187,6 +187,25 @@ TEST_F(TrackStripTest, ScribbleShowsTheNameAndVolume) {
   EXPECT_EQ(xtouch_ext_->GetScribble(0, 1), "-6.02dB");
 }
 
+// REAPER writes some volumes in 8 characters, which the strip fits in 7 by
+// dropping a decimal digit.
+TEST_F(TrackStripTest, ScribbleFitsLongVolumes) {
+  tracks_[0]->volume = 0.000000631;  // "-124.0dB".
+  tracks_[1]->volume = 0.3163;       // "-10.00dB".
+  RunUntilShown();
+  EXPECT_EQ(xtouch_ext_->GetScribble(0, 1), "-124dB ");
+  EXPECT_EQ(xtouch_ext_->GetScribble(1, 1), "-10.0dB");
+}
+
+// The bottom of a fader's travel, below its -60dB mark, reaches volumes under
+// -100dB.
+TEST_F(TrackStripTest, ScribbleFitsAVolumeAtTheBottomOfTheFader) {
+  MoveFader(*xtouch_ext_, 0, 1);
+  RunUntilShown();
+  EXPECT_LT(tracks_[0]->volume, 0.00001);                // -100dB.
+  EXPECT_EQ(xtouch_ext_->GetScribble(0, 1), "-114dB ");  // "-114.5dB".
+}
+
 TEST_F(TrackStripTest, ScribbleShowsTheTrackColor) {
   tracks_[0]->color = 0x010000FF;  // As 0x01BBGGRR.
   tracks_[1]->color = 0x0100FF00;
