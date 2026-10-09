@@ -366,7 +366,8 @@ TEST_F(TrackTest, RouteMuteKeepsPendingChangesOutOfItsUndoPoint) {
   track->SetRouteMute(TrackRouteType::kSend, 0, true);
   EXPECT_THAT(
       project_.GetUndoPoints(),
-      ElementsAre(Field(&FakeUndoPoint::name, "JPR: Adjust send volume")));
+      ElementsAre(Field(&FakeUndoPoint::name, "JPR: Adjust send volume"),
+                  Field(&FakeUndoPoint::name, "Toggle send mute")));
 }
 
 //------------------------------------------------------------------------------

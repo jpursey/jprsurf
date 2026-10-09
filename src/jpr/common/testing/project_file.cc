@@ -146,7 +146,7 @@ void ProjectFileWriter::AppendProject() {
   if (project_.GetPlayPosition() != 0.0) {
     Fail("a play position, as a project opens stopped");
   }
-  if (!project_.GetUndoPoints().empty()) {
+  if (project_.GetUndoCount() > 0) {
     Fail("undo points, as a project opens with none");
   }
   if (!project_.GetRedo().empty()) {

@@ -24,18 +24,17 @@ namespace jpr {
 // needs the report makes the call REAPER would make itself. What relates
 // tracks to each other, or must stay unique, is FakeProject's (see its class
 // comment).
+//
+// Its values that undo points hold are in FakeTrackUndoValues, and the rest in
+// FakeTrack itself (see "Undo and saving" in FakeProject).
 //==============================================================================
 
-struct FakeTrack {
+struct FakeTrackUndoValues {
   // The master's is MASTER, which P_NAME can't read or set.
   std::string name;
 
-  // As GetTrackColor(): 0 for none, or 0x01BBGGRR. The master's reads as 0.
-  int color = 0;
-
   double volume = 1.0;  // As a gain: 1.0 is 0dB.
   double pan = 0.0;     // From -1.0 (left) to 1.0 (right).
-  bool selected = false;
   bool mute = false;
   bool solo = false;
 
@@ -49,6 +48,9 @@ struct FakeTrack {
   // preview.
   int auto_mode = 0;
 
+  // As GetTrackColor(): 0 for none, or 0x01BBGGRR. The master's reads as 0.
+  int color = 0;
+
   // The track's group, or 0 for none. A grouped change to the mute, solo, rec
   // arm, volume, or pan of a track in a group changes every track in it (see
   // "Track changes" in fake_reaper.cc for how). This is simpler than REAPER's
@@ -60,6 +62,12 @@ struct FakeTrack {
   // and only GetTrackState() shows it: its B_SHOWINTCP reads 1 either way.
   bool show_in_mixer = true;
   bool show_in_tcp = true;
+
+  bool operator==(const FakeTrackUndoValues&) const = default;
+};
+
+struct FakeTrack : FakeTrackUndoValues {
+  bool selected = false;
 
   // As Track_GetPeakInfo() for the left and right channels: 1.0 is 0dB.
   std::array<double, 2> peak = {};

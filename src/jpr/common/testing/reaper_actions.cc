@@ -32,12 +32,14 @@ absl::Span<const RulerMode> FindRulerGroup(int id) {
 }
 
 // Sets the automation mode of every selected track in the current project,
-// the master's too.
+// the master's too, with an undo point if any changed.
 void SetSelectedAutoModes(FakeReaper* reaper, AutoMode mode) {
-  for (FakeTrack* track :
-       reaper->GetProject().GetSelectedTracks(/*include_master=*/true)) {
+  FakeProject& project = reaper->GetProject();
+  for (FakeTrack* track : project.GetSelectedTracks(/*include_master=*/true)) {
     track->auto_mode = static_cast<int>(mode);
   }
+  project.AddUndoPoint("Change track envelope automation mode",
+                       UNDO_STATE_TRACKCFG);
 }
 
 // Adds the ruler actions `group`, with `on` on.
@@ -64,6 +66,10 @@ void AddReaperActions(FakeReaper* reaper) {
       const AutoMode mode =
           static_cast<AutoMode>(action.id - kFirstAutoModeAction);
       command.on_run = [reaper, mode] { SetSelectedAutoModes(reaper, mode); };
+    } else if (action.id == kUndoAction) {
+      command.on_run = [reaper] { reaper->GetProject().Undo(); };
+    } else if (action.id == kRedoAction) {
+      command.on_run = [reaper] { reaper->GetProject().Redo(); };
     }
     reaper->AddCommand(std::move(command));
   }

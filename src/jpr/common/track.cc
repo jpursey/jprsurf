@@ -395,14 +395,15 @@ void Track::SetRouteVolume(TrackRouteType type, int index, double volume) {
   if (route == nullptr || route->volume == volume) {
     return;
   }
-  SetTrackSendUIVol(track_id_, GetTrackSendUiIndex(type, index), volume,
-                    /*isend=*/0);
   // REAPER does not create undo points for route changes from a control
-  // surface, so create one once the changes stop.
+  // surface, so create one once the changes stop. This comes first, so a
+  // pending undo point of another kind doesn't hold this change.
   ContinuousUndo::Get().OnChange(type == TrackRouteType::kSend
                                      ? "JPR: Adjust send volume"
                                      : "JPR: Adjust receive volume",
                                  UNDO_STATE_TRACKCFG);
+  SetTrackSendUIVol(track_id_, GetTrackSendUiIndex(type, index), volume,
+                    /*isend=*/0);
   route->volume = volume;
   NotifyRoutesChanged();
 }
@@ -412,13 +413,13 @@ void Track::SetRoutePan(TrackRouteType type, int index, double pan) {
   if (route == nullptr || route->pan == pan) {
     return;
   }
-  SetTrackSendUIPan(track_id_, GetTrackSendUiIndex(type, index), pan,
-                    /*isend=*/0);
   // See SetRouteVolume().
   ContinuousUndo::Get().OnChange(type == TrackRouteType::kSend
                                      ? "JPR: Adjust send pan"
                                      : "JPR: Adjust receive pan",
                                  UNDO_STATE_TRACKCFG);
+  SetTrackSendUIPan(track_id_, GetTrackSendUiIndex(type, index), pan,
+                    /*isend=*/0);
   route->pan = pan;
   NotifyRoutesChanged();
 }

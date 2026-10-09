@@ -6,10 +6,12 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/types/span.h"
 #include "jpr/common/testing/fake_track.h"
@@ -17,22 +19,30 @@
 
 namespace jpr {
 
+// A route's values that undo points hold (see "Undo and saving" in
+// FakeProject), which are all a test can set.
+struct FakeRouteUndoValues {
+  double volume = 1.0;  // As a gain: 1.0 is 0dB.
+  double pan = 0.0;     // From -1.0 (left) to 1.0 (right).
+  bool mute = false;
+
+  bool operator==(const FakeRouteUndoValues&) const = default;
+};
+
 // A route in a project: a send from one track to another, or a hardware output
 // from a track. A test reads and sets its values directly. Its ends are fixed,
 // as FakeProject keeps each track's routes by them.
-struct FakeRoute {
+struct FakeRoute : FakeRouteUndoValues {
   FakeTrack* const source = nullptr;
   FakeTrack* const destination = nullptr;  // Null for a hardware output.
-  double volume = 1.0;                     // As a gain: 1.0 is 0dB.
-  double pan = 0.0;                        // From -1.0 (left) to 1.0 (right).
-  bool mute = false;
 };
 
 // The isend of SetTrackSendUIVol() and SetTrackSendUIPan() that ends an edit,
 // which sets nothing and calls nothing back.
 inline constexpr int kEndEdit = 1;
 
-// An undo point added with Undo_OnStateChangeEx().
+// An undo point, added with Undo_OnStateChangeEx(), or by REAPER (see "Undo"
+// in fake_reaper.cc).
 struct FakeUndoPoint {
   std::string name;
   int flags = 0;  // UNDO_STATE_* flags.
@@ -206,17 +216,42 @@ class FakeProject final {
 
   //----------------------------------------------------------------------------
   // Undo and saving
+  //
+  // As in REAPER, an undo point holds the project's undoable state: each
+  // track's FakeTrackUndoValues (the master's too), and each route's
+  // FakeRouteUndoValues. Selection and the automation override aren't
+  // undoable. A point is only added if that state
+  // changed since the last one. Edit: Undo restores the state of the point
+  // before the last, and Edit: Redo the state of the point after, each
+  // dropping any change made since the last point. A new point drops those
+  // Redo would redo.
+  //
+  // Undo stops at the state the project had when the first change through
+  // the API (or an action's handler) was made. A test's own changes before
+  // that are part of it, and those after it are part of the next point.
   //----------------------------------------------------------------------------
 
-  // The undo points added to the project, in order.
-  absl::Span<const FakeUndoPoint> GetUndoPoints() const { return undo_points_; }
+  // The undo points Edit: Undo would undo, in the order they were added, and
+  // how many there are.
+  std::vector<FakeUndoPoint> GetUndoPoints() const;
+  int GetUndoCount() const { return undo_count_; }
 
-  // The undo point Edit: Redo would redo, as Undo_CanRedo2() returns it, or
-  // empty if there is none.
-  const std::string& GetRedo() const { return redo_; }
-  void SetRedo(std::string_view name) { redo_ = name; }
+  // The name of the undo point Edit: Redo would redo, as Undo_CanRedo2()
+  // returns it, or empty if there is none.
+  std::string_view GetRedo() const;
 
-  // Whether the project has changes to save, as IsProjectDirty() returns.
+  // Adds an undo point called `name`, as Undo_OnStateChangeEx() does, if
+  // `flags` (UNDO_STATE_*) has UNDO_STATE_TRACKCFG, and the undoable state
+  // changed since the last point. Returns true if it added one.
+  bool AddUndoPoint(std::string_view name, int flags);
+
+  // Undoes or redoes an undo point, as Edit: Undo and Edit: Redo do, and
+  // returns true, or returns false if there is none.
+  bool Undo();
+  bool Redo();
+
+  // Whether the project has changes to save, as IsProjectDirty() returns. An
+  // undo point sets it, as Undo and Redo do.
   bool IsDirty() const { return dirty_; }
   void SetDirty(bool dirty) { dirty_ = dirty; }
 
@@ -241,6 +276,23 @@ class FakeProject final {
     std::vector<FakeRoute*> receives;
     std::vector<FakeRoute*> hardware_outputs;
     bool deleted = false;
+  };
+
+  // The project's undoable state, as an undo point holds it. The project
+  // itself has no undoable values yet. The first would go in a
+  // FakeProjectUndoValues member, which this would hold a copy of, as it does
+  // each track's and route's.
+  struct UndoState {
+    absl::flat_hash_map<FakeTrack*, FakeTrackUndoValues> tracks;
+    absl::flat_hash_map<FakeRoute*, FakeRouteUndoValues> routes;
+
+    bool operator==(const UndoState&) const = default;
+  };
+
+  // An undo point, and the state it holds.
+  struct UndoStep {
+    FakeUndoPoint point;
+    UndoState state;
   };
 
   // `number` is the project's number in FakeReaper, starting from 1.
@@ -272,9 +324,29 @@ class FakeProject final {
   // AddHardwareOutput() have checked.
   FakeRoute* AddRoute(FakeTrack* source, FakeTrack* destination);
 
-  // Removes `route` from the records of the tracks at each end, and deletes
-  // it.
+  // Removes `route` from the records of the tracks at each end, and from the
+  // undo points, and deletes it.
   void RemoveRoute(FakeRoute* route);
+
+  // Keeps the undoable state as where Undo stops, if it isn't kept yet. The
+  // fake calls this before each change through the API.
+  void BeforeChange();
+
+  // For a change from a control surface (CSurf_On*ChangeEx()): if REAPER is
+  // holding the undo point of another kind of change, adds it, then holds
+  // `name`, the undo point of this kind (see "Undo" in fake_reaper.cc).
+  void HoldSurfaceChange(const char* name);
+
+  // Returns the undoable state, or sets it.
+  UndoState GetUndoState() const;
+  void SetUndoState(const UndoState& state);
+
+  // Returns true if there is an undo point Redo would redo.
+  bool HasRedo() const;
+
+  // Returns the state of the last undo point, or where Undo stops if there is
+  // none. BeforeChange() must have been called.
+  const UndoState& GetLastUndoState() const;
 
   const int number_;
   unsigned long next_guid_ = 1;
@@ -295,8 +367,18 @@ class FakeProject final {
 
   int automation_override_ = -1;
 
-  std::vector<FakeUndoPoint> undo_points_;
-  std::string redo_;
+  // Where Undo stops, once a change has been made (see BeforeChange()).
+  std::optional<UndoState> undo_start_;
+
+  // The undo points: the first undo_count_ are those Undo would undo, and the
+  // rest those Redo would redo.
+  std::vector<UndoStep> undo_steps_;
+  int undo_count_ = 0;
+
+  // The name of the undo point REAPER is holding for a change from a control
+  // surface, or null if it isn't holding one.
+  const char* held_surface_change_ = nullptr;
+
   bool dirty_ = false;
 
   int selected_item_count_ = 0;

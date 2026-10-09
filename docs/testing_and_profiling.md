@@ -424,8 +424,9 @@ REAPER's calls on the surface follow these.
   master's solo, mute, volume, and pan again, then each track's rec arm, input
   monitor, mute, solo, volume, and pan. The second round's volumes were the
   project's after the undo, where the first round's weren't always. Edit: Redo
-  calls the same. The ruler's time unit actions (40365, 40369, 40370), and
-  every other action the smoke scenario ran, called nothing back.
+  calls the same. With nothing to undo or redo, they call nothing back. The
+  ruler's time unit actions (40365, 40369, 40370), and every other action the
+  smoke scenario ran, called nothing back.
 - **Every track's state** is sent master first, then each track in order:
   `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`
   (with the track's pan mode: 3, REAPER 4 and later's balance, in a project
@@ -685,8 +686,8 @@ cost.
 
 **What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees
-with the hardware, what REAPER's own UI shows, what Undo restores, and times.
-The smoke test in CLAUDE.md checks those by hand.
+with the hardware, what REAPER's own UI shows, the undo points REAPER adds
+between runs, and times. The smoke test in CLAUDE.md checks those by hand.
 
 ## Getting there
 

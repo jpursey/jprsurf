@@ -20,13 +20,16 @@ namespace jpr {
 // A series of changes with the same description (for instance, moving one or
 // more send faders) becomes a single undo point, created once the changes have
 // stopped for kDelay. A change with a different description first creates the
-// undo point for the pending changes, as REAPER does for track volume and pan
-// changes from a control surface.
+// undo point for the pending changes, much as REAPER does for track volume and
+// pan changes from a control surface.
 //
-// As the undo point is created after the changes, it also includes any other
-// change made in the meantime that doesn't create its own undo point. Code that
-// is about to create its own undo point should call Flush() first, so the
-// pending changes aren't included in it.
+// An undo point holds every change since the last one, so OnChange() is called
+// before the change is made, and the pending undo point it may create doesn't
+// hold it (REAPER's own does hold the change that creates it, so undoing it
+// undoes that change too). As the undo point is created after the changes, it
+// also includes any other change made in the meantime that doesn't create its
+// own undo point. Code that is about to create its own undo point should call
+// Flush() first, so the pending changes aren't included in it.
 class ContinuousUndo final {
  public:
   // How long changes must stop before their undo point is created.
@@ -39,9 +42,9 @@ class ContinuousUndo final {
   ContinuousUndo& operator=(const ContinuousUndo&) = delete;
   ~ContinuousUndo() = default;
 
-  // Records a change to include in an undo point with the given description
-  // and undo state flags (see Undo_OnStateChangeEx). The change's time is the
-  // time last passed to Update().
+  // Records a change about to be made, to include in an undo point with the
+  // given description and undo state flags (see Undo_OnStateChangeEx). The
+  // change's time is the time last passed to Update().
   //
   // If a change is pending with a different description or flags, the pending
   // undo point is created first.

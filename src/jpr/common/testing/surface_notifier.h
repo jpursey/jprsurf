@@ -56,7 +56,8 @@ namespace jpr {
 // - Main_OnCommand(), after the action's handler: for the automation mode
 //   actions (40400-40404), SetAutoMode() with the mode, then as the override
 //   does if any track's mode changed. For Edit: Undo and Edit: Redo (40029,
-//   40030), everything (see SendUndo()).
+//   40030), everything (see SendUndo()), if there was something to undo or
+//   redo.
 //
 // The refresh is when the outermost PreventUIRefresh() scope ends. Outside a
 // batch, REAPER sends a track's mute and solo before the next run, which a

@@ -29,6 +29,7 @@ using ::testing::WithParamInterface;
 using Button = FakeXTouch::Button;
 using Led = FakeXTouch::Led;
 using Light = FakeXTouch::Light;
+using StripButton = FakeXTouch::StripButton;
 
 // Four tracks, on the extender's first strips, for the automation modes. The
 // global controls are all on the X-Touch.
@@ -199,12 +200,16 @@ TEST_F(GlobalTest, SoloLedShowsAnyTrackSoloed) {
 }
 
 TEST_F(GlobalTest, UndoLightShowsThereIsARedo) {
+  Tap(*xtouch_ext_, StripButton::kMute, 0);
+  RunUntilShown();
   EXPECT_EQ(xtouch_.GetLight(Button::kUndo), Light::kOff);
-  reaper_.GetProject().SetRedo("JPR:Toggle Mute");
+  Tap(xtouch_, Button::kUndo);
   RunUntilShown();
+  EXPECT_FALSE(tracks_[0]->mute);
   EXPECT_EQ(xtouch_.GetLight(Button::kUndo), Light::kOn);
-  reaper_.GetProject().SetRedo("");
+  TapWith(Button::kShift, Button::kUndo);
   RunUntilShown();
+  EXPECT_TRUE(tracks_[0]->mute);
   EXPECT_EQ(xtouch_.GetLight(Button::kUndo), Light::kOff);
 }
 

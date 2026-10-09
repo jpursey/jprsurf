@@ -68,6 +68,10 @@ struct FakeCommand {
 // writes them, for a project at REAPER's defaults of 120 BPM in 4/4, with 30
 // frames and 44100 samples a second.
 //
+// Undo points are part of the state: each holds the project's undoable state,
+// as REAPER's do, so Edit: Undo restores it (see "Undo and saving" in
+// FakeProject).
+//
 // Creating the fake, and destroying it, resets the process state of every
 // library linked into the test (see TestReset). Only one may exist at a time.
 //

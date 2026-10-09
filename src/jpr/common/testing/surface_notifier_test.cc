@@ -51,6 +51,14 @@ class SurfaceNotifierTest : public ::testing::Test {
     return RecordingSurface::Get()->TakeCalls();
   }
 
+  // Gives Edit: Undo its handler, and A's mute to undo.
+  void AddMuteToUndo() {
+    reaper_.AddCommand(
+        {.id = kUndoAction, .on_run = [this] { reaper_.GetProject().Undo(); }});
+    SetTrackUIMute(a_, 1, 0);
+    Undo_OnStateChangeEx("Mute", UNDO_STATE_TRACKCFG, -1);
+  }
+
   FakeReaper reaper_;
   SurfaceNotifier notifier_{&reaper_};
   std::unique_ptr<TestControlSurface> surface_;
@@ -81,8 +89,8 @@ TEST_F(SurfaceNotifierTest, SendsNothingWithNoSurfaceOpen) {
   // With the surface removed, a call on it would use a destroyed surface.
   surface_.reset();
   ASSERT_EQ(RecordingSurface::Get(), nullptr);
-  SetTrackUIMute(a_, 1, 0);
   SetTrackUIRecArm(a_, 1, 0);
+  AddMuteToUndo();
   Main_OnCommand(kUndoAction, 0);
 }
 
@@ -120,6 +128,8 @@ TEST_F(SurfaceNotifierTest, ActionsSendAfterTheirHandler) {
 // REAPER's repeat state is the user's.
 TEST_F(SurfaceNotifierTest, UndoSendsTheRepeatState) {
   reaper_.AddCommand({.id = kRepeatAction, .toggle_state = 1});
+  AddMuteToUndo();
+  TakeCalls();
   Main_OnCommand(kUndoAction, 0);
   EXPECT_THAT(TakeCalls(), Contains("SetRepeatState(true)"));
 }

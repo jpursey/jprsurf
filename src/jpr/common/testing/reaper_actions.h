@@ -20,7 +20,9 @@ namespace jpr {
 // SurfaceNotifier is for REAPER's calls to a control surface. Those whose
 // effect tests need change what REAPER's do:
 // - The automation mode actions set the mode of every selected track in the
-//   current project, the master's too.
+//   current project, the master's too, with an undo point if any changed.
+// - Edit: Undo and Edit: Redo undo and redo the current project's undo points
+//   (see FakeProject::Undo()).
 // - The ruler's time unit actions, and its secondary ones (see timeline.cc),
 //   are each a radio group (see SelectRulerMode()), with Measure.Beats on, and
 //   no secondary unit, where REAPER's default preferences have

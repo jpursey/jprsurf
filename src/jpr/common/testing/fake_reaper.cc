@@ -56,6 +56,10 @@ constexpr int kBeatsPerMeasure = 4;
 constexpr int kFramesPerSecond = 30;
 constexpr double kSamplesPerSecond = 44100.0;
 
+// The undo points REAPER holds for changes from a control surface (see Undo).
+constexpr char kSurfaceVolumeUndo[] = "Adjust track volume (via surface)";
+constexpr char kSurfacePanUndo[] = "Adjust track pan (via surface)";
+
 }  // namespace
 
 //==============================================================================
@@ -145,6 +149,7 @@ class FakeReaper::Api final {
         return false;
       }
       if (set) {
+        s_instance_->GetProjectOf(track).BeforeChange();
         track.name = value;
       } else {
         // The API passes no size for `value`, so it must hold the name.
@@ -223,18 +228,20 @@ class FakeReaper::Api final {
     return GetRouteMute(GetReceive(track_id, index), mute);
   }
 
-  // Changes to routes aren't grouped. `end_edit` (REAPER's isend) is kEndEdit
-  // to end an edit, which sets nothing, and otherwise 0, or -1 for an instant
-  // edit. A pan past an end isn't clamped.
+  // Changes to routes aren't grouped. `end_edit` (REAPER's isend) is 0 to
+  // set the value, kEndEdit to end an edit, which sets nothing, or -1 for an
+  // instant edit, which does both (see Undo). A pan past an end isn't
+  // clamped.
   static bool SetTrackSendUIVol(MediaTrack* track_id, int index, double volume,
                                 int end_edit) {
-    return SetRouteDouble(track_id, index, &FakeRoute::volume, volume,
-                          end_edit);
+    return SetRouteDouble(track_id, index, &FakeRoute::volume, volume, end_edit,
+                          "Adjust send volume");
   }
 
   static bool SetTrackSendUIPan(MediaTrack* track_id, int index, double pan,
                                 int end_edit) {
-    return SetRouteDouble(track_id, index, &FakeRoute::pan, pan, end_edit);
+    return SetRouteDouble(track_id, index, &FakeRoute::pan, pan, end_edit,
+                          "Adjust send pan");
   }
 
   static bool ToggleTrackSendUIMute(MediaTrack* track_id, int index) {
@@ -242,7 +249,10 @@ class FakeReaper::Api final {
     if (route == nullptr) {
       return false;
     }
+    FakeProject& project = s_instance_->GetProjectOf(*route->source);
+    project.BeforeChange();
     route->mute = !route->mute;
+    project.AddUndoPoint("Toggle send mute", UNDO_STATE_TRACKCFG);
     return true;
   }
 
@@ -276,6 +286,7 @@ class FakeReaper::Api final {
   static int SetTrackUIMute(MediaTrack* track_id, int mute, int group_flags) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
     s_instance_->OnBatchedChange(&track);
+    s_instance_->GetProjectOf(track).BeforeChange();
     const bool new_mute = GetNewValue(mute, track.mute);
     for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
       changed->mute = new_mute;
@@ -290,6 +301,8 @@ class FakeReaper::Api final {
   static int SetTrackUISolo(MediaTrack* track_id, int solo, int group_flags) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
     s_instance_->OnBatchedChange(&track);
+    FakeProject& project = s_instance_->GetProjectOf(track);
+    project.BeforeChange();
     if (solo == 3 || solo > 4) {
       ADD_FAILURE() << "SetTrackUISolo() with solo " << solo
                     << " isn't faked yet";
@@ -297,7 +310,7 @@ class FakeReaper::Api final {
     }
     const bool new_solo = GetNewValue(solo, track.solo);
     const bool in_place = new_solo && solo != 2;
-    const FakeTrack* master = s_instance_->GetProjectOf(track).GetMasterTrack();
+    const FakeTrack* master = project.GetMasterTrack();
     for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
       changed->solo = new_solo;
       changed->solo_in_place = in_place && changed != master;
@@ -312,7 +325,9 @@ class FakeReaper::Api final {
                               int group_flags) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
     s_instance_->OnBatchedChange(&track);
-    const FakeTrack* master = s_instance_->GetProjectOf(track).GetMasterTrack();
+    FakeProject& project = s_instance_->GetProjectOf(track);
+    project.BeforeChange();
+    const FakeTrack* master = project.GetMasterTrack();
     if (&track == master) {
       return -1;
     }
@@ -339,6 +354,8 @@ class FakeReaper::Api final {
       ADD_FAILURE() << "CSurf_OnVolumeChangeEx() with relative isn't faked yet";
       return track.volume;
     }
+    FakeProject& project = s_instance_->GetProjectOf(track);
+    project.BeforeChange();
     const double old_volume = track.volume;
     for (FakeTrack* changed :
          GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging)
@@ -351,6 +368,7 @@ class FakeReaper::Api final {
         changed->volume *= volume / old_volume;
       }
     }
+    project.HoldSurfaceChange(kSurfaceVolumeUndo);
     return volume;
   }
 
@@ -362,6 +380,8 @@ class FakeReaper::Api final {
       ADD_FAILURE() << "CSurf_OnPanChangeEx() with relative isn't faked yet";
       return track.pan;
     }
+    FakeProject& project = s_instance_->GetProjectOf(track);
+    project.BeforeChange();
     const double new_pan = std::clamp(pan, -1.0, 1.0);
     const double change = new_pan - track.pan;
     for (FakeTrack* changed :
@@ -378,6 +398,7 @@ class FakeReaper::Api final {
       }
       changed->pan = std::clamp(other_pan, -1.0, 1.0);
     }
+    project.HoldSurfaceChange(kSurfacePanUndo);
     return new_pan;
   }
 
@@ -425,13 +446,8 @@ class FakeReaper::Api final {
   }
 
   //----------------------------------------------------------------------------
-  // Undo
+  // Track state
   //----------------------------------------------------------------------------
-
-  static void Undo_OnStateChangeEx(const char* name, int flags,
-                                   int track_parameter) {
-    s_instance_->GetProject().undo_points_.push_back({name, flags});
-  }
 
   // The fake has no FX or input monitoring, so their flags are never set.
   static const char* GetTrackState(MediaTrack* track_id, int* flags) {
@@ -653,6 +669,7 @@ class FakeReaper::Api final {
     s_instance_->commands_run_.push_back(command);
     FakeCommand* fake_command = FindCommand(command);
     if (fake_command != nullptr && fake_command->on_run) {
+      s_instance_->GetProject().BeforeChange();
       fake_command->on_run();
     }
   }
@@ -686,7 +703,7 @@ class FakeReaper::Api final {
   }
 
   //----------------------------------------------------------------------------
-  // Automation, undo, and the project
+  // Automation and the project
   //----------------------------------------------------------------------------
 
   static int GetGlobalAutomationOverride() {
@@ -697,9 +714,39 @@ class FakeReaper::Api final {
     s_instance_->GetProject().automation_override_ = mode;
   }
 
+  //----------------------------------------------------------------------------
+  // Undo
+  //
+  // An undo point holds the project's undoable state (see "Undo and saving"
+  // in FakeProject). Most setters add none of their own, and
+  // Undo_OnStateChangeEx() adds one with whatever changed since the last. The
+  // route setters do add their own: ToggleTrackSendUIMute() always, and
+  // SetTrackSendUIVol() and SetTrackSendUIPan() for an instant edit, or one
+  // that ends an edit. So do the automation mode actions (see
+  // AddReaperActions()).
+  //
+  // REAPER holds the undo point of a change from a control surface
+  // (CSurf_On*ChangeEx()), which it adds once a change of the other kind
+  // (volume or pan) is made, so the point holds that change too. Other undo
+  // points, and Undo, leave it held. REAPER adds it between runs too, which
+  // isn't checked, so the fake doesn't.
+  //----------------------------------------------------------------------------
+
+  // `track_parameter` is -1 for the whole project, which is all the fake
+  // models.
+  static void Undo_OnStateChangeEx(const char* name, int flags,
+                                   int track_parameter) {
+    if (track_parameter != -1) {
+      ADD_FAILURE() << "Undo_OnStateChangeEx() with a track isn't faked yet";
+    }
+    s_instance_->GetProject().AddUndoPoint(name, flags);
+  }
+
   static const char* Undo_CanRedo2(ReaProject* project) {
-    const FakeProject& fake_project = s_instance_->FindProject(project);
-    return fake_project.redo_.empty() ? nullptr : fake_project.redo_.c_str();
+    const std::string_view redo = s_instance_->FindProject(project).GetRedo();
+
+    // GetRedo() is a point's name, which ends where it does.
+    return redo.empty() ? nullptr : redo.data();
   }
 
   static int IsProjectDirty(ReaProject* project) {
@@ -827,17 +874,28 @@ class FakeReaper::Api final {
   }
 
   // Sets the volume or pan of `track_id`'s route at `index` as the
-  // *TrackSendUI* functions index them, unless `end_edit` is kEndEdit. Returns
-  // false if there is none.
+  // *TrackSendUI* functions index them, unless `end_edit` is kEndEdit, and
+  // adds the undo point `undo_name`, unless `end_edit` is 0 (see
+  // SetTrackSendUIVol()). Returns false if there is no route.
   static bool SetRouteDouble(MediaTrack* track_id, int index,
                              double FakeRoute::*property, double value,
-                             int end_edit) {
+                             int end_edit, const char* undo_name) {
+    if (end_edit < -1 || end_edit > kEndEdit) {
+      ADD_FAILURE() << "SetTrackSendUIVol() or SetTrackSendUIPan() with isend "
+                    << end_edit << " isn't faked yet";
+      return false;
+    }
     FakeRoute* route = GetTrackSendUiRoute(track_id, index);
     if (route == nullptr) {
       return false;
     }
+    FakeProject& project = s_instance_->GetProjectOf(*route->source);
+    project.BeforeChange();
     if (end_edit != kEndEdit) {
       route->*property = value;
+    }
+    if (end_edit != 0) {
+      project.AddUndoPoint(undo_name, UNDO_STATE_TRACKCFG);
     }
     return true;
   }

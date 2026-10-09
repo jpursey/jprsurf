@@ -274,9 +274,6 @@ TEST(ProjectFileTest, StateAProjectDoesntOpenWithFailsTheTest) {
   project->SetPlayPosition(1.0);
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "a play position");
   project->SetPlayPosition(0.0);
-  project->SetRedo("Change");
-  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "a redo");
-  project->SetRedo("");
   project->SetDirty(true);
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "changes to save");
   project->SetDirty(false);
@@ -284,11 +281,18 @@ TEST(ProjectFileTest, StateAProjectDoesntOpenWithFailsTheTest) {
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "A's peak");
 }
 
-TEST(ProjectFileTest, UndoPointsFailTheTest) {
-  // Only the API adds undo points, so this needs the fake.
+TEST(ProjectFileTest, UndoPointsAndRedoFailTheTest) {
+  // Only changes through the API are undone, so this needs the fake.
   FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  SetTrackUIMute(ToMediaTrack(project.AddTrack("A")), 1,
+                 kPreventGroupingAndGanging);
   Undo_OnStateChangeEx("Change", UNDO_STATE_TRACKCFG, -1);
-  EXPECT_NONFATAL_FAILURE(WriteProjectFile(reaper.GetProject()), "undo points");
+  project.SetDirty(false);
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(project), "undo points");
+  project.Undo();
+  project.SetDirty(false);
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(project), "a redo");
 }
 
 TEST(ProjectFileTest, MasterStateAProjectCantHoldFailsTheTest) {

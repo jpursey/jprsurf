@@ -12,6 +12,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/automation.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -19,6 +20,7 @@
 #include "jpr/scene/scene.h"
 #include "jpr/scene/testing/scene_test.h"
 #include "jpr/scene/view_property.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 namespace {
@@ -97,7 +99,10 @@ TEST_F(StatePropertiesTest, PolledTogglesEachFollowTheirState) {
   tracks_[1]->solo = true;
   surface_->Run();
   EXPECT_THAT(GetValues(toggles), ElementsAre(true, false, false, false));
-  project_.SetRedo("Track volume");
+  SetTrackUIMute(ToMediaTrack(tracks_[0]), 1, kPreventGroupingAndGanging);
+  Undo_OnStateChangeEx("Mute", UNDO_STATE_TRACKCFG, -1);
+  project_.Undo();
+  project_.SetDirty(false);
   surface_->Run();
   EXPECT_THAT(GetValues(toggles), ElementsAre(true, true, false, false));
   project_.SetDirty(true);

@@ -188,13 +188,16 @@ void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
   if (auto_mode_action) {
     before = GetFlags();
   }
+  const int undo_count = reaper_->GetProject().GetUndoCount();
   original(command, flag);
   IReaperControlSurface* surface = GetWrappedSurface();
   if (surface == nullptr) {
     return;
   }
   if (command == kUndoAction || command == kRedoAction) {
-    SendUndo(*surface);
+    if (reaper_->GetProject().GetUndoCount() != undo_count) {
+      SendUndo(*surface);
+    }
   } else if (auto_mode_action) {
     surface->SetAutoMode(command - kFirstAutoModeAction);
     if (!GetChanges(before).empty()) {

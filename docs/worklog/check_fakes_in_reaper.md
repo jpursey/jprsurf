@@ -19,7 +19,8 @@ Every behavior the fake models, and every call the notifier makes, has a
 contract test, and the API list is finite, so a review can check it (see
 Coverage).
 
-There is no change in behavior.
+There is no change in behavior, apart from a fix to the undo points of route
+changes, which the fake's undo showed (see CL9).
 
 ## Design
 
@@ -191,10 +192,10 @@ Checked in REAPER, with the test install, before the CLs that rely on them:
 3. **Quitting:** confirmed (2026-10-08). Opening an empty project with
    `noprompt:`, then posting File: Quit REAPER, exits with no prompt. Quitting
    from inside a run crashed REAPER.
-4. **Undo:** what Edit: Undo restores after each setter on the API list (mute,
-   solo, rec arm, selection, volume, pan, the send setters, and the override),
-   which settles whether the fake models undo. These are contract tests that
-   fail under the fake until it does, so they are checked in REAPER first.
+4. **Undo:** confirmed (2026-10-09). What Edit: Undo restores after each
+   setter on the API list (mute, solo, rec arm, selection, volume, pan, the
+   send setters, and the override) is simple enough that the fake models it
+   (see Found in REAPER).
 
 ### Found in REAPER
 
@@ -339,6 +340,50 @@ gaps in the fake, each fixed with its test:
 
 Surface tests that showed 0dB as `+0.00dB` now show `0.00dB`, as REAPER
 writes it.
+
+The undo contract tests, in CL9 (2026-10-09), explored with temporary tests
+first, showed the fake could model undo, which it now does (see "Undo and
+saving" in `FakeProject`, and "Undo" in `fake_reaper.cc`):
+- **An undo point holds the project's state,** not a change.
+  `Undo_OnStateChangeEx()` adds one holding every change since the last
+  point, and none if nothing changed, or if its flags don't have
+  `UNDO_STATE_TRACKCFG`. Edit: Undo restores the state of the point before,
+  and Edit: Redo the state of the point after, each dropping any change since
+  the last point. A new point drops the redo. With nothing to undo or redo,
+  they change nothing and call nothing back, where `SurfaceNotifier` always
+  sent Undo's calls. Each point sets the dirty flag. The fake has Undo and
+  Redo set it too, which wasn't seen, as a project with something to undo is
+  already dirty.
+- **What is undone:** each track's name, volume, pan, mute, solo, rec arm, and
+  automation mode, the master's too, and each route's volume, pan, and mute.
+  Selection and the automation override aren't. A track's color, group, and
+  visibility are too, which the user checked in REAPER's UI, as no function
+  on the API list changes them.
+- **Which setters add their own point:** the track setters, selection, names,
+  the override, and the route setters with isend 0 add none, so a later point
+  holds their changes. `ToggleTrackSendUIMute()` adds `Toggle send mute`, and
+  `SetTrackSendUIVol()` and `SetTrackSendUIPan()` add `Adjust send volume` and
+  `Adjust send pan` for an instant edit (-1), or one that ends an edit (1),
+  from either end of the route. The automation mode actions add `Change track
+  envelope automation mode` if a mode changed, and Track: Unsolo all tracks
+  adds `Clear all track solos` if a track was soloed (it has no handler in the
+  fake).
+- **`CSurf_On*ChangeEx()` hold their undo point:** REAPER adds it, as `Adjust
+  track volume (via surface)` or `Adjust track pan (via surface)`, once a
+  change of the other kind is made, so it holds that change too. Changes of
+  the same kind, to any track, add nothing. Other points, and Undo, leave it
+  held. REAPER also adds it between runs, which a contract test can't see, so
+  the fake doesn't.
+- **Not faked:** a volume change from a control surface on a track in touch
+  mode adds a point of its own (`Create volume envelope: ...`), as the fake has
+  no envelopes.
+- **JPRSurf's route undo points:** `Track` told `ContinuousUndo` of a route
+  change after making it, so a pending point of the other kind (a send's
+  volume, then its pan) held the change that added it, and the pan never got
+  a point of its own, as `SendModeTest.EachKindOfRouteMoveHasItsOwnUndoPoint`
+  expected. It now tells it first.
+
+Scene and surface tests that set the redo by hand now undo a change.
 
 ## CLs
 
@@ -501,18 +546,26 @@ Depends on: CL5.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL9 [ ] common/testing: Undo
+### CL9 [x] common/testing: Undo
 
 Depends on: CL6, CL7.
 
-- To confirm 4. Then either the fake models what Undo restores, with the
-  contract tests passing under both, or it doesn't, and why is recorded here
-  and in the fake's class comment.
-- Which setters leave an undo point, as an undo with nothing to undo calls
-  nothing back, where `SurfaceNotifier` always sends Undo's calls (see Found
-  in REAPER).
-- `Undo_OnStateChangeEx()`'s undo points, from CL8: what Undo restores after
-  one, and whether the project is dirty after (it read clean within the call).
+- To confirm 4, explored with temporary tests, then contract tests of undo in
+  `fake_reaper_contract_test.cc`, including `Undo_OnStateChangeEx()`'s points
+  and the dirty flag, from CL8.
+- The fake models undo (see Found in REAPER): `FakeProject` keeps its undo
+  points as the state each holds, each track's and route's values in base
+  structs of `FakeTrack` and `FakeRoute` (`FakeTrackUndoValues` and
+  `FakeRouteUndoValues`), so a field is undone by where it is declared. It
+  has `Undo()` and `Redo()`, which
+  `AddReaperActions()` gives Edit: Undo and Edit: Redo, and the setters that
+  add their own points add them. `FakeProject::SetRedo()` is gone, so tests
+  that need a redo undo a change, and `ContinuousUndo`'s tests make the
+  changes their points hold.
+- `SurfaceNotifier` sends Undo's calls only if there was something to undo or
+  redo, with a contract test.
+- `Track` tells `ContinuousUndo` of a route change before making it (see
+  Found in REAPER).
 
 **Verify**
 - Standard checks, and `check_in_reaper`.

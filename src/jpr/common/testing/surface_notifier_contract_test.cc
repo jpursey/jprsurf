@@ -492,6 +492,13 @@ TEST_F(SurfaceNotifierContractTest, UndoAndRedoSendEverything) {
   }
 }
 
+TEST_F(SurfaceNotifierContractTest, UndoAndRedoWithNothingToDoSendNothing) {
+  for (int command : {kUndoAction, kRedoAction}) {
+    Main_OnCommand(command, 0);
+    EXPECT_THAT(TakeCalls(), IsEmpty()) << "Action " << command;
+  }
+}
+
 TEST_F(SurfaceNotifierContractTest, OtherActionsSendNothing) {
   // The ruler's time unit actions.
   for (int command : {40365, 40369, 40370}) {

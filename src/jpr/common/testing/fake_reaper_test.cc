@@ -22,11 +22,14 @@
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/test_control_surface.h"
 #include "jpr/common/track_cache.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 namespace {
 
+using ::testing::AllOf;
 using ::testing::ElementsAre;
+using ::testing::Field;
 using ::testing::IsEmpty;
 
 // A control surface that counts its runs, and calls `on_run` in each.
@@ -416,6 +419,18 @@ TEST(FakeReaperTest, ParametersItDoesntModelFailTheTest) {
   std::array<char, 64> text = {};
   EXPECT_NONFATAL_FAILURE(
       ::format_timestr_pos(1.0, text.data(), text.size(), 3), "mode 3");
+  EXPECT_NONFATAL_FAILURE(::Undo_OnStateChangeEx("Change", -1, 0), "a track");
+}
+
+TEST(FakeReaperTest, RouteEditsItDoesntModelFailTheTest) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  project.AddSend(drums, project.AddTrack("Bus"));
+  EXPECT_NONFATAL_FAILURE(::SetTrackSendUIVol(ToMediaTrack(drums), 0, 0.5, 2),
+                          "isend 2");
+  EXPECT_NONFATAL_FAILURE(::SetTrackSendUIPan(ToMediaTrack(drums), 0, 0.5, -2),
+                          "isend -2");
 }
 
 // REAPER moves a group from where it was when the gesture began, so the fake
@@ -525,12 +540,84 @@ TEST(FakeReaperTest, SendsREAPERCantMakeFailTheTest) {
   EXPECT_NE(project.AddHardwareOutput(master), nullptr);
 }
 
-TEST(FakeReaperTest, RecordsUndoPoints) {
+TEST(FakeReaperTest, UndoPointsAreListedUntilUndone) {
   FakeReaper reaper;
-  ::Undo_OnStateChangeEx("Change", 4, -1);
-  ASSERT_EQ(reaper.GetProject().GetUndoPoints().size(), 1);
-  EXPECT_EQ(reaper.GetProject().GetUndoPoints()[0].name, "Change");
-  EXPECT_EQ(reaper.GetProject().GetUndoPoints()[0].flags, 4);
+  FakeProject& project = reaper.GetProject();
+  MediaTrack* track = ToMediaTrack(project.AddTrack("Drums"));
+  ::SetTrackUIMute(track, 1, kPreventGroupingAndGanging);
+  ::Undo_OnStateChangeEx("Mute", UNDO_STATE_TRACKCFG, -1);
+  ::SetTrackUISolo(track, 1, kPreventGroupingAndGanging);
+  ::Undo_OnStateChangeEx("Solo", UNDO_STATE_ALL, -1);
+  EXPECT_THAT(
+      project.GetUndoPoints(),
+      ElementsAre(AllOf(Field(&FakeUndoPoint::name, "Mute"),
+                        Field(&FakeUndoPoint::flags, UNDO_STATE_TRACKCFG)),
+                  Field(&FakeUndoPoint::name, "Solo")));
+  EXPECT_EQ(project.GetRedo(), "");
+
+  EXPECT_TRUE(project.Undo());
+  EXPECT_THAT(project.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "Mute")));
+  EXPECT_EQ(project.GetRedo(), "Solo");
+}
+
+// What a test changes itself is outside undo until the API changes something.
+TEST(FakeReaperTest, UndoStopsWhereTheApiFirstChangedSomething) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  drums->volume = 0.5;
+  ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventGroupingAndGanging);
+  drums->pan = 0.25;
+  ::Undo_OnStateChangeEx("Change", UNDO_STATE_TRACKCFG, -1);
+
+  EXPECT_TRUE(project.Undo());
+  EXPECT_EQ(drums->volume, 0.5);
+  EXPECT_FALSE(drums->mute);
+  EXPECT_EQ(drums->pan, 0.0);
+  EXPECT_FALSE(project.Undo());
+}
+
+// No function on the API list changes them, so the contract tests can't check
+// them, but REAPER's UI shows they're undone, where selection isn't.
+TEST(FakeReaperTest, ColorGroupAndVisibilityAreUndone) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventGroupingAndGanging);
+  drums->color = 0x014080FF;
+  drums->group = 1;
+  drums->show_in_mixer = false;
+  drums->show_in_tcp = false;
+  drums->selected = true;
+  ::Undo_OnStateChangeEx("Change", UNDO_STATE_TRACKCFG, -1);
+
+  EXPECT_TRUE(project.Undo());
+  EXPECT_EQ(drums->color, 0);
+  EXPECT_EQ(drums->group, 0);
+  EXPECT_TRUE(drums->show_in_mixer);
+  EXPECT_TRUE(drums->show_in_tcp);
+  EXPECT_TRUE(drums->selected);
+}
+
+TEST(FakeReaperTest, UndoLeavesDeletedTracksAndRoutesDeleted) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* bus = project.AddTrack("Bus");
+  FakeRoute* send = project.AddSend(drums, bus);
+  ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventGroupingAndGanging);
+  ::ToggleTrackSendUIMute(ToMediaTrack(drums), 0);
+  project.DeleteRoute(send);
+  project.DeleteTrack(drums);
+  FakeRoute* new_send = project.AddSend(bus, project.AddTrack("Reverb"));
+  new_send->mute = true;
+
+  // The new route is left as it is, even if it has the deleted one's pointer.
+  EXPECT_TRUE(project.Undo());
+  EXPECT_TRUE(drums->mute);
+  EXPECT_TRUE(new_send->mute);
+  EXPECT_EQ(project.GetTrackCount(), 2);
 }
 
 TEST(FakeReaperTest, UnbalancedPreventUIRefreshFailsTheTest) {
@@ -675,11 +762,9 @@ TEST(FakeReaperTest, StateAProjectCantOpenWith) {
   FakeProject& project = reaper.GetProject();
   project.SetPlayState(1);
   project.SetPlayPosition(2.5);
-  project.SetRedo("Change volume");
   project.SetDirty(true);
   EXPECT_EQ(::GetPlayState(), 1);
   EXPECT_EQ(::GetPlayPosition(), 2.5);
-  EXPECT_STREQ(::Undo_CanRedo2(nullptr), "Change volume");
   EXPECT_EQ(::IsProjectDirty(nullptr), 1);
 }
 

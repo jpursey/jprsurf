@@ -9,12 +9,14 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
 #include "gtest/gtest.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 namespace {
@@ -296,10 +298,11 @@ void FakeProject::DeleteRoute(FakeRoute* route) {
 }
 
 FakeRoute* FakeProject::AddRoute(FakeTrack* source, FakeTrack* destination) {
-  FakeRoute* route = routes_
-                         .emplace_back(std::make_unique<FakeRoute>(FakeRoute{
-                             .source = source, .destination = destination}))
-                         .get();
+  FakeRoute* route =
+      routes_
+          .emplace_back(std::make_unique<FakeRoute>(
+              FakeRoute{{}, /*source=*/source, /*destination=*/destination}))
+          .get();
   // AddSend() and AddHardwareOutput() checked the ends are tracks in the
   // project, so each has a record.
   TrackRecord* source_record = FindRecord(source);
@@ -321,6 +324,14 @@ void FakeProject::RemoveRoute(FakeRoute* route) {
   } else {
     TrackRecord* destination_record = FindRecord(route->destination);
     std::erase(destination_record->receives, route);
+  }
+
+  // A new route may be given its pointer.
+  if (undo_start_.has_value()) {
+    undo_start_->routes.erase(route);
+  }
+  for (UndoStep& step : undo_steps_) {
+    step.state.routes.erase(route);
   }
   std::erase_if(routes_,
                 [route](const auto& entry) { return entry.get() == route; });
@@ -386,6 +397,111 @@ int FakeProject::GetTrackSendUiIndex(const FakeRoute* route) const {
 
 int FakeProject::GetReceiveIndex(const FakeRoute* route) const {
   return IndexOf(GetReceives(route->destination), route);
+}
+
+//------------------------------------------------------------------------------
+// Undo and saving
+//------------------------------------------------------------------------------
+
+std::vector<FakeUndoPoint> FakeProject::GetUndoPoints() const {
+  std::vector<FakeUndoPoint> points;
+  for (int i = 0; i < undo_count_; ++i) {
+    points.push_back(undo_steps_[i].point);
+  }
+  return points;
+}
+
+std::string_view FakeProject::GetRedo() const {
+  if (!HasRedo()) {
+    return {};
+  }
+  return undo_steps_[undo_count_].point.name;
+}
+
+bool FakeProject::AddUndoPoint(std::string_view name, int flags) {
+  // Nothing has changed if Undo has nowhere to stop yet.
+  if ((flags & UNDO_STATE_TRACKCFG) == 0 || !undo_start_.has_value()) {
+    return false;
+  }
+  UndoState state = GetUndoState();
+  if (state == GetLastUndoState()) {
+    return false;
+  }
+  undo_steps_.resize(undo_count_);
+  undo_steps_.push_back({.point = {.name = std::string(name), .flags = flags},
+                         .state = std::move(state)});
+  ++undo_count_;
+  dirty_ = true;
+  return true;
+}
+
+bool FakeProject::Undo() {
+  if (undo_count_ == 0) {
+    return false;
+  }
+  --undo_count_;
+  SetUndoState(GetLastUndoState());
+  dirty_ = true;
+  return true;
+}
+
+bool FakeProject::Redo() {
+  if (!HasRedo()) {
+    return false;
+  }
+  ++undo_count_;
+  SetUndoState(GetLastUndoState());
+  dirty_ = true;
+  return true;
+}
+
+void FakeProject::BeforeChange() {
+  if (!undo_start_.has_value()) {
+    undo_start_ = GetUndoState();
+  }
+}
+
+void FakeProject::HoldSurfaceChange(const char* name) {
+  if (held_surface_change_ != nullptr && held_surface_change_ != name) {
+    AddUndoPoint(held_surface_change_, UNDO_STATE_TRACKCFG);
+  }
+  held_surface_change_ = name;
+}
+
+FakeProject::UndoState FakeProject::GetUndoState() const {
+  UndoState state;
+  state.tracks.reserve(records_.size());
+  for (const auto& [track, record] : records_) {
+    if (!record.deleted) {
+      state.tracks[record.track.get()] = *track;
+    }
+  }
+  state.routes.reserve(routes_.size());
+  for (const std::unique_ptr<FakeRoute>& route : routes_) {
+    state.routes[route.get()] = *route;
+  }
+  return state;
+}
+
+void FakeProject::SetUndoState(const UndoState& state) {
+  for (const auto& [track, values] : state.tracks) {
+    if (HasTrack(track)) {
+      static_cast<FakeTrackUndoValues&>(*track) = values;
+    }
+  }
+
+  // RemoveRoute() removes a deleted route from every state.
+  for (const auto& [route, values] : state.routes) {
+    static_cast<FakeRouteUndoValues&>(*route) = values;
+  }
+}
+
+bool FakeProject::HasRedo() const {
+  return undo_count_ < static_cast<int>(undo_steps_.size());
+}
+
+const FakeProject::UndoState& FakeProject::GetLastUndoState() const {
+  return undo_count_ > 0 ? undo_steps_[undo_count_ - 1].state : *undo_start_;
 }
 
 }  // namespace jpr

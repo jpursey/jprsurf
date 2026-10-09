@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
@@ -17,6 +18,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/testing/action_ids.h"
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
@@ -29,6 +31,9 @@ namespace {
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
+
+// GetTrackState()'s flags for a track soloed in place.
+constexpr int kSoloedInPlace = kTrackStateSolo | kTrackStateSoloInPlace;
 
 // Returns a track's name, as GetTrackState() returns it.
 std::string GetName(MediaTrack* track) {
@@ -150,8 +155,7 @@ TEST_F(TrackContractTest, TrackStateHasTheTracksFlags) {
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Selected")), kTrackStateSelected);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Muted")), kTrackStateMute);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed")), kTrackStateSolo);
-  EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed in place")),
-            kTrackStateSolo | kTrackStateSoloInPlace);
+  EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed in place")), kSoloedInPlace);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Armed")), kTrackStateRecArm);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Folder")), kTrackStateFolder);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("In folder")), 0);
@@ -329,19 +333,18 @@ TEST_F(TrackChangeContractTest, MuteAndRecArmAreSetClearedAndToggled) {
 TEST_F(TrackChangeContractTest, SoloIsInPlaceByDefault) {
   OpenProject([](FakeProject& project) { project.AddTrack("Track"); });
   MediaTrack* track = GetTrack(nullptr, 0);
-  constexpr int kInPlace = kTrackStateSolo | kTrackStateSoloInPlace;
   EXPECT_EQ(Set(kTrackStateSolo, track, 1, kPreventGroupingAndGanging), 2);
-  EXPECT_EQ(GetTrackStateFlags(track), kInPlace);
+  EXPECT_EQ(GetTrackStateFlags(track), kSoloedInPlace);
   EXPECT_EQ(Set(kTrackStateSolo, track, -1, kPreventGroupingAndGanging), 0);
   EXPECT_EQ(GetTrackStateFlags(track), 0);
   EXPECT_EQ(Set(kTrackStateSolo, track, -1, kPreventGroupingAndGanging), 2);
-  EXPECT_EQ(GetTrackStateFlags(track), kInPlace);
+  EXPECT_EQ(GetTrackStateFlags(track), kSoloedInPlace);
 
   // 2 solos it not in place, and 4 in place.
   EXPECT_EQ(Set(kTrackStateSolo, track, 2, kPreventGroupingAndGanging), 1);
   EXPECT_EQ(GetTrackStateFlags(track), kTrackStateSolo);
   EXPECT_EQ(Set(kTrackStateSolo, track, 4, kPreventGroupingAndGanging), 2);
-  EXPECT_EQ(GetTrackStateFlags(track), kInPlace);
+  EXPECT_EQ(GetTrackStateFlags(track), kSoloedInPlace);
   EXPECT_EQ(Set(kTrackStateSolo, track, 0, kPreventGroupingAndGanging), 0);
   EXPECT_EQ(GetTrackStateFlags(track), 0);
 }
@@ -441,7 +444,7 @@ TEST_F(TrackChangeContractTest, GroupedMuteAndSoloSetTheGroup) {
   Set(kTrackStateSolo, a, 2, kPreventSelectionGanging);
   EXPECT_EQ(GetTrackStateFlags(b), kTrackStateSolo);
   Set(kTrackStateSolo, a, 4, kPreventSelectionGanging);
-  EXPECT_EQ(GetTrackStateFlags(b), kTrackStateSolo | kTrackStateSoloInPlace);
+  EXPECT_EQ(GetTrackStateFlags(b), kSoloedInPlace);
 }
 
 TEST_F(TrackChangeContractTest, GroupedRecArmTogglesTheGroup) {
@@ -911,6 +914,306 @@ TEST_F(ProjectContractTest, TheAutomationOverrideIsTheProjects) {
     SetGlobalAutomationOverride(mode);
     EXPECT_EQ(GetGlobalAutomationOverride(), mode);
   }
+}
+
+//------------------------------------------------------------------------------
+// Undo
+//------------------------------------------------------------------------------
+
+// A and B, with a send from A to B.
+class UndoContractTest : public ContractTest {
+ protected:
+  UndoContractTest() {
+    OpenProject([](FakeProject& project) {
+      FakeTrack* a = project.AddTrack("A");
+      project.AddSend(a, project.AddTrack("B"));
+    });
+    master_ = GetMasterTrack(nullptr);
+    a_ = FindTrack("A");
+    b_ = FindTrack("B");
+  }
+
+  // Runs Edit: Undo or Edit: Redo.
+  void Undo() { Main_OnCommand(kUndoAction, 0); }
+  void Redo() { Main_OnCommand(kRedoAction, 0); }
+
+  // Returns the name of the undo point Edit: Redo would redo, or nothing if
+  // there is none.
+  std::optional<std::string> GetRedo() {
+    const char* redo = Undo_CanRedo2(nullptr);
+    if (redo == nullptr) {
+      return std::nullopt;
+    }
+    return redo;
+  }
+
+  // Mutes or unmutes `track`, without grouping or ganging.
+  void SetMute(MediaTrack* track, bool mute) {
+    SetTrackUIMute(track, mute ? 1 : 0, kPreventGroupingAndGanging);
+  }
+
+  // Adds an undo point of the whole project.
+  void AddUndoPoint(const char* name) {
+    Undo_OnStateChangeEx(name, UNDO_STATE_TRACKCFG, -1);
+  }
+
+  // Changes A's mute, solo, rec arm, name, and volume, and the send's volume
+  // and pan, without an undo point.
+  void ChangeA() {
+    SetMute(a_, true);
+    SetTrackUISolo(a_, 1, kPreventGroupingAndGanging);
+    SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
+    std::string name = "Z";
+    GetSetMediaTrackInfo_String(a_, "P_NAME", name.data(), true);
+    CSurf_OnVolumeChangeEx(a_, 0.5, false, false);
+    SetTrackSendUIVol(a_, 0, 0.5, 0);
+    SetTrackSendUIPan(a_, 0, 0.25, 0);
+  }
+
+  // Expects what ChangeA() changes to be as it left them, if `changed`, and
+  // otherwise as they started.
+  void ExpectAChanged(bool changed) {
+    constexpr int kFlags = kTrackStateMute | kSoloedInPlace | kTrackStateRecArm;
+    EXPECT_EQ(GetTrackStateFlags(a_) & kFlags, changed ? kFlags : 0);
+    EXPECT_EQ(GetName(a_), changed ? "Z" : "A");
+    EXPECT_EQ(GetVolume(a_), changed ? 0.5 : 1.0);
+    const std::vector<double> send_vol_pan =
+        changed ? std::vector<double>{0.5, 0.25}
+                : std::vector<double>{1.0, 0.0};
+    EXPECT_EQ(GetSendVolPan(), send_vol_pan);
+  }
+
+  // Returns the send's volume and pan.
+  std::vector<double> GetSendVolPan() {
+    return GetVolPan(GetTrackSendUIVolPan, a_, 0);
+  }
+
+  MediaTrack* master_ = nullptr;
+  MediaTrack* a_ = nullptr;
+  MediaTrack* b_ = nullptr;
+};
+
+TEST_F(UndoContractTest, ChangesAddNoUndoPointOfTheirOwn) {
+  ChangeA();
+  SetTrackSelected(a_, true);
+  SetGlobalAutomationOverride(4);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+
+  // So there is nothing to undo.
+  Undo();
+  ExpectAChanged(true);
+  EXPECT_TRUE(HasFlag(a_, kTrackStateSelected));
+  EXPECT_EQ(GetGlobalAutomationOverride(), 4);
+  EXPECT_EQ(GetRedo(), std::nullopt);
+}
+
+TEST_F(UndoContractTest, AnUndoPointHoldsEveryChangeSinceTheLast) {
+  ChangeA();
+  EndEntryPoint();
+  SetMute(master_, true);
+  AddUndoPoint("Change");
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+
+  Undo();
+  ExpectAChanged(false);
+  EXPECT_FALSE(HasFlag(master_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), "Change");
+
+  Redo();
+  ExpectAChanged(true);
+  EXPECT_TRUE(HasFlag(master_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), std::nullopt);
+}
+
+TEST_F(UndoContractTest, AnUndoPointIsOnlyAddedForAChange) {
+  AddUndoPoint("Nothing");
+  SetMute(a_, true);
+  SetMute(a_, false);
+  AddUndoPoint("Back");
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+
+  // A track's state is UNDO_STATE_TRACKCFG's.
+  SetMute(a_, true);
+  Undo_OnStateChangeEx("Other", UNDO_STATE_MISCCFG, -1);
+  Undo_OnStateChangeEx("None", 0, -1);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+  Undo_OnStateChangeEx("All", UNDO_STATE_ALL, -1);
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+  Undo();
+  EXPECT_FALSE(HasFlag(a_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), "All");
+}
+
+TEST_F(UndoContractTest, SelectionAndTheOverrideArentUndone) {
+  SetTrackSelected(a_, true);
+  SetGlobalAutomationOverride(4);
+  SetMute(a_, true);
+  AddUndoPoint("Change");
+  EndEntryPoint();
+  SetTrackSelected(a_, false);
+  EndEntryPoint();
+  SetTrackSelected(b_, true);
+  SetGlobalAutomationOverride(2);
+
+  Undo();
+  EXPECT_EQ(GetTrackStateFlags(a_), 0);
+  EXPECT_EQ(GetTrackStateFlags(b_), kTrackStateSelected);
+  EXPECT_EQ(GetGlobalAutomationOverride(), 2);
+}
+
+TEST_F(UndoContractTest, UndoAndRedoStepThroughThePoints) {
+  SetMute(a_, true);
+  AddUndoPoint("Mute A");
+  EndEntryPoint();
+  SetMute(b_, true);
+  AddUndoPoint("Mute B");
+
+  Undo();
+  EXPECT_TRUE(HasFlag(a_, kTrackStateMute));
+  EXPECT_FALSE(HasFlag(b_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), "Mute B");
+  Undo();
+  EXPECT_FALSE(HasFlag(a_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), "Mute A");
+
+  // The project opened with nothing to undo.
+  Undo();
+  EXPECT_EQ(GetRedo(), "Mute A");
+
+  Redo();
+  EXPECT_TRUE(HasFlag(a_, kTrackStateMute));
+  EXPECT_FALSE(HasFlag(b_, kTrackStateMute));
+  Redo();
+  EXPECT_TRUE(HasFlag(b_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), std::nullopt);
+  Redo();
+  EXPECT_TRUE(HasFlag(b_, kTrackStateMute));
+}
+
+TEST_F(UndoContractTest, UndoAndRedoDropChangesSinceTheLastPoint) {
+  SetMute(a_, true);
+  AddUndoPoint("Mute A");
+  EndEntryPoint();
+  SetMute(b_, true);
+  Undo();
+  EXPECT_FALSE(HasFlag(a_, kTrackStateMute));
+  EXPECT_FALSE(HasFlag(b_, kTrackStateMute));
+
+  // A change since doesn't drop the redo.
+  EndEntryPoint();
+  SetMute(b_, true);
+  EXPECT_EQ(GetRedo(), "Mute A");
+  Redo();
+  EXPECT_TRUE(HasFlag(a_, kTrackStateMute));
+  EXPECT_FALSE(HasFlag(b_, kTrackStateMute));
+}
+
+TEST_F(UndoContractTest, ANewPointDropsTheRedo) {
+  SetMute(a_, true);
+  AddUndoPoint("Mute A");
+  Undo();
+  EndEntryPoint();
+  SetMute(b_, true);
+  AddUndoPoint("Mute B");
+  EXPECT_EQ(GetRedo(), std::nullopt);
+  Redo();
+  EXPECT_FALSE(HasFlag(a_, kTrackStateMute));
+}
+
+TEST_F(UndoContractTest, RouteMuteAddsAnUndoPoint) {
+  // From either end.
+  for (auto [track, index] : {std::pair(a_, 0), std::pair(b_, -1)}) {
+    ToggleTrackSendUIMute(track, index);
+    EXPECT_EQ(GetMute(GetTrackSendUIMute, a_, 0), true);
+    Undo();
+    EXPECT_EQ(GetMute(GetTrackSendUIMute, a_, 0), false);
+    EXPECT_EQ(GetRedo(), "Toggle send mute");
+  }
+}
+
+TEST_F(UndoContractTest, AnInstantRouteEditAddsAnUndoPoint) {
+  // To the same value, it changes nothing.
+  SetTrackSendUIVol(a_, 0, 1.0, /*isend=*/-1);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+
+  SetTrackSendUIVol(a_, 0, 0.5, /*isend=*/-1);
+  Undo();
+  EXPECT_THAT(GetSendVolPan(), ElementsAre(1.0, 0.0));
+  EXPECT_EQ(GetRedo(), "Adjust send volume");
+
+  // From either end.
+  SetTrackSendUIPan(b_, -1, 0.5, /*isend=*/-1);
+  Undo();
+  EXPECT_THAT(GetSendVolPan(), ElementsAre(1.0, 0.0));
+  EXPECT_EQ(GetRedo(), "Adjust send pan");
+}
+
+TEST_F(UndoContractTest, EndingARouteEditAddsAnUndoPoint) {
+  // With nothing changed, it changes nothing.
+  SetTrackSendUIVol(a_, 0, 0.5, kEndEdit);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+
+  // It holds every change since the last point, a pan too.
+  SetTrackSendUIPan(a_, 0, 0.5, 0);
+  SetTrackSendUIVol(a_, 0, 0.25, kEndEdit);
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+  Undo();
+  EXPECT_THAT(GetSendVolPan(), ElementsAre(1.0, 0.0));
+  EXPECT_EQ(GetRedo(), "Adjust send volume");
+}
+
+TEST_F(UndoContractTest, SurfaceChangesAddAPointWhenTheOtherKindChanges) {
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, false);
+  CSurf_OnVolumeChangeEx(b_, 0.5, false, false);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+
+  // The point holds the change that adds it.
+  CSurf_OnPanChangeEx(b_, 0.5, false, false);
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+  CSurf_OnVolumeChangeEx(a_, 0.25, false, false);
+
+  Undo();
+  EXPECT_EQ(GetVolume(a_), 0.5);
+  EXPECT_EQ(GetVolume(b_), 0.5);
+  EXPECT_EQ(GetPan(b_), 0.5);
+  EXPECT_EQ(GetRedo(), "Adjust track pan (via surface)");
+  Undo();
+  EXPECT_EQ(GetVolume(a_), 1.0);
+  EXPECT_EQ(GetVolume(b_), 1.0);
+  EXPECT_EQ(GetPan(b_), 0.0);
+  EXPECT_EQ(GetRedo(), "Adjust track volume (via surface)");
+}
+
+TEST_F(UndoContractTest, ASurfaceChangeStaysHeldThroughOtherPointsAndUndo) {
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, false);
+  AddUndoPoint("Point");
+  CSurf_OnVolumeChangeEx(a_, 0.25, false, false);
+  CSurf_OnPanChangeEx(b_, 0.5, false, false);
+  Undo();
+  EXPECT_EQ(GetVolume(a_), 0.5);
+  EXPECT_EQ(GetPan(b_), 0.0);
+  EXPECT_EQ(GetRedo(), "Adjust track volume (via surface)");
+
+  // The pan is still held.
+  CSurf_OnVolumeChangeEx(a_, 0.75, false, false);
+  Undo();
+  EXPECT_EQ(GetVolume(a_), 0.5);
+  EXPECT_EQ(GetRedo(), "Adjust track pan (via surface)");
+}
+
+TEST_F(UndoContractTest, AutomationModeActionsAddAPointIfAModeChanges) {
+  constexpr int kTouchAction = kFirstAutoModeAction + 2;
+  Main_OnCommand(kTouchAction, 0);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+  SetTrackSelected(a_, true);
+  Main_OnCommand(kFirstAutoModeAction, 0);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+
+  Main_OnCommand(kTouchAction, 0);
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+  Undo();
+  EXPECT_EQ(GetMediaTrackInfo_Value(a_, "I_AUTOMODE"), 0.0);
+  EXPECT_EQ(GetRedo(), "Change track envelope automation mode");
 }
 
 //------------------------------------------------------------------------------
