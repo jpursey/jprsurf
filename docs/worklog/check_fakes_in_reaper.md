@@ -163,14 +163,78 @@ a fake and a contract test of its own.
 ### Coverage
 
 Each function on the API list is checked by a contract test, or is listed here
-as fake only, with why. The table is filled in as the CLs land, so the last CL's
-review checks it against `JPR_REAPER_API`.
+as fake only, with why, in the order of `JPR_REAPER_API`. Contract tests are
+named by their fixture, without `ContractTest`: `ReaperActions` and `RulerMode`
+are in `reaper_actions_contract_test.cc`, those starting `SurfaceNotifier` in
+`surface_notifier_contract_test.cc`, and the rest in
+`fake_reaper_contract_test.cc`. "and most others" is for a function nearly
+every test reads.
 
-| Function                      | Contract test | Or fake only, because |
-| ----------------------------- | ------------- | --------------------- |
-| `CreateMIDIInput`, ...        |               | The machine's ports   |
-| `time_precise`                |               | The real clock        |
-| `ShowConsoleMsg`              |               | Opens a window        |
+| Function                      | Contract tests                                           | Fake only, because                                                |
+| ----------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `AnyTrackSolo`                | TrackChange, SurfaceNotifier                             |                                                                   |
+| `CountSelectedMediaItems`     | Project                                                  |                                                                   |
+| `CountSelectedTracks`         | Selection                                                |                                                                   |
+| `CountSelectedTracks2`        | Selection                                                |                                                                   |
+| `CountTracks`                 | Track                                                    |                                                                   |
+| `CreateMIDIInput`             |                                                          | The machine's ports                                               |
+| `CreateMIDIOutput`            |                                                          | The machine's ports                                               |
+| `CSurf_OnPanChangeEx`         | TrackChange, Undo, SurfaceNotifier                       |                                                                   |
+| `CSurf_OnVolumeChangeEx`      | TrackChange, Undo, SurfaceNotifier                       |                                                                   |
+| `format_timestr_pos`          | Text                                                     |                                                                   |
+| `GetCursorPosition`           | Project                                                  | Moving it: tests set it, as REAPER's UI moves it                  |
+| `GetGlobalAutomationOverride` | Project, Undo                                            |                                                                   |
+| `GetMasterTrack`              | Track, and most others                                   |                                                                   |
+| `GetMediaTrackInfo_Value`     | Track, ReaperActions, Undo                               |                                                                   |
+| `GetMIDIInputName`            |                                                          | The machine's ports                                               |
+| `GetMIDIOutputName`           |                                                          | The machine's ports                                               |
+| `GetNumMIDIInputs`            |                                                          | The machine's ports                                               |
+| `GetNumMIDIOutputs`           |                                                          | The machine's ports                                               |
+| `GetParentTrack`              | Track                                                    |                                                                   |
+| `GetPlayPosition`             | Project                                                  | Playing: tests set it, as the transport actions have no handlers  |
+| `GetPlayState`                | Project                                                  | Playing: tests set it, as the transport actions have no handlers  |
+| `GetSelectedTrack`            | Selection                                                |                                                                   |
+| `GetSelectedTrack2`           | Selection                                                |                                                                   |
+| `GetSetMediaTrackInfo_String` | Track, Undo                                              |                                                                   |
+| `GetSetTrackSendInfo`         | Route                                                    |                                                                   |
+| `GetToggleCommandState`       | ReaperActions, RulerMode                                 |                                                                   |
+| `GetTrack`                    | Track, and most others                                   |                                                                   |
+| `GetTrackColor`               | Track                                                    |                                                                   |
+| `GetTrackGUID`                | Track                                                    | Its pointer lasting as tracks are added, which the API can't show |
+| `GetTrackNumSends`            | Route                                                    |                                                                   |
+| `GetTrackReceiveUIMute`       | Route                                                    |                                                                   |
+| `GetTrackReceiveUIVolPan`     | Route                                                    |                                                                   |
+| `GetTrackSendUIMute`          | Route                                                    |                                                                   |
+| `GetTrackSendUIVolPan`        | Route, Undo                                              |                                                                   |
+| `GetTrackState`               | Track, and most others                                   |                                                                   |
+| `GetTrackUIVolPan`            | Track, and most others                                   |                                                                   |
+| `guidToString`                | Track, Guid                                              |                                                                   |
+| `IsProjectDirty`              | Project, Undo                                            |                                                                   |
+| `kbd_getTextFromCmd`          | ReaperActions, RulerMode                                 |                                                                   |
+| `Main_OnCommand`              | ReaperActions, RulerMode, Undo, SurfaceNotifier          |                                                                   |
+| `mkpanstr`                    | Text                                                     |                                                                   |
+| `mkvolstr`                    | Text                                                     |                                                                   |
+| `NamedCommandLookup`          | ReaperActions                                            |                                                                   |
+| `PreventUIRefresh`            | TrackChange, SurfaceNotifier                             |                                                                   |
+| `SetGlobalAutomationOverride` | Project, Undo, SurfaceNotifier                           |                                                                   |
+| `SetOnlyTrackSelected`        | Selection, SurfaceNotifier                               |                                                                   |
+| `SetTrackSelected`            | Selection, TrackChange, Undo, SurfaceNotifier            |                                                                   |
+| `SetTrackSendUIPan`           | Route, Undo, SurfaceNotifierRoute                        |                                                                   |
+| `SetTrackSendUIVol`           | Route, Undo, SurfaceNotifierRoute                        |                                                                   |
+| `SetTrackUIMute`              | TrackChange, Undo, SurfaceNotifier                       |                                                                   |
+| `SetTrackUIRecArm`            | TrackChange, Undo, SurfaceNotifier, SurfaceNotifierGroup |                                                                   |
+| `SetTrackUISolo`              | TrackChange, Undo, SurfaceNotifier                       |                                                                   |
+| `ShowConsoleMsg`              |                                                          | Opens a window                                                    |
+| `stringToGuid`                | Guid                                                     |                                                                   |
+| `time_precise`                |                                                          | The real clock                                                    |
+| `ToggleTrackSendUIMute`       | Route, Undo, SurfaceNotifierRoute                        |                                                                   |
+| `Track_GetPeakInfo`           |                                                          | Peaks need audio playing, and a project opens stopped             |
+| `Undo_CanRedo2`               | Project, Undo                                            |                                                                   |
+| `Undo_OnStateChangeEx`        | Undo                                                     |                                                                   |
+
+What the API can't reach stays fake only too: changes made in REAPER's own UI,
+which tests make by setting the fake, and what REAPER calls on a surface
+between runs (see "Seen in traces" in `testing_and_profiling.md`).
 
 ### To confirm
 
@@ -570,7 +634,7 @@ Depends on: CL6, CL7.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL10 [ ] docs: Coverage, and CLAUDE.md
+### CL10 [x] docs: Coverage, and CLAUDE.md
 
 Depends on: CL3 to CL9.
 

@@ -77,6 +77,14 @@ ctest --test-dir out/build/x64-Release
 
 Runs every library's unit tests, after a build.
 
+### Check in REAPER
+
+```
+cmake --build out/build/x64-Release --target check_in_reaper
+```
+
+Runs the contract tests (tests on `ContractTest`, which act only through REAPER's API, so they run under the fake in `ctest` too) in a test install of REAPER: a portable REAPER of their own, which never touches the user's, so it runs while the user has REAPER open. It prints what gtest printed, and fails if a test failed. Setting `GTEST_FILTER` runs only the tests it names. Run it for a change to the fake REAPER, `SurfaceNotifier`, or their contract tests; any other change is verified under the fake alone. It runs REAPER, so it runs in the main session only (see Parallel sessions). Setting up the test install, and the files a run leaves, are in "Contract tests in REAPER" in `docs/testing_and_profiling.md`.
+
 ### Testing and Logging
 
 Code is unit tested (see Build system), including code that depends on REAPER, which is tested against `FakeReaper` (see `src/jpr/common/testing/fake_reaper.h`): REAPER's state in memory, loaded as the REAPER API. A change is verified by its tests, not in REAPER, so most work can be done in a side session (see Parallel sessions). The user runs REAPER only for the reasons in Checking in REAPER below.
@@ -89,12 +97,15 @@ Every change is checked as follows:
 - It builds cleanly in Release (`out/build/x64-Release`).
 - Touched files pass `clang-format --dry-run -Werror`.
 - `ctest` passes, with tests of what the change does.
+- `check_in_reaper` passes, for a change to the fake REAPER, `SurfaceNotifier`, or their contract tests (see Check in REAPER).
 - Any feature specific checks for the change (see Feature workflow below).
 
 #### Checking in REAPER
 
 The user runs REAPER, with the extension deployed to it, only for these:
-1. **Behavior nobody has checked.** What REAPER or the hardware does, where code will rely on it, is checked before that code is written, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. As much as possible, this is a step at the start of a feature, from its plan's To confirm (see Feature workflow). A fact that turns up partway through stops the work until it is checked. Each finding is recorded in the plan's To confirm, and goes into the fake as a tested fact (and the calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`), so it is never checked twice. When REAPER shows the fake is wrong, fix the fake first, with a test, then the code.
+1. **Behavior nobody has checked.** What REAPER or the hardware does, where code will rely on it, is checked before that code is written. As much as possible, this is a step at the start of a feature, from its plan's To confirm (see Feature workflow). A fact that turns up partway through stops the work until it is checked. Each finding is recorded in the plan's To confirm, and goes into the fake as a tested fact, so it is never checked twice. When REAPER shows the fake is wrong, fix the fake first, with a test, then the code.
+   - **What REAPER's API does**, to REAPER's state and in what REAPER calls on a surface from inside a function, is checked with a contract test where it can be, which Claude runs in the test install (see Check in REAPER under Commands), rather than in the user's REAPER. A temporary test writes out what REAPER returns, and the finding stays as a contract test the fake passes.
+   - **The rest**, such as the hardware, REAPER's own UI, and what REAPER calls on a surface between runs, is checked in the user's REAPER, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. The calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`.
 2. **Performance**, for the changes Performance below names.
 3. **The end of a feature.** Before a feature is done, the user tests it in REAPER:
    - REAPER loads the extension (which runs `dll_main.cc`, the only code no test runs), and `jprsurf.log` has no new errors.
@@ -157,12 +168,12 @@ A feature follows the feature workflow, with its CLs in library order: `common`,
 
 ## Parallel sessions
 
-These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs REAPER (see Checking in REAPER) happens one change at a time in the main session, in the main checkout.
+These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs REAPER (see Checking in REAPER) happens one change at a time in the main session, in the main checkout. So does `check_in_reaper`, which runs the single test install, one run at a time: a change in a side session that needs it is checked by the main session, after it cherry-picks the change.
 
 Side sessions run in their own git worktree, for work that can be verified without REAPER: most CLs, which their unit tests verify, documentation and comment cleanup, research, and reviews.
 - A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.
 - A side session never merges or pushes to `main`. The main session cherry-picks its commit onto `main`, builds, and hands anything that needs a REAPER check to the user.
-- If a change turns out to need REAPER (behavior nobody has checked, or a profile), say so and hand it back to the main session rather than deploying it.
+- If a change turns out to need REAPER (behavior nobody has checked, a profile, or a `check_in_reaper` run), say so and hand it back to the main session rather than deploying it.
 
 ## Resources
 
