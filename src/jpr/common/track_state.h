@@ -33,6 +33,11 @@ inline constexpr int kPreventSelectionGanging = 2;
 inline constexpr int kPreventGroupingAndGanging =
     kPreventTrackGrouping | kPreventSelectionGanging;
 
+// The categories of GetTrackNumSends() and GetSetTrackSendInfo().
+inline constexpr int kReceiveCategory = -1;
+inline constexpr int kSendCategory = 0;
+inline constexpr int kHardwareOutputCategory = 1;
+
 // Returns `track`'s GetTrackState() flags.
 inline int GetTrackStateFlags(MediaTrack* track) {
   int flags = 0;

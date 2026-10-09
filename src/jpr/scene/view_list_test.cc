@@ -42,7 +42,9 @@ using ::testing::SizeIs;
 // - T1 sends to T2, T3, and T4.
 // - T5, T4, and T2 send to T1.
 //
-// So T3 only has receives, and T1, T2, and T4 have both.
+// So T3 only has receives, and T1, T2, and T4 have both. A track's sends are in
+// the order of the tracks they go to, as REAPER's are: T2's and T4's send to T1
+// comes first.
 //
 // The scene has two track references for lists to be bound to:
 // "user:folder", which falls back to the master track, and "user:track". A
@@ -502,9 +504,10 @@ TEST_F(ViewListTest, CrossesARouteToShowTheRouteBack) {
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
   EXPECT_THAT(GetShown(list), ElementsAre("T4", "T1"));
 
-  // T4's send to T1 is T1's middle receive, which is shown as the last item.
+  // T4's first send, to T1, is T1's middle receive, which is shown as the last
+  // item.
   SetReference(track_reference_, top_[3]);
-  RunAction(list->GetChildViewAt(1), View::kParentRouteOtherTrack);
+  RunAction(list->GetChildViewAt(0), View::kParentRouteOtherTrack);
   EXPECT_EQ(track_reference_->GetTrack(), GetCachedTrack(top_[0]));
   EXPECT_THAT(GetShown(list), ElementsAre("T5", "T4"));
 }

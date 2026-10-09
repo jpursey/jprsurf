@@ -7,6 +7,7 @@
 // REAPER models. The tests that need the fake are in fake_reaper_test.cc.
 
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,6 +27,7 @@ namespace jpr {
 namespace {
 
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 
 // Returns a track's name, as GetTrackState() returns it.
 std::string GetName(MediaTrack* track) {
@@ -676,6 +678,202 @@ TEST_F(SelectionContractTest, SetOnlyTrackSelectedUnselectsEveryOtherTrack) {
   EXPECT_EQ(CountSelectedTracks(nullptr), 0);
   EXPECT_EQ(CountSelectedTracks2(nullptr, /*wantmaster=*/true), 1);
   EXPECT_EQ(GetSelectedTrack2(nullptr, 0, /*wantmaster=*/true), master);
+}
+
+//------------------------------------------------------------------------------
+// Routes
+//------------------------------------------------------------------------------
+
+// Drums, Bus, and Reverb. Drums has a hardware output, at a volume of 0.75 and
+// a pan of 0.25, then a send to Reverb, at 0.5 and -0.25, then a send to Bus.
+// Bus has a muted send to Reverb. The master has a hardware output.
+void BuildRoutes(FakeProject& project) {
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* bus = project.AddTrack("Bus");
+  FakeTrack* reverb = project.AddTrack("Reverb");
+  FakeRoute* output = project.AddHardwareOutput(drums);
+  output->volume = 0.75;
+  output->pan = 0.25;
+  FakeRoute* to_reverb = project.AddSend(drums, reverb);
+  to_reverb->volume = 0.5;
+  to_reverb->pan = -0.25;
+  project.AddSend(drums, bus);
+  project.AddSend(bus, reverb)->mute = true;
+  project.AddHardwareOutput(project.GetMasterTrack());
+}
+
+class RouteContractTest : public ContractTest {
+ protected:
+  RouteContractTest() {
+    OpenProject(BuildRoutes);
+    master_ = GetMasterTrack(nullptr);
+    drums_ = FindTrack("Drums");
+    bus_ = FindTrack("Bus");
+    reverb_ = FindTrack("Reverb");
+  }
+
+  MediaTrack* master_ = nullptr;
+  MediaTrack* drums_ = nullptr;
+  MediaTrack* bus_ = nullptr;
+  MediaTrack* reverb_ = nullptr;
+};
+
+// Returns the volume and pan `get` (GetTrackSendUIVolPan() or
+// GetTrackReceiveUIVolPan()) reads for `track`'s route at `index`, or nothing
+// if it returns false.
+std::vector<double> GetVolPan(decltype(GetTrackSendUIVolPan) get,
+                              MediaTrack* track, int index) {
+  double volume = 0.0;
+  double pan = 0.0;
+  if (!get(track, index, &volume, &pan)) {
+    return {};
+  }
+  return {volume, pan};
+}
+
+// Returns the mute `get` (GetTrackSendUIMute() or GetTrackReceiveUIMute())
+// reads for `track`'s route at `index`, or nothing if it returns false.
+std::optional<bool> GetMute(decltype(GetTrackSendUIMute) get, MediaTrack* track,
+                            int index) {
+  bool mute = false;
+  if (!get(track, index, &mute)) {
+    return std::nullopt;
+  }
+  return mute;
+}
+
+// Returns GetSetTrackSendInfo()'s `parameter` for `track`'s route at `index`
+// in `category`.
+MediaTrack* GetRouteTrack(MediaTrack* track, int category, int index,
+                          const char* parameter) {
+  return static_cast<MediaTrack*>(
+      GetSetTrackSendInfo(track, category, index, parameter, nullptr));
+}
+
+TEST_F(RouteContractTest, RoutesAreCountedByCategory) {
+  EXPECT_EQ(GetTrackNumSends(drums_, kReceiveCategory), 0);
+  EXPECT_EQ(GetTrackNumSends(drums_, kSendCategory), 2);
+  EXPECT_EQ(GetTrackNumSends(drums_, kHardwareOutputCategory), 1);
+  EXPECT_EQ(GetTrackNumSends(bus_, kReceiveCategory), 1);
+  EXPECT_EQ(GetTrackNumSends(bus_, kSendCategory), 1);
+  EXPECT_EQ(GetTrackNumSends(bus_, kHardwareOutputCategory), 0);
+  EXPECT_EQ(GetTrackNumSends(reverb_, kReceiveCategory), 2);
+  EXPECT_EQ(GetTrackNumSends(reverb_, kSendCategory), 0);
+  EXPECT_EQ(GetTrackNumSends(master_, kReceiveCategory), 0);
+  EXPECT_EQ(GetTrackNumSends(master_, kSendCategory), 0);
+  EXPECT_EQ(GetTrackNumSends(master_, kHardwareOutputCategory), 1);
+}
+
+// Sends are in the order of the tracks they go to, not the order they were
+// added, as REAPER keeps each at its destination, as a receive.
+TEST_F(RouteContractTest, SendsAndReceivesHaveTheirEnds) {
+  EXPECT_EQ(GetRouteTrack(drums_, kSendCategory, 0, "P_DESTTRACK"), bus_);
+  EXPECT_EQ(GetRouteTrack(drums_, kSendCategory, 1, "P_DESTTRACK"), reverb_);
+  EXPECT_EQ(GetRouteTrack(drums_, kSendCategory, 0, "P_SRCTRACK"), drums_);
+  EXPECT_EQ(GetRouteTrack(drums_, kSendCategory, 2, "P_DESTTRACK"), nullptr);
+  EXPECT_EQ(GetRouteTrack(reverb_, kReceiveCategory, 0, "P_SRCTRACK"), drums_);
+  EXPECT_EQ(GetRouteTrack(reverb_, kReceiveCategory, 1, "P_SRCTRACK"), bus_);
+  EXPECT_EQ(GetRouteTrack(reverb_, kReceiveCategory, 1, "P_DESTTRACK"),
+            reverb_);
+  EXPECT_EQ(GetRouteTrack(reverb_, kReceiveCategory, 2, "P_SRCTRACK"), nullptr);
+}
+
+TEST_F(RouteContractTest, HardwareOutputsHaveOnlyTheirSource) {
+  EXPECT_EQ(GetRouteTrack(drums_, kHardwareOutputCategory, 0, "P_SRCTRACK"),
+            drums_);
+  EXPECT_EQ(GetRouteTrack(drums_, kHardwareOutputCategory, 0, "P_DESTTRACK"),
+            nullptr);
+}
+
+TEST_F(RouteContractTest, SendUiIndexesAreHardwareOutputsThenSends) {
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 0),
+              ElementsAre(0.75, 0.25));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 1),
+              ElementsAre(1.0, 0.0));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 2),
+              ElementsAre(0.5, -0.25));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 3), IsEmpty());
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, master_, 0),
+              ElementsAre(1.0, 0.0));
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, bus_, 0), true);
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, drums_, 1), false);
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, drums_, 3), std::nullopt);
+}
+
+TEST_F(RouteContractTest, SendUiIndexesBelowZeroAreReceives) {
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, reverb_, -1),
+              ElementsAre(0.5, -0.25));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, reverb_, -2),
+              ElementsAre(1.0, 0.0));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, reverb_, -3), IsEmpty());
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, reverb_, -2), true);
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, reverb_, -3), std::nullopt);
+}
+
+TEST_F(RouteContractTest, ReceiveUiIndexesAreReceives) {
+  EXPECT_THAT(GetVolPan(GetTrackReceiveUIVolPan, reverb_, 0),
+              ElementsAre(0.5, -0.25));
+  EXPECT_THAT(GetVolPan(GetTrackReceiveUIVolPan, reverb_, 1),
+              ElementsAre(1.0, 0.0));
+  EXPECT_THAT(GetVolPan(GetTrackReceiveUIVolPan, reverb_, 2), IsEmpty());
+  EXPECT_THAT(GetVolPan(GetTrackReceiveUIVolPan, drums_, 0), IsEmpty());
+  EXPECT_EQ(GetMute(GetTrackReceiveUIMute, reverb_, 0), false);
+  EXPECT_EQ(GetMute(GetTrackReceiveUIMute, reverb_, 1), true);
+  EXPECT_EQ(GetMute(GetTrackReceiveUIMute, reverb_, 2), std::nullopt);
+}
+
+TEST_F(RouteContractTest, SettersChangeTheRouteAtBothEnds) {
+  EXPECT_TRUE(SetTrackSendUIVol(drums_, 1, 0.25, 0));
+  EXPECT_TRUE(SetTrackSendUIPan(drums_, 1, -0.5, 0));
+  EXPECT_THAT(GetVolPan(GetTrackReceiveUIVolPan, bus_, 0),
+              ElementsAre(0.25, -0.5));
+
+  // From the receive's end.
+  EXPECT_TRUE(SetTrackSendUIVol(reverb_, -2, 0.5, 0));
+  EXPECT_TRUE(SetTrackSendUIPan(reverb_, -2, 0.75, 0));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, bus_, 0), ElementsAre(0.5, 0.75));
+
+  EXPECT_TRUE(SetTrackSendUIVol(drums_, 0, 0.5, 0));
+  EXPECT_TRUE(SetTrackSendUIPan(drums_, 0, -1.0, 0));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 0),
+              ElementsAre(0.5, -1.0));
+}
+
+TEST_F(RouteContractTest, MuteTogglesTheRouteAtBothEnds) {
+  EXPECT_TRUE(ToggleTrackSendUIMute(reverb_, -1));
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, drums_, 2), true);
+  EXPECT_TRUE(ToggleTrackSendUIMute(bus_, 0));
+  EXPECT_EQ(GetMute(GetTrackReceiveUIMute, reverb_, 1), false);
+  EXPECT_TRUE(ToggleTrackSendUIMute(drums_, 0));
+  EXPECT_EQ(GetMute(GetTrackSendUIMute, drums_, 0), true);
+}
+
+TEST_F(RouteContractTest, SettersOfARouteThatIsntThereFail) {
+  EXPECT_FALSE(SetTrackSendUIVol(drums_, 3, 0.5, 0));
+  EXPECT_FALSE(SetTrackSendUIPan(drums_, 3, 0.5, 0));
+  EXPECT_FALSE(SetTrackSendUIVol(drums_, -1, 0.5, 0));
+  EXPECT_FALSE(ToggleTrackSendUIMute(drums_, 3));
+  EXPECT_FALSE(ToggleTrackSendUIMute(reverb_, -3));
+}
+
+TEST_F(RouteContractTest, AnInstantEditSetsTheValueButEndingAnEditDoesnt) {
+  EXPECT_TRUE(SetTrackSendUIVol(drums_, 2, 0.25, /*isend=*/-1));
+  EXPECT_TRUE(SetTrackSendUIPan(drums_, 2, 0.5, /*isend=*/-1));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 2),
+              ElementsAre(0.25, 0.5));
+  EXPECT_TRUE(SetTrackSendUIVol(drums_, 2, 0.75, /*isend=*/1));
+  EXPECT_TRUE(SetTrackSendUIPan(drums_, 2, -0.5, /*isend=*/1));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 2),
+              ElementsAre(0.25, 0.5));
+}
+
+TEST_F(RouteContractTest, PanPastAnEndIsntClamped) {
+  EXPECT_TRUE(SetTrackSendUIPan(drums_, 1, 2.0, 0));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 1),
+              ElementsAre(1.0, 2.0));
+  EXPECT_TRUE(SetTrackSendUIPan(drums_, 1, -2.0, 0));
+  EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 1),
+              ElementsAre(1.0, -2.0));
 }
 
 //------------------------------------------------------------------------------

@@ -38,11 +38,6 @@ namespace jpr {
 
 namespace {
 
-// GetTrackNumSends() and GetSetTrackSendInfo()'s categories.
-constexpr int kReceiveCategory = -1;
-constexpr int kSendCategory = 0;
-constexpr int kHardwareOutputCategory = 1;
-
 // The sizes of the buffers guidToString(), mkvolstr(), and mkpanstr() write.
 constexpr int kTextSize = 64;
 
@@ -184,7 +179,8 @@ class FakeReaper::Api final {
   // receives, 0 for sends, and positive for hardware outputs. The *TrackSendUI*
   // functions index a track's hardware outputs and then its sends from 0, and
   // its receives from -1 down, as -1 - index. REAPER only documents the
-  // setters' receives; the getters are taken to do the same.
+  // setters' receives, but the getters do the same. A hardware output's
+  // P_SRCTRACK is its track, and its P_DESTTRACK is null.
   //----------------------------------------------------------------------------
 
   static int GetTrackNumSends(MediaTrack* track_id, int category) {
@@ -227,16 +223,18 @@ class FakeReaper::Api final {
     return GetRouteMute(GetReceive(track_id, index), mute);
   }
 
-  // Changes to routes aren't grouped, and `end_edit` (REAPER's isend) changes
-  // nothing the fake holds.
+  // Changes to routes aren't grouped. `end_edit` (REAPER's isend) is kEndEdit
+  // to end an edit, which sets nothing, and otherwise 0, or -1 for an instant
+  // edit. A pan past an end isn't clamped.
   static bool SetTrackSendUIVol(MediaTrack* track_id, int index, double volume,
                                 int end_edit) {
-    return SetRouteDouble(track_id, index, &FakeRoute::volume, volume);
+    return SetRouteDouble(track_id, index, &FakeRoute::volume, volume,
+                          end_edit);
   }
 
   static bool SetTrackSendUIPan(MediaTrack* track_id, int index, double pan,
                                 int end_edit) {
-    return SetRouteDouble(track_id, index, &FakeRoute::pan, pan);
+    return SetRouteDouble(track_id, index, &FakeRoute::pan, pan, end_edit);
   }
 
   static bool ToggleTrackSendUIMute(MediaTrack* track_id, int index) {
@@ -754,17 +752,16 @@ class FakeReaper::Api final {
   }
 
   // Returns `track_id`'s routes in `category` (see Routes).
-  static absl::Span<FakeRoute* const> GetRoutes(MediaTrack* track_id,
-                                                int category) {
+  static std::vector<FakeRoute*> GetRoutes(MediaTrack* track_id, int category) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
     const FakeProject& project = s_instance_->GetProjectOf(track);
-    if (category < 0) {
-      return project.GetReceives(&track);
-    }
-    if (category == 0) {
+    if (category == kSendCategory) {
       return project.GetSends(&track);
     }
-    return project.GetHardwareOutputs(&track);
+    const absl::Span<FakeRoute* const> routes =
+        category < kSendCategory ? project.GetReceives(&track)
+                                 : project.GetHardwareOutputs(&track);
+    return {routes.begin(), routes.end()};
   }
 
   // Returns the route at `index` in `routes`, or null if there is none.
@@ -807,14 +804,18 @@ class FakeReaper::Api final {
   }
 
   // Sets the volume or pan of `track_id`'s route at `index` as the
-  // *TrackSendUI* functions index them, returning false if there is none.
+  // *TrackSendUI* functions index them, unless `end_edit` is kEndEdit. Returns
+  // false if there is none.
   static bool SetRouteDouble(MediaTrack* track_id, int index,
-                             double FakeRoute::*property, double value) {
+                             double FakeRoute::*property, double value,
+                             int end_edit) {
     FakeRoute* route = GetTrackSendUiRoute(track_id, index);
     if (route == nullptr) {
       return false;
     }
-    route->*property = value;
+    if (end_edit != kEndEdit) {
+      route->*property = value;
+    }
     return true;
   }
 

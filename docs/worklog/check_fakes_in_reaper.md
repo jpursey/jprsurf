@@ -291,6 +291,20 @@ temporary tests first, found these gaps in the fake, each fixed with its test
   end of pan, or a volume through -inf, comes back to where it was; the fake
   fails the test there, as it isn't faked. A pan past an end is clamped.
 
+The routes' contract tests, in CL7 (2026-10-09), found these gaps in the fake,
+each fixed with its test:
+- **A track's sends are in the order of the tracks they go to,** then of
+  their receives there, not the order they were added, as REAPER keeps each
+  route at its destination, as a receive (`AUXRECV`). So `FakeProject`
+  finds a track's sends from the receives, rather than keeping its own list.
+- **Ending an edit sets nothing:** `SetTrackSendUIVol()` and
+  `SetTrackSendUIPan()` with isend 1 leave the route's value as it was,
+  where the fake set it. An instant edit (-1) sets it.
+- **As the fake already did:** the getters index receives below zero, as the
+  setters are documented to; a hardware output's `P_SRCTRACK` is its track,
+  and its `P_DESTTRACK` null; and a send's pan past an end isn't clamped,
+  unlike a track's.
+
 ## CLs
 
 ### CL1 [x] common/testing: Write a FakeProject as an RPP file
@@ -408,13 +422,20 @@ Depends on: CL5.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL7 [ ] common/testing: Contract tests of routes
+### CL7 [x] common/testing: Contract tests of routes
 
 Depends on: CL5.
 
 - Route counts and indexing (hardware outputs before sends, receives as
   negative indexes), `P_DESTTRACK` and `P_SRCTRACK`, and the route getters and
-  setters.
+  setters, moved from `fake_reaper_test.cc` where they act only through the
+  API, into `fake_reaper_contract_test.cc`.
+- Fixes to the fake that REAPER shows, each with its test (see Found in
+  REAPER): the order of a track's sends, and ending an edit. The scene tests
+  that relied on the old order of sends follow REAPER's.
+- The route categories in `common/track_state.h`, for `Track`, the fake, and
+  the contract tests, where each had its own, and `kEndEdit` in
+  `fake_project.h`, for the fake and `SurfaceNotifier`.
 
 **Verify**
 - Standard checks, and `check_in_reaper`.

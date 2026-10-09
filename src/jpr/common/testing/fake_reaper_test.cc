@@ -411,6 +411,8 @@ TEST(FakeReaperTest, ParametersItDoesntModelFailTheTest) {
       "relative");
   EXPECT_NONFATAL_FAILURE(
       ::CSurf_OnPanChangeEx(track, 0.5, /*relative=*/true, false), "relative");
+  EXPECT_NONFATAL_FAILURE(::GetSetTrackSendInfo(track, 0, 0, "D_VOL", nullptr),
+                          "D_VOL");
 }
 
 // REAPER moves a group from where it was when the gesture began, so the fake
@@ -447,61 +449,6 @@ TEST(FakeReaperTest, SelectedTracksListTheMasterFirst) {
               ElementsAre(master, bass));
 }
 
-TEST(FakeReaperTest, Routes) {
-  FakeReaper reaper;
-  FakeProject& project = reaper.GetProject();
-  FakeTrack* drums = project.AddTrack("Drums");
-  FakeTrack* bus = project.AddTrack("Bus");
-  FakeTrack* reverb = project.AddTrack("Reverb");
-  MediaTrack* drums_id = ToMediaTrack(drums);
-  MediaTrack* reverb_id = ToMediaTrack(reverb);
-  FakeRoute* output = project.AddHardwareOutput(drums);
-  FakeRoute* to_bus = project.AddSend(drums, bus);
-  FakeRoute* to_reverb = project.AddSend(drums, reverb);
-  FakeRoute* from_bus = project.AddSend(bus, reverb);
-  to_reverb->volume = 0.5;
-  to_reverb->pan = -0.25;
-  from_bus->mute = true;
-
-  // By category: receives, sends, and hardware outputs.
-  EXPECT_EQ(::GetTrackNumSends(drums_id, -1), 0);
-  EXPECT_EQ(::GetTrackNumSends(drums_id, 0), 2);
-  EXPECT_EQ(::GetTrackNumSends(drums_id, 1), 1);
-  EXPECT_EQ(::GetTrackNumSends(reverb_id, -1), 2);
-  EXPECT_EQ(::GetSetTrackSendInfo(drums_id, 0, 1, "P_DESTTRACK", nullptr),
-            reverb_id);
-  EXPECT_EQ(::GetSetTrackSendInfo(drums_id, 0, 1, "P_SRCTRACK", nullptr),
-            drums_id);
-  EXPECT_EQ(::GetSetTrackSendInfo(reverb_id, -1, 1, "P_SRCTRACK", nullptr),
-            ToMediaTrack(bus));
-  EXPECT_EQ(::GetSetTrackSendInfo(drums_id, 0, 2, "P_DESTTRACK", nullptr),
-            nullptr);
-  EXPECT_NONFATAL_FAILURE(
-      ::GetSetTrackSendInfo(drums_id, 0, 0, "D_VOL", nullptr), "D_VOL");
-
-  // In the UI functions, sends come after hardware outputs, and receives are
-  // -1 - index in the send functions.
-  double volume = 0.0;
-  double pan = 0.0;
-  bool mute = false;
-  EXPECT_TRUE(::GetTrackSendUIVolPan(drums_id, 2, &volume, &pan));
-  EXPECT_EQ(volume, 0.5);
-  EXPECT_EQ(pan, -0.25);
-  EXPECT_FALSE(::GetTrackSendUIVolPan(drums_id, 3, &volume, &pan));
-  EXPECT_TRUE(::GetTrackReceiveUIMute(reverb_id, 1, &mute));
-  EXPECT_TRUE(mute);
-  EXPECT_TRUE(::GetTrackSendUIMute(reverb_id, -2, &mute));
-  EXPECT_TRUE(mute);
-
-  EXPECT_TRUE(::SetTrackSendUIVol(drums_id, 0, 0.75, 0));
-  EXPECT_EQ(output->volume, 0.75);
-  EXPECT_TRUE(::SetTrackSendUIPan(drums_id, 1, 0.5, 0));
-  EXPECT_EQ(to_bus->pan, 0.5);
-  EXPECT_TRUE(::ToggleTrackSendUIMute(reverb_id, -2));
-  EXPECT_FALSE(from_bus->mute);
-  EXPECT_FALSE(::ToggleTrackSendUIMute(reverb_id, -3));
-}
-
 TEST(FakeReaperTest, EachEndOfARouteListsIt) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
@@ -509,10 +456,11 @@ TEST(FakeReaperTest, EachEndOfARouteListsIt) {
   FakeTrack* bus = project.AddTrack("Bus");
   FakeTrack* reverb = project.AddTrack("Reverb");
   FakeRoute* output = project.AddHardwareOutput(drums);
-  FakeRoute* to_bus = project.AddSend(drums, bus);
   FakeRoute* to_reverb = project.AddSend(drums, reverb);
+  FakeRoute* to_bus = project.AddSend(drums, bus);
   FakeRoute* bus_to_reverb = project.AddSend(bus, reverb);
 
+  // Sends are in the order of the tracks they go to.
   EXPECT_THAT(project.GetSends(drums), ElementsAre(to_bus, to_reverb));
   EXPECT_THAT(project.GetReceives(drums), IsEmpty());
   EXPECT_THAT(project.GetHardwareOutputs(drums), ElementsAre(output));

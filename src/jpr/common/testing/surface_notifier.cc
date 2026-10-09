@@ -27,9 +27,6 @@ namespace {
 // The key IsKeyDown() is asked about during a volume or pan change (VK_SHIFT).
 constexpr int kShiftKey = 0x10;
 
-// The isend of SetTrackSendUIVol() and SetTrackSendUIPan() that ends an edit.
-constexpr int kEndEdit = 1;
-
 }  // namespace
 
 SurfaceNotifier::SurfaceNotifier(FakeReaper* reaper) : reaper_(reaper) {}

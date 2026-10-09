@@ -18,11 +18,6 @@ namespace jpr {
 
 namespace {
 
-// Categories for GetTrackNumSends and GetSetTrackSendInfo.
-constexpr int kReceiveCategory = -1;
-constexpr int kSendCategory = 0;
-constexpr int kHardwareOutputCategory = 1;
-
 // Undo point name for a TrackBatch that changed more than one kind of property.
 constexpr char kChangeTracksUndoName[] = "JPR:Change Tracks";
 

@@ -28,6 +28,10 @@ struct FakeRoute {
   bool mute = false;
 };
 
+// The isend of SetTrackSendUIVol() and SetTrackSendUIPan() that ends an edit,
+// which sets nothing and calls nothing back.
+inline constexpr int kEndEdit = 1;
+
 // An undo point added with Undo_OnStateChangeEx().
 struct FakeUndoPoint {
   std::string name;
@@ -139,8 +143,10 @@ class FakeProject final {
   // Routes
   //
   // A send, and the receive at its other end, are the same route, so they
-  // can't disagree. Each track's sends, receives, and hardware outputs are in
-  // the order they were added.
+  // can't disagree. Each track's receives and hardware outputs are in the
+  // order they were added. Its sends are in the order of the tracks they go
+  // to, then of their receives there, as REAPER keeps each route at its
+  // destination, as a receive.
   //----------------------------------------------------------------------------
 
   // Adds a send from `source` to `destination`, and returns it. They must be
@@ -156,7 +162,7 @@ class FakeProject final {
 
   // Returns the sends from `track`, the receives into it, or its hardware
   // outputs.
-  absl::Span<FakeRoute* const> GetSends(const FakeTrack* track) const;
+  std::vector<FakeRoute*> GetSends(const FakeTrack* track) const;
   absl::Span<FakeRoute* const> GetReceives(const FakeTrack* track) const;
   absl::Span<FakeRoute* const> GetHardwareOutputs(const FakeTrack* track) const;
 
@@ -232,7 +238,6 @@ class FakeProject final {
     std::unique_ptr<FakeTrack> track;  // Kept when the track is deleted.
     GUID guid = {};
     FakeTrack* parent = nullptr;  // Null at the top level, and for the master.
-    std::vector<FakeRoute*> sends;  // Each in the order they were added.
     std::vector<FakeRoute*> receives;
     std::vector<FakeRoute*> hardware_outputs;
     bool deleted = false;

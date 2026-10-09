@@ -141,11 +141,13 @@ TEST_F(RoutePropertiesTest, ChangingTheRoutesNotifies) {
   ViewProperty* exists = send.GetProperty(RouteProperties::kExists);
   exists->RegisterFlag(&changed_);
 
+  // A second send to T2 comes before the send to T3, as sends are in the order
+  // of the tracks they go to, so the send to T3 moves to index 2.
   project_.AddSend(tracks_[0], tracks_[1]);
   TrackCache::Get().Refresh();
   EXPECT_TRUE(changed_);
   EXPECT_TRUE(exists->GetBool());
-  EXPECT_EQ(send.GetProperty("route:other_track.name")->GetText(), "T2");
+  EXPECT_EQ(send.GetProperty("route:other_track.name")->GetText(), "T3");
 
   changed_ = false;
   project_.DeleteTrack(tracks_[0]);

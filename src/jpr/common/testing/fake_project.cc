@@ -88,8 +88,8 @@ void FakeProject::DeleteTrack(FakeTrack* track) {
       other_record->parent = record->parent;
     }
   }
-  while (!record->sends.empty()) {
-    RemoveRoute(record->sends.back());
+  for (FakeRoute* send : GetSends(track)) {
+    RemoveRoute(send);
   }
   while (!record->receives.empty()) {
     RemoveRoute(record->receives.back());
@@ -307,7 +307,6 @@ FakeRoute* FakeProject::AddRoute(FakeTrack* source, FakeTrack* destination) {
     source_record->hardware_outputs.push_back(route);
   } else {
     TrackRecord* destination_record = FindRecord(destination);
-    source_record->sends.push_back(route);
     destination_record->receives.push_back(route);
   }
   return route;
@@ -321,20 +320,22 @@ void FakeProject::RemoveRoute(FakeRoute* route) {
     std::erase(source_record->hardware_outputs, route);
   } else {
     TrackRecord* destination_record = FindRecord(route->destination);
-    std::erase(source_record->sends, route);
     std::erase(destination_record->receives, route);
   }
   std::erase_if(routes_,
                 [route](const auto& entry) { return entry.get() == route; });
 }
 
-absl::Span<FakeRoute* const> FakeProject::GetSends(
-    const FakeTrack* track) const {
-  const TrackRecord* record = FindRecord(track);
-  if (record == nullptr) {
-    return {};
+std::vector<FakeRoute*> FakeProject::GetSends(const FakeTrack* track) const {
+  std::vector<FakeRoute*> sends;
+  for (const FakeTrack* destination : tracks_) {
+    for (FakeRoute* receive : GetReceives(destination)) {
+      if (receive->source == track) {
+        sends.push_back(receive);
+      }
+    }
   }
-  return record->sends;
+  return sends;
 }
 
 absl::Span<FakeRoute* const> FakeProject::GetReceives(
@@ -367,7 +368,7 @@ FakeRoute* FakeProject::GetTrackSendUiRoute(const FakeTrack* track,
   if (index < output_count) {
     return outputs[index];
   }
-  const absl::Span<FakeRoute* const> sends = GetSends(track);
+  const std::vector<FakeRoute*> sends = GetSends(track);
   return index - output_count < static_cast<int>(sends.size())
              ? sends[index - output_count]
              : nullptr;
