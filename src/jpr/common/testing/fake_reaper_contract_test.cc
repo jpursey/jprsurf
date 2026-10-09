@@ -1296,6 +1296,7 @@ TEST_F(TextContractTest, TimeIsTruncatedToTheMillisecond) {
 
   // Before the start, as the distance from it.
   EXPECT_EQ(GetPositionText(-65.5, kFormatTime), "-1:05.500");
+  EXPECT_EQ(GetPositionText(-3725.25, kFormatTime), "-1:02:05.250");
   EXPECT_EQ(GetPositionText(-0.0016, kFormatTime), "-0:00.001");
 }
 

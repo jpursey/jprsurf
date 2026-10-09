@@ -324,7 +324,10 @@ the notifier.
   secondary unit is Minutes:Seconds. Running the mode that is on leaves it on.
 - **`mkvolstr()`** writes 0dB as `0.00dB`, and just under or over it as
   `-0.00dB` or `+0.00dB`. It writes one decimal from 10dB up (`-140.0dB`).
-  Below 2^-25 (about -150.5dB) it writes `-inf dB`.
+  Below 2^-25 (about -150.5dB) it writes `-inf dB`. A volume that low set
+  through the API or a project file is kept as set, but REAPER's own UI sets a
+  volume below about -145dB to -inf (0), so the surface shows `-inf dB` from
+  there for a change made in REAPER (checked by hand, 2026-10-09).
 - **`mkpanstr()`** writes `center` only for exactly 0. Otherwise it truncates
   the percent (`12%R` for 0.125), or under 1% writes it to a tenth (`0.4%R`),
   unless that is 0 (`0%R`).
