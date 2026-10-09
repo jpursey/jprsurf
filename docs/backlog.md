@@ -595,6 +595,26 @@ every mapping that uses it and watched once, for less to write (ergonomics)
 and fewer watches (performance). Worth doing once a config has several such
 groups, or a measurement shows the extra watches matter.
 
+## Short track names on narrow displays
+
+- **Layers:** scene, plugin
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** nothing
+- **Background:** `ViewProperty::GetFittedText()` in `scene/view_property.h`
+
+A track name longer than a display's text width is cut by the control today,
+so "Lead Vocal" shows as "Lead Vo" on the X-Touch scribble strip. Mappings
+already write text fitted to the control's width, and `GetFittedText()` is
+virtual so a property can shorten its own text. `TrackNameProperty` could
+override it to shorten a name that doesn't fit: first with common instrument
+substitutions ("Vocal" to "Vox", "Guitar" to "Gtr"), then by dropping vowels
+after the first letter of each word. A name that fits is shown as is. The
+substitutions are a list the surface gives the property, starting with
+JPRSurf's own, and are configured once there is a config (see *Config file
+language and loader*). The user keeps such a list in a spreadsheet for coloring
+tracks by instrument, which could be the starting point.
+
 ## Value names for every enumerated property
 
 - **Layers:** scene
