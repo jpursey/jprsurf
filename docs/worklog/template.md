@@ -37,9 +37,11 @@ anything that is left.*
 ### To confirm
 
 *Facts about REAPER or the hardware that the design depends on but that nobody
-has checked yet. They are checked in REAPER first, before the CLs that rely on
-them (see Checking in REAPER in CLAUDE.md). Record the findings here, put each
-into the fake as a tested fact, and adjust the later CLs before starting them.*
+has checked yet. They are checked first, before the CLs that rely on them (see
+Checking in REAPER in CLAUDE.md): what REAPER's API does with a contract test
+in the test install, and the rest in the user's REAPER. Record the findings
+here, put each into the fake as a tested fact, and adjust the later CLs before
+starting them.*
 
 ## CLs
 
@@ -47,9 +49,14 @@ into the fake as a tested fact, and adjust the later CLs before starting them.*
 `scene`, then `plugin`. The status is `[ ]` not started, `[~]` in progress (set
 by the CL's first edit), or `[x]` submitted (set in the CL's own commit).*
 
-*If a fact under To confirm needs temporary code to check, the first CL checks
-it: the temporary code (extra logging, a test mapping, or a trace), and what it
-should show. It commits only the findings, and the fake's tests of them.*
+*If a fact under To confirm needs checking, the first CL checks it: a
+temporary contract test that writes out what REAPER returns, or for what the
+API can't reach, temporary code in the user's REAPER (extra logging, a test
+mapping, or a trace), and what it should show. It commits only the findings,
+and the fake's tests of them (a contract test, where it can be).*
+
+*The last entry is always the summary, which stays `[ ]` until the user says
+the feature is done.*
 
 ### CL1 [ ] *library*: *what it does*
 
@@ -75,6 +82,15 @@ Depends on: CL1.
 **Verify**
 - Standard checks.
 - *...*
+
+### Summary [ ] docs: Summarize the feature
+
+Depends on: every CL above, and the user saying the feature is done.
+
+- *When the last CL lands, ask the user whether the feature is done. Once they
+  say so, replace this plan with a summary of the final implementation
+  (behavior, structure, and reusable building blocks), and move anything left
+  undone into the backlog, in the same change (see the workflow).*
 
 ## Checks in REAPER
 

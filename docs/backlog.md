@@ -716,16 +716,26 @@ order:
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [view_subjects.md](worklog/view_subjects.md) (Lists)
+- **Background:** [view_subjects.md](worklog/view_subjects.md) (Lists),
+  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (REAPER
+  facts)
 
-Only worth doing if route polling shows up in the `Run()` average. REAPER
-doesn't reliably report route volume, pan, and mute changes, so a routes list
-calls `Track::RefreshRoutes()` every run while it is active, which reads every
-send and every receive of its track (two REAPER calls each). Only the routes
-of the list's route type are shown, one per item from its scroll position, so
-a track with 40 receives shown as sends costs 80+ calls a run where at most 2
-per strip are needed. A `Track::RefreshRoutes(type, first, count)`
-would bound it to what the strips show.
+Only worth doing if route polling shows up in the `Run()` average. A routes
+list calls `Track::RefreshRoutes()` every run while it is active, which reads
+every send and every receive of its track (two REAPER calls each). Only the
+routes of the list's route type are shown, one per item from its scroll
+position, so a track with 40 receives shown as sends costs 80+ calls a run
+where at most 2 per strip are needed. A
+`Track::RefreshRoutes(type, first, count)` would bound it to what the strips
+show.
+
+JPRSurf polls routes on the belief that REAPER doesn't report their changes,
+but the contract tests showed it does report volume and pan, from inside the
+setter: `Extended(CSURF_EXT_SETSENDVOLUME)` and `SETSENDPAN` for the source
+track, and `SETRECVVOLUME` and `SETRECVPAN` for the destination. Only mute
+sends nothing. So another way is to follow volume and pan from those calls,
+and poll only mute, if REAPER sends them for changes made in its own UI too,
+which a trace would show first.
 
 ## Read track visibility from GetTrackState()
 
@@ -734,8 +744,8 @@ would bound it to what the strips show.
 - **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:**
-  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (Found in
-  REAPER)
+  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (REAPER
+  facts)
 
 `Track::UpdateVisibility()` reads each track's `B_SHOWINTCP` and
 `B_SHOWINMIXER`, two calls per track in the once a second visibility poll.
@@ -766,7 +776,7 @@ The time saved is small: the idle snapshot has `RefreshVisibility` at about
 - **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:**
-  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (CL8)
+  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (Structure)
 
 The same REAPER action IDs are written in three places:
 - `common/timeline.cc`'s file-local ruler arrays.
@@ -835,18 +845,29 @@ to the start.
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [track_actions.md](worklog/track_actions.md) (REAPER facts)
+- **Background:** [track_actions.md](worklog/track_actions.md) (REAPER facts),
+  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (REAPER
+  facts: Undo)
 
 Only worth doing if it gets in the way. REAPER creates the undo point for a
-track volume or pan change made from the surface itself, and holds it open,
-folding it into the next undo point it is given. So a track fader or pan move
-followed within about half a second by anything with its own undo point (a
-mute, or a send fader's undo point from `ContinuousUndo`) is one undo step.
+track volume or pan change made from the surface itself, and holds it open. An
+undo point holds the project's state, so the next point anything adds holds
+the move too, and REAPER only adds its own (`Adjust track volume (via
+surface)`) once a change of the other kind is made, or between runs. So a
+track fader or pan move followed within about half a second by anything with
+its own undo point (a mute, or a send fader's undo point from
+`ContinuousUndo`) is one undo step. The fake models this, apart from the
+point REAPER adds between runs.
+
 REAPER's `CSurf_FlushUndo(true)`, called before JPRSurf adds an undo point (in
-`ContinuousUndo::Flush()` and `TrackBatch`), might close REAPER's one first.
-That is untested: it didn't make route changes create undo points of their own
-(see [surface_modes.md](worklog/surface_modes.md), Route undo), which is a
-different question. It would be added to the API list.
+`ContinuousUndo::Flush()` and `TrackBatch`), might add REAPER's point first, as
+its own step. The contract tests' DLL already calls it before opening each
+project, as closing a project with the point held crashed REAPER, but what it
+adds is unchecked. A contract test can check it (a surface volume change,
+`CSurf_FlushUndo(true)`, then a mute and its point), and the fake then models
+it. It would be added to the API list. It didn't make route changes create
+undo points of their own (see [surface_modes.md](worklog/surface_modes.md),
+Route undo), which is a different question.
 
 ## Short MIDI messages at their length on the fake output
 

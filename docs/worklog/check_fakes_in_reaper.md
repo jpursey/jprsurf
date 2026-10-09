@@ -1,30 +1,44 @@
 # Check the fakes in REAPER
 
 Surface tests trust two fakes: the fake REAPER's model of REAPER's state, and
-`SurfaceNotifier`'s model of what REAPER calls on the surface. This checks both
-against REAPER, with contract tests: tests that act only through REAPER's API,
-so the same source runs under the fake (in `ctest`) and inside a test install
-of REAPER. A test that passes under the fake but fails in REAPER is a gap in the
-fake, which is fixed, with that test, as Checking in REAPER in CLAUDE.md says.
+`SurfaceNotifier`'s model of what REAPER calls on the surface. Contract tests
+check both against REAPER: tests that act only through REAPER's API, so the same
+source runs under the fake, in `ctest`, and inside a test install of REAPER,
+with `check_in_reaper`. A test that passes under the fake but fails in REAPER is
+a gap in the fake, which is fixed, with that test.
 
 So the surface is tested in three separate parts:
-- **The surface's behavior**, and later its call counts: surface tests, under
-  the fake only.
+- **The surface's behavior:** surface tests, under the fake only.
 - **The fake REAPER:** what each function on the API list does to REAPER's
-  state, and the effects of the actions `AddReaperActions()` gives handlers.
-  What Undo restores settles whether the fake should model undo.
-- **`SurfaceNotifier`:** what REAPER calls on a surface during each function.
+  state, and the effects of the actions `AddReaperActions()` gives handlers,
+  undo included.
+- **`SurfaceNotifier`:** what REAPER calls on a surface from inside each
+  function.
 
-Every behavior the fake models, and every call the notifier makes, has a
-contract test, and the API list is finite, so a review can check it (see
-Coverage).
+Every function on the API list has a contract test, or is fake only for a
+reason (see Coverage). Running them in REAPER found gaps in nearly every area of
+the fakes, each now fixed and tested (see REAPER facts). CLAUDE.md's Checking in
+REAPER now checks a fact about REAPER's API with a contract test in the test
+install, which Claude runs, rather than with temporary code in the user's
+REAPER. The design of the runner is in "Contract tests in REAPER" in
+[testing_and_profiling.md](../testing_and_profiling.md).
 
-There is no change in behavior, apart from a fix to the undo points of route
-changes, which the fake's undo showed (see CL9).
+## Behavior
 
-## Design
+One change for the user: **a route's volume, then pan, now get an undo point
+each.** `Track` told `ContinuousUndo` of a route change after making it, so the
+pending point of the other kind (a send's volume, then its pan) held the change
+that added it, and the pan never got a point of its own. It now tells it first.
+The fake's undo showed it, as
+`SendModeTest.EachKindOfRouteMoveHasItsOwnUndoPoint` failed once the fake
+modeled it.
 
-### Names
+The rest is in the tests: the fakes now do what REAPER does, and the surface
+tests that relied on the old behavior follow REAPER's (0dB shows as `0.00dB`,
+not `+0.00dB`; sends are in the order of the tracks they go to; tests that
+needed a redo undo a change).
+
+## Names
 
 | Name                    | What                                                                       | Might be confused with                                                  |
 | ----------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -36,131 +50,124 @@ changes, which the fake's undo showed (see CL9).
 | `reaper_jprsurf_check`  | The DLL that runs the contract tests inside the test install               | `reaper_jprsurf`, the plugin                                            |
 | `check_in_reaper`       | The build target that runs `reaper_jprsurf_check` in the test install      | `ctest`, which runs the same tests under the fake                       |
 
-Alternatives for "contract test": "REAPER test" (but every test is about
-REAPER), "API test" (`reaper_api_test.cc` already tests the list itself).
+## Structure
 
-### common/testing: The project a test starts from (project_file.h)
+### common/testing: The contract library (jpr_common_contract)
 
-A contract test builds its project with a function that fills in a
-`FakeProject`, as `surface_notifier_test.cc` already does. Under the fake, it
-builds the fake's current project. In REAPER, it builds a `FakeProject` of its
-own, which is written as an RPP file and opened with
-`Main_openProject("noprompt:<file>")`.
+What contract tests need, without the fake, so the DLL that runs them in REAPER
+doesn't link the fake, and a contract test that reaches for it
+(`FakeReaper`, `GetProject()`) doesn't build there:
+- `contract_test.h`, `FakeProject` and `FakeTrack`, `WriteProjectFile()`, and
+  `RecordingSurface`.
+- `reaper_action_list.h`: every action JPRSurf uses, with REAPER's text and
+  default toggle state, which a contract test checks against REAPER, and the
+  IDs tests use, named in `action_ids.h`.
+- `jpr_common_testing` (the fake) depends on it. The contract tests
+  (`jpr_common_contract_TESTS`) build into both `jpr_common_testing_test` and
+  `reaper_jprsurf_check`.
 
-```
-// Writes `project` as the text of an RPP file, which opens in REAPER as the
-// same project. Fails the test, naming it, for state an RPP file can't hold,
-// such as the play state or a peak.
-std::string WriteProjectFile(const FakeProject& project);
-```
+### common/testing: ContractTest (contract_test.h)
 
-- **One builder for both,** so the project in REAPER can't drift from the one
-  under the fake, and every contract test checks the writer too: a field it
-  gets wrong reads back wrong in REAPER.
-- **The fake writes it too,** and throws it away, so a test that builds a
-  project REAPER can't open fails in `ctest`, not only in REAPER.
-- **What it writes:** the tracks in order, with their folders, names, GUIDs,
-  colors, volume and pan, mute and solo, rec arm, selection (the master's
-  too), automation mode, group, and visibility; each send and hardware output;
-  the selected media items, as empty items; the cursor position; and the
-  automation override. The play state, play position, peaks, dirty flag, and
-  redo are left to what REAPER does (a project opens stopped, clean, and with
-  no redo), and setting them fails the test.
-- `FakeProject` can be created on its own (`FakeProject::Create()`), rather
-  than only by `FakeReaper`, so the REAPER side doesn't need the fake.
+- `OpenProject(build)` opens the project `build` fills in, in place of the one
+  open, and forgets the calls opening it made. Each test opens its own, so
+  nothing carries from one test to the next. `TakeCalls()` returns what the
+  `RecordingSurface` got since the last time. `EndEntryPoint()` splits the
+  test's calls, as one of REAPER's calls would end, so the fake's checks see
+  each part on its own.
+- **Two implementations,** chosen by what links it. `contract_test_fake.cc`
+  gives each test its own `FakeReaper`, with `AddReaperActions()`, a
+  `SurfaceNotifier`, and a `RecordingSurface` added, and writes the project
+  file too, so a project REAPER couldn't open fails in `ctest`.
+  `contract_test_reaper.cc` writes the project file and opens it with
+  `Main_openProject("noprompt:...")`, after `CSurf_FlushUndo(true)`.
+- **`RecordingSurface`** records each call as text, with tracks by name
+  (`SetSurfaceMute(Drums, true)`), and route calls named (`SETSENDVOLUME`). It
+  leaves out its runs, and the `Extended()` calls about state the fake doesn't
+  hold (the mixer's scroll, input monitoring). Its type is registered as
+  `RECORDING`.
 
-Each test opens its own project, so tests start from the same state without
-undoing anything, and nothing carries from one test to the next. Opening a
-small project should take a few milliseconds (To confirm).
+### common/testing: Project files (project_file.h)
 
-### common/testing: The fixture (contract_test.h)
-
-```
-// The fixture for contract tests. Under the fake, each test has its own
-// FakeReaper, with a SurfaceNotifier and AddReaperActions(), and a
-// RecordingSurface added. In REAPER, the test install's RecordingSurface is
-// the one REAPER created, and the tests run from inside its Run().
-class ContractTest : public ::testing::Test {
- protected:
-  // Opens the project `build` makes, in place of the one open, and forgets
-  // the calls opening it made.
-  void OpenProject(absl::FunctionRef<void(FakeProject&)> build);
-
-  // Returns the calls the recording surface got since the last time, as text,
-  // and forgets them.
-  std::vector<std::string> TakeCalls();
-};
-```
-
-- `contract_test.h` is the same in both. Its implementation is one of two
-  files, chosen by what links it: `contract_test_fake.cc` for `ctest`, and
-  `contract_test_reaper.cc` for the DLL. A contract test that reaches for the
-  fake (`FakeReaper`, `GetProject()`) doesn't link into the DLL, as it doesn't
-  link the fake.
-- `RecordingSurface` moves out of `surface_notifier_test.cc` into its own file,
-  as both the fixture and the DLL need it.
-- Under the fake, the test's calls are one entry point (see "Checks" in
-  `FakeReaper`), so a contract test changing several tracks batches them, as
-  JPRSurf must.
-- Tests that need the fake (its checks, `FakeProject`'s own methods, changes
-  in REAPER's UI, actions given handlers) stay in `fake_reaper_test.cc` and
-  `surface_notifier_test.cc`, as they are.
+`WriteProjectFile(project)` writes a `FakeProject` as the text of an RPP file,
+which opens in REAPER as the same project: the tracks in order, with their
+folders, names, GUIDs, colors, volume and pan, mute and solo (in place too),
+rec arm, selection (the master's too), automation mode, group, and visibility,
+with input monitoring off and `PANMODE 3`; each send and hardware output; the
+selected media items, as empty items; the cursor; the automation override; and
+the master's visibility in the track panel (`MASTERTRACKVIEW`). It fails the
+test, naming it, for state a project can't open with: playing, a peak, a dirty
+flag, or undo points. `FakeProject::Create()` makes a project outside the fake,
+for the REAPER side.
 
 ### common/testing: Running them in REAPER (reaper_jprsurf_check)
 
-`reaper_jprsurf_check` is a DLL with the contract tests, gtest, and an entry
-point that loads the API from REAPER's `GetFunc` (`LoadReaperApi()`) and
-registers `RecordingSurface`'s type.
-- **The test install** is a portable REAPER the user installs, in a folder
-  named by the `JPR_REAPER_CHECK_DIR` environment variable, set up as
-  `testing_and_profiling.md` says. It has its own `reaper.ini`, which adds a
-  `RecordingSurface` and uses REAPER's dummy audio device, so it never
-  competes with the user's REAPER for a real one, and its own `UserPlugins`,
-  with `reaper_jprsurf_check.dll` and not the plugin. The user's REAPER and
-  setup are untouched.
-- **Running:** the surface's first `Run()` runs every test
-  (`RUN_ALL_TESTS()`), each finishing within the call, as it does under the
-  fake. gtest's output, the result, and a log of how far the DLL got go to the
-  folder in the `JPRSURF_CHECK_DIR` environment variable, which the runner
-  sets. Then it opens an empty project with `Main_openProject("noprompt:...")`,
-  which closes the changed one without asking. The next `Run()` posts File:
-  Quit REAPER (40004) to REAPER's main window, so REAPER quits after the run
-  returns, with nothing left to save. Quitting from inside the run destroys
-  the surface while it is still running, which crashes.
-- **Main session only:** it runs REAPER, so it runs in the main checkout, one
-  run at a time, as other work that needs REAPER does. Claude runs it, as it
-  doesn't touch the user's REAPER. Most work doesn't need it: a CL that
-  doesn't change the fake or the notifier is verified under the fake alone.
-- **`check_in_reaper`** builds the DLL, copies it into the test install, runs
-  REAPER there with a time limit (`cmake -P`, no new dependencies), and
-  prints the results, failing if any test failed, REAPER didn't quit, or no
-  results were written. It is a build target rather than a `ctest` test, as a
-  plain `ctest` can't skip a test by label, and it is only run on purpose.
-- **What it leaves out:** what REAPER calls between runs, as each test
-  finishes within one call; anything that reads the machine (MIDI ports,
-  `time_precise()`) or opens a window (`ShowConsoleMsg()`), which stay fake
-  only.
-- `Main_openProject()`, `GetMainHwnd()`, and `CSurf_FlushUndo()` are the only
-  functions the DLL calls that aren't on the API list. It loads them by name
-  in `contract_test_reaper.cc`, rather than adding them to the list, as
-  JPRSurf never calls them and the fake must never fake them.
+- **The DLL** loads the API from REAPER's `GetFunc`, and registers
+  `RecordingSurface`'s type. With `JPRSURF_CHECK_DIR` set, the surface's first
+  run runs every test (`RUN_ALL_TESTS()`), each finishing within the call, then
+  opens an empty project. The next posts File: Quit REAPER to the main window,
+  as quitting from inside a run destroys the surface while it runs. It writes
+  `output.txt` (gtest's output), `result.txt`, `log.txt` (how far it got), and
+  `project.rpp` (the last project opened).
+- `Main_openProject()`, `GetMainHwnd()`, and `CSurf_FlushUndo()` are loaded by
+  name in `contract_test_reaper.cc`, not put on the API list, as JPRSurf never
+  calls them and the fake must never fake them.
+- **`check_in_reaper`** (`check_in_reaper.cmake`, run with `cmake -P`) builds
+  the DLL, copies it into the test install's `UserPlugins`, writes
+  `csurf_0=RECORDING null` as its only control surface, runs REAPER with
+  `-newinst` and a time limit (`JPR_REAPER_CHECK_TIMEOUT`), prints gtest's
+  output, and fails if a test failed, REAPER didn't quit, or there is no
+  result. `GTEST_FILTER` picks the tests. It runs in the main checkout only,
+  one run at a time, and never touches the user's REAPER.
 
-It isn't for performance: the tests' calls aren't JPRSurf's, and the DLL has no
-profiler.
+### common/testing: The fake's undo (fake_project.h)
 
-**Risks**, accepted: contract tests only check what someone thought to check,
-where running whole surface tests in REAPER would also find what nobody
-expected; the test install's preferences aren't the user's; the fake X-Touch
-against the hardware stays a check by hand; what REAPER calls while
-creating the surface and loading the project is only seen in traces; and
-`WriteProjectFile()` grows with every field `FakeProject` gains, in a format
-REAPER doesn't document. A field it can't write fails the test, and every
-contract test reads its fields back in REAPER, so a gap shows the first time a
-test uses it. If it becomes a burden, the alternative is building the project
-with REAPER's own calls, which puts more functions on the API list, each with
-a fake and a contract test of its own.
+- **An undo point holds the project's state,** as REAPER's does. Each track's
+  undoable values are in `FakeTrackUndoValues`, a base of `FakeTrack`, and each
+  route's in `FakeRouteUndoValues`, a base of `FakeRoute`, so a field is undone
+  by where it is declared. A point copies those bases for every track and route
+  (`UndoState`), and Undo or Redo copies them back. Tracks and routes are never
+  freed, so a deleted one stays deleted.
+- **It starts when the API first changes something** (`BeforeChange()`), so a
+  test's own setup isn't undone. A test's direct changes after that are part of
+  the next point.
+- `AddUndoPoint()`, `Undo()`, `Redo()`, `GetUndoPoints()`, `GetUndoCount()`,
+  and `GetRedo()`. `AddReaperActions()` gives Edit: Undo and Redo handlers, and
+  the setters REAPER adds a point for add it (see REAPER facts).
+  `CSurf_On*ChangeEx()` hold their point as REAPER does
+  (`HoldSurfaceChange()`). `SetRedo()` is gone.
+- The project itself has no undoable values yet. The first would go in a
+  `FakeProjectUndoValues`, which `UndoState` would hold a copy of.
 
-### Coverage
+### common/testing: The rest of the fake, and SurfaceNotifier
+
+Each gap REAPER showed is fixed in the fake or the notifier, with its test (see
+REAPER facts): `GetTrackState()`'s flags, the master's name, color, and
+visibility, solo in place, the setters' return values, selection ganging, how
+grouping changes each property, the order of sends, ending a route edit, the
+text formats, `NamedCommandLookup()` of a number, and undo. `SurfaceNotifier`
+follows REAPER's calls, which wait for the refresh (see REAPER facts), and its
+comments and "Seen in traces" in `testing_and_profiling.md` say so.
+
+### common: Shared constants
+
+REAPER's values that `Track`, the fake, and the contract tests each had their
+own copy of are in one place: `GetTrackState()`'s flags, the setters' group
+flags, and the route categories in `track_state.h`; `format_timestr_pos()`'s
+modes in `timeline.h`; and `kEndEdit` in `fake_project.h`.
+
+## Tests
+
+| File                                | What                                                                                                                                         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fake_reaper_contract_test.cc`      | Tracks, track changes (grouping, ganging, batches), selection, routes, the project, undo, text formats, and GUID text, through the API only  |
+| `reaper_actions_contract_test.cc`   | Each action's text and toggle state, the automation mode actions, `NamedCommandLookup()`, and the ruler's time units                          |
+| `surface_notifier_contract_test.cc` | What REAPER calls on a surface during each setter, in and out of a batch, for routes, groups, the override, actions, and Undo and Redo      |
+| `project_file_test.cc`              | Each field's text, and the state a project can't open with failing the test                                                                 |
+| `recording_surface_test.cc`         | Only one exists at a time, and its run can be replaced from inside a run                                                                    |
+| `fake_reaper_test.cc`               | What needs the fake: its checks, `FakeProject`'s own methods, undo points as the fake lists them, and what it doesn't model failing the test |
+| `surface_notifier_test.cc`          | What needs the fake: changes in REAPER's own UI, and runs forgetting a refresh                                                               |
+
+## Coverage
 
 Each function on the API list is checked by a contract test, or is listed here
 as fake only, with why, in the order of `JPR_REAPER_API`. Contract tests are
@@ -168,7 +175,7 @@ named by their fixture, without `ContractTest`: `ReaperActions` and `RulerMode`
 are in `reaper_actions_contract_test.cc`, those starting `SurfaceNotifier` in
 `surface_notifier_contract_test.cc`, and the rest in
 `fake_reaper_contract_test.cc`. "and most others" is for a function nearly
-every test reads.
+every test reads. A function added to the API list gets a row.
 
 | Function                      | Contract tests                                           | Fake only, because                                                |
 | ----------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -236,419 +243,169 @@ What the API can't reach stays fake only too: changes made in REAPER's own UI,
 which tests make by setting the fake, and what REAPER calls on a surface
 between runs (see "Seen in traces" in `testing_and_profiling.md`).
 
-### To confirm
+## REAPER facts
 
-Checked in REAPER, with the test install, before the CLs that rely on them:
-1. **The test install runs unattended:** confirmed (2026-10-08). Registered
-   with the user's license and set to the dummy audio device, it starts with
-   no dialogs, and with `-newinst` runs as its own instance beside the user's
-   REAPER, which is untouched. REAPER only creates a control surface whose
-   line in `reaper.ini` has a config string after its type, so the runner
-   writes `csurf_0=RECORDING null`, as the user's has `JPRSurf null`. The
-   transport plays and stops on the dummy device (2026-10-09, in CL8).
-2. **Opening a project from inside `Run()`** with
-   `Main_openProject("noprompt:")`: confirmed (2026-10-08). It finishes within
-   the call, in about 0.55 seconds, and the notifier's tests read the project
-   back as written. GUIDs are checked with the tracks' tests. REAPER holds open
-   the undo point of a volume or pan change made with `CSurf_On*ChangeEx()`,
-   and if the project it is in is closed first, REAPER crashes after the run.
-   So the DLL calls `CSurf_FlushUndo(true)` before it opens each project.
-3. **Quitting:** confirmed (2026-10-08). Opening an empty project with
-   `noprompt:`, then posting File: Quit REAPER, exits with no prompt. Quitting
-   from inside a run crashed REAPER.
-4. **Undo:** confirmed (2026-10-09). What Edit: Undo restores after each
-   setter on the API list (mute, solo, rec arm, selection, volume, pan, the
-   send setters, and the override) is simple enough that the fake models it
-   (see Found in REAPER).
+Checked in the test install (2026-10-08 to 2026-10-09), and held by the fake and
+the notifier.
 
-### Found in REAPER
+**The test install:**
+- Registered with the user's license and set to the dummy audio device, it
+  starts with no dialogs, and with `-newinst` runs beside the user's REAPER.
+  The transport plays and stops on the dummy device.
+- REAPER only creates a control surface whose line in `reaper.ini` has a
+  config string after its type.
+- `Main_openProject("noprompt:...")` from inside a run finishes within the call,
+  in about 0.55 seconds. A project closed while REAPER holds a surface change's
+  undo point open (see Undo) crashes REAPER after the run, so the DLL calls
+  `CSurf_FlushUndo(true)` before opening each project.
+- Opening an empty project with `noprompt:`, then posting File: Quit REAPER,
+  exits with no prompt. Quitting from inside a run crashes REAPER.
 
-The notifier's contract tests, run in REAPER first (2026-10-08), with 8 of 13
-failing. Each was a gap in the notifier, fixed in CL4:
-- **Mute and solo outside a batch:** during the call, REAPER only sends the
-  master's solo. The track's own mute and solo come later, not in the call.
-- **Rec arm outside a batch:** REAPER sends the track's rec arm, mute, solo,
-  volume, and pan first, then the track list change, every track's state, and
-  more.
-- **Rec arm in a batch:** the calls in the call are as traced, but the end of
-  the batch sends the master's state, then for each track its title, rec arm,
-  and selection, then its rec arm, mute, solo, volume, and pan, rather than
-  every track's state.
-- **The automation mode actions with no track selected** only send
-  `SetAutoMode()`. The traces had tracks selected, so the resend is probably
-  only for the tracks whose mode changes.
-- **Undo and Redo** send 45 calls where the notifier sends 47, with some of a
-  track's calls missing in the first round.
-- **`Extended(CSURF_EXT_SETPAN_EX)` sends pan mode 0** for the test projects'
-  tracks, where the traces' tracks had 3. `PANMODE 3` in the project file sets
-  the tracks' mode, and `MASTER_PANMODE 3` the master's, which was still 0
-  when it seemed `PANMODE` changed nothing.
-- **Send volume and pan changes do notify,** where the traces said sends
-  notify nothing: `Extended(CSURF_EXT_SETSENDVOLUME)` and `SETSENDPAN` for the
-  source track, and `SETRECVVOLUME` and `SETRECVPAN` for the destination. Mute
-  sends nothing. JPRSurf polls every route each run on the belief that REAPER
-  doesn't report them, which *Poll only the routes a routes list shows* in the
-  backlog should now weigh.
-
-CL4 explored each of these in the test install with temporary tests, and found
-the rule behind them (see "Seen in traces" in `testing_and_profiling.md`, and
-`SurfaceNotifier`):
+**What REAPER calls on a surface:**
 - **A track's mute and solo wait for the refresh:** the end of the outermost
   batch, or outside a batch, before the next run, when REAPER sends those that
   differ from what it last sent. Until then, every track's state leaves them
-  out, which is why Undo sent 45 calls.
+  out. Outside a batch, a mute or solo sends only the master's solo during the
+  call.
 - **Rec arm** sends the track's change around every track's state outside a
   batch, and in a batch sends each changed track's change in every track's
-  state at its end. A rec arm that changes nothing sends nothing.
+  state at its end. A rec arm that changes nothing sends nothing. One that
+  ganging or grouping could take to other tracks is sent as a change to every
+  track.
 - **The automation mode actions** resend only if a selected track's mode
   changed.
-- **Selection ganging:** with the setters' group flags without `&2`, as
-  JPRSurf passes for a grouped change, a mute, solo, or rec arm of a selected
-  track changes every selected track, which the fake doesn't do (see CL6), and
-  a rec arm is then sent as a change to every track.
-- **Undo** with nothing to undo calls nothing back: after only
-  `CSurf_OnVolumeChangeEx()`, or only `SetTrackUIMute()` outside a batch,
-  there was nothing to undo (see CL9).
+- **Undo and Redo** with nothing to undo or redo call nothing.
+- **Send volume and pan changes notify:** `Extended(CSURF_EXT_SETSENDVOLUME)`
+  and `SETSENDPAN` for the source track, and `SETRECVVOLUME` and `SETRECVPAN`
+  for the destination. Mute sends nothing. Ending an edit sends nothing.
+- **`Extended(CSURF_EXT_SETPAN_EX)`** sends the track's pan mode: `PANMODE 3`
+  in the project file sets the tracks' mode, and `MASTER_PANMODE 3` the
+  master's.
 
-The tracks' contract tests, in CL5 (2026-10-08), found these gaps in the fake,
-each fixed with its test:
-- **`GetTrackState()`** sets &1 for a folder, and &512 and &1024 for a track
-  hidden in the track panel or the mixer, which the fake left out. It also
-  sets &128 (input monitoring on), which REAPER's new tracks have, and the
-  project file now turns off, as the fake has no input monitoring. Solo
-  writes &16, and solo in place &16 and &32.
-- **The master** is shown in the track panel by the project:
-  `MASTERTRACKVIEW`'s first field, which View: Toggle master track visible
-  (40075) toggles, and whose toggle state it is. A project file without it
-  hides the master. Hidden, the master has &512, though its `B_SHOWINTCP`
-  reads 1 either way. The project file writes it. Its `GetTrackColor()`
-  reads 0, even when it has a color, which the project file writes as
-  REAPER does (`MASTERPEAKCOL`). `P_NAME` can't read or set its name: both
-  return false, and reading empties the buffer. `GetTrackState()` names it
-  `MASTER`.
-- **Unchecked by contract tests,** as nothing in REAPER's API can show them:
-  `GetTrackGUID()` keeps returning the same pointer as tracks are added, and
-  REAPER keeps the GUIDs in the project file (it did here), so they stay
-  fake only.
+**Tracks:**
+- **`GetTrackState()`** sets &1 for a folder, &16 for solo (&16 and &32 in
+  place), &128 for input monitoring (which REAPER's new tracks have), and &512
+  and &1024 for a track hidden in the track panel or the mixer.
+- **The master** is shown in the track panel by the project
+  (`MASTERTRACKVIEW`'s first field), which View: Toggle master track visible
+  (40075) toggles, and whose toggle state it is. Hidden, it has &512, though
+  its `B_SHOWINTCP` reads 1 either way. Its `GetTrackColor()` reads 0 even with
+  a color. `P_NAME` can't read or set its name, and `GetTrackState()` names it
+  `MASTER`. It can't be rec armed (`SetTrackUIRecArm()` returns -1).
+- **Solo** is in place by default: `SetTrackUISolo()` with 1, or a toggle, sets
+  &16 and &32 and returns 2. 2 solos not in place and returns 1, and 4 solos in
+  place. The master's solo returns 2 but sets only &16, and `AnyTrackSolo()`
+  leaves it out.
+- **Selection ganging:** with the setters' group flags without `&2`, a change to
+  a selected track changes every selected track, the master too, and then
+  grouping changes each of their groups, but a group's selected tracks aren't
+  ganged in turn. `CSurf_On*ChangeEx()`'s `allowGang` allows both.
+- **Grouped and ganged changes:** mute and solo set the other tracks to the
+  track's new value, even when the track's didn't change. Rec arm changes
+  nothing if the track's doesn't change; ganged tracks are set to its new
+  value, but grouped tracks are toggled. Volume and pan move the other tracks
+  by the same change, volume by its ratio and pan by its difference, measured
+  from where each was when the gesture began, so a track clamped at an end of
+  pan, or a volume through -inf, comes back (the fake fails the test there). A
+  track's pan past an end is clamped.
 
-The track changes' contract tests, in CL6 (2026-10-09), explored with
-temporary tests first, found these gaps in the fake, each fixed with its test
-(see "Track changes" in `fake_reaper.cc`):
-- **Solo** is in place by default: `SetTrackUISolo()` with 1, or a toggle,
-  sets &16 and &32 and returns 2. 2 solos not in place and returns 1, and 4
-  solos in place. A grouped or ganged solo carries its mode. The master's
-  solo returns 2 but sets only &16, and `AnyTrackSolo()` leaves it out.
-- **The master** can't be rec armed: `SetTrackUIRecArm()` returns -1.
-- **Selection ganging** changes every selected track, the master too, and
-  then grouping changes each of their groups, but a group's selected tracks
-  aren't ganged in turn. `CSurf_On*ChangeEx()`'s `allowGang` allows both.
-- **Mute and solo** set the ganged and grouped tracks to the track's new
-  value, even when the track's didn't change.
-- **Rec arm** changes nothing if the track's doesn't change. When it does,
-  ganged tracks are set to its new value, but grouped tracks are toggled.
-  And a rec arm that ganging or grouping could take to other tracks is sent
-  as a change to every track, as `SurfaceNotifier` now does for grouping too.
-- **Volume and pan** move ganged and grouped tracks by the same change, where
-  the fake set them to the same value: volume by its ratio, and pan by its
-  difference. REAPER measures the change from where each track was when the
-  gesture began (it held across a test's calls), so a track clamped at an
-  end of pan, or a volume through -inf, comes back to where it was; the fake
-  fails the test there, as it isn't faked. A pan past an end is clamped.
+**Routes:**
+- **A track's sends are in the order of the tracks they go to,** then of their
+  receives there, as REAPER keeps each route at its destination (`AUXRECV`).
+- **Ending an edit** (`SetTrackSendUIVol()` or `SetTrackSendUIPan()` with
+  isend 1) sets nothing. An instant edit (-1) sets the value.
+- The getters index receives below zero, as the setters are documented to. A
+  hardware output's `P_SRCTRACK` is its track, and its `P_DESTTRACK` null. A
+  send's pan past an end isn't clamped.
 
-The routes' contract tests, in CL7 (2026-10-09), found these gaps in the fake,
-each fixed with its test:
-- **A track's sends are in the order of the tracks they go to,** then of
-  their receives there, not the order they were added, as REAPER keeps each
-  route at its destination, as a receive (`AUXRECV`). So `FakeProject`
-  finds a track's sends from the receives, rather than keeping its own list.
-- **Ending an edit sets nothing:** `SetTrackSendUIVol()` and
-  `SetTrackSendUIPan()` with isend 1 leave the route's value as it was,
-  where the fake set it. An instant edit (-1) sets it.
-- **As the fake already did:** the getters index receives below zero, as the
-  setters are documented to; a hardware output's `P_SRCTRACK` is its track,
-  and its `P_DESTTRACK` null; and a send's pan past an end isn't clamped,
-  unlike a track's.
-
-The actions', timeline's, and text's contract tests, in CL8 (2026-10-09),
-explored with a temporary test that wrote out what REAPER returned, found these
-gaps in the fake, each fixed with its test:
-- **The ruler's time unit actions have text,** such as `View: Time unit for
-  ruler: Seconds`, which the fake left out. Which of each group is on is a
-  preference: REAPER's default secondary unit is Minutes:Seconds, where the
-  fake's is none, so the contract tests only check that one is on, and turn
-  back on those that were, in a group a test changed. Running the mode that
-  is on leaves it on, as the fake does, where `timeline.cc` said it toggled
-  (its guards against it only save running an action).
-- **`mkvolstr()`** writes 0dB as `0.00dB`, with no sign, and a volume just
-  under or over it as `-0.00dB` or `+0.00dB`. It writes one decimal from 10dB
-  up, as `-140.0dB`, where the fake wrote none from 100dB. Below 2^-25 (about
-  -150.5dB) it writes `-inf dB`, and above that, at least `-150.0dB`.
+**Actions and text:**
+- **The ruler's time unit actions** have text (`View: Time unit for ruler:
+  Seconds`). Which of each group is on is a preference: REAPER's default
+  secondary unit is Minutes:Seconds. Running the mode that is on leaves it on.
+- **`mkvolstr()`** writes 0dB as `0.00dB`, and just under or over it as
+  `-0.00dB` or `+0.00dB`. It writes one decimal from 10dB up (`-140.0dB`).
+  Below 2^-25 (about -150.5dB) it writes `-inf dB`.
 - **`mkpanstr()`** writes `center` only for exactly 0. Otherwise it truncates
   the percent (`12%R` for 0.125), or under 1% writes it to a tenth (`0.4%R`),
-  unless that is 0 (`0%R`). The fake rounded, and wrote `center` for under
-  0.5%.
+  unless that is 0 (`0%R`).
 - **`format_timestr_pos()`** truncates the time mode's milliseconds and the
-  frames, where the fake rounded them. Before the start, beats count measures
-  down from 0 (`0.4.50` is half a beat before), and frames count hours down
-  from 0 (`-1:59:59:28`), where the fake wrote the distance from the start.
-  Beats' hundredths and samples are rounded, as the fake did.
+  frames. Before the start, beats count measures down from 0 (`0.4.50` is half
+  a beat before), and frames count hours down from 0 (`-1:59:59:28`). Beats'
+  hundredths and samples are rounded.
 - **`NamedCommandLookup()`** reads a name that doesn't start with `_` as a
   number, as far as its digits go (`40029x` is 40029).
-- **As the fake already did:** every other action's text and toggle state; the
-  automation mode actions set the selected tracks' modes, the master's too; an
-  action REAPER doesn't have has no text and no toggle; a project opens
+- An action REAPER doesn't have has no text and no toggle. A project opens
   stopped, with the play position at 0 rather than the cursor, clean, and with
-  nothing to redo; and the automation override is the project's. Adding an
-  undo point left `IsProjectDirty()` at 0 within the call, which CL9 checks
-  with the rest of undo.
+  nothing to redo. The automation override is the project's.
 
-Surface tests that showed 0dB as `+0.00dB` now show `0.00dB`, as REAPER
-writes it.
-
-The undo contract tests, in CL9 (2026-10-09), explored with temporary tests
-first, showed the fake could model undo, which it now does (see "Undo and
-saving" in `FakeProject`, and "Undo" in `fake_reaper.cc`):
+**Undo:**
 - **An undo point holds the project's state,** not a change.
-  `Undo_OnStateChangeEx()` adds one holding every change since the last
-  point, and none if nothing changed, or if its flags don't have
-  `UNDO_STATE_TRACKCFG`. Edit: Undo restores the state of the point before,
-  and Edit: Redo the state of the point after, each dropping any change since
-  the last point. A new point drops the redo. With nothing to undo or redo,
-  they change nothing and call nothing back, where `SurfaceNotifier` always
-  sent Undo's calls. Each point sets the dirty flag. The fake has Undo and
-  Redo set it too, which wasn't seen, as a project with something to undo is
-  already dirty.
-- **What is undone:** each track's name, volume, pan, mute, solo, rec arm, and
-  automation mode, the master's too, and each route's volume, pan, and mute.
-  Selection and the automation override aren't. A track's color, group, and
-  visibility are too, which the user checked in REAPER's UI, as no function
-  on the API list changes them.
+  `Undo_OnStateChangeEx()` adds one holding every change since the last point,
+  and none if nothing changed, or if its flags don't have
+  `UNDO_STATE_TRACKCFG`. Edit: Undo restores the state of the point before, and
+  Edit: Redo the state of the point after, each dropping any change since the
+  last point. A new point drops the redo. Each point sets the dirty flag.
+- **What is undone:** each track's name, volume, pan, mute, solo, rec arm,
+  automation mode, color, group, and visibility, the master's too, and each
+  route's volume, pan, and mute. Selection and the automation override aren't.
+  (Color, group, and visibility were checked in REAPER's UI, as no function on
+  the API list changes them.)
 - **Which setters add their own point:** the track setters, selection, names,
-  the override, and the route setters with isend 0 add none, so a later point
-  holds their changes. `ToggleTrackSendUIMute()` adds `Toggle send mute`, and
-  `SetTrackSendUIVol()` and `SetTrackSendUIPan()` add `Adjust send volume` and
-  `Adjust send pan` for an instant edit (-1), or one that ends an edit (1),
-  from either end of the route. The automation mode actions add `Change track
-  envelope automation mode` if a mode changed, and Track: Unsolo all tracks
-  adds `Clear all track solos` if a track was soloed (it has no handler in the
-  fake).
+  the override, and the route setters with isend 0 add none.
+  `ToggleTrackSendUIMute()` adds `Toggle send mute`, and `SetTrackSendUIVol()`
+  and `SetTrackSendUIPan()` add `Adjust send volume` and `Adjust send pan` for
+  an instant edit (-1), or one that ends an edit (1), from either end of the
+  route. The automation mode actions add `Change track envelope automation
+  mode` if a mode changed, and Track: Unsolo all tracks adds `Clear all track
+  solos` if a track was soloed.
 - **`CSurf_On*ChangeEx()` hold their undo point:** REAPER adds it, as `Adjust
   track volume (via surface)` or `Adjust track pan (via surface)`, once a
-  change of the other kind is made, so it holds that change too. Changes of
-  the same kind, to any track, add nothing. Other points, and Undo, leave it
-  held. REAPER also adds it between runs, which a contract test can't see, so
-  the fake doesn't.
-- **Not faked:** a volume change from a control surface on a track in touch
-  mode adds a point of its own (`Create volume envelope: ...`), as the fake has
-  no envelopes.
-- **JPRSurf's route undo points:** `Track` told `ContinuousUndo` of a route
-  change after making it, so a pending point of the other kind (a send's
-  volume, then its pan) held the change that added it, and the pan never got
-  a point of its own, as `SendModeTest.EachKindOfRouteMoveHasItsOwnUndoPoint`
-  expected. It now tells it first.
+  change of the other kind is made, so it holds that change too. Changes of the
+  same kind, to any track, add nothing. Other points, and Undo, leave it held.
+  REAPER also adds it between runs.
 
-Scene and surface tests that set the redo by hand now undo a change.
+**What the fake leaves out**, as no test needs it yet: the held surface point
+REAPER adds between runs; the point a volume change from a surface adds on a
+track in touch mode (`Create volume envelope: ...`), as the fake has no
+envelopes; the points changes in REAPER's own UI add (`ClickMute()` and the
+like); and a handler for Track: Unsolo all tracks. `GetTrackGUID()` keeping the
+same pointer as tracks are added is fake only (see Coverage).
 
-## CLs
+## Building blocks
 
-### CL1 [x] common/testing: Write a FakeProject as an RPP file
+- **A contract test** derives from `ContractTest` (or a fixture of its own that
+  does), opens its project with `OpenProject()`, filled in as a `FakeProject`,
+  and checks only what REAPER's API returns and `TakeCalls()`. It goes in the
+  `*_contract_test.cc` beside the code it checks, which is in
+  `jpr_common_contract_TESTS`. A test that needs the fake stays in the plain
+  `*_test.cc`.
+- **Exploring REAPER:** a temporary contract test writes what REAPER returns
+  into a string and expects it to be empty, so `check_in_reaper` (with
+  `GTEST_FILTER`) prints it. The finding then becomes a real contract test the
+  fake passes, and the exploration goes.
+- **A field the project file can't write** fails the test, naming it, so a new
+  `FakeProject` or `FakeTrack` field is either written or refused.
+- **An undoable value** of a track or route goes in `FakeTrackUndoValues` or
+  `FakeRouteUndoValues`, and is undone with no other change.
+- **A value REAPER defines** (a flag, a mode, an action ID) is named once, in
+  `common` or the contract library, for the plugin, the fake, and the tests.
 
-Depends on: nothing.
+## Decisions
 
-- `FakeProject::Create()`, for a project outside the fake.
-- `WriteProjectFile()` (`project_file.h`), with every field above, and a test
-  failure for the rest.
-- Unused, so no visible change.
+- **One project builder for both,** written as an RPP file, rather than built
+  with REAPER's own calls, which would put more functions on the API list, each
+  needing a fake and a contract test. Its cost is a format REAPER doesn't
+  document, which every contract test checks by reading its fields back.
+- **The contract tests finish within one run,** so what REAPER calls between
+  runs is left to traces.
+- **The fake models undo** as snapshots of the undoable values, as REAPER's undo
+  was simple enough once explored, rather than leaving undo a check by hand.
+- **`check_in_reaper` is a build target,** not a `ctest` test, as a plain
+  `ctest` can't skip a test by label, and it runs REAPER, so it is only run on
+  purpose.
 
-**Verify**
-- Standard checks (Release build, clang-format, ctest).
-- `project_file_test.cc`: each field's text, and the state it can't write
-  failing the test.
+## Performance
 
-### CL2 [x] common/testing: ContractTest, with the notifier's tests on it
-
-Depends on: CL1.
-
-- `RecordingSurface` in its own file, and `ContractTest` with
-  `contract_test_fake.cc`, which writes the project too (see above).
-- `surface_notifier_test.cc` splits: its contract tests move to
-  `surface_notifier_contract_test.cc` on `ContractTest`, and those that need
-  the fake stay.
-
-**Verify**
-- Standard checks.
-- The notifier's tests pass unchanged on the new fixture.
-
-### CL3 [x] common/testing: Run the contract tests in REAPER
-
-Depends on: CL2.
-
-- To confirm 1 to 3, with the user, as the runner is built.
-- A library without the fake, for what the DLL links: `RecordingSurface`,
-  `FakeProject`, `WriteProjectFile()`, and `contract_test.h`, which
-  `jpr_common_testing` then depends on. What its files take from the fake's
-  headers moves out with them: `FakeReaper::kBeatsPerMinute`, and the action
-  IDs in `reaper_actions.h` that contract tests use. Then a contract test that
-  uses the fake doesn't build into the DLL.
-- `contract_test_reaper.cc`, the `reaper_jprsurf_check` DLL, and the
-  `check_in_reaper` target and script.
-- How to install the test install and set it up (the portable install, the
-  license, `JPR_REAPER_CHECK_DIR`, and its `reaper.ini`: the dummy audio
-  device and the `RecordingSurface`), and how to run it, in
-  `testing_and_profiling.md`.
-- The notifier's tests that fail in REAPER (see Found in REAPER) are fixed in
-  CL4, so they fail in REAPER until then.
-
-**Verify**
-- Standard checks.
-- `check_in_reaper` runs the notifier's contract tests in REAPER, and reports
-  the failures above, with REAPER quitting cleanly. A run of only the tests
-  that pass (`GTEST_FILTER`) passes.
-
-### CL4 [x] common/testing: Make the notifier match REAPER
-
-Depends on: CL3.
-
-- `SurfaceNotifier`, and its contract tests, follow what REAPER does (see Found
-  in REAPER), and its comments and "Seen in traces" in
-  `testing_and_profiling.md` say so. A call REAPER makes later, outside the
-  call, isn't made, as no test spans runs: a mute or solo left for the next
-  run is forgotten when the surface runs (`FakeReaper::GetRuns()`).
-- The automation mode actions are tested with tracks selected too.
-- The route tests get a fixture of their own that opens the project with a
-  send, rather than opening a second project, as each open takes about half a
-  second in REAPER. `RecordingSurface` names the route calls.
-- The project file writes `PANMODE 3` and `MASTER_PANMODE 3`.
-- Surface tests that relied on the old calls are updated, or show a change in
-  the surface, which is its own follow-up. Only the trace's test relied on
-  them.
-
-**Verify**
-- Standard checks, and `check_in_reaper` passes.
-
-### CL5 [x] common/testing: Contract tests of tracks
-
-Depends on: CL4.
-
-- `CountTracks`, `GetTrack`, `GetMasterTrack`, `GetParentTrack`,
-  `GetTrackGUID`, `GetTrackState`, `GetMediaTrackInfo_Value`,
-  `GetSetMediaTrackInfo_String`, `GetTrackColor`, `GetTrackUIVolPan`, and the
-  GUID text functions, moved from `fake_reaper_test.cc` where they act only
-  through the API, into `fake_reaper_contract_test.cc`.
-- Fixes to the fake that REAPER shows, each with its test (see Found in
-  REAPER): `GetTrackState()`'s folder and hidden flags, and the master's color
-  and name. The project file writes input monitoring off, which the fake
-  doesn't have, and the master's visibility in the track panel.
-- `GetTrackState()`'s flags in `common/track_state.h`, for `Track`, the fake,
-  and the contract tests, where each had its own.
-
-**Verify**
-- Standard checks, and `check_in_reaper`.
-
-### CL6 [x] common/testing: Contract tests of track changes and selection
-
-Depends on: CL5.
-
-- The track setters, grouping, `PreventUIRefresh`, `AnyTrackSolo`, and the
-  selection functions, moved from `fake_reaper_test.cc` where they act only
-  through the API, into `fake_reaper_contract_test.cc`.
-- Selection ganging (see Found in REAPER), which the fake then models, and
-  `SurfaceNotifier`'s comment no longer excepts.
-- Fixes to the fake that REAPER shows, each with its test (see Found in
-  REAPER): solo in place (`FakeTrack::solo_in_place`, which the project file
-  writes), the setters' return values, the master's rec arm, ganging, how
-  grouping changes each property, and pan clamping.
-- `SurfaceNotifier` sends a grouped rec arm as a change to every track, as it
-  does a ganged one.
-- The setters' group flags in `common/track_state.h`, for `Track`, the fake,
-  and the contract tests, where `Track` and the fake each had their own.
-
-**Verify**
-- Standard checks, and `check_in_reaper`.
-
-### CL7 [x] common/testing: Contract tests of routes
-
-Depends on: CL5.
-
-- Route counts and indexing (hardware outputs before sends, receives as
-  negative indexes), `P_DESTTRACK` and `P_SRCTRACK`, and the route getters and
-  setters, moved from `fake_reaper_test.cc` where they act only through the
-  API, into `fake_reaper_contract_test.cc`.
-- Fixes to the fake that REAPER shows, each with its test (see Found in
-  REAPER): the order of a track's sends, and ending an edit. The scene tests
-  that relied on the old order of sends follow REAPER's.
-- The route categories in `common/track_state.h`, for `Track`, the fake, and
-  the contract tests, where each had its own, and `kEndEdit` in
-  `fake_project.h`, for the fake and `SurfaceNotifier`.
-
-**Verify**
-- Standard checks, and `check_in_reaper`.
-
-### CL8 [x] common/testing: Contract tests of actions, the timeline, and text
-
-Depends on: CL5.
-
-- `Main_OnCommand` and the actions `AddReaperActions()` adds (their text,
-  toggle states, and the effects of those with handlers: the ruler and
-  automation modes), `NamedCommandLookup`, the automation override, the
-  transport, `format_timestr_pos`, `mkvolstr`, `mkpanstr`, `Undo_CanRedo2`,
-  `IsProjectDirty`, and `CountSelectedMediaItems`, moved from
-  `fake_reaper_test.cc` and `reaper_actions_test.cc` where they act only
-  through the API, into `fake_reaper_contract_test.cc` and
-  `reaper_actions_contract_test.cc`. Undo points are left to CL9.
-- The actions' list in `reaper_action_list.h`, in the contract library, so
-  the contract tests check each against REAPER, with the IDs tests use named
-  in `action_ids.h`, and `format_timestr_pos()`'s modes in `timeline.h`, for
-  `Timeline`, the fake, and the contract tests.
-- Fixes to the fake that REAPER shows, each with its test (see Found in
-  REAPER): the ruler actions' text, the text formats, and
-  `NamedCommandLookup()` of a number.
-- View: Toggle master track visible (40075) isn't added, as JPRSurf doesn't
-  use it. If it comes to: it toggles the master's `show_in_tcp`, and its
-  toggle state is that (see Found in REAPER).
-
-**Verify**
-- Standard checks, and `check_in_reaper`.
-
-### CL9 [x] common/testing: Undo
-
-Depends on: CL6, CL7.
-
-- To confirm 4, explored with temporary tests, then contract tests of undo in
-  `fake_reaper_contract_test.cc`, including `Undo_OnStateChangeEx()`'s points
-  and the dirty flag, from CL8.
-- The fake models undo (see Found in REAPER): `FakeProject` keeps its undo
-  points as the state each holds, each track's and route's values in base
-  structs of `FakeTrack` and `FakeRoute` (`FakeTrackUndoValues` and
-  `FakeRouteUndoValues`), so a field is undone by where it is declared. It
-  has `Undo()` and `Redo()`, which
-  `AddReaperActions()` gives Edit: Undo and Edit: Redo, and the setters that
-  add their own points add them. `FakeProject::SetRedo()` is gone, so tests
-  that need a redo undo a change, and `ContinuousUndo`'s tests make the
-  changes their points hold.
-- `SurfaceNotifier` sends Undo's calls only if there was something to undo or
-  redo, with a contract test.
-- `Track` tells `ContinuousUndo` of a route change before making it (see
-  Found in REAPER).
-
-**Verify**
-- Standard checks, and `check_in_reaper`.
-
-### CL10 [x] docs: Coverage, and CLAUDE.md
-
-Depends on: CL3 to CL9.
-
-- The Coverage table complete, against `JPR_REAPER_API`.
-- CLAUDE.md's Checking in REAPER: a fact about REAPER's API is checked with a
-  contract test in the test install where it can be, rather than with
-  temporary code in the user's REAPER. "Seen in traces" stays for what REAPER
-  calls between runs and from its own UI. Commands gains `check_in_reaper`,
-  and Parallel sessions says it runs in the main session only.
-
-**Verify**
-- Standard checks.
-
-## Checks in REAPER
-
-`check_in_reaper` is the check: it passes. Nothing in the plugin changes, so
-there is no smoke test or profile.
+Nothing on the realtime path changes; the one change for the user, the route
+undo fix, reorders two calls. `check_in_reaper` isn't for performance: the
+tests' calls aren't JPRSurf's, and the DLL has no profiler.
