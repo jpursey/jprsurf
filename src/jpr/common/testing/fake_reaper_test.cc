@@ -413,6 +413,9 @@ TEST(FakeReaperTest, ParametersItDoesntModelFailTheTest) {
       ::CSurf_OnPanChangeEx(track, 0.5, /*relative=*/true, false), "relative");
   EXPECT_NONFATAL_FAILURE(::GetSetTrackSendInfo(track, 0, 0, "D_VOL", nullptr),
                           "D_VOL");
+  std::array<char, 64> text = {};
+  EXPECT_NONFATAL_FAILURE(
+      ::format_timestr_pos(1.0, text.data(), text.size(), 3), "mode 3");
 }
 
 // REAPER moves a group from where it was when the gesture began, so the fake
@@ -665,87 +668,29 @@ TEST(FakeReaperTest, ActionsAreAddedOnce) {
   EXPECT_NONFATAL_FAILURE(reaper.SetToggleState(40364, 1), "wasn't added");
 }
 
-TEST(FakeReaperTest, Transport) {
+// What a project can't open with in REAPER (see WriteProjectFile()), which the
+// contract tests can't set up.
+TEST(FakeReaperTest, StateAProjectCantOpenWith) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
   project.SetPlayState(1);
   project.SetPlayPosition(2.5);
-  project.SetCursorPosition(1.25);
-  EXPECT_EQ(::GetPlayState(), 1);
-  EXPECT_EQ(::GetPlayPosition(), 2.5);
-  EXPECT_EQ(::GetCursorPosition(), 1.25);
-
-  // Each project tab has its own.
-  reaper.AddProject();
-  EXPECT_EQ(::GetPlayState(), 0);
-}
-
-TEST(FakeReaperTest, ProjectState) {
-  FakeReaper reaper;
-  FakeProject& project = reaper.GetProject();
-  EXPECT_EQ(::Undo_CanRedo2(nullptr), nullptr);
-  EXPECT_EQ(::IsProjectDirty(nullptr), 0);
-  EXPECT_EQ(::CountSelectedMediaItems(nullptr), 0);
-  EXPECT_FALSE(::AnyTrackSolo(nullptr));
-
   project.SetRedo("Change volume");
   project.SetDirty(true);
-  project.SetSelectedItemCount(2);
-  project.AddTrack("Drums")->solo = true;
+  EXPECT_EQ(::GetPlayState(), 1);
+  EXPECT_EQ(::GetPlayPosition(), 2.5);
   EXPECT_STREQ(::Undo_CanRedo2(nullptr), "Change volume");
   EXPECT_EQ(::IsProjectDirty(nullptr), 1);
-  EXPECT_EQ(::CountSelectedMediaItems(nullptr), 2);
-  EXPECT_TRUE(::AnyTrackSolo(nullptr));
 }
 
-TEST(FakeReaperTest, AutomationOverride) {
+TEST(FakeReaperTest, EachProjectTabHasItsOwnTransportAndOverride) {
   FakeReaper reaper;
-  EXPECT_EQ(::GetGlobalAutomationOverride(), -1);
-  ::SetGlobalAutomationOverride(3);
-  EXPECT_EQ(reaper.GetProject().GetAutomationOverride(), 3);
-
-  // Each project tab has its own.
+  FakeProject& project = reaper.GetProject();
+  project.SetPlayState(1);
+  project.SetAutomationOverride(3);
   reaper.AddProject();
+  EXPECT_EQ(::GetPlayState(), 0);
   EXPECT_EQ(::GetGlobalAutomationOverride(), -1);
-}
-
-TEST(FakeReaperTest, VolumeAndPanText) {
-  FakeReaper reaper;
-  std::array<char, 64> text = {};
-  ::mkvolstr(text.data(), 1.0);
-  EXPECT_STREQ(text.data(), "+0.00dB");
-  ::mkvolstr(text.data(), 0.5);
-  EXPECT_STREQ(text.data(), "-6.02dB");
-  ::mkvolstr(text.data(), 0.1);
-  EXPECT_STREQ(text.data(), "-20.0dB");
-  ::mkvolstr(text.data(), 2.0);
-  EXPECT_STREQ(text.data(), "+6.02dB");
-  ::mkvolstr(text.data(), 0.0);
-  EXPECT_STREQ(text.data(), "-inf dB");
-
-  ::mkpanstr(text.data(), 0.0);
-  EXPECT_STREQ(text.data(), "center");
-  ::mkpanstr(text.data(), -0.25);
-  EXPECT_STREQ(text.data(), "25%L");
-  ::mkpanstr(text.data(), 1.0);
-  EXPECT_STREQ(text.data(), "100%R");
-}
-
-TEST(FakeReaperTest, PositionText) {
-  FakeReaper reaper;
-  std::array<char, 64> text = {};
-  ::format_timestr_pos(3.5, text.data(), text.size(), 2);
-  EXPECT_STREQ(text.data(), "2.4.00");  // As REAPER writes it.
-  ::format_timestr_pos(3725.25, text.data(), text.size(), 0);
-  EXPECT_STREQ(text.data(), "1:02:05.250");
-  ::format_timestr_pos(-65.5, text.data(), text.size(), 0);
-  EXPECT_STREQ(text.data(), "-1:05.500");
-  ::format_timestr_pos(3.5, text.data(), text.size(), 4);
-  EXPECT_STREQ(text.data(), "154350");
-  ::format_timestr_pos(3725.5, text.data(), text.size(), 5);
-  EXPECT_STREQ(text.data(), "01:02:05:15");
-  EXPECT_NONFATAL_FAILURE(
-      ::format_timestr_pos(1.0, text.data(), text.size(), 3), "mode 3");
 }
 
 TEST(FakeReaperTest, TextThatIsntAGuidFailsTheTest) {

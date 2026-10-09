@@ -40,6 +40,12 @@ enum TimelineMode {
   kSamples,
 };
 
+// format_timestr_pos()'s modes for a position in each TimelineMode.
+inline constexpr int kFormatBeats = 2;    // Measure.beat.hundredths.
+inline constexpr int kFormatTime = 0;     // Minutes:seconds.milliseconds.
+inline constexpr int kFormatFrames = 5;   // Hours:minutes:seconds:frames.
+inline constexpr int kFormatSamples = 4;  // Samples.
+
 template <typename Sink>
 void AbslStringify(Sink& sink, TimelineMode mode) {
   switch (mode) {

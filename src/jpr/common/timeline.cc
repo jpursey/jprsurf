@@ -93,8 +93,8 @@ TimelineMode GetRulerMode() {
 }
 
 void SetRulerMode(TimelineMode mode) {
-  // Setting the mode is a toggle, so we don't want to trigger the command if
-  // we're already in the correct mode.
+  // Running the mode that is on leaves it on (see RulerModeContractTest), so
+  // this only saves running an action.
   if (GetRulerMode() == mode) {
     return;
   }
@@ -135,8 +135,8 @@ std::optional<TimelineMode> GetRulerSecondaryMode() {
 }
 
 void SetRulerSecondaryMode(TimelineMode mode) {
-  // Setting the mode is a toggle, so we don't want to trigger the command if
-  // we're already in the correct mode.
+  // Running the mode that is on leaves it on (see RulerModeContractTest), so
+  // this only saves running an action.
   std::optional<TimelineMode> current_secondary_mode = GetRulerSecondaryMode();
   if (current_secondary_mode.has_value() && *current_secondary_mode == mode) {
     return;
@@ -204,9 +204,7 @@ TimelinePosition TimelinePosition::GetEdit() {
 
 BeatsPosition TimelinePosition::ToBeats() const {
   char timestr[100];
-  // Two is "Beats" mode.
-  format_timestr_pos(position_, timestr, std::size(timestr),
-                     /*modeoverride=*/2);
+  format_timestr_pos(position_, timestr, std::size(timestr), kFormatBeats);
 
   bool negative = (timestr[0] == '-');
   const char* timestr_start = (negative ? timestr + 1 : timestr);
@@ -230,9 +228,7 @@ BeatsPosition TimelinePosition::ToBeats() const {
 
 TimePosition TimelinePosition::ToTime() const {
   char timestr[100];
-  // Zero is "Time" mode.
-  format_timestr_pos(position_, timestr, std::size(timestr),
-                     /*modeoverride=*/0);
+  format_timestr_pos(position_, timestr, std::size(timestr), kFormatTime);
 
   bool negative = (timestr[0] == '-');
   const char* timestr_start = (negative ? timestr + 1 : timestr);
@@ -265,9 +261,7 @@ TimePosition TimelinePosition::ToTime() const {
 
 FramesPosition TimelinePosition::ToFrames() const {
   char timestr[100];
-  // Five is "Hours:Minutes:Seconds:Frame" mode.
-  format_timestr_pos(position_, timestr, std::size(timestr),
-                     /*modeoverride=*/5);
+  format_timestr_pos(position_, timestr, std::size(timestr), kFormatFrames);
 
   bool negative = (timestr[0] == '-');
   const char* timestr_start = (negative ? timestr + 1 : timestr);
@@ -292,9 +286,7 @@ FramesPosition TimelinePosition::ToFrames() const {
 
 int64_t TimelinePosition::ToSamples() const {
   char timestr[100];
-  // Four is "Samples" mode.
-  format_timestr_pos(position_, timestr, std::size(timestr),
-                     /*modeoverride=*/4);
+  format_timestr_pos(position_, timestr, std::size(timestr), kFormatSamples);
   int64_t samples = 0;
   if (!absl::SimpleAtoi(timestr, &samples)) {
     LOG(ERROR) << "Unexpected time format: " << timestr;

@@ -13,6 +13,7 @@ set(jpr_common_contract_SOURCE
   fake_project.cc fake_project.h
   fake_track.h
   project_file.cc project_file.h
+  reaper_action_list.h
   recording_surface.cc recording_surface.h
 )
 
@@ -37,6 +38,7 @@ gb_add_library(jpr_common_contract)
 
 set(jpr_common_contract_TESTS
   fake_reaper_contract_test.cc
+  reaper_actions_contract_test.cc
   surface_notifier_contract_test.cc
 )
 

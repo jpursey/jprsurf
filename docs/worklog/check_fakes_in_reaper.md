@@ -179,9 +179,8 @@ Checked in REAPER, with the test install, before the CLs that rely on them:
    no dialogs, and with `-newinst` runs as its own instance beside the user's
    REAPER, which is untouched. REAPER only creates a control surface whose
    line in `reaper.ini` has a config string after its type, so the runner
-   writes `csurf_0=RECORDING null`, as the user's has `JPRSurf null`. Still to
-   check, with the play state's tests: the transport plays and stops on the
-   dummy device.
+   writes `csurf_0=RECORDING null`, as the user's has `JPRSurf null`. The
+   transport plays and stops on the dummy device (2026-10-09, in CL8).
 2. **Opening a project from inside `Run()`** with
    `Main_openProject("noprompt:")`: confirmed (2026-10-08). It finishes within
    the call, in about 0.55 seconds, and the notifier's tests read the project
@@ -304,6 +303,42 @@ each fixed with its test:
   setters are documented to; a hardware output's `P_SRCTRACK` is its track,
   and its `P_DESTTRACK` null; and a send's pan past an end isn't clamped,
   unlike a track's.
+
+The actions', timeline's, and text's contract tests, in CL8 (2026-10-09),
+explored with a temporary test that wrote out what REAPER returned, found these
+gaps in the fake, each fixed with its test:
+- **The ruler's time unit actions have text,** such as `View: Time unit for
+  ruler: Seconds`, which the fake left out. Which of each group is on is a
+  preference: REAPER's default secondary unit is Minutes:Seconds, where the
+  fake's is none, so the contract tests only check that one is on, and turn
+  back on those that were, in a group a test changed. Running the mode that
+  is on leaves it on, as the fake does, where `timeline.cc` said it toggled
+  (its guards against it only save running an action).
+- **`mkvolstr()`** writes 0dB as `0.00dB`, with no sign, and a volume just
+  under or over it as `-0.00dB` or `+0.00dB`. It writes one decimal from 10dB
+  up, as `-140.0dB`, where the fake wrote none from 100dB. Below 2^-25 (about
+  -150.5dB) it writes `-inf dB`, and above that, at least `-150.0dB`.
+- **`mkpanstr()`** writes `center` only for exactly 0. Otherwise it truncates
+  the percent (`12%R` for 0.125), or under 1% writes it to a tenth (`0.4%R`),
+  unless that is 0 (`0%R`). The fake rounded, and wrote `center` for under
+  0.5%.
+- **`format_timestr_pos()`** truncates the time mode's milliseconds and the
+  frames, where the fake rounded them. Before the start, beats count measures
+  down from 0 (`0.4.50` is half a beat before), and frames count hours down
+  from 0 (`-1:59:59:28`), where the fake wrote the distance from the start.
+  Beats' hundredths and samples are rounded, as the fake did.
+- **`NamedCommandLookup()`** reads a name that doesn't start with `_` as a
+  number, as far as its digits go (`40029x` is 40029).
+- **As the fake already did:** every other action's text and toggle state; the
+  automation mode actions set the selected tracks' modes, the master's too; an
+  action REAPER doesn't have has no text and no toggle; a project opens
+  stopped, with the play position at 0 rather than the cursor, clean, and with
+  nothing to redo; and the automation override is the project's. Adding an
+  undo point left `IsProjectDirty()` at 0 within the call, which CL9 checks
+  with the rest of undo.
+
+Surface tests that showed 0dB as `+0.00dB` now show `0.00dB`, as REAPER
+writes it.
 
 ## CLs
 
@@ -440,18 +475,28 @@ Depends on: CL5.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL8 [ ] common/testing: Contract tests of actions, the timeline, and text
+### CL8 [x] common/testing: Contract tests of actions, the timeline, and text
 
 Depends on: CL5.
 
 - `Main_OnCommand` and the actions `AddReaperActions()` adds (their text,
   toggle states, and the effects of those with handlers: the ruler and
   automation modes), `NamedCommandLookup`, the automation override, the
-  transport, `format_timestr_pos`, `mkvolstr`, `mkpanstr`, undo points,
-  `Undo_CanRedo2`, `IsProjectDirty`, and `CountSelectedMediaItems`.
-- View: Toggle master track visible (40075), if JPRSurf comes to use it: it
-  toggles the master's `show_in_tcp`, and its toggle state is that (see Found
-  in REAPER).
+  transport, `format_timestr_pos`, `mkvolstr`, `mkpanstr`, `Undo_CanRedo2`,
+  `IsProjectDirty`, and `CountSelectedMediaItems`, moved from
+  `fake_reaper_test.cc` and `reaper_actions_test.cc` where they act only
+  through the API, into `fake_reaper_contract_test.cc` and
+  `reaper_actions_contract_test.cc`. Undo points are left to CL9.
+- The actions' list in `reaper_action_list.h`, in the contract library, so
+  the contract tests check each against REAPER, with the IDs tests use named
+  in `action_ids.h`, and `format_timestr_pos()`'s modes in `timeline.h`, for
+  `Timeline`, the fake, and the contract tests.
+- Fixes to the fake that REAPER shows, each with its test (see Found in
+  REAPER): the ruler actions' text, the text formats, and
+  `NamedCommandLookup()` of a number.
+- View: Toggle master track visible (40075) isn't added, as JPRSurf doesn't
+  use it. If it comes to: it toggles the master's `show_in_tcp`, and its
+  toggle state is that (see Found in REAPER).
 
 **Verify**
 - Standard checks, and `check_in_reaper`.
@@ -466,6 +511,8 @@ Depends on: CL6, CL7.
 - Which setters leave an undo point, as an undo with nothing to undo calls
   nothing back, where `SurfaceNotifier` always sends Undo's calls (see Found
   in REAPER).
+- `Undo_OnStateChangeEx()`'s undo points, from CL8: what Undo restores after
+  one, and whether the project is dirty after (it read clean within the call).
 
 **Verify**
 - Standard checks, and `check_in_reaper`.

@@ -178,7 +178,7 @@ TEST_F(TrackStripTest, MeterStaysUpWhileThePeakDoes) {
 
 TEST_F(TrackStripTest, ScribbleShowsTheNameAndVolume) {
   EXPECT_EQ(xtouch_ext_->GetScribble(0, 0), "T1     ");
-  EXPECT_EQ(xtouch_ext_->GetScribble(0, 1), "+0.00dB");
+  EXPECT_EQ(xtouch_ext_->GetScribble(0, 1), "0.00dB ");
 
   tracks_[0]->name = "Kick";
   tracks_[0]->volume = 0.5;
@@ -212,7 +212,7 @@ TEST_F(TrackStripTest, ScribbleShowsATrackAddedToAnEmptyStrip) {
   surface_->SetTrackListChange();
   RunUntilShown();
   EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 0), "T11    ");
-  EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 1), "+0.00dB");
+  EXPECT_EQ(xtouch_.GetScribble(kEmptyStrip, 1), "0.00dB ");
 }
 
 TEST_F(TrackStripTest, ScribbleIsBlankForADeletedTrack) {

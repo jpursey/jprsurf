@@ -23,4 +23,10 @@ inline constexpr int kLastAutoModeAction = 40404;
 static_assert(kLastAutoModeAction - kFirstAutoModeAction ==
               static_cast<int>(AutoMode::kLatch));
 
+// Ruler time units (see kRulerModes in reaper_action_list.h).
+inline constexpr int kRulerMeasuresBeats = 40367;
+inline constexpr int kRulerSeconds = 40368;
+inline constexpr int kRulerSecondaryNone = 42360;
+inline constexpr int kRulerSecondaryFrames = 42364;  // Hours:...:Frames.
+
 }  // namespace jpr

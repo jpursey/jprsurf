@@ -13,7 +13,8 @@ namespace jpr {
 // REAPER's actions
 //
 // AddReaperActions() adds a set of REAPER's actions to a fake REAPER (see
-// FakeReaper::AddCommand()), each with REAPER's text and toggle state. The
+// FakeReaper::AddCommand()), each with REAPER's text and toggle state (see
+// reaper_action_list.h, which contract tests check against REAPER). The
 // fake holds REAPER's state, not its behavior, so this is the opt-in for tests
 // that need REAPER's actions to exist, and to do what they do, as
 // SurfaceNotifier is for REAPER's calls to a control surface. Those whose
@@ -22,12 +23,13 @@ namespace jpr {
 //   current project, the master's too.
 // - The ruler's time unit actions, and its secondary ones (see timeline.cc),
 //   are each a radio group (see SelectRulerMode()), with Measure.Beats on, and
-//   no secondary unit. They have no text.
+//   no secondary unit, where REAPER's default preferences have
+//   Minutes:Seconds.
 // A test gives another action a handler with FakeReaper::SetCommandHandler().
 //
 // Brittleness: an action that isn't in the set doesn't exist in REAPER, as
 // far as a test that uses it can tell, so code that starts using another
-// action needs it added here.
+// action needs it added to reaper_action_list.h.
 //==============================================================================
 
 // Adds the actions to `reaper`, which none of them may have been added to.

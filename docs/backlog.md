@@ -759,6 +759,34 @@ In order:
 The time saved is small: the idle snapshot has `RefreshVisibility` at about
 2.5us a second for 81 tracks. A short idle profile shows it.
 
+## Name REAPER's action IDs in common
+
+- **Layers:** common, scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:**
+  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (CL8)
+
+The same REAPER action IDs are written in three places:
+- `common/timeline.cc`'s file-local ruler arrays.
+- `scene/command_properties.h`'s `kCmd*` config names (`kCmdName<40029>`).
+- `common/testing/action_ids.h` and `reaper_action_list.h`, which the
+  contract tests check against REAPER's text for each action.
+
+So the contract tests check the tests' copies of the IDs, not the ones the
+plugin uses. Moving the IDs named in more than one place into a
+`common/action_ids.h` would let one set serve both, so a wrong ID in the
+plugin fails a contract test: the ruler groups `timeline.cc` uses, undo and
+redo, repeat, and the automation mode range with its `static_assert` (as
+`AutoMode` is in `common`). `timeline.cc` and `command_properties.h` (as
+`kCmdUndo = kCmdName<kUndoAction>`) then use them, and
+`testing/reaper_action_list.h` keeps only what tests need, REAPER's text and
+default toggle state for each, built from the common IDs. The rest of
+`command_properties.h`'s actions, each named once, stay as they are, as
+`docs/config_model.md` moves mappings to config, where actions are "cmd:<id>"
+strings.
+
 ## Act on REAPER re-reporting the last touched track
 
 - **Layers:** common, scene

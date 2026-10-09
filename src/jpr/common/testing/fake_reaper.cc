@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -31,6 +32,7 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/timeline.h"
 #include "jpr/common/track_state.h"
 #include "jpr/common/volume_utils.h"
 
@@ -41,14 +43,12 @@ namespace {
 // The sizes of the buffers guidToString(), mkvolstr(), and mkpanstr() write.
 constexpr int kTextSize = 64;
 
-// The quietest volume mkvolstr() writes, below which it writes "-inf dB".
-constexpr double kMinDecibels = -150.0;
+// The quietest volume mkvolstr() writes in decibels (about -150.5dB), below
+// which it writes "-inf dB".
+constexpr double kMinVolume = 0x1p-25;
 
-// format_timestr_pos()'s modes that the fake writes.
-constexpr int kTimeMode = 0;
-constexpr int kBeatsMode = 2;
-constexpr int kSamplesMode = 4;
-constexpr int kFramesMode = 5;
+// The quietest decibels mkvolstr() writes, which volumes between are raised to.
+constexpr double kMinDecibels = -150.0;
 
 // The project's time signature and rates, which are REAPER's defaults, as its
 // tempo is (FakeProject::kBeatsPerMinute).
@@ -526,74 +526,91 @@ class FakeReaper::Api final {
     }
   }
 
-  // Writes a volume in decibels to three significant digits, as REAPER does:
-  // "-14.2dB", "-5.10dB", "+4.23dB", or "-inf dB".
+  // Writes a volume in decibels as REAPER does: "-14.2dB", "-5.10dB",
+  // "+4.23dB", or "-inf dB", to two decimals below 10dB either way, and one
+  // from there. Only 0dB has no sign, so a volume just under it is "-0.00dB".
   static void mkvolstr(char* text, double volume) {
-    const double decibels = VolumeToDecibels(volume);
-    if (decibels < kMinDecibels) {
+    if (volume < kMinVolume) {
       absl::SNPrintF(text, kTextSize, "-inf dB");
       return;
     }
+    const double decibels = std::max(VolumeToDecibels(volume), kMinDecibels);
+    const char* sign = decibels > 0.0 ? "+" : (decibels < 0.0 ? "-" : "");
     const double magnitude = std::abs(decibels);
-    const int decimals = magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : 2);
-    absl::SNPrintF(text, kTextSize, "%+.*fdB", decimals, decibels);
+    absl::SNPrintF(text, kTextSize, "%s%.*fdB", sign, magnitude >= 10.0 ? 1 : 2,
+                   magnitude);
   }
 
-  // Writes a pan as REAPER does: "center", "25%L", or "100%R".
+  // Writes a pan as REAPER does: "center" for exactly 0, and otherwise its
+  // percent, truncated, such as "25%L" or "100%R", or under 1%, to a tenth,
+  // such as "0.5%R", unless that is 0.
   static void mkpanstr(char* text, double pan) {
-    const int percent = static_cast<int>(std::lround(std::abs(pan) * 100.0));
-    if (percent == 0) {
+    if (pan == 0.0) {
       absl::SNPrintF(text, kTextSize, "center");
       return;
     }
-    absl::SNPrintF(text, kTextSize, "%d%%%c", percent, pan < 0.0 ? 'L' : 'R');
+    const double percent = std::abs(pan) * 100.0;
+    const char side = pan < 0.0 ? 'L' : 'R';
+    if (percent >= 0.05 && percent < 1.0) {
+      absl::SNPrintF(text, kTextSize, "%.1f%%%c", percent, side);
+    } else {
+      absl::SNPrintF(text, kTextSize, "%d%%%c", static_cast<int>(percent),
+                     side);
+    }
   }
 
   // Writes a position in the modes JPRSurf reads, as REAPER does (see
-  // FakeReaper's class comment for the project's tempo and rates). A negative
-  // position is written as its distance from the start, after a "-".
+  // FakeReaper's class comment for the project's tempo and rates).
   static void format_timestr_pos(double position, char* text, int text_size,
                                  int mode) {
-    const char* sign = position < 0.0 ? "-" : "";
-    const double seconds = std::abs(position);
     switch (mode) {
-      case kTimeMode: {
-        // Minutes:seconds.milliseconds, with hours if there are any.
-        const int64_t total = std::llround(seconds * 1000.0);
+      case kFormatTime: {
+        // Minutes:seconds.milliseconds, with hours if there are any. The
+        // milliseconds are truncated, and a negative position is written as
+        // its distance from the start, after a "-".
+        const char* sign = position < 0.0 ? "-" : "";
+        const int64_t total = static_cast<int64_t>(std::abs(position) * 1000.0);
         const int64_t hours = total / 3600000;
         const int64_t minutes = total / 60000 % 60;
-        const int64_t whole_seconds = total / 1000 % 60;
+        const int64_t seconds = total / 1000 % 60;
         const int64_t milliseconds = total % 1000;
         if (hours > 0) {
           absl::SNPrintF(text, text_size, "%s%d:%02d:%02d.%03d", sign, hours,
-                         minutes, whole_seconds, milliseconds);
+                         minutes, seconds, milliseconds);
         } else {
           absl::SNPrintF(text, text_size, "%s%d:%02d.%03d", sign, minutes,
-                         whole_seconds, milliseconds);
+                         seconds, milliseconds);
         }
         return;
       }
-      case kBeatsMode: {
-        // Measure.beat.hundredths of a beat, from 1.1.00.
-        const int64_t total =
-            std::llround(seconds * FakeProject::kBeatsPerMinute / 60.0 * 100.0);
-        const int64_t beats = total / 100;
-        absl::SNPrintF(text, text_size, "%s%d.%d.%02d", sign,
-                       beats / kBeatsPerMeasure + 1,
-                       beats % kBeatsPerMeasure + 1, total % 100);
+      case kFormatBeats: {
+        // Measure.beat.hundredths of a beat, from 1.1.00, with the hundredths
+        // rounded. Before the start, measures count down from 0, so half a
+        // beat before it is 0.4.50.
+        const int64_t total = std::llround(
+            position * FakeProject::kBeatsPerMinute / 60.0 * 100.0);
+        const int64_t beats = FloorDivide(total, 100);
+        const int64_t measures = FloorDivide(beats, kBeatsPerMeasure);
+        absl::SNPrintF(text, text_size, "%d.%d.%02d", measures + 1,
+                       beats - measures * kBeatsPerMeasure + 1,
+                       total - beats * 100);
         return;
       }
-      case kSamplesMode:
-        absl::SNPrintF(text, text_size, "%s%d", sign,
-                       std::llround(seconds * kSamplesPerSecond));
+      case kFormatSamples:
+        absl::SNPrintF(text, text_size, "%d",
+                       std::llround(position * kSamplesPerSecond));
         return;
-      case kFramesMode: {
-        // Hours:minutes:seconds:frames.
-        const int64_t total = std::llround(seconds * kFramesPerSecond);
-        const int64_t total_seconds = total / kFramesPerSecond;
-        absl::SNPrintF(text, text_size, "%s%02d:%02d:%02d:%02d", sign,
-                       total_seconds / 3600, total_seconds / 60 % 60,
-                       total_seconds % 60, total % kFramesPerSecond);
+      case kFormatFrames: {
+        // Hours:minutes:seconds:frames, with the frames truncated. Before the
+        // start, hours count down from 0, so a frame before it is
+        // -1:59:59:29.
+        const int64_t total =
+            static_cast<int64_t>(std::floor(position * kFramesPerSecond));
+        const int64_t seconds = FloorDivide(total, kFramesPerSecond);
+        const int64_t hours = FloorDivide(seconds, 3600);
+        const int64_t rest = seconds - hours * 3600;
+        absl::SNPrintF(text, text_size, "%02d:%02d:%02d:%02d", hours, rest / 60,
+                       rest % 60, total - seconds * kFramesPerSecond);
         return;
       }
     }
@@ -644,7 +661,13 @@ class FakeReaper::Api final {
     return s_instance_->GetToggleState(command);
   }
 
+  // A name that doesn't start with "_" is read as a number, as far as its
+  // digits go, as REAPER does: "40029" and "40029x" are both 40029, and "abc"
+  // is 0.
   static int NamedCommandLookup(const char* name) {
+    if (name[0] != '_') {
+      return std::atoi(name);
+    }
     for (const auto& [id, command] : s_instance_->commands_) {
       if (!command.name.empty() && command.name == name) {
         return id;
@@ -849,6 +872,11 @@ class FakeReaper::Api final {
     }
     port->open_ = true;
     return port;
+  }
+
+  // Returns `value` divided by `divisor`, which is positive, rounded down.
+  static int64_t FloorDivide(int64_t value, int64_t divisor) {
+    return value / divisor - (value % divisor < 0 ? 1 : 0);
   }
 
   // Returns the value of the hex digits `hex`, or 0 if they aren't any.

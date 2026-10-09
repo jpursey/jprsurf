@@ -444,9 +444,11 @@ REAPER's calls on the surface follow these.
 - **Exiting:** REAPER destroys the surface, then unloads the plugin, so the
   profiler's snapshot can be written when the surface is destroyed.
 - **Text:** `mkvolstr` writes `-14.2dB`, `-5.10dB`, `+4.23dB`, and `-inf dB`
-  (three significant digits). `kbd_getTextFromCmd` names commands with their
-  section, such as `Edit: Undo`. `format_timestr_pos` in beats mode (2) writes
-  3.5 seconds as `2.4.00`.
+  (two decimals below 10dB, and one from there), and 0dB as `0.00dB`.
+  `kbd_getTextFromCmd` names commands with their section, such as
+  `Edit: Undo`. `format_timestr_pos` in beats mode (2) writes 3.5 seconds as
+  `2.4.00`. The contract tests check each format's rounding and negative
+  positions (see `TextContractTest`).
 
 ### Checks
 

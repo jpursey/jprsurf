@@ -188,7 +188,7 @@ TEST_F(SendModeTest, RouteStripShowsTheOtherTracksColor) {
 
 TEST_F(SendModeTest, RouteStripShowsTheRoute) {
   EnterSendMode(kSource);
-  EXPECT_EQ(GetBottomLine(0), "+0.00dB");
+  EXPECT_EQ(GetBottomLine(0), "0.00dB");
   EXPECT_NEAR(xtouch_ext_->GetFader(0), kFader0dB, 1);
   EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kCenterRing}));
   EXPECT_EQ(GetLight(StripButton::kMute, 0), Light::kOff);

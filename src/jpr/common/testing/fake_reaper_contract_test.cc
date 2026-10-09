@@ -20,6 +20,7 @@
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/timeline.h"
 #include "jpr/common/track_state.h"
 #include "sdk/reaper_plugin.h"
 
@@ -874,6 +875,162 @@ TEST_F(RouteContractTest, PanPastAnEndIsntClamped) {
   EXPECT_TRUE(SetTrackSendUIPan(drums_, 1, -2.0, 0));
   EXPECT_THAT(GetVolPan(GetTrackSendUIVolPan, drums_, 1),
               ElementsAre(1.0, -2.0));
+}
+
+//------------------------------------------------------------------------------
+// The project
+//------------------------------------------------------------------------------
+
+using ProjectContractTest = ContractTest;
+
+TEST_F(ProjectContractTest, AProjectOpensStoppedAtItsCursor) {
+  OpenProject([](FakeProject& project) { project.SetCursorPosition(2.5); });
+  EXPECT_EQ(GetPlayState(), 0);
+  EXPECT_EQ(GetPlayPosition(), 0.0);
+  EXPECT_EQ(GetCursorPosition(), 2.5);
+}
+
+TEST_F(ProjectContractTest, AProjectOpensCleanWithNothingToRedo) {
+  OpenProject([](FakeProject& project) {});
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+  EXPECT_EQ(Undo_CanRedo2(nullptr), nullptr);
+}
+
+TEST_F(ProjectContractTest, SelectedItemsAreCounted) {
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("Track");
+    project.SetSelectedItemCount(2);
+  });
+  EXPECT_EQ(CountSelectedMediaItems(nullptr), 2);
+}
+
+TEST_F(ProjectContractTest, TheAutomationOverrideIsTheProjects) {
+  OpenProject([](FakeProject& project) { project.SetAutomationOverride(4); });
+  EXPECT_EQ(GetGlobalAutomationOverride(), 4);
+  for (int mode : {-1, 0, 3, 5, 6}) {
+    SetGlobalAutomationOverride(mode);
+    EXPECT_EQ(GetGlobalAutomationOverride(), mode);
+  }
+}
+
+//------------------------------------------------------------------------------
+// Text
+//------------------------------------------------------------------------------
+
+// Positions are in the open project's tempo and rates, which are REAPER's
+// defaults in every project the tests open, and the one REAPER starts with.
+using TextContractTest = ContractTest;
+
+// Returns what mkvolstr() writes for `volume`.
+std::string GetVolumeText(double volume) {
+  std::array<char, 64> text = {};
+  mkvolstr(text.data(), volume);
+  return text.data();
+}
+
+// Returns what mkpanstr() writes for `pan`.
+std::string GetPanText(double pan) {
+  std::array<char, 64> text = {};
+  mkpanstr(text.data(), pan);
+  return text.data();
+}
+
+// Returns what format_timestr_pos() writes for `position` in `mode`.
+std::string GetPositionText(double position, int mode) {
+  std::array<char, 64> text = {};
+  format_timestr_pos(position, text.data(), static_cast<int>(text.size()),
+                     mode);
+  return text.data();
+}
+
+TEST_F(TextContractTest, VolumesAreDecibelsToTwoDecimalsBelowTen) {
+  EXPECT_EQ(GetVolumeText(1.0), "0.00dB");
+  EXPECT_EQ(GetVolumeText(0.5), "-6.02dB");
+  EXPECT_EQ(GetVolumeText(2.0), "+6.02dB");
+  EXPECT_EQ(GetVolumeText(3.162), "+10.00dB");
+  EXPECT_EQ(GetVolumeText(3.17), "+10.0dB");
+  EXPECT_EQ(GetVolumeText(0.1), "-20.0dB");
+  EXPECT_EQ(GetVolumeText(1000.0), "+60.0dB");
+  EXPECT_EQ(GetVolumeText(0.0000001), "-140.0dB");
+
+  // Only 0dB has no sign.
+  EXPECT_EQ(GetVolumeText(0.9999), "-0.00dB");
+  EXPECT_EQ(GetVolumeText(1.0001), "+0.00dB");
+}
+
+TEST_F(TextContractTest, VolumesBelowTwoToTheMinus25AreInf) {
+  EXPECT_EQ(GetVolumeText(0.0), "-inf dB");
+  EXPECT_EQ(GetVolumeText(0.00000001), "-inf dB");
+  EXPECT_EQ(GetVolumeText(0.000000029), "-inf dB");
+  EXPECT_EQ(GetVolumeText(0.00000003), "-150.0dB");
+}
+
+TEST_F(TextContractTest, PansAreTruncatedPercents) {
+  EXPECT_EQ(GetPanText(0.0), "center");
+  EXPECT_EQ(GetPanText(-0.25), "25%L");
+  EXPECT_EQ(GetPanText(1.0), "100%R");
+  EXPECT_EQ(GetPanText(0.125), "12%R");
+  EXPECT_EQ(GetPanText(0.999), "99%R");
+  EXPECT_EQ(GetPanText(-0.015), "1%L");
+}
+
+TEST_F(TextContractTest, PansUnderOnePercentAreToATenth) {
+  EXPECT_EQ(GetPanText(0.004), "0.4%R");
+  EXPECT_EQ(GetPanText(-0.006), "0.6%L");
+  EXPECT_EQ(GetPanText(0.0099), "1.0%R");
+
+  // Unless that is 0, which isn't center.
+  EXPECT_EQ(GetPanText(0.0004), "0%R");
+  EXPECT_EQ(GetPanText(-0.0004), "0%L");
+}
+
+TEST_F(TextContractTest, TimeIsTruncatedToTheMillisecond) {
+  EXPECT_EQ(GetPositionText(0.0, kFormatTime), "0:00.000");
+  EXPECT_EQ(GetPositionText(3.5, kFormatTime), "0:03.500");
+  EXPECT_EQ(GetPositionText(0.0016, kFormatTime), "0:00.001");
+  EXPECT_EQ(GetPositionText(3599.9999, kFormatTime), "59:59.999");
+  EXPECT_EQ(GetPositionText(3725.25, kFormatTime), "1:02:05.250");
+
+  // Before the start, as the distance from it.
+  EXPECT_EQ(GetPositionText(-65.5, kFormatTime), "-1:05.500");
+  EXPECT_EQ(GetPositionText(-0.0016, kFormatTime), "-0:00.001");
+}
+
+TEST_F(TextContractTest, BeatsAreRoundedToTheHundredth) {
+  // REAPER's default 120 BPM in 4/4.
+  EXPECT_EQ(GetPositionText(0.0, kFormatBeats), "1.1.00");
+  EXPECT_EQ(GetPositionText(3.5, kFormatBeats), "2.4.00");
+  EXPECT_EQ(GetPositionText(0.004, kFormatBeats), "1.1.01");
+  EXPECT_EQ(GetPositionText(1.999, kFormatBeats), "2.1.00");
+  EXPECT_EQ(GetPositionText(3725.25, kFormatBeats), "1863.3.50");
+
+  // Before the start, measures count down from 0.
+  EXPECT_EQ(GetPositionText(-0.25, kFormatBeats), "0.4.50");
+  EXPECT_EQ(GetPositionText(-0.004, kFormatBeats), "0.4.99");
+  EXPECT_EQ(GetPositionText(-65.5, kFormatBeats), "-32.2.00");
+}
+
+TEST_F(TextContractTest, SamplesAreRounded) {
+  // At 44100 samples a second.
+  EXPECT_EQ(GetPositionText(0.0, kFormatSamples), "0");
+  EXPECT_EQ(GetPositionText(3.5, kFormatSamples), "154350");
+  EXPECT_EQ(GetPositionText(0.00004, kFormatSamples), "2");
+  EXPECT_EQ(GetPositionText(-0.00004, kFormatSamples), "-2");
+  EXPECT_EQ(GetPositionText(-65.5, kFormatSamples), "-2888550");
+}
+
+TEST_F(TextContractTest, FramesAreTruncated) {
+  // At 30 frames a second.
+  EXPECT_EQ(GetPositionText(0.0, kFormatFrames), "00:00:00:00");
+  EXPECT_EQ(GetPositionText(3.5, kFormatFrames), "00:00:03:15");
+  EXPECT_EQ(GetPositionText(0.0666, kFormatFrames), "00:00:00:01");
+  EXPECT_EQ(GetPositionText(59.99, kFormatFrames), "00:00:59:29");
+  EXPECT_EQ(GetPositionText(3725.25, kFormatFrames), "01:02:05:07");
+
+  // Before the start, hours count down from 0.
+  EXPECT_EQ(GetPositionText(-0.05, kFormatFrames), "-1:59:59:28");
+  EXPECT_EQ(GetPositionText(-65.5, kFormatFrames), "-1:58:54:15");
+  EXPECT_EQ(GetPositionText(-7300.0, kFormatFrames), "-3:58:20:00");
 }
 
 //------------------------------------------------------------------------------
