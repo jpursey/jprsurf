@@ -158,28 +158,6 @@ TEST(FakeReaperTest, SurfaceRunsAdvanceTheClock) {
   EXPECT_EQ(g_test_surface->run_count, 32);
 }
 
-TEST(FakeReaperTest, MasterTrack) {
-  FakeReaper reaper;
-  FakeTrack* master = reaper.GetProject().GetMasterTrack();
-  ASSERT_EQ(::GetMasterTrack(nullptr), ToMediaTrack(master));
-  master->name = "Master";
-  master->color = 0x01020304;
-  master->volume = 0.5;
-  master->pan = -0.25;
-  master->mute = true;
-  master->rec_arm = true;
-
-  int flags = 0;
-  EXPECT_STREQ(::GetTrackState(ToMediaTrack(master), &flags), "Master");
-  EXPECT_EQ(flags, 8 | 64);
-  EXPECT_EQ(::GetTrackColor(ToMediaTrack(master)), 0x01020304);
-  double volume = 0.0;
-  double pan = 0.0;
-  EXPECT_TRUE(::GetTrackUIVolPan(ToMediaTrack(master), &volume, &pan));
-  EXPECT_EQ(volume, 0.5);
-  EXPECT_EQ(pan, -0.25);
-}
-
 TEST(FakeReaperTest, GuidsAreTheSameOnEveryRun) {
   for (int i = 0; i < 2; ++i) {
     FakeReaper reaper;
@@ -223,8 +201,9 @@ TEST(FakeReaperTest, ProjectTabsStayOpen) {
   EXPECT_EQ(::GetMasterTrack(nullptr), ToMediaTrack(second.GetMasterTrack()));
 
   // The first project's tracks are still there, and keep their pointers.
-  first->GetMasterTrack()->color = 0x01010203;
-  EXPECT_EQ(::GetTrackColor(ToMediaTrack(first->GetMasterTrack())), 0x01010203);
+  FakeTrack* drums = first->AddTrack("Drums");
+  drums->color = 0x01010203;
+  EXPECT_EQ(::GetTrackColor(ToMediaTrack(drums)), 0x01010203);
   EXPECT_EQ(::GetMasterTrack(ToReaProject(first)),
             ToMediaTrack(first->GetMasterTrack()));
 
@@ -258,27 +237,6 @@ TEST(FakeReaperTest, UnknownProjectFailsTheTest) {
       "isn't an open project");
 }
 
-TEST(FakeReaperTest, AddsTracksToTheEndOfTheirFolder) {
-  FakeReaper reaper;
-  FakeProject& project = reaper.GetProject();
-  FakeTrack* drums = project.AddTrack("Drums");
-  FakeTrack* bass = project.AddTrack("Bass");
-  FakeTrack* kick = project.AddTrack("Kick", drums);
-  FakeTrack* inside = project.AddTrack("Inside", kick);
-  FakeTrack* snare = project.AddTrack("Snare", drums);
-
-  ASSERT_EQ(::CountTracks(nullptr), 5);
-  EXPECT_EQ(::GetTrack(nullptr, 0), ToMediaTrack(drums));
-  EXPECT_EQ(::GetTrack(nullptr, 1), ToMediaTrack(kick));
-  EXPECT_EQ(::GetTrack(nullptr, 2), ToMediaTrack(inside));
-  EXPECT_EQ(::GetTrack(nullptr, 3), ToMediaTrack(snare));
-  EXPECT_EQ(::GetTrack(nullptr, 4), ToMediaTrack(bass));
-  EXPECT_EQ(::GetTrack(nullptr, 5), nullptr);
-  EXPECT_EQ(::GetParentTrack(ToMediaTrack(inside)), ToMediaTrack(kick));
-  EXPECT_EQ(::GetParentTrack(ToMediaTrack(kick)), ToMediaTrack(drums));
-  EXPECT_EQ(::GetParentTrack(ToMediaTrack(drums)), nullptr);
-}
-
 TEST(FakeReaperTest, AddsTracksNamedForWhereTheyAre) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
@@ -307,35 +265,6 @@ TEST(FakeReaperTest, FindsTracksByName) {
   EXPECT_EQ(project.FindTrackByName("Kick"), kick);
   EXPECT_EQ(project.FindTrackByName("Drums"), drums);
   EXPECT_EQ(project.FindTrackByName("Snare"), nullptr);
-}
-
-TEST(FakeReaperTest, TracksHaveNumbersAndNames) {
-  FakeReaper reaper;
-  FakeProject& project = reaper.GetProject();
-  FakeTrack* drums = project.AddTrack("Drums");
-  FakeTrack* kick = project.AddTrack("Kick", drums);
-  MediaTrack* master = ToMediaTrack(project.GetMasterTrack());
-
-  EXPECT_EQ(::GetMediaTrackInfo_Value(ToMediaTrack(drums), "IP_TRACKNUMBER"),
-            1.0);
-  EXPECT_EQ(::GetMediaTrackInfo_Value(ToMediaTrack(kick), "IP_TRACKNUMBER"),
-            2.0);
-  EXPECT_EQ(::GetMediaTrackInfo_Value(master, "IP_TRACKNUMBER"), -1.0);
-
-  char name[64] = "";
-  EXPECT_TRUE(
-      ::GetSetMediaTrackInfo_String(ToMediaTrack(kick), "P_NAME", name, false));
-  EXPECT_STREQ(name, "Kick");
-  char new_name[] = "Snare";
-  EXPECT_TRUE(::GetSetMediaTrackInfo_String(ToMediaTrack(kick), "P_NAME",
-                                            new_name, true));
-  EXPECT_EQ(kick->name, "Snare");
-
-  // REAPER's documentation says the master's name reads as null, which nobody
-  // has checked.
-  EXPECT_NONFATAL_FAILURE(
-      ::GetSetMediaTrackInfo_String(master, "P_NAME", name, false),
-      "isn't faked yet");
 }
 
 TEST(FakeReaperTest, ShowingAFolderInTheMixerSetsItsTracks) {
@@ -919,20 +848,9 @@ TEST(FakeReaperTest, PositionText) {
       ::format_timestr_pos(1.0, text.data(), text.size(), 3), "mode 3");
 }
 
-TEST(FakeReaperTest, GuidText) {
+TEST(FakeReaperTest, TextThatIsntAGuidFailsTheTest) {
   FakeReaper reaper;
   GUID guid = {};
-  ::stringToGuid("{00000001-0002-0003-0405-060708090A0B}", &guid);
-  EXPECT_EQ(guid.Data1, 1);
-  EXPECT_EQ(guid.Data2, 2);
-  EXPECT_EQ(guid.Data3, 3);
-  EXPECT_EQ(guid.Data4[0], 4);
-  EXPECT_EQ(guid.Data4[7], 11);
-
-  std::array<char, 64> text = {};
-  ::guidToString(&guid, text.data());
-  EXPECT_STREQ(text.data(), "{00000001-0002-0003-0405-060708090A0B}");
-
   EXPECT_NONFATAL_FAILURE(::stringToGuid("{1234}", &guid), "isn't a GUID");
 }
 

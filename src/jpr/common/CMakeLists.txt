@@ -24,6 +24,7 @@ set(jpr_common_SOURCE
   test_reset.cc test_reset.h
   timeline.cc timeline.h
   track.cc track.h
+  track_state.h
   track_cache.cc track_cache.h
   undo.cc undo.h
   volume_utils.h

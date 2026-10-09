@@ -184,13 +184,18 @@ void ProjectFileWriter::AppendMaster() {
   if (master->group != 0) {
     Fail("the master's group");
   }
-  if (!master->show_in_mixer || !master->show_in_tcp) {
-    Fail("the master hidden, which only REAPER's preferences hide");
+  if (!master->show_in_mixer) {
+    Fail("the master hidden in the mixer, which shows the master its own way");
   }
   CheckTrack(master, "the master");
   absl::StrAppend(&text_, "  MASTERAUTOMODE ", master->auto_mode, "\n");
   absl::StrAppend(&text_, "  MASTERPEAKCOL ", PeakColor(master), "\n");
   absl::StrAppend(&text_, "  MASTERMUTESOLO ", Flag(master->mute), "\n");
+
+  // Its first field shows the master in the track panel, which View: Toggle
+  // master track visible toggles. Without it, the master is hidden.
+  absl::StrAppend(&text_, "  MASTERTRACKVIEW ", Flag(master->show_in_tcp),
+                  " 0.6667 0.5 0.5 0 0 0 0 0 0 0 0 0 0 0\n");
   absl::StrAppend(&text_, "  MASTER_VOLUME ", VolumePan(master), "\n");
   absl::StrAppend(&text_, "  MASTER_PANMODE ", kBalancePanMode, "\n");
   absl::StrAppend(&text_, "  MASTER_SEL ", Flag(master->selected), "\n");
@@ -215,7 +220,7 @@ void ProjectFileWriter::AppendTrack(int index) {
   const int next_depth = index + 1 < project_.GetTrackCount()
                              ? GetDepth(project_.GetTrack(index + 1))
                              : 0;
-  if (next_depth > depth) {
+  if (project_.IsFolder(track)) {
     absl::StrAppend(&text_, "    ISBUS 1 1\n");
   } else if (next_depth < depth) {
     absl::StrAppend(&text_, "    ISBUS 2 ", next_depth - depth, "\n");
@@ -226,7 +231,10 @@ void ProjectFileWriter::AppendTrack(int index) {
   absl::StrAppend(&text_, "    SHOWINMIX ", Flag(track->show_in_mixer),
                   " 0.6667 0.5 ", Flag(track->show_in_tcp), " 0.5 0 0 0\n");
   absl::StrAppend(&text_, "    SEL ", Flag(track->selected), "\n");
-  absl::StrAppend(&text_, "    REC ", Flag(track->rec_arm), " 0 1 0 0 0 0\n");
+
+  // Rec arm, then the input, and input monitoring off, as the fake has none,
+  // where REAPER's new tracks have it on.
+  absl::StrAppend(&text_, "    REC ", Flag(track->rec_arm), " 0 0 0 0 0 0\n");
   absl::StrAppend(&text_, "    TRACKID ", guid, "\n");
   if (track->group < 0 || track->group > kMaxGroup) {
     Fail(absl::StrCat(track->name, "'s group, ", track->group,

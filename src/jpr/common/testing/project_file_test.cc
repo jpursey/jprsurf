@@ -54,6 +54,7 @@ TEST(ProjectFileTest, AnEmptyProjectIsTheMaster) {
             "  MASTERAUTOMODE 0\n"
             "  MASTERPEAKCOL 16576\n"
             "  MASTERMUTESOLO 0\n"
+            "  MASTERTRACKVIEW 1 0.6667 0.5 0.5 0 0 0 0 0 0 0 0 0 0 0\n"
             "  MASTER_VOLUME 1 0 -1 -1 1\n"
             "  MASTER_PANMODE 3\n"
             "  MASTER_SEL 0\n"
@@ -71,6 +72,7 @@ TEST(ProjectFileTest, WritesTheProjectsState) {
   master->volume = 0.5;
   master->pan = -0.25;
   master->selected = true;
+  master->show_in_tcp = false;
   EXPECT_EQ(WriteProjectFile(*project),
             "<REAPER_PROJECT 0.1 \"7.0/x64\" 0\n"
             "  CURSOR 2.5\n"
@@ -80,6 +82,7 @@ TEST(ProjectFileTest, WritesTheProjectsState) {
             "  MASTERAUTOMODE 1\n"
             "  MASTERPEAKCOL 16777471\n"
             "  MASTERMUTESOLO 1\n"
+            "  MASTERTRACKVIEW 0 0.6667 0.5 0.5 0 0 0 0 0 0 0 0 0 0 0\n"
             "  MASTER_VOLUME 0.5 -0.25 -1 -1 1\n"
             "  MASTER_PANMODE 3\n"
             "  MASTER_SEL 1\n"
@@ -112,7 +115,7 @@ TEST(ProjectFileTest, WritesEachTracksState) {
                         "    ISBUS 0 0\n"
                         "    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0\n"
                         "    SEL 0\n"
-                        "    REC 0 0 1 0 0 0 0\n"
+                        "    REC 0 0 0 0 0 0 0\n"
                         "    TRACKID {00000002-0001-0000-0000-000000000000}\n"
                         "  >\n"));
   EXPECT_THAT(text,
@@ -125,7 +128,7 @@ TEST(ProjectFileTest, WritesEachTracksState) {
                         "    ISBUS 0 0\n"
                         "    SHOWINMIX 0 0.6667 0.5 0 0.5 0 0 0\n"
                         "    SEL 1\n"
-                        "    REC 1 0 1 0 0 0 0\n"
+                        "    REC 1 0 0 0 0 0 0\n"
                         "    TRACKID {00000003-0001-0000-0000-000000000000}\n"
                         "  >\n"));
   EXPECT_LT(text.find("NAME \"A\""), text.find("NAME \"B\""));
@@ -294,9 +297,10 @@ TEST(ProjectFileTest, MasterStateAProjectCantHoldFailsTheTest) {
   master->group = 1;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's group");
   master->group = 0;
-  master->show_in_tcp = false;
-  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master hidden");
-  master->show_in_tcp = true;
+  master->show_in_mixer = false;
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
+                          "the master hidden in the mixer");
+  master->show_in_mixer = true;
   master->peak = {1.0, 0.0};
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's peak");
 }

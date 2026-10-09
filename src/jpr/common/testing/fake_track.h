@@ -26,8 +26,12 @@ namespace jpr {
 //==============================================================================
 
 struct FakeTrack {
+  // The master's is MASTER, which P_NAME can't read or set.
   std::string name;
-  int color = 0;        // As GetTrackColor(): 0 for none, or 0x01BBGGRR.
+
+  // As GetTrackColor(): 0 for none, or 0x01BBGGRR. The master's reads as 0.
+  int color = 0;
+
   double volume = 1.0;  // As a gain: 1.0 is 0dB.
   double pan = 0.0;     // From -1.0 (left) to 1.0 (right).
   bool selected = false;
@@ -45,7 +49,9 @@ struct FakeTrack {
   // and followers.
   int group = 0;
 
-  // As B_SHOWINMIXER and B_SHOWINTCP.
+  // As B_SHOWINMIXER and B_SHOWINTCP, and GetTrackState()'s hidden flags. The
+  // master's show_in_tcp is the project's View: Toggle master track visible,
+  // and only GetTrackState() shows it: its B_SHOWINTCP reads 1 either way.
   bool show_in_mixer = true;
   bool show_in_tcp = true;
 

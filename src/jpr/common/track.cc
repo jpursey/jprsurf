@@ -11,6 +11,7 @@
 #include "absl/log/log.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/common/track_state.h"
 #include "jpr/common/undo.h"
 
 namespace jpr {
@@ -50,22 +51,22 @@ const Track::BoolPropertyInfo& Track::GetBoolPropertyInfo(
     TrackBoolProperty property) {
   // Indexed by TrackBoolProperty.
   static constexpr BoolPropertyInfo kBoolPropertyInfo[] = {
-      {2, &Track::selected_,
+      {kTrackStateSelected, &Track::selected_,
        [](MediaTrack* track_id, bool value, int ingroupflags) {
          SetTrackSelected(track_id, value);
        },
        nullptr},
-      {8, &Track::mute_,
+      {kTrackStateMute, &Track::mute_,
        [](MediaTrack* track_id, bool value, int ingroupflags) {
          SetTrackUIMute(track_id, value ? 1 : 0, ingroupflags);
        },
        "JPR:Toggle Mute"},
-      {16, &Track::solo_,
+      {kTrackStateSolo, &Track::solo_,
        [](MediaTrack* track_id, bool value, int ingroupflags) {
          SetTrackUISolo(track_id, value ? 1 : 0, ingroupflags);
        },
        "JPR:Toggle Solo"},
-      {64, &Track::rec_arm_,
+      {kTrackStateRecArm, &Track::rec_arm_,
        [](MediaTrack* track_id, bool value, int ingroupflags) {
          SetTrackUIRecArm(track_id, value ? 1 : 0, ingroupflags);
        },
@@ -487,9 +488,7 @@ void TrackBatch::Set(Track* track, TrackBoolProperty property, bool value,
 
   // The cached value is only kept up to date for tracks the surface shows, so
   // compare against REAPER's.
-  int state = 0;
-  GetTrackState(track_id, &state);
-  if (((state & info.state_bit) != 0) != value) {
+  if (((GetTrackStateFlags(track_id) & info.state_bit) != 0) != value) {
     if (info.undo_name != nullptr) {
       if (undo_name_ == nullptr) {
         // This batch creates its own undo point, which shouldn't include

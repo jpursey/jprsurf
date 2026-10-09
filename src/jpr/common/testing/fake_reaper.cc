@@ -31,17 +31,12 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/track_state.h"
 #include "jpr/common/volume_utils.h"
 
 namespace jpr {
 
 namespace {
-
-// GetTrackState()'s flags.
-constexpr int kTrackStateSelected = 2;
-constexpr int kTrackStateMute = 8;
-constexpr int kTrackStateSolo = 16;
-constexpr int kTrackStateRecArm = 64;
 
 // GetTrackNumSends() and GetSetTrackSendInfo()'s categories.
 constexpr int kReceiveCategory = -1;
@@ -120,21 +115,22 @@ class FakeReaper::Api final {
                                         const char* name) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
     const std::string_view parameter(name);
+
+    // The master's read as shown, even when it is hidden.
     if (parameter == "B_SHOWINMIXER") {
-      return track.show_in_mixer ? 1.0 : 0.0;
+      return track.show_in_mixer || IsMaster(track) ? 1.0 : 0.0;
     }
     if (parameter == "B_SHOWINTCP") {
-      return track.show_in_tcp ? 1.0 : 0.0;
+      return track.show_in_tcp || IsMaster(track) ? 1.0 : 0.0;
     }
     if (parameter == "I_AUTOMODE") {
       return track.auto_mode;
     }
     if (parameter == "IP_TRACKNUMBER") {
       // 1 for the first track, and -1 for the master.
-      FakeProject& project = s_instance_->GetProjectOf(track);
-      return &track == project.GetMasterTrack()
+      return IsMaster(track)
                  ? -1.0
-                 : project.FindTrack(&track) + 1.0;
+                 : s_instance_->GetProjectOf(track).FindTrack(&track) + 1.0;
     }
     ADD_FAILURE() << "GetMediaTrackInfo_Value(\"" << parameter
                   << "\") isn't faked yet";
@@ -145,8 +141,14 @@ class FakeReaper::Api final {
                                           const char* name, char* value,
                                           bool set) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    if (std::string_view(name) == "P_NAME" &&
-        &track != s_instance_->GetProjectOf(track).GetMasterTrack()) {
+    if (std::string_view(name) == "P_NAME") {
+      if (IsMaster(track)) {
+        // The master's name can't be read or set, and reads as empty.
+        if (!set) {
+          value[0] = '\0';
+        }
+        return false;
+      }
       if (set) {
         track.name = value;
       } else {
@@ -335,12 +337,19 @@ class FakeReaper::Api final {
     s_instance_->GetProject().undo_points_.push_back({name, flags});
   }
 
+  // The fake has no FX, solo in place, or input monitoring, so their flags are
+  // never set.
   static const char* GetTrackState(MediaTrack* track_id, int* flags) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
-    *flags = (track.selected ? kTrackStateSelected : 0) |
-             (track.mute ? kTrackStateMute : 0) |
-             (track.solo ? kTrackStateSolo : 0) |
-             (track.rec_arm ? kTrackStateRecArm : 0);
+    *flags =
+        (s_instance_->GetProjectOf(track).IsFolder(&track) ? kTrackStateFolder
+                                                           : 0) |
+        (track.selected ? kTrackStateSelected : 0) |
+        (track.mute ? kTrackStateMute : 0) |
+        (track.solo ? kTrackStateSolo : 0) |
+        (track.rec_arm ? kTrackStateRecArm : 0) |
+        (track.show_in_tcp ? 0 : kTrackStateHiddenInTcp) |
+        (track.show_in_mixer ? 0 : kTrackStateHiddenInMixer);
     return track.name.c_str();
   }
 
@@ -352,8 +361,10 @@ class FakeReaper::Api final {
     return true;
   }
 
+  // The master's color reads as none, even when it has one.
   static int GetTrackColor(MediaTrack* track_id) {
-    return s_instance_->GetTrack(track_id).color;
+    const FakeTrack& track = s_instance_->GetTrack(track_id);
+    return IsMaster(track) ? 0 : track.color;
   }
 
   //----------------------------------------------------------------------------
@@ -581,6 +592,11 @@ class FakeReaper::Api final {
   }
 
  private:
+  // Returns true if `track` is its project's master.
+  static bool IsMaster(const FakeTrack& track) {
+    return &track == s_instance_->GetProjectOf(track).GetMasterTrack();
+  }
+
   // Sets a track's mute, solo, or rec arm as SetTrackUIMute() and the like
   // do: `value` toggles it if negative, and otherwise sets it to `value > 0`.
   // Returns the new value.

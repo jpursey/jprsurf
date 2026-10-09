@@ -36,6 +36,7 @@ gb_add_library(jpr_common_contract)
 # reaper_jprsurf_check, which runs them in REAPER.
 
 set(jpr_common_contract_TESTS
+  fake_reaper_contract_test.cc
   surface_notifier_contract_test.cc
 )
 

@@ -127,6 +127,14 @@ FakeTrack* FakeProject::GetParentTrack(const FakeTrack* track) const {
   return record != nullptr ? record->parent : nullptr;
 }
 
+bool FakeProject::IsFolder(const FakeTrack* track) const {
+  // A folder's tracks follow it, so its first is the next track. The master
+  // isn't in the order, so it is never one.
+  const int index = FindTrack(track);
+  return index >= 0 && index + 1 < GetTrackCount() &&
+         GetParentTrack(GetTrack(index + 1)) == track;
+}
+
 void FakeProject::ShowInMixer(FakeTrack* track, bool shown) {
   if (FindTrack(track) < 0) {
     ADD_FAILURE() << "ShowInMixer() was given a track that isn't in the "

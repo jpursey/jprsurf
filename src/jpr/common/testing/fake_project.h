@@ -106,6 +106,9 @@ class FakeProject final {
   // master, as GetParentTrack() does.
   FakeTrack* GetParentTrack(const FakeTrack* track) const;
 
+  // Returns true if `track` is a folder: a track with tracks in it.
+  bool IsFolder(const FakeTrack* track) const;
+
   // Shows or hides `track` in the mixer, as the user does in REAPER. Every
   // track in its folder, at any depth, is set the same, whatever it was.
   void ShowInMixer(FakeTrack* track, bool shown);

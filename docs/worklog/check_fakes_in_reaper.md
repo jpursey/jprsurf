@@ -246,6 +246,27 @@ the rule behind them (see "Seen in traces" in `testing_and_profiling.md`, and
   `CSurf_OnVolumeChangeEx()`, or only `SetTrackUIMute()` outside a batch,
   there was nothing to undo (see CL9).
 
+The tracks' contract tests, in CL5 (2026-10-08), found these gaps in the fake,
+each fixed with its test:
+- **`GetTrackState()`** sets &1 for a folder, and &512 and &1024 for a track
+  hidden in the track panel or the mixer, which the fake left out. It also
+  sets &128 (input monitoring on), which REAPER's new tracks have, and the
+  project file now turns off, as the fake has no input monitoring. Solo
+  writes &16, and solo in place &16 and &32.
+- **The master** is shown in the track panel by the project:
+  `MASTERTRACKVIEW`'s first field, which View: Toggle master track visible
+  (40075) toggles, and whose toggle state it is. A project file without it
+  hides the master. Hidden, the master has &512, though its `B_SHOWINTCP`
+  reads 1 either way. The project file writes it. Its `GetTrackColor()`
+  reads 0, even when it has a color, which the project file writes as
+  REAPER does (`MASTERPEAKCOL`). `P_NAME` can't read or set its name: both
+  return false, and reading empties the buffer. `GetTrackState()` names it
+  `MASTER`.
+- **Unchecked by contract tests,** as nothing in REAPER's API can show them:
+  `GetTrackGUID()` keeps returning the same pointer as tracks are added, and
+  REAPER keeps the GUIDs in the project file (it did here), so they stay
+  fake only.
+
 ## CLs
 
 ### CL1 [x] common/testing: Write a FakeProject as an RPP file
@@ -323,7 +344,7 @@ Depends on: CL3.
 **Verify**
 - Standard checks, and `check_in_reaper` passes.
 
-### CL5 [ ] common/testing: Contract tests of tracks
+### CL5 [x] common/testing: Contract tests of tracks
 
 Depends on: CL4.
 
@@ -331,8 +352,13 @@ Depends on: CL4.
   `GetTrackGUID`, `GetTrackState`, `GetMediaTrackInfo_Value`,
   `GetSetMediaTrackInfo_String`, `GetTrackColor`, `GetTrackUIVolPan`, and the
   GUID text functions, moved from `fake_reaper_test.cc` where they act only
-  through the API.
-- Fixes to the fake that REAPER shows, each with its test.
+  through the API, into `fake_reaper_contract_test.cc`.
+- Fixes to the fake that REAPER shows, each with its test (see Found in
+  REAPER): `GetTrackState()`'s folder and hidden flags, and the master's color
+  and name. The project file writes input monitoring off, which the fake
+  doesn't have, and the master's visibility in the track panel.
+- `GetTrackState()`'s flags in `common/track_state.h`, for `Track`, the fake,
+  and the contract tests, where each had its own.
 
 **Verify**
 - Standard checks, and `check_in_reaper`.
@@ -369,6 +395,9 @@ Depends on: CL5.
   automation modes), `NamedCommandLookup`, the automation override, the
   transport, `format_timestr_pos`, `mkvolstr`, `mkpanstr`, undo points,
   `Undo_CanRedo2`, `IsProjectDirty`, and `CountSelectedMediaItems`.
+- View: Toggle master track visible (40075), if JPRSurf comes to use it: it
+  toggles the master's `show_in_tcp`, and its toggle state is that (see Found
+  in REAPER).
 
 **Verify**
 - Standard checks, and `check_in_reaper`.

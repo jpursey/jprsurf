@@ -67,6 +67,8 @@ The build also will copy the binary to the REAPER plugin directory so it can be 
 
 A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Assume REAPER is closed and build without asking. Treat a copy or permission failure at the end of a build as "REAPER is open": ask the user to close it and build again, rather than debugging the build.
 
+Only a change to code the plugin links rebuilds and copies the DLL. While the user has REAPER open, such a change can still be checked by building only the targets the checks need, which don't deploy: each library's tests (`--target <library>_test`, such as `jpr_common_test`) and `check_in_reaper`, whose test install runs beside the user's REAPER. The full build, which deploys, then waits until REAPER is closed, before the commit.
+
 ### Test
 
 ```

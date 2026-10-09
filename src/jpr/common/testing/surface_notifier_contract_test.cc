@@ -21,6 +21,7 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/recording_surface.h"
+#include "jpr/common/track_state.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -52,21 +53,8 @@ void BuildProjectWithRoutes(FakeProject& project) {
 // What tests expect, read through REAPER's API
 //------------------------------------------------------------------------------
 
-// GetTrackState()'s flags.
-constexpr int kTrackStateSelected = 2;
-constexpr int kTrackStateMute = 8;
-constexpr int kTrackStateSolo = 16;
-constexpr int kTrackStateRecArm = 64;
-
 std::string Name(MediaTrack* track) {
   return RecordingSurface::GetTrackText(track);
-}
-
-// Returns a track's state, as GetTrackState()'s flags.
-int GetFlags(MediaTrack* track) {
-  int flags = 0;
-  GetTrackState(track, &flags);
-  return flags;
 }
 
 void Append(std::vector<std::string>& calls,
@@ -89,9 +77,9 @@ std::vector<std::string> VolumeAndPan(MediaTrack* track) {
 
 // The call that sends one of a track's GetTrackState() flags.
 std::string Flag(std::string_view function, MediaTrack* track, int flag) {
-  return absl::StrCat(function, "(", Name(track), ", ",
-                      RecordingSurface::GetBoolText(GetFlags(track) & flag),
-                      ")");
+  return absl::StrCat(
+      function, "(", Name(track), ", ",
+      RecordingSurface::GetBoolText(GetTrackStateFlags(track) & flag), ")");
 }
 
 std::string Mute(MediaTrack* track) {
