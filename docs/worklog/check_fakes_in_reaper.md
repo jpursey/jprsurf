@@ -267,6 +267,30 @@ each fixed with its test:
   REAPER keeps the GUIDs in the project file (it did here), so they stay
   fake only.
 
+The track changes' contract tests, in CL6 (2026-10-09), explored with
+temporary tests first, found these gaps in the fake, each fixed with its test
+(see "Track changes" in `fake_reaper.cc`):
+- **Solo** is in place by default: `SetTrackUISolo()` with 1, or a toggle,
+  sets &16 and &32 and returns 2. 2 solos not in place and returns 1, and 4
+  solos in place. A grouped or ganged solo carries its mode. The master's
+  solo returns 2 but sets only &16, and `AnyTrackSolo()` leaves it out.
+- **The master** can't be rec armed: `SetTrackUIRecArm()` returns -1.
+- **Selection ganging** changes every selected track, the master too, and
+  then grouping changes each of their groups, but a group's selected tracks
+  aren't ganged in turn. `CSurf_On*ChangeEx()`'s `allowGang` allows both.
+- **Mute and solo** set the ganged and grouped tracks to the track's new
+  value, even when the track's didn't change.
+- **Rec arm** changes nothing if the track's doesn't change. When it does,
+  ganged tracks are set to its new value, but grouped tracks are toggled.
+  And a rec arm that ganging or grouping could take to other tracks is sent
+  as a change to every track, as `SurfaceNotifier` now does for grouping too.
+- **Volume and pan** move ganged and grouped tracks by the same change, where
+  the fake set them to the same value: volume by its ratio, and pan by its
+  difference. REAPER measures the change from where each track was when the
+  gesture began (it held across a test's calls), so a track clamped at an
+  end of pan, or a volume through -inf, comes back to where it was; the fake
+  fails the test there, as it isn't faked. A pan past an end is clamped.
+
 ## CLs
 
 ### CL1 [x] common/testing: Write a FakeProject as an RPP file
@@ -363,14 +387,23 @@ Depends on: CL4.
 **Verify**
 - Standard checks, and `check_in_reaper`.
 
-### CL6 [ ] common/testing: Contract tests of track changes and selection
+### CL6 [x] common/testing: Contract tests of track changes and selection
 
 Depends on: CL5.
 
 - The track setters, grouping, `PreventUIRefresh`, `AnyTrackSolo`, and the
-  selection functions.
+  selection functions, moved from `fake_reaper_test.cc` where they act only
+  through the API, into `fake_reaper_contract_test.cc`.
 - Selection ganging (see Found in REAPER), which the fake then models, and
   `SurfaceNotifier`'s comment no longer excepts.
+- Fixes to the fake that REAPER shows, each with its test (see Found in
+  REAPER): solo in place (`FakeTrack::solo_in_place`, which the project file
+  writes), the setters' return values, the master's rec arm, ganging, how
+  grouping changes each property, and pan clamping.
+- `SurfaceNotifier` sends a grouped rec arm as a change to every track, as it
+  does a ganged one.
+- The setters' group flags in `common/track_state.h`, for `Track`, the fake,
+  and the contract tests, where `Track` and the fake each had their own.
 
 **Verify**
 - Standard checks, and `check_in_reaper`.

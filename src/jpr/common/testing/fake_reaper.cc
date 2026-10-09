@@ -251,38 +251,136 @@ class FakeReaper::Api final {
   //----------------------------------------------------------------------------
   // Track changes
   //
-  // A grouped change also changes every other track in the same group (see
-  // FakeTrack::group). SetTrackUI*()'s group flags group the change unless &1
-  // ("prevent track grouping") is set. Selection ganging (&2) isn't modeled.
+  // A change can also change other tracks, as REAPER's UI does. With selection
+  // ganging, a change to a selected track changes every selected track, the
+  // master too. Then with grouping, it changes every other track in a group
+  // with one of those (see FakeTrack::group), but not the selected tracks of a
+  // group's other tracks. SetTrackUI*()'s group flags allow both unless &1
+  // ("prevent track grouping") or &2 ("prevent selection ganging") is set,
+  // and CSurf_On*ChangeEx()'s allow_gang allows both.
+  //
+  // The other tracks get the same mute or solo, even if the track's didn't
+  // change. A rec arm that changes the track sets its ganged tracks, but
+  // toggles its grouped tracks, and one that doesn't change it changes
+  // nothing. A volume or pan moves the others by the same change: volume by
+  // its ratio, and pan by its difference. REAPER measures that change from
+  // where each track was when the gesture began, which the fake doesn't
+  // model, so a grouped change that clamps another track's pan, or moves a
+  // volume from -inf, isn't faked yet.
   //----------------------------------------------------------------------------
 
   static void PreventUIRefresh(int count) {
     s_instance_->OnPreventUIRefresh(count);
   }
 
+  // `mute` toggles the track's mute if negative, and otherwise sets it to
+  // `mute > 0`. Returns the new mute.
   static int SetTrackUIMute(MediaTrack* track_id, int mute, int group_flags) {
-    return SetTrackBool(track_id, &FakeTrack::mute, mute, group_flags);
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    s_instance_->OnBatchedChange(&track);
+    const bool new_mute = GetNewValue(mute, track.mute);
+    for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
+      changed->mute = new_mute;
+    }
+    return new_mute ? 1 : 0;
   }
 
+  // `solo` toggles the track's solo if negative, unsolos it if 0, and solos it
+  // in place if 1 (REAPER's default) or 4, or not in place if 2. A toggle
+  // solos it in place. Returns 0 for no solo, 1 for solo, or 2 for in place,
+  // even for the master, whose solo is never in place.
   static int SetTrackUISolo(MediaTrack* track_id, int solo, int group_flags) {
-    return SetTrackBool(track_id, &FakeTrack::solo, solo, group_flags);
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    s_instance_->OnBatchedChange(&track);
+    if (solo == 3 || solo > 4) {
+      ADD_FAILURE() << "SetTrackUISolo() with solo " << solo
+                    << " isn't faked yet";
+      return -1;
+    }
+    const bool new_solo = GetNewValue(solo, track.solo);
+    const bool in_place = new_solo && solo != 2;
+    const FakeTrack* master = s_instance_->GetProjectOf(track).GetMasterTrack();
+    for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
+      changed->solo = new_solo;
+      changed->solo_in_place = in_place && changed != master;
+    }
+    return new_solo ? (in_place ? 2 : 1) : 0;
   }
 
+  // `rec_arm` toggles the track's rec arm if negative, and otherwise sets it
+  // to `rec_arm > 0`. Returns the new rec arm, or -1 for the master, which
+  // can't be armed.
   static int SetTrackUIRecArm(MediaTrack* track_id, int rec_arm,
                               int group_flags) {
-    return SetTrackBool(track_id, &FakeTrack::rec_arm, rec_arm, group_flags);
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    s_instance_->OnBatchedChange(&track);
+    const FakeTrack* master = s_instance_->GetProjectOf(track).GetMasterTrack();
+    if (&track == master) {
+      return -1;
+    }
+    const bool new_rec_arm = GetNewValue(rec_arm, track.rec_arm);
+    if (new_rec_arm == track.rec_arm) {
+      return new_rec_arm ? 1 : 0;
+    }
+    const ChangedTracks changed = GetChangedTracks(track, group_flags);
+    for (FakeTrack* ganged : changed.ganged) {
+      if (ganged != master) {
+        ganged->rec_arm = new_rec_arm;
+      }
+    }
+    for (FakeTrack* grouped : changed.grouped) {
+      grouped->rec_arm = !grouped->rec_arm;
+    }
+    return new_rec_arm ? 1 : 0;
   }
 
   static double CSurf_OnVolumeChangeEx(MediaTrack* track_id, double volume,
                                        bool relative, bool allow_gang) {
-    return SetTrackDouble(track_id, &FakeTrack::volume, volume, relative,
-                          allow_gang, "CSurf_OnVolumeChangeEx");
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    if (relative) {
+      ADD_FAILURE() << "CSurf_OnVolumeChangeEx() with relative isn't faked yet";
+      return track.volume;
+    }
+    const double old_volume = track.volume;
+    for (FakeTrack* changed :
+         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging)
+             .All()) {
+      if (changed == &track) {
+        changed->volume = volume;
+      } else if (old_volume == 0.0) {
+        ADD_FAILURE() << "A grouped volume change from -inf isn't faked yet";
+      } else {
+        changed->volume *= volume / old_volume;
+      }
+    }
+    return volume;
   }
 
+  // A pan past an end is clamped to it.
   static double CSurf_OnPanChangeEx(MediaTrack* track_id, double pan,
                                     bool relative, bool allow_gang) {
-    return SetTrackDouble(track_id, &FakeTrack::pan, pan, relative, allow_gang,
-                          "CSurf_OnPanChangeEx");
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    if (relative) {
+      ADD_FAILURE() << "CSurf_OnPanChangeEx() with relative isn't faked yet";
+      return track.pan;
+    }
+    const double new_pan = std::clamp(pan, -1.0, 1.0);
+    const double change = new_pan - track.pan;
+    for (FakeTrack* changed :
+         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging)
+             .All()) {
+      if (changed == &track) {
+        changed->pan = new_pan;
+        continue;
+      }
+      const double other_pan = changed->pan + change;
+      if (other_pan < -1.0 || other_pan > 1.0) {
+        ADD_FAILURE() << "A grouped pan change that clamps another track's "
+                         "pan isn't faked yet";
+      }
+      changed->pan = std::clamp(other_pan, -1.0, 1.0);
+    }
+    return new_pan;
   }
 
   //----------------------------------------------------------------------------
@@ -337,8 +435,7 @@ class FakeReaper::Api final {
     s_instance_->GetProject().undo_points_.push_back({name, flags});
   }
 
-  // The fake has no FX, solo in place, or input monitoring, so their flags are
-  // never set.
+  // The fake has no FX or input monitoring, so their flags are never set.
   static const char* GetTrackState(MediaTrack* track_id, int* flags) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
     *flags =
@@ -347,6 +444,7 @@ class FakeReaper::Api final {
         (track.selected ? kTrackStateSelected : 0) |
         (track.mute ? kTrackStateMute : 0) |
         (track.solo ? kTrackStateSolo : 0) |
+        (track.solo && track.solo_in_place ? kTrackStateSoloInPlace : 0) |
         (track.rec_arm ? kTrackStateRecArm : 0) |
         (track.show_in_tcp ? 0 : kTrackStateHiddenInTcp) |
         (track.show_in_mixer ? 0 : kTrackStateHiddenInMixer);
@@ -592,58 +690,67 @@ class FakeReaper::Api final {
   }
 
  private:
+  // The tracks a change to a track changes (see Track changes).
+  struct ChangedTracks {
+    // The track, and the selected tracks if it is ganged with them.
+    std::vector<FakeTrack*> ganged;
+
+    // The other tracks in a group with one of those.
+    std::vector<FakeTrack*> grouped;
+
+    std::vector<FakeTrack*> All() const {
+      std::vector<FakeTrack*> tracks = ganged;
+      tracks.insert(tracks.end(), grouped.begin(), grouped.end());
+      return tracks;
+    }
+  };
+
   // Returns true if `track` is its project's master.
   static bool IsMaster(const FakeTrack& track) {
     return &track == s_instance_->GetProjectOf(track).GetMasterTrack();
   }
 
-  // Sets a track's mute, solo, or rec arm as SetTrackUIMute() and the like
-  // do: `value` toggles it if negative, and otherwise sets it to `value > 0`.
-  // Returns the new value.
-  static int SetTrackBool(MediaTrack* track_id, bool FakeTrack::*property,
-                          int value, int group_flags) {
-    FakeTrack& track = s_instance_->GetTrack(track_id);
-    s_instance_->OnBatchedChange(&track);
-    const bool new_value = (value < 0) ? !(track.*property) : (value > 0);
-    const bool grouped = (group_flags & kPreventTrackGrouping) == 0;
-    for (FakeTrack* changed : GetGroupedTracks(track, grouped)) {
-      changed->*property = new_value;
-    }
-    return new_value ? 1 : 0;
+  // Returns the new value of a mute, solo, or rec arm set to `value`, which
+  // toggles it if negative, and otherwise sets it to `value > 0`.
+  static bool GetNewValue(int value, bool current) {
+    return value < 0 ? !current : value > 0;
   }
 
-  // Sets a track's volume or pan as CSurf_OnVolumeChangeEx() and the like do,
-  // for `function`. Returns the new value.
-  static double SetTrackDouble(MediaTrack* track_id,
-                               double FakeTrack::*property, double value,
-                               bool relative, bool grouped,
-                               const char* function) {
-    FakeTrack& track = s_instance_->GetTrack(track_id);
-    if (relative) {
-      ADD_FAILURE() << function << "() with relative isn't faked yet";
-      return track.*property;
+  // Returns the tracks a change to `track` changes, with SetTrackUI*()'s
+  // `group_flags`.
+  static ChangedTracks GetChangedTracks(FakeTrack& track, int group_flags) {
+    ChangedTracks changed;
+    if (IsGanged(track, group_flags)) {
+      changed.ganged = s_instance_->GetProjectOf(track).GetSelectedTracks(
+          /*include_master=*/true);
+    } else {
+      changed.ganged = {&track};
     }
-    for (FakeTrack* changed : GetGroupedTracks(track, grouped)) {
-      changed->*property = value;
+    if (IsGrouped(group_flags)) {
+      changed.grouped = GetGroupedTracks(changed.ganged);
     }
-    return value;
+    return changed;
   }
 
-  // Returns `track`, and if `grouped`, every other track in its group.
-  static std::vector<FakeTrack*> GetGroupedTracks(FakeTrack& track,
-                                                  bool grouped) {
-    std::vector<FakeTrack*> tracks = {&track};
-    if (!grouped || track.group == 0) {
-      return tracks;
+  // Returns every track in a group with one of `tracks`, that isn't one of
+  // them.
+  static std::vector<FakeTrack*> GetGroupedTracks(
+      absl::Span<FakeTrack* const> tracks) {
+    std::vector<FakeTrack*> grouped;
+    if (std::ranges::none_of(tracks, &FakeTrack::group)) {
+      return grouped;
     }
-    FakeProject& project = s_instance_->GetProjectOf(track);
+    const FakeProject& project = s_instance_->GetProjectOf(*tracks.front());
     for (int i = 0; i < project.GetTrackCount(); ++i) {
       FakeTrack* other = project.GetTrack(i);
-      if (other != &track && other->group == track.group) {
-        tracks.push_back(other);
+      if (other->group != 0 &&
+          std::ranges::find(tracks, other) == tracks.end() &&
+          std::ranges::find(tracks, other->group, &FakeTrack::group) !=
+              tracks.end()) {
+        grouped.push_back(other);
       }
     }
-    return tracks;
+    return grouped;
   }
 
   // Returns `track_id`'s routes in `category` (see Routes).

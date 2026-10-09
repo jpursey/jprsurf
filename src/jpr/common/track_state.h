@@ -25,6 +25,14 @@ inline constexpr int kTrackStateMonitorAuto = 256;
 inline constexpr int kTrackStateHiddenInTcp = 512;
 inline constexpr int kTrackStateHiddenInMixer = 1024;
 
+// The group flags of SetTrackUIMute(), SetTrackUISolo(), and
+// SetTrackUIRecArm(). Without them, a change to a selected track changes every
+// selected track, and then every track in a group with one of those.
+inline constexpr int kPreventTrackGrouping = 1;
+inline constexpr int kPreventSelectionGanging = 2;
+inline constexpr int kPreventGroupingAndGanging =
+    kPreventTrackGrouping | kPreventSelectionGanging;
+
 // Returns `track`'s GetTrackState() flags.
 inline int GetTrackStateFlags(MediaTrack* track) {
   int flags = 0;

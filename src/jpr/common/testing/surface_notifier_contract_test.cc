@@ -569,5 +569,37 @@ TEST_F(SurfaceNotifierRouteContractTest, MuteChangesSendNothing) {
   EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 
+class SurfaceNotifierGroupContractTest : public ContractTest {
+ protected:
+  // A and B are in a group, and C isn't.
+  SurfaceNotifierGroupContractTest() {
+    OpenProject([](FakeProject& project) {
+      project.AddTrack("A")->group = 1;
+      project.AddTrack("B")->group = 1;
+      project.AddTrack("C");
+    });
+    a_ = GetTrack(nullptr, 0);
+    b_ = GetTrack(nullptr, 1);
+    c_ = GetTrack(nullptr, 2);
+  }
+
+  MediaTrack* a_ = nullptr;
+  MediaTrack* b_ = nullptr;
+  MediaTrack* c_ = nullptr;
+};
+
+TEST_F(SurfaceNotifierGroupContractTest,
+       RecArmOfAGroupedTrackIsSentAsAChangeToEveryTrack) {
+  SetTrackUIRecArm(a_, 1, kPreventSelectionGanging);
+  EXPECT_THAT(TakeCalls(),
+              ElementsAreArray(RecArmOutsideABatch(a_, {a_, b_, c_})));
+}
+
+TEST_F(SurfaceNotifierGroupContractTest,
+       RecArmOfAGroupedTrackWithoutGroupingIsSentAsAChangeToIt) {
+  SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_})));
+}
+
 }  // namespace
 }  // namespace jpr

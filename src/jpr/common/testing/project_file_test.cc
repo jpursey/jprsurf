@@ -134,6 +134,15 @@ TEST(ProjectFileTest, WritesEachTracksState) {
   EXPECT_LT(text.find("NAME \"A\""), text.find("NAME \"B\""));
 }
 
+TEST(ProjectFileTest, WritesSoloInPlaceAs2) {
+  std::unique_ptr<FakeProject> project = FakeProject::Create();
+  FakeTrack* track = project->AddTrack("A");
+  track->solo = true;
+  track->solo_in_place = true;
+  EXPECT_THAT(Lines(WriteProjectFile(*project), "MUTESOLO"),
+              ElementsAre("MUTESOLO 0 2 0"));
+}
+
 TEST(ProjectFileTest, NamesAreQuotedWithAQuoteTheyDontContain) {
   std::unique_ptr<FakeProject> project = FakeProject::Create();
   project->AddTrack("");

@@ -401,64 +401,50 @@ TEST(FakeReaperTest, RestoringATrackWhoseFolderIsGoneAddsItAtTheEnd) {
   EXPECT_EQ(project.GetTrack(1), restored);
 }
 
-TEST(FakeReaperTest, TrackSetters) {
+TEST(FakeReaperTest, ParametersItDoesntModelFailTheTest) {
   FakeReaper reaper;
-  FakeTrack* track = reaper.GetProject().AddTrack("Drums");
-  MediaTrack* track_id = ToMediaTrack(track);
-
-  EXPECT_EQ(::SetTrackUIMute(track_id, 1, 0), 1);
-  EXPECT_TRUE(track->mute);
-  EXPECT_EQ(::SetTrackUIMute(track_id, -1, 0), 0);
-  EXPECT_FALSE(track->mute);
-  EXPECT_EQ(::SetTrackUISolo(track_id, 2, 0), 1);
-  EXPECT_TRUE(track->solo);
-  EXPECT_EQ(::SetTrackUIRecArm(track_id, 0, 0), 0);
-  EXPECT_FALSE(track->rec_arm);
-  EXPECT_EQ(::CSurf_OnVolumeChangeEx(track_id, 0.5, false, false), 0.5);
-  EXPECT_EQ(track->volume, 0.5);
-  EXPECT_EQ(::CSurf_OnPanChangeEx(track_id, -0.5, false, false), -0.5);
-  EXPECT_EQ(track->pan, -0.5);
-
-  std::string name = "Kit";
-  EXPECT_TRUE(::GetSetMediaTrackInfo_String(track_id, "P_NAME", name.data(),
-                                            /*setNewValue=*/true));
-  EXPECT_EQ(track->name, "Kit");
-
-  track->auto_mode = 3;
-  track->show_in_tcp = false;
-  EXPECT_EQ(::GetMediaTrackInfo_Value(track_id, "I_AUTOMODE"), 3.0);
-  EXPECT_EQ(::GetMediaTrackInfo_Value(track_id, "B_SHOWINTCP"), 0.0);
-  EXPECT_EQ(::GetMediaTrackInfo_Value(track_id, "B_SHOWINMIXER"), 1.0);
-  EXPECT_NONFATAL_FAILURE(::GetMediaTrackInfo_Value(track_id, "D_VOL"),
-                          "D_VOL");
+  MediaTrack* track = ToMediaTrack(reaper.GetProject().AddTrack("Drums"));
+  EXPECT_NONFATAL_FAILURE(::GetMediaTrackInfo_Value(track, "D_VOL"), "D_VOL");
+  EXPECT_NONFATAL_FAILURE(::SetTrackUISolo(track, 3, 0), "solo 3");
+  EXPECT_NONFATAL_FAILURE(
+      ::CSurf_OnVolumeChangeEx(track, 0.5, /*relative=*/true, false),
+      "relative");
+  EXPECT_NONFATAL_FAILURE(
+      ::CSurf_OnPanChangeEx(track, 0.5, /*relative=*/true, false), "relative");
 }
 
-TEST(FakeReaperTest, Selection) {
+// REAPER moves a group from where it was when the gesture began, so the fake
+// only moves it from where it is when that is the same.
+TEST(FakeReaperTest, GroupedChangesItCantMoveFailTheTest) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  FakeTrack* kick = project.AddTrack("Kick");
+  drums->group = 1;
+  kick->group = 1;
+  drums->volume = 0.0;
+  kick->pan = 0.5;
+  EXPECT_NONFATAL_FAILURE(
+      ::CSurf_OnVolumeChangeEx(ToMediaTrack(drums), 0.5, false, true),
+      "from -inf");
+  EXPECT_NONFATAL_FAILURE(
+      ::CSurf_OnPanChangeEx(ToMediaTrack(drums), 1.0, false, true),
+      "clamps another track's pan");
+  EXPECT_EQ(kick->pan, 1.0);
+}
+
+TEST(FakeReaperTest, SelectedTracksListTheMasterFirst) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
   FakeTrack* master = project.GetMasterTrack();
-  FakeTrack* drums = project.AddTrack("Drums");
+  project.AddTrack("Drums");
   FakeTrack* bass = project.AddTrack("Bass");
   master->selected = true;
   bass->selected = true;
-
-  EXPECT_EQ(::CountSelectedTracks(nullptr), 1);
-  EXPECT_EQ(::GetSelectedTrack(nullptr, 0), ToMediaTrack(bass));
-  EXPECT_EQ(::CountSelectedTracks2(nullptr, /*wantmaster=*/true), 2);
-  EXPECT_EQ(::GetSelectedTrack2(nullptr, 0, true), ToMediaTrack(master));
-  EXPECT_EQ(::GetSelectedTrack2(nullptr, 1, true), ToMediaTrack(bass));
-  EXPECT_EQ(::GetSelectedTrack2(nullptr, 2, true), nullptr);
   EXPECT_THAT(project.GetSelectedTracks(/*include_master=*/false),
               ElementsAre(bass));
   EXPECT_THAT(project.GetSelectedTracks(/*include_master=*/true),
               ElementsAre(master, bass));
-
-  ::SetTrackSelected(ToMediaTrack(drums), true);
-  EXPECT_TRUE(drums->selected);
-  ::SetOnlyTrackSelected(ToMediaTrack(drums));
-  EXPECT_TRUE(drums->selected);
-  EXPECT_FALSE(bass->selected);
-  EXPECT_FALSE(master->selected);
 }
 
 TEST(FakeReaperTest, Routes) {
@@ -676,40 +662,6 @@ TEST(FakeReaperTest, TheTestCanEndItsOwnEntryPoints) {
         reaper.EndEntryPoint();
       },
       "in one TrackBatch");
-}
-
-TEST(FakeReaperTest, GroupedChangesChangeTheGroup) {
-  FakeReaper reaper;
-  FakeProject& project = reaper.GetProject();
-  FakeTrack* drums = project.AddTrack("Drums");
-  FakeTrack* kick = project.AddTrack("Kick");
-  FakeTrack* bass = project.AddTrack("Bass");
-  drums->group = 1;
-  kick->group = 1;
-  std::unique_ptr<TestControlSurface> surface = AddTestSurface(reaper);
-
-  // &1 prevents grouping.
-  g_test_surface->on_run = [&] {
-    ::SetTrackUIMute(ToMediaTrack(drums), 1, /*igngroupflags=*/1);
-  };
-  surface->Run();
-  EXPECT_TRUE(drums->mute);
-  EXPECT_FALSE(kick->mute);
-
-  g_test_surface->on_run = [&] {
-    ::SetTrackUISolo(ToMediaTrack(drums), 1, /*igngroupflags=*/0);
-    ::CSurf_OnVolumeChangeEx(ToMediaTrack(kick), 0.5, false, true);
-    ::CSurf_OnPanChangeEx(ToMediaTrack(kick), 0.5, false, false);
-  };
-  surface->Run();
-  EXPECT_TRUE(drums->solo);
-  EXPECT_TRUE(kick->solo);
-  EXPECT_FALSE(bass->solo);
-  EXPECT_EQ(drums->volume, 0.5);
-  EXPECT_EQ(kick->volume, 0.5);
-  EXPECT_EQ(bass->volume, 1.0);
-  EXPECT_EQ(drums->pan, 0.0);
-  EXPECT_EQ(kick->pan, 0.5);
 }
 
 TEST(FakeReaperTest, RecordsConsoleText) {

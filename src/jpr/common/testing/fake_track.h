@@ -8,6 +8,7 @@
 #include <array>
 #include <string>
 
+#include "jpr/common/track_state.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -37,16 +38,21 @@ struct FakeTrack {
   bool selected = false;
   bool mute = false;
   bool solo = false;
-  bool rec_arm = false;
+
+  // With solo, soloed in place, as SetTrackUISolo() solos by default. The
+  // master's solo is never in place.
+  bool solo_in_place = false;
+
+  bool rec_arm = false;  // The master can't be armed.
 
   // As I_AUTOMODE: 0 trim/read, 1 read, 2 touch, 3 write, 4 latch, and 5 latch
   // preview.
   int auto_mode = 0;
 
   // The track's group, or 0 for none. A grouped change to the mute, solo, rec
-  // arm, volume, or pan of a track in a group changes every track in it. This
-  // is simpler than REAPER's groups, where each property has its own leaders
-  // and followers.
+  // arm, volume, or pan of a track in a group changes every track in it (see
+  // "Track changes" in fake_reaper.cc for how). This is simpler than REAPER's
+  // groups, where each property has its own leaders and followers.
   int group = 0;
 
   // As B_SHOWINMIXER and B_SHOWINTCP, and GetTrackState()'s hidden flags. The
@@ -63,10 +69,17 @@ struct FakeTrack {
 // fake track has, as every track in the traces did.
 inline constexpr int kBalancePanMode = 3;
 
-// The group flags of SetTrackUIMute(), SetTrackUISolo(), and
-// SetTrackUIRecArm().
-inline constexpr int kPreventTrackGrouping = 1;
-inline constexpr int kPreventSelectionGanging = 2;
+// Returns true if a change to `track` with SetTrackUI*()'s `group_flags` (see
+// track_state.h) also changes the other selected tracks.
+inline bool IsGanged(const FakeTrack& track, int group_flags) {
+  return (group_flags & kPreventSelectionGanging) == 0 && track.selected;
+}
+
+// Returns true if a change with `group_flags` also changes the tracks in a
+// group with the tracks it changes.
+inline bool IsGrouped(int group_flags) {
+  return (group_flags & kPreventTrackGrouping) == 0;
+}
 
 // Returns the MediaTrack* the fake hands out for `track`.
 inline MediaTrack* ToMediaTrack(FakeTrack* track) {

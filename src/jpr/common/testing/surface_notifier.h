@@ -41,9 +41,9 @@ namespace jpr {
 //   SetTrackListChange() and every track's state, then the master's solo and
 //   the change of each track whose rec arm changed. In a batch,
 //   SetTrackListChange() and the master's solo, and the rest at the refresh.
-//   With selection ganging (group flags without &2), a selected track's
-//   change is sent as a change to every track. REAPER also changes the other
-//   selected tracks then, which the fake doesn't.
+//   A change to a selected track with selection ganging (group flags without
+//   &2), or to a track in a group with grouping (without &1), is sent as a
+//   change to every track.
 // - SetOnlyTrackSelected() and SetTrackSelected(): the selection of each track
 //   whose selection changed, outside a batch, and otherwise at the refresh.
 // - CSurf_OnVolumeChangeEx() and CSurf_OnPanChangeEx(): IsKeyDown(VK_SHIFT),
@@ -137,6 +137,23 @@ class SurfaceNotifier final {
     SurfaceNotifier* const notifier_;
   };
 
+  // What a track setter can change on each track.
+  struct TrackFlags {
+    bool mute = false;
+    bool solo = false;
+    bool rec_arm = false;
+    bool selected = false;
+    int auto_mode = 0;
+
+    bool operator==(const TrackFlags&) const = default;
+  };
+
+  // The mute and solo last sent for a track whose mute or solo changed since.
+  struct Unsent {
+    bool mute = false;
+    bool solo = false;
+  };
+
   //----------------------------------------------------------------------------
   // Hooked functions, each calling the original first
   //----------------------------------------------------------------------------
@@ -171,17 +188,6 @@ class SurfaceNotifier final {
   // Returns the current project's tracks, master first.
   std::vector<FakeTrack*> GetTracks();
 
-  // What a track setter can change on each track.
-  struct TrackFlags {
-    bool mute = false;
-    bool solo = false;
-    bool rec_arm = false;
-    bool selected = false;
-    int auto_mode = 0;
-
-    bool operator==(const TrackFlags&) const = default;
-  };
-
   // Returns GetTracks()' flags, to compare with after a change, or one track's.
   std::vector<TrackFlags> GetFlags();
   static TrackFlags GetFlags(const FakeTrack& track);
@@ -214,12 +220,6 @@ class SurfaceNotifier final {
   //----------------------------------------------------------------------------
   // What isn't sent yet
   //----------------------------------------------------------------------------
-
-  // The mute and solo last sent for a track whose mute or solo changed since.
-  struct Unsent {
-    bool mute = false;
-    bool solo = false;
-  };
 
   // Returns the tracks whose mute and solo aren't sent yet, and what was last
   // sent for each. Those of an earlier run are forgotten, as REAPER sent them

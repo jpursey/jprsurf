@@ -103,11 +103,12 @@ int SurfaceNotifier::OnSetTrackUIRecArm(decltype(SetTrackUIRecArm) original,
     return result;
   }
 
-  // The original changed a track, so `track` is one of the fake's. With
-  // selection ganging, a change to a selected track is sent as a change to
-  // every track.
+  // The original changed a track, so `track` is one of the fake's. A change
+  // that ganging or grouping could take to other tracks is sent as a change to
+  // every track, whatever it changed.
   FakeTrack* fake_track = ToFakeTrack(track);
-  if ((group_flags & kPreventSelectionGanging) == 0 && fake_track->selected) {
+  if (IsGanged(*fake_track, group_flags) ||
+      (IsGrouped(group_flags) && fake_track->group != 0)) {
     changed = GetTracks();
     changed.erase(changed.begin());
   }

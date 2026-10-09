@@ -18,11 +18,6 @@ namespace jpr {
 
 namespace {
 
-// These ingroupflags are used for SetTrackUIVolume and SetTrackUIPan, and are
-// passed to the REAPER API to control grouping and ganging behavior.
-constexpr int kNoGrouping = 1;
-constexpr int kNoGanging = 2;
-
 // Categories for GetTrackNumSends and GetSetTrackSendInfo.
 constexpr int kReceiveCategory = -1;
 constexpr int kSendCategory = 0;
@@ -502,7 +497,7 @@ void TrackBatch::Set(Track* track, TrackBoolProperty property, bool value,
     }
     info.set(
         track_id, value,
-        grouping == TrackGrouping::kGrouped ? 0 : kNoGrouping | kNoGanging);
+        grouping == TrackGrouping::kGrouped ? 0 : kPreventGroupingAndGanging);
   }
 
   // REAPER now has the value either way, so bring the cache into line with it.

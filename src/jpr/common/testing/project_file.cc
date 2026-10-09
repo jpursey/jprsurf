@@ -211,8 +211,11 @@ void ProjectFileWriter::AppendTrack(int index) {
   absl::StrAppend(&text_, "    PEAKCOL ", PeakColor(track), "\n");
   absl::StrAppend(&text_, "    AUTOMODE ", track->auto_mode, "\n");
   absl::StrAppend(&text_, "    VOLPAN ", VolumePan(track), "\n");
-  absl::StrAppend(&text_, "    MUTESOLO ", Flag(track->mute), " ",
-                  Flag(track->solo), " 0\n");
+
+  // Solo is 1, or 2 in place.
+  const int solo = track->solo ? (track->solo_in_place ? 2 : 1) : 0;
+  absl::StrAppend(&text_, "    MUTESOLO ", Flag(track->mute), " ", solo,
+                  " 0\n");
 
   // A folder opens before its first track, and each folder its last track
   // ends is closed after it.

@@ -379,9 +379,11 @@ REAPER's calls on the surface follow these.
   selection, then its change. A track whose mute or solo is still to be sent
   has them after its selection, and one whose selection changed has its
   selection again.
-- **Selection ganging:** with the setters' group flags without `&2`, a mute,
-  solo, or rec arm of a selected track changes every selected track, and a
-  rec arm is then sent as a change to every track.
+- **Ganging and grouping:** with the setters' group flags without `&2`, a
+  mute, solo, or rec arm of a selected track changes every selected track,
+  and without `&1`, of a track in a group changes the group (see "Track
+  changes" in `fake_reaper.cc`). Either way, a rec arm is then sent as a
+  change to every track.
 - **Send volume and pan notify,** even if nothing changed.
   `SetTrackSendUIVol()` and `SetTrackSendUIPan()` call
   `Extended(CSURF_EXT_SETSENDVOLUME)` or `SETSENDPAN` with the source track,

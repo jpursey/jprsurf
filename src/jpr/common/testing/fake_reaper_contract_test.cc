@@ -45,6 +45,25 @@ MediaTrack* FindTrack(std::string_view name) {
   return nullptr;
 }
 
+// Returns true if `track`'s GetTrackState() flags have `flag`.
+bool HasFlag(MediaTrack* track, int flag) {
+  return (GetTrackStateFlags(track) & flag) != 0;
+}
+
+// Returns `track`'s volume or pan, as GetTrackUIVolPan() reads them.
+double GetVolume(MediaTrack* track) {
+  double volume = 0.0;
+  double pan = 0.0;
+  GetTrackUIVolPan(track, &volume, &pan);
+  return volume;
+}
+double GetPan(MediaTrack* track) {
+  double volume = 0.0;
+  double pan = 0.0;
+  GetTrackUIVolPan(track, &volume, &pan);
+  return pan;
+}
+
 // Returns the text guidToString() writes for `guid`.
 std::string GetGuidText(const GUID* guid) {
   std::array<char, 64> text = {};
@@ -112,6 +131,9 @@ TEST_F(TrackContractTest, TrackStateHasTheTracksFlags) {
     project.AddTrack("Selected")->selected = true;
     project.AddTrack("Muted")->mute = true;
     project.AddTrack("Soloed")->solo = true;
+    FakeTrack* in_place = project.AddTrack("Soloed in place");
+    in_place->solo = true;
+    in_place->solo_in_place = true;
     project.AddTrack("Armed")->rec_arm = true;
     FakeTrack* folder = project.AddTrack("Folder");
     project.AddTrack("In folder", folder);
@@ -125,6 +147,8 @@ TEST_F(TrackContractTest, TrackStateHasTheTracksFlags) {
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Selected")), kTrackStateSelected);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Muted")), kTrackStateMute);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed")), kTrackStateSolo);
+  EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed in place")),
+            kTrackStateSolo | kTrackStateSoloInPlace);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Armed")), kTrackStateRecArm);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Folder")), kTrackStateFolder);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("In folder")), 0);
@@ -253,6 +277,405 @@ TEST_F(TrackContractTest, EachTrackHasItsOwnGuid) {
     }
     guids.push_back(guid);
   }
+}
+
+//------------------------------------------------------------------------------
+// Track changes
+//------------------------------------------------------------------------------
+
+class TrackChangeContractTest : public ContractTest {
+ protected:
+  // Sets `track`'s mute, solo, or rec arm, by its GetTrackState() flag, with
+  // SetTrackUIMute() and the like. Then ends the entry point, so a test can
+  // change one track after another.
+  int Set(int flag, MediaTrack* track, int value, int group_flags) {
+    int result = -1;
+    if (flag == kTrackStateMute) {
+      result = SetTrackUIMute(track, value, group_flags);
+    } else if (flag == kTrackStateSolo) {
+      result = SetTrackUISolo(track, value, group_flags);
+    } else {
+      result = SetTrackUIRecArm(track, value, group_flags);
+    }
+    EndEntryPoint();
+    return result;
+  }
+};
+
+TEST_F(TrackChangeContractTest, MuteAndRecArmAreSetClearedAndToggled) {
+  OpenProject([](FakeProject& project) { project.AddTrack("Track"); });
+  MediaTrack* track = GetTrack(nullptr, 0);
+  for (int flag : {kTrackStateMute, kTrackStateRecArm}) {
+    SCOPED_TRACE(flag);
+    EXPECT_EQ(Set(flag, track, 1, kPreventGroupingAndGanging), 1);
+    EXPECT_EQ(GetTrackStateFlags(track), flag);
+    EXPECT_EQ(Set(flag, track, -1, kPreventGroupingAndGanging), 0);
+    EXPECT_EQ(GetTrackStateFlags(track), 0);
+    EXPECT_EQ(Set(flag, track, -1, kPreventGroupingAndGanging), 1);
+    EXPECT_EQ(GetTrackStateFlags(track), flag);
+    EXPECT_EQ(Set(flag, track, 0, kPreventGroupingAndGanging), 0);
+    EXPECT_EQ(GetTrackStateFlags(track), 0);
+
+    // Any value above 0 sets it.
+    EXPECT_EQ(Set(flag, track, 2, kPreventGroupingAndGanging), 1);
+    EXPECT_EQ(GetTrackStateFlags(track), flag);
+    Set(flag, track, 0, kPreventGroupingAndGanging);
+  }
+}
+
+TEST_F(TrackChangeContractTest, SoloIsInPlaceByDefault) {
+  OpenProject([](FakeProject& project) { project.AddTrack("Track"); });
+  MediaTrack* track = GetTrack(nullptr, 0);
+  constexpr int kInPlace = kTrackStateSolo | kTrackStateSoloInPlace;
+  EXPECT_EQ(Set(kTrackStateSolo, track, 1, kPreventGroupingAndGanging), 2);
+  EXPECT_EQ(GetTrackStateFlags(track), kInPlace);
+  EXPECT_EQ(Set(kTrackStateSolo, track, -1, kPreventGroupingAndGanging), 0);
+  EXPECT_EQ(GetTrackStateFlags(track), 0);
+  EXPECT_EQ(Set(kTrackStateSolo, track, -1, kPreventGroupingAndGanging), 2);
+  EXPECT_EQ(GetTrackStateFlags(track), kInPlace);
+
+  // 2 solos it not in place, and 4 in place.
+  EXPECT_EQ(Set(kTrackStateSolo, track, 2, kPreventGroupingAndGanging), 1);
+  EXPECT_EQ(GetTrackStateFlags(track), kTrackStateSolo);
+  EXPECT_EQ(Set(kTrackStateSolo, track, 4, kPreventGroupingAndGanging), 2);
+  EXPECT_EQ(GetTrackStateFlags(track), kInPlace);
+  EXPECT_EQ(Set(kTrackStateSolo, track, 0, kPreventGroupingAndGanging), 0);
+  EXPECT_EQ(GetTrackStateFlags(track), 0);
+}
+
+TEST_F(TrackChangeContractTest, TheMasterCanBeMutedAndSoloedButNotArmed) {
+  OpenProject([](FakeProject& project) {});
+  MediaTrack* master = GetMasterTrack(nullptr);
+  EXPECT_EQ(Set(kTrackStateMute, master, 1, kPreventGroupingAndGanging), 1);
+  EXPECT_EQ(GetTrackStateFlags(master), kTrackStateMute);
+  Set(kTrackStateMute, master, 0, kPreventGroupingAndGanging);
+
+  // Its solo reads as in place, but never is, and isn't any track's.
+  EXPECT_EQ(Set(kTrackStateSolo, master, 1, kPreventGroupingAndGanging), 2);
+  EXPECT_EQ(GetTrackStateFlags(master), kTrackStateSolo);
+  EXPECT_FALSE(AnyTrackSolo(nullptr));
+  Set(kTrackStateSolo, master, 0, kPreventGroupingAndGanging);
+
+  EXPECT_EQ(Set(kTrackStateRecArm, master, 1, kPreventGroupingAndGanging), -1);
+  EXPECT_EQ(GetTrackStateFlags(master), 0);
+}
+
+TEST_F(TrackChangeContractTest, AnyTrackSoloIsWhetherATrackIsSoloed) {
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("Drums");
+    project.AddTrack("Bass")->solo = true;
+  });
+  MediaTrack* drums = GetTrack(nullptr, 0);
+  MediaTrack* bass = GetTrack(nullptr, 1);
+  EXPECT_TRUE(AnyTrackSolo(nullptr));
+  Set(kTrackStateSolo, bass, 0, kPreventGroupingAndGanging);
+  EXPECT_FALSE(AnyTrackSolo(nullptr));
+  Set(kTrackStateSolo, drums, 1, kPreventGroupingAndGanging);
+  EXPECT_TRUE(AnyTrackSolo(nullptr));
+}
+
+TEST_F(TrackChangeContractTest, VolumeAndPanAreSet) {
+  OpenProject([](FakeProject& project) { project.AddTrack("Track"); });
+  for (MediaTrack* track : {GetTrack(nullptr, 0), GetMasterTrack(nullptr)}) {
+    for (double volume : {0.5, 0.0, 4.0}) {
+      EXPECT_EQ(CSurf_OnVolumeChangeEx(track, volume, false, false), volume);
+      EXPECT_EQ(GetVolume(track), volume);
+    }
+    for (double pan : {-0.25, -1.0, 1.0}) {
+      EXPECT_EQ(CSurf_OnPanChangeEx(track, pan, false, false), pan);
+      EXPECT_EQ(GetPan(track), pan);
+    }
+
+    // A pan past an end is clamped to it.
+    EXPECT_EQ(CSurf_OnPanChangeEx(track, -2.0, false, false), -1.0);
+    EXPECT_EQ(GetPan(track), -1.0);
+  }
+}
+
+// A and B are in a group, C isn't, and D is in another. B's volume and pan are
+// 0.5.
+void BuildGroups(FakeProject& project) {
+  project.AddTrack("A")->group = 1;
+  FakeTrack* b = project.AddTrack("B");
+  b->group = 1;
+  b->volume = 0.5;
+  b->pan = 0.5;
+  project.AddTrack("C");
+  project.AddTrack("D")->group = 2;
+}
+
+TEST_F(TrackChangeContractTest, GroupedMuteAndSoloSetTheGroup) {
+  OpenProject(BuildGroups);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  MediaTrack* d = FindTrack("D");
+  for (int flag : {kTrackStateMute, kTrackStateSolo}) {
+    SCOPED_TRACE(flag);
+    Set(flag, a, 1, kPreventSelectionGanging);
+    EXPECT_TRUE(HasFlag(a, flag));
+    EXPECT_TRUE(HasFlag(b, flag));
+    EXPECT_FALSE(HasFlag(c, flag));
+    EXPECT_FALSE(HasFlag(d, flag));
+
+    // &1 prevents grouping.
+    Set(flag, b, 0, kPreventGroupingAndGanging);
+    EXPECT_TRUE(HasFlag(a, flag));
+    EXPECT_FALSE(HasFlag(b, flag));
+
+    // A toggle sets the group to the track's new value.
+    Set(flag, a, -1, kPreventSelectionGanging);
+    EXPECT_FALSE(HasFlag(a, flag));
+    EXPECT_FALSE(HasFlag(b, flag));
+
+    // Even when the track's doesn't change.
+    Set(flag, b, 1, kPreventGroupingAndGanging);
+    Set(flag, a, 0, kPreventSelectionGanging);
+    EXPECT_FALSE(HasFlag(b, flag));
+  }
+
+  // The group is soloed the same way.
+  Set(kTrackStateSolo, a, 2, kPreventSelectionGanging);
+  EXPECT_EQ(GetTrackStateFlags(b), kTrackStateSolo);
+  Set(kTrackStateSolo, a, 4, kPreventSelectionGanging);
+  EXPECT_EQ(GetTrackStateFlags(b), kTrackStateSolo | kTrackStateSoloInPlace);
+}
+
+TEST_F(TrackChangeContractTest, GroupedRecArmTogglesTheGroup) {
+  OpenProject(BuildGroups);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  EXPECT_EQ(Set(kTrackStateRecArm, a, 1, kPreventSelectionGanging), 1);
+  EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+  EXPECT_FALSE(HasFlag(FindTrack("C"), kTrackStateRecArm));
+  EXPECT_FALSE(HasFlag(FindTrack("D"), kTrackStateRecArm));
+
+  // Unarming A toggles B, which was unarmed.
+  Set(kTrackStateRecArm, b, 0, kPreventGroupingAndGanging);
+  EXPECT_EQ(Set(kTrackStateRecArm, a, 0, kPreventSelectionGanging), 0);
+  EXPECT_FALSE(HasFlag(a, kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+
+  // A rec arm that doesn't change the track changes nothing.
+  EXPECT_EQ(Set(kTrackStateRecArm, a, 0, kPreventSelectionGanging), 0);
+  EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+}
+
+TEST_F(TrackChangeContractTest, GroupedVolumeAndPanMoveTheGroupAsMuch) {
+  OpenProject(BuildGroups);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+
+  // Volume by its ratio, and pan by its difference.
+  CSurf_OnVolumeChangeEx(a, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.25);
+  CSurf_OnVolumeChangeEx(a, 4.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 2.0);
+  CSurf_OnPanChangeEx(a, -0.25, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.25);
+  EXPECT_EQ(GetVolume(FindTrack("C")), 1.0);
+  EXPECT_EQ(GetVolume(FindTrack("D")), 1.0);
+
+  // Without allow_gang, only the track changes.
+  CSurf_OnVolumeChangeEx(a, 1.0, false, false);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 2.0);
+  CSurf_OnPanChangeEx(a, 0.0, false, false);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.25);
+}
+
+// The master, A, and B are selected, and C isn't. B's volume and pan are 0.5.
+void BuildSelection(FakeProject& project) {
+  project.GetMasterTrack()->selected = true;
+  project.AddTrack("A")->selected = true;
+  FakeTrack* b = project.AddTrack("B");
+  b->selected = true;
+  b->volume = 0.5;
+  b->pan = 0.5;
+  project.AddTrack("C");
+}
+
+TEST_F(TrackChangeContractTest, GangedMuteAndSoloSetEverySelectedTrack) {
+  OpenProject(BuildSelection);
+  MediaTrack* master = GetMasterTrack(nullptr);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  for (int flag : {kTrackStateMute, kTrackStateSolo}) {
+    SCOPED_TRACE(flag);
+    Set(flag, a, 1, kPreventTrackGrouping);
+    EXPECT_TRUE(HasFlag(master, flag));
+    EXPECT_TRUE(HasFlag(b, flag));
+    EXPECT_FALSE(HasFlag(c, flag));
+
+    // &2 prevents ganging.
+    Set(flag, a, 0, kPreventGroupingAndGanging);
+    EXPECT_TRUE(HasFlag(b, flag));
+
+    // Ganged tracks are set to the track's value, even when the track's
+    // doesn't change.
+    Set(flag, a, 0, kPreventTrackGrouping);
+    EXPECT_FALSE(HasFlag(master, flag));
+    EXPECT_FALSE(HasFlag(b, flag));
+
+    // A track that isn't selected changes only itself.
+    Set(flag, c, 1, kPreventTrackGrouping);
+    EXPECT_FALSE(HasFlag(a, flag));
+    Set(flag, c, 0, kPreventTrackGrouping);
+  }
+}
+
+TEST_F(TrackChangeContractTest, GangedRecArmSetsEverySelectedTrack) {
+  OpenProject(BuildSelection);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  EXPECT_EQ(Set(kTrackStateRecArm, a, 1, kPreventTrackGrouping), 1);
+  EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+  EXPECT_FALSE(HasFlag(FindTrack("C"), kTrackStateRecArm));
+
+  // A toggle sets them to the track's new value.
+  Set(kTrackStateRecArm, a, 0, kPreventGroupingAndGanging);
+  EXPECT_EQ(Set(kTrackStateRecArm, a, -1, kPreventTrackGrouping), 1);
+  EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+
+  // A rec arm that doesn't change the track changes nothing.
+  Set(kTrackStateRecArm, a, 0, kPreventGroupingAndGanging);
+  EXPECT_EQ(Set(kTrackStateRecArm, a, 0, kPreventTrackGrouping), 0);
+  EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+
+  // The master is selected, but can't be armed.
+  EXPECT_EQ(
+      Set(kTrackStateRecArm, GetMasterTrack(nullptr), 1, kPreventTrackGrouping),
+      -1);
+  EXPECT_FALSE(HasFlag(a, kTrackStateRecArm));
+}
+
+TEST_F(TrackChangeContractTest, GangedVolumeAndPanMoveEverySelectedTrack) {
+  OpenProject(BuildSelection);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(GetMasterTrack(nullptr)), 0.5);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.25);
+  EXPECT_EQ(GetVolume(c), 1.0);
+  CSurf_OnPanChangeEx(a, -0.25, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.25);
+
+  // A track that isn't selected changes only itself.
+  CSurf_OnVolumeChangeEx(c, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(a), 0.5);
+}
+
+TEST_F(TrackChangeContractTest, GangedTracksChangeTheirGroupsButNotTheReverse) {
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("A")->selected = true;
+    FakeTrack* b = project.AddTrack("B");
+    b->selected = true;
+    b->group = 1;
+    project.AddTrack("C")->group = 1;
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  for (int flag : {kTrackStateMute, kTrackStateSolo, kTrackStateRecArm}) {
+    SCOPED_TRACE(flag);
+
+    // A is ganged with B, which is grouped with C.
+    Set(flag, a, 1, 0);
+    EXPECT_TRUE(HasFlag(b, flag));
+    EXPECT_TRUE(HasFlag(c, flag));
+    Set(flag, a, 0, 0);
+    EXPECT_FALSE(HasFlag(c, flag));
+
+    // C is grouped with B, but isn't selected.
+    Set(flag, c, 1, 0);
+    EXPECT_TRUE(HasFlag(b, flag));
+    EXPECT_FALSE(HasFlag(a, flag));
+    Set(flag, c, 0, 0);
+  }
+}
+
+TEST_F(TrackChangeContractTest, ChangesInABatchReadBackAtOnce) {
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("Drums");
+    project.AddTrack("Bass");
+  });
+  MediaTrack* drums = GetTrack(nullptr, 0);
+  MediaTrack* bass = GetTrack(nullptr, 1);
+  PreventUIRefresh(1);
+  SetTrackUIMute(drums, 1, kPreventGroupingAndGanging);
+  SetTrackSelected(bass, true);
+  EXPECT_EQ(GetTrackStateFlags(drums), kTrackStateMute);
+  EXPECT_EQ(GetTrackStateFlags(bass), kTrackStateSelected);
+  PreventUIRefresh(-1);
+  EXPECT_EQ(GetTrackStateFlags(drums), kTrackStateMute);
+  EXPECT_EQ(GetTrackStateFlags(bass), kTrackStateSelected);
+}
+
+//------------------------------------------------------------------------------
+// Selection
+//------------------------------------------------------------------------------
+
+using SelectionContractTest = ContractTest;
+
+TEST_F(SelectionContractTest, SelectedTracksAreInOrderWithTheMasterIfWanted) {
+  OpenProject([](FakeProject& project) {
+    BuildSelection(project);
+    project.AddTrack("D")->selected = true;
+  });
+  MediaTrack* master = GetMasterTrack(nullptr);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* d = FindTrack("D");
+  EXPECT_EQ(CountSelectedTracks(nullptr), 3);
+  EXPECT_EQ(CountSelectedTracks2(nullptr, /*wantmaster=*/false), 3);
+  EXPECT_EQ(GetSelectedTrack(nullptr, 0), a);
+  EXPECT_EQ(GetSelectedTrack(nullptr, 1), b);
+  EXPECT_EQ(GetSelectedTrack(nullptr, 2), d);
+  EXPECT_EQ(GetSelectedTrack(nullptr, 3), nullptr);
+  EXPECT_EQ(GetSelectedTrack(nullptr, -1), nullptr);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 0, /*wantmaster=*/false), a);
+
+  EXPECT_EQ(CountSelectedTracks2(nullptr, /*wantmaster=*/true), 4);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 0, true), master);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 1, true), a);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 3, true), d);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 4, true), nullptr);
+}
+
+TEST_F(SelectionContractTest, SetTrackSelectedChangesOnlyTheTrack) {
+  OpenProject(BuildSelection);
+  MediaTrack* master = GetMasterTrack(nullptr);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* c = FindTrack("C");
+  SetTrackSelected(c, true);
+  EndEntryPoint();
+  EXPECT_EQ(CountSelectedTracks(nullptr), 3);
+  SetTrackSelected(a, false);
+  EndEntryPoint();
+  EXPECT_EQ(GetTrackStateFlags(a), 0);
+  EXPECT_EQ(CountSelectedTracks(nullptr), 2);
+  SetTrackSelected(master, false);
+  EndEntryPoint();
+  EXPECT_EQ(GetTrackStateFlags(master), 0);
+  EXPECT_EQ(CountSelectedTracks2(nullptr, /*wantmaster=*/true), 2);
+  SetTrackSelected(master, true);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 0, /*wantmaster=*/true), master);
+}
+
+TEST_F(SelectionContractTest, SetOnlyTrackSelectedUnselectsEveryOtherTrack) {
+  OpenProject(BuildSelection);
+  MediaTrack* master = GetMasterTrack(nullptr);
+  MediaTrack* c = FindTrack("C");
+  SetOnlyTrackSelected(c);
+  EndEntryPoint();
+  EXPECT_EQ(CountSelectedTracks2(nullptr, /*wantmaster=*/true), 1);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 0, /*wantmaster=*/true), c);
+
+  SetOnlyTrackSelected(master);
+  EXPECT_EQ(CountSelectedTracks(nullptr), 0);
+  EXPECT_EQ(CountSelectedTracks2(nullptr, /*wantmaster=*/true), 1);
+  EXPECT_EQ(GetSelectedTrack2(nullptr, 0, /*wantmaster=*/true), master);
 }
 
 //------------------------------------------------------------------------------
