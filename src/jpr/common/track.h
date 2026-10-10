@@ -24,18 +24,25 @@ class TrackCache;
 //==============================================================================
 // Track filtering
 //
-// REAPER independently tracks whether each track is visible in the mixer
-// control panel (MCP) and in the track control panel (TCP), which the user
-// manages through the Track Manager. There is only ever one track list and one
-// child track list; a filter selects which of those tracks are included, and
-// each Track caches its index and child count under every filter so callers can
-// work in whichever space is relevant to them.
+// Each track has two settings in REAPER's Track Manager: whether to show it in
+// the mixer control panel (MCP), and in the track control panel (TCP). There is
+// only ever one track list and one child track list; a filter selects which of
+// those tracks are included, and each Track caches its index and child count
+// under every filter so callers can work in whichever space is relevant to
+// them.
+//
+// The filters follow only these settings, not what REAPER actually shows: a
+// track in a collapsed folder is still included. The master track is not in
+// the Track Manager, and is always included. REAPER shows or hides it with
+// toggle commands instead (40075 for the TCP, and 41209 for the mixer), which
+// a surface can map like any other command. Nothing that changes a track's
+// settings may touch the master's.
 //==============================================================================
 
 enum class TrackFilter {
   kAll,  // Every track that exists in REAPER.
-  kMcp,  // Only tracks visible in the mixer control panel.
-  kTcp,  // Only tracks visible in the track control panel.
+  kMcp,  // Only tracks the Track Manager shows in the mixer control panel.
+  kTcp,  // Only tracks the Track Manager shows in the track control panel.
 };
 
 // The number of TrackFilter values. TrackFilter values are contiguous starting
@@ -157,8 +164,10 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool Exists() const { return track_id_ != nullptr; }
 
   // Returns true if this track is included by the given filter. This is always
-  // true for kAll, and for the master track. This is updated whenever
-  // TrackCache::Refresh() or TrackCache::RefreshVisibility() is called.
+  // true for kAll, and for the master track. It is the track's Track Manager
+  // setting, not whether REAPER shows it (see "Track filtering" above). This
+  // is updated whenever TrackCache::Refresh() or
+  // TrackCache::RefreshVisibility() is called.
   //
   // This does *not* imply Exists(): the stub track and tracks that have been
   // deleted report the default, which is visible. Callers that need a track

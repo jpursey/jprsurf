@@ -180,6 +180,31 @@ TEST(ProjectFileTest, FoldersOpenBeforeTheirTracksAndCloseAfterTheLast) {
                           "ISBUS 1 1", "ISBUS 1 1", "ISBUS 2 -2"));
 }
 
+TEST(ProjectFileTest, FoldersHaveHowTheyAreCollapsed) {
+  std::unique_ptr<FakeProject> project = FakeProject::Create();
+  project->AddTrack("Leaf")->folder_compact = 2;
+  FakeTrack* open = project->AddTrack("Open");
+  project->AddTrack("In open", open);
+  FakeTrack* compact = project->AddTrack("Small");
+  compact->folder_compact = 1;
+  project->AddTrack("In small", compact);
+  FakeTrack* collapsed = project->AddTrack("Collapsed");
+  collapsed->folder_compact = 2;
+  collapsed->folder_collapsed_in_mixer = true;
+  project->AddTrack("In collapsed", collapsed);
+  EXPECT_THAT(Lines(WriteProjectFile(*project), "BUSCOMP"),
+              ElementsAre("BUSCOMP 0 0 0 0 0", "BUSCOMP 1 0 0 0 0",
+                          "BUSCOMP 2 1 0 0 0"));
+}
+
+TEST(ProjectFileTest, AFolderCompactOutOfRangeFailsTheTest) {
+  std::unique_ptr<FakeProject> project = FakeProject::Create();
+  FakeTrack* folder = project->AddTrack("A");
+  project->AddTrack("In A", folder);
+  folder->folder_compact = 3;
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "A's folder_compact, 3");
+}
+
 TEST(ProjectFileTest, ReceivesNameTheTrackTheyComeFrom) {
   std::unique_ptr<FakeProject> project = FakeProject::Create();
   FakeTrack* a = project->AddTrack("A");

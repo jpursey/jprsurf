@@ -161,13 +161,16 @@ bool Track::UpdateVisibility() {
     return false;
   }
 
-  // The master track has no B_SHOWINMIXER / B_SHOWINTCP state, and is always
-  // included: a control surface has a dedicated master fader, so hiding it the
-  // way REAPER's UI does is meaningless here.
+  // The master track isn't in the Track Manager, so it is always included (see
+  // "Track filtering" in track.h). Its B_SHOWIN* don't say whether REAPER
+  // shows it.
   if (this == TrackCache::Get().GetMasterTrack()) {
     return false;
   }
 
+  // These are the Track Manager's settings. GetTrackState()'s hidden flags are
+  // the same for every track but the master, but one call costs more than both
+  // of these reads.
   const bool mcp = GetMediaTrackInfo_Value(track_id_, "B_SHOWINMIXER") != 0.0;
   const bool tcp = GetMediaTrackInfo_Value(track_id_, "B_SHOWINTCP") != 0.0;
   FilterState& mcp_state =

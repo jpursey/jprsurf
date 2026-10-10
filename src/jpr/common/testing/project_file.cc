@@ -113,6 +113,10 @@ void ProjectFileWriter::CheckTrack(const FakeTrack* track,
   if (track->color != 0 && (track->color & kColorFlag) == 0) {
     Fail(absl::StrCat(name, "'s color, which doesn't have 0x01000000 set"));
   }
+  if (track->folder_compact < 0 || track->folder_compact > 2) {
+    Fail(absl::StrCat(name, "'s folder_compact, ", track->folder_compact,
+                      ", which isn't from 0 to 2"));
+  }
 }
 
 std::string ProjectFileWriter::Quote(std::string_view text) {
@@ -225,6 +229,8 @@ void ProjectFileWriter::AppendTrack(int index) {
                              : 0;
   if (project_.IsFolder(track)) {
     absl::StrAppend(&text_, "    ISBUS 1 1\n");
+    absl::StrAppend(&text_, "    BUSCOMP ", track->folder_compact, " ",
+                    Flag(track->folder_collapsed_in_mixer), " 0 0 0\n");
   } else if (next_depth < depth) {
     absl::StrAppend(&text_, "    ISBUS 2 ", next_depth - depth, "\n");
   } else {

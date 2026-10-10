@@ -177,6 +177,40 @@ TEST_F(TrackContractTest, TheMasterHiddenInTheTrackPanelIsOnlyInItsState) {
   EXPECT_EQ(GetMediaTrackInfo_Value(master, "B_SHOWINTCP"), 1.0);
 }
 
+TEST_F(TrackContractTest, TracksInHiddenOrCollapsedFoldersArentHidden) {
+  OpenProject([](FakeProject& project) {
+    FakeTrack* hidden_in_tcp = project.AddTrack("Hidden in TCP");
+    hidden_in_tcp->show_in_tcp = false;
+    project.AddTrack("In hidden in TCP", hidden_in_tcp);
+    FakeTrack* hidden_in_mixer = project.AddTrack("Hidden in mixer");
+    hidden_in_mixer->show_in_mixer = false;
+    project.AddTrack("In hidden in mixer", hidden_in_mixer);
+    FakeTrack* compact = project.AddTrack("Small");
+    compact->folder_compact = 1;
+    project.AddTrack("In small", compact);
+    FakeTrack* collapsed = project.AddTrack("Collapsed");
+    collapsed->folder_compact = 2;
+    collapsed->folder_collapsed_in_mixer = true;
+    FakeTrack* inner = project.AddTrack("Inner", collapsed);
+    project.AddTrack("In inner", inner);
+  });
+  EXPECT_EQ(GetMediaTrackInfo_Value(FindTrack("Small"), "I_FOLDERCOMPACT"),
+            1.0);
+  EXPECT_EQ(GetMediaTrackInfo_Value(FindTrack("Collapsed"), "I_FOLDERCOMPACT"),
+            2.0);
+  EXPECT_TRUE(HasFlag(FindTrack("Hidden in TCP"), kTrackStateHiddenInTcp));
+  EXPECT_TRUE(HasFlag(FindTrack("Hidden in mixer"), kTrackStateHiddenInMixer));
+  for (const char* name : {"In hidden in TCP", "In hidden in mixer", "In small",
+                           "Inner", "In inner"}) {
+    SCOPED_TRACE(name);
+    MediaTrack* track = FindTrack(name);
+    EXPECT_FALSE(
+        HasFlag(track, kTrackStateHiddenInTcp | kTrackStateHiddenInMixer));
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "B_SHOWINTCP"), 1.0);
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "B_SHOWINMIXER"), 1.0);
+  }
+}
+
 TEST_F(TrackContractTest, TracksHaveTheirNames) {
   OpenProject([](FakeProject& project) {
     project.AddTrack("Kick");

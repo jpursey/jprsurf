@@ -10,9 +10,10 @@
 
 namespace jpr {
 
-// GetTrackState()'s flags. The hidden flags are what REAPER shows, which
-// B_SHOWINTCP and B_SHOWINMIXER don't always say: the master's read as shown
-// even while it is hidden.
+// GetTrackState()'s flags. For a track, the hidden flags are its Track Manager
+// settings, as B_SHOWINTCP and B_SHOWINMIXER are. The master isn't in the
+// Track Manager, and its hidden in TCP flag is View: Toggle master track
+// visible (40075). Neither says whether a collapsed folder hides a track.
 inline constexpr int kTrackStateFolder = 1;
 inline constexpr int kTrackStateSelected = 2;
 inline constexpr int kTrackStateFxEnabled = 4;

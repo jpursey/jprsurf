@@ -757,38 +757,6 @@ sends nothing. So another way is to follow volume and pan from those calls,
 and poll only mute, if REAPER sends them for changes made in its own UI too,
 which a trace would show first.
 
-## Read track visibility from GetTrackState()
-
-- **Layers:** common
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:**
-  [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md) (REAPER
-  facts)
-
-`Track::UpdateVisibility()` reads each track's `B_SHOWINTCP` and
-`B_SHOWINMIXER`, two calls per track in the once a second visibility poll.
-`GetTrackState()` has the same in its &512 (hidden in the track panel) and
-&1024 (hidden in the mixer) flags, in one call that also returns the name and
-the other flags. The flags look like what REAPER actually shows, where
-`B_SHOWIN*` are each track's own settings, as the Track Manager edits them:
-the master isn't in the Track Manager, and its `B_SHOWINTCP` reads 1 even
-while View: Toggle master track visible hides it, which only its &512 shows.
-In order:
-
-1. **A contract test** (`fake_reaper_contract_test.cc`) of tracks in a
-   collapsed folder, in the track panel and the mixer, and in a hidden folder,
-   to see whether the flags and `B_SHOWIN*` still agree. Where they don't, the
-   fake models the difference.
-2. **Read the flags in `UpdateVisibility()`.** If they differ from `B_SHOWIN*`
-   for collapsed or hidden folders, the track panel and mixer filters change
-   from each track's setting to what is on screen, which is a behavior change
-   to decide on, not only a cheaper read.
-
-The time saved is small: the idle snapshot has `RefreshVisibility` at about
-2.5us a second for 81 tracks. A short idle profile shows it.
-
 ## Act on REAPER re-reporting the last touched track
 
 - **Layers:** common, scene

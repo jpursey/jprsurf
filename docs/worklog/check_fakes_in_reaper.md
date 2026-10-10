@@ -286,11 +286,18 @@ the notifier.
 **Tracks:**
 - **`GetTrackState()`** sets &1 for a folder, &16 for solo (&16 and &32 in
   place), &128 for input monitoring (which REAPER's new tracks have), and &512
-  and &1024 for a track hidden in the track panel or the mixer.
-- **The master** is shown in the track panel by the project
-  (`MASTERTRACKVIEW`'s first field), which View: Toggle master track visible
-  (40075) toggles, and whose toggle state it is. Hidden, it has &512, though
-  its `B_SHOWINTCP` reads 1 either way. Its `GetTrackColor()` reads 0 even with
+  and &1024 for a track hidden in the track panel or the mixer. For a track,
+  the hidden flags are its Track Manager settings, as `B_SHOWINTCP` and
+  `B_SHOWINMIXER` are, but one `GetTrackState()` costs about 3.4 times one
+  `B_SHOWIN*` read (250ns against 73ns in an idle profile). They aren't what
+  REAPER shows: a track in a hidden folder, or in one collapsed in the track
+  panel (`I_FOLDERCOMPACT` 1 or 2, `BUSCOMP`'s first field) or the mixer (its
+  second), at any depth, has neither.
+- **The master** isn't in the Track Manager. It is shown in the track panel
+  by the project (`MASTERTRACKVIEW`'s first field), which View: Toggle master
+  track visible (40075) toggles, and whose toggle state it is, and in the
+  mixer by another toggle command, 41209. Hidden in the track panel, it has
+  &512, though its `B_SHOWINTCP` reads 1 either way. Its `GetTrackColor()` reads 0 even with
   a color. `P_NAME` can't read or set its name, and `GetTrackState()` names it
   `MASTER`. It can't be rec armed (`SetTrackUIRecArm()` returns -1).
 - **Solo** is in place by default: `SetTrackUISolo()` with 1, or a toggle, sets

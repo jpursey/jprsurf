@@ -57,9 +57,10 @@ struct FakeTrackUndoValues {
   // groups, where each property has its own leaders and followers.
   int group = 0;
 
-  // As B_SHOWINMIXER and B_SHOWINTCP, and GetTrackState()'s hidden flags. The
-  // master's show_in_tcp is the project's View: Toggle master track visible,
-  // and only GetTrackState() shows it: its B_SHOWINTCP reads 1 either way.
+  // As B_SHOWINMIXER and B_SHOWINTCP, the Track Manager's settings, and
+  // GetTrackState()'s hidden flags. The master isn't in the Track Manager: its
+  // show_in_tcp is the project's View: Toggle master track visible (40075),
+  // and only GetTrackState() shows it, as its B_SHOWINTCP reads 1 either way.
   bool show_in_mixer = true;
   bool show_in_tcp = true;
 
@@ -68,6 +69,14 @@ struct FakeTrackUndoValues {
 
 struct FakeTrack : FakeTrackUndoValues {
   bool selected = false;
+
+  // How a folder is collapsed in the track panel, as I_FOLDERCOMPACT (0
+  // normal, 1 small, and 2 collapsed), and whether it is collapsed in the
+  // mixer (which only the project file holds). Neither changes any track's
+  // hidden flags. Only the project file sets them, so the fake doesn't model
+  // their undo.
+  int folder_compact = 0;
+  bool folder_collapsed_in_mixer = false;
 
   // As Track_GetPeakInfo() for the left and right channels: 1.0 is 0dB.
   std::array<double, 2> peak = {};

@@ -125,6 +125,9 @@ class FakeReaper::Api final {
     if (parameter == "I_AUTOMODE") {
       return track.auto_mode;
     }
+    if (parameter == "I_FOLDERCOMPACT") {
+      return track.folder_compact;
+    }
     if (parameter == "IP_TRACKNUMBER") {
       // 1 for the first track, and -1 for the master.
       return IsMaster(track)
