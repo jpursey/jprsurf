@@ -148,12 +148,12 @@ void ControlSurface::Run() {
     track_list_changed_ = false;
     TrackCache::Get().Refresh();
 
-    // Refresh() re-read visibility for every track, so the poll can wait.
-    last_visibility_time_ = time.precise;
-  } else if (absl::Seconds(time.precise - last_visibility_time_) >
-             kVisibilityInterval) {
-    last_visibility_time_ = time.precise;
-    TrackCache::Get().RefreshVisibility();
+    // Refresh() re-read every track's filters, so the poll can wait.
+    last_track_filter_time_ = time.precise;
+  } else if (absl::Seconds(time.precise - last_track_filter_time_) >
+             kTrackFilterInterval) {
+    last_track_filter_time_ = time.precise;
+    TrackCache::Get().RefreshFilters();
   }
 
   // Create the undo point for continuous changes that have stopped, and give

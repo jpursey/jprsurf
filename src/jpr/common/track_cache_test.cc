@@ -59,13 +59,13 @@ TEST_F(TrackCacheTest, FiltersHiddenTracks) {
   FakeTrack* bass = project_.AddTrack("Bass");
   Cache().Refresh();
   const int64_t version = Cache().GetTrackListVersion();
-  EXPECT_FALSE(Cache().RefreshVisibility());
+  EXPECT_FALSE(Cache().RefreshFilters());
 
   drums->show_in_mixer = false;
-  EXPECT_TRUE(Cache().RefreshVisibility());
+  EXPECT_TRUE(Cache().RefreshFilters());
   EXPECT_NE(Cache().GetTrackListVersion(), version);
-  EXPECT_FALSE(GetCachedTrack(drums)->IsVisible(TrackFilter::kMcp));
-  EXPECT_TRUE(GetCachedTrack(drums)->IsVisible(TrackFilter::kTcp));
+  EXPECT_FALSE(GetCachedTrack(drums)->IsIncluded(TrackFilter::kMcp));
+  EXPECT_TRUE(GetCachedTrack(drums)->IsIncluded(TrackFilter::kTcp));
   EXPECT_EQ(GetCachedTrack(drums)->GetIndex(TrackFilter::kMcp), std::nullopt);
   EXPECT_EQ(GetCachedTrack(bass)->GetIndex(TrackFilter::kMcp), 0);
   EXPECT_EQ(Cache().GetMasterTrack()->GetChildTrackCount(TrackFilter::kMcp), 1);

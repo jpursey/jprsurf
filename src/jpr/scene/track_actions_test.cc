@@ -71,7 +71,7 @@ class TrackActionsTest : public ::testing::Test {
   // Hides `track` in the mixer, so it isn't on the surface.
   void Hide(FakeTrack* track) {
     track->show_in_mixer = false;
-    TrackCache::Get().RefreshVisibility();
+    TrackCache::Get().RefreshFilters();
   }
 
   // Returns the names of the tracks with `value` on, in order.

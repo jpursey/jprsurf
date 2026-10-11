@@ -50,8 +50,8 @@ class TrackListTest : public DefaultConfigTest {
   }
 
   // Lets the surface see a track shown or hidden.
-  void WaitForVisibility() {
-    surface_->RunFor(ControlSurface::kVisibilityInterval +
+  void WaitForTrackFilters() {
+    surface_->RunFor(ControlSurface::kTrackFilterInterval +
                      FakeReaper::GetRunTime());
     RunUntilShown();
   }
@@ -266,12 +266,12 @@ TEST_F(TrackListTest, DeletingTheFolderGoesToTheTop) {
 TEST_F(TrackListTest, HiddenFolderIsKeptUntilItIsShown) {
   DoublePressSelect(kFolder);
   reaper_.GetProject().ShowInMixer(top_[kFolder], false);
-  WaitForVisibility();
+  WaitForTrackFilters();
   EXPECT_EQ(GetName(0), "");
   EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOn);
 
   reaper_.GetProject().ShowInMixer(top_[kFolder], true);
-  WaitForVisibility();
+  WaitForTrackFilters();
   EXPECT_EQ(GetName(0), "T2.1");
   EXPECT_EQ(GetName(1), "T2.2");
 }

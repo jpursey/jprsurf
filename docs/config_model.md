@@ -674,10 +674,10 @@ These are needed, but a config never names them:
   between runs, as views can't be enabled or disabled while the scene is
   running them.
 - **Keeping subjects and lists current**: references and lists react to track
-  list and visibility changes themselves, rather than the plugin re-pointing
-  views (`TrackReference::Update()` and `ViewList::Update()`).
+  list and track filter changes themselves, rather than the plugin
+  re-pointing views (`TrackReference::Update()` and `ViewList::Update()`).
 - **Host plumbing**: forwarding REAPER's notifications to `TrackCache`, polling
-  track visibility, `ContinuousUndo`, and the `Run()` performance log
+  the track filters, `ContinuousUndo`, and the `Run()` performance log
   ([extension_host.md](worklog/extension_host.md)).
 
 ## The escape hatch: REAPER commands
@@ -861,7 +861,7 @@ What becomes of the plugin's code:
 | `kTransportSteps`, `user:transport_step`, and `user:surface_mode`                         | Enumerated values, and conditions on their values                |
 | `user:pick_selected_track` and `user:pick_track`, and the mappings beside them            | Pick                                                             |
 | `user:folder`, `user:current_track`, and the views' configs                               | References, subjects, and lists                                  |
-| Track list and visibility refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log | Host plumbing                                                    |
+| Track list and filter refresh, `TrackCache` events, `ContinuousUndo`, the `Run()` log     | Host plumbing                                                    |
 
 ## Getting there
 

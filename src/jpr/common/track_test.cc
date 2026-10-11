@@ -511,7 +511,7 @@ TEST_F(TrackRangeTest, AnEndNotInTheFilterMakesNoRange) {
   EXPECT_FALSE(Between(project_.GetMasterTrack(), top_[0]));
 
   project_.ShowInMixer(top_[2], false);
-  TrackCache::Get().RefreshVisibility();
+  TrackCache::Get().RefreshFilters();
   EXPECT_FALSE(Between(top_[0], top_[2], TrackFilter::kMcp));
   EXPECT_FALSE(Between(top_[2], top_[0], TrackFilter::kMcp));
   EXPECT_TRUE(Between(top_[0], top_[2], TrackFilter::kTcp));
@@ -530,7 +530,7 @@ TEST_F(TrackRangeTest, SameParentIncludesOnlyTracksWithTheParentOfFrom) {
 
 TEST_F(TrackRangeTest, TracksNotInTheFilterAreLeftOut) {
   project_.ShowInMixer(folder_[0], false);
-  TrackCache::Get().RefreshVisibility();
+  TrackCache::Get().RefreshFilters();
 
   EXPECT_THAT(GetTracksBetween(top_[1], top_[2], TrackFilter::kMcp),
               Optional(ElementsAre("T2", "T2.2", "T3")));

@@ -102,7 +102,7 @@ void ChildTrackList::Layout() {
     if (item == GetItems().end()) {
       break;
     }
-    if (!track->IsVisible(filter)) {
+    if (!track->IsIncluded(filter)) {
       continue;
     }
     if (skip_count > 0) {

@@ -156,7 +156,7 @@ void Track::DoRefresh(MediaTrack* track_id) {
   }
 }
 
-bool Track::UpdateVisibility() {
+bool Track::UpdateFilters() {
   if (track_id_ == nullptr) {
     return false;
   }
@@ -177,11 +177,11 @@ bool Track::UpdateVisibility() {
       filter_state_[GetTrackFilterIndex(TrackFilter::kMcp)];
   FilterState& tcp_state =
       filter_state_[GetTrackFilterIndex(TrackFilter::kTcp)];
-  if (mcp_state.visible == mcp && tcp_state.visible == tcp) {
+  if (mcp_state.included == mcp && tcp_state.included == tcp) {
     return false;
   }
-  mcp_state.visible = mcp;
-  tcp_state.visible = tcp;
+  mcp_state.included = mcp;
+  tcp_state.included = tcp;
   return true;
 }
 

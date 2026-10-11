@@ -184,7 +184,7 @@ TEST_F(TrackPropertiesTest, IsFolderCountsOnlyChildrenOnTheSurface) {
   EXPECT_FALSE(other.GetProperty(TrackProperties::kTrackIsFolder)->GetBool());
 
   child->show_in_mixer = false;
-  TrackCache::Get().RefreshVisibility();
+  TrackCache::Get().RefreshFilters();
   EXPECT_FALSE(folder.GetProperty(TrackProperties::kTrackIsFolder)->GetBool());
 }
 

@@ -34,7 +34,9 @@ A back to back run (a session without the change, then one with it) is only
 needed when a time moves by more than 10%, or when the change is meant to make
 something faster.
 
-Each snapshot's header has the build it was made from, and the date.
+Each snapshot's header has the build it was made from, and the date. Points keep
+the names they were recorded with: `TrackCache::RefreshFilters` was
+`TrackCache::RefreshVisibility`.
 
 ## Scenarios
 

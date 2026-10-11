@@ -39,17 +39,18 @@ class TrackCache final {
   // list changes.
   void Refresh();
 
-  // Updates every track's visibility (see Track::IsVisible()), and the filtered
-  // indices and child counts that depend on it, notifying the listeners of any
-  // track that changed. Returns true if any track's visibility changed.
+  // Updates which tracks each filter includes (see Track::IsIncluded()), and
+  // the filtered indices and child counts that depend on it, notifying the
+  // listeners of any track that changed. Returns true if any track's filters
+  // changed.
   //
   // REAPER provides no control surface notification when a track is shown or
   // hidden in the mixer or track control panel, so this must be polled.
-  bool RefreshVisibility();
+  bool RefreshFilters();
 
-  // Returns a number that changes whenever the track list, or any track's
-  // visibility, may have changed: on every Refresh(), and on any
-  // RefreshVisibility() that returns true. Comparing it with a saved value
+  // Returns a number that changes whenever the track list, or which tracks a
+  // filter includes, may have changed: on every Refresh(), and on any
+  // RefreshFilters() that returns true. Comparing it with a saved value
   // tells a caller whether anything it derived from the track list may be
   // stale. It does not change when one track's own values are refreshed
   // (Track::Refresh() or Track::RefreshRoutes()); subscribe to the track
@@ -91,7 +92,7 @@ class TrackCache final {
   //
   // Like the other track accessors, this does not apply any filter. Callers
   // that only want the tracks included by a filter must also check
-  // Track::IsVisible().
+  // Track::IsIncluded().
   Track* GetOnlySelectedTrack() const;
 
   // Returns the selected tracks, in order, not including the master track. Like
@@ -144,8 +145,8 @@ class TrackCache final {
   void AddTrack(Track* track);
 
   // Recomputes the per-filter indices and child counts for every track from the
-  // track lists and the current per-track visibility. This is called by
-  // Refresh() and RefreshVisibility() once the lists and visibility are up to
+  // track lists and which tracks each filter includes. This is called by
+  // Refresh() and RefreshFilters() once the lists and filters are up to
   // date.
   void RebuildTrackIndices();
 

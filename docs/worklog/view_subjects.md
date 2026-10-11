@@ -34,7 +34,7 @@ The surface looks and works as it did, except:
   so now another track must be touched first.
 
 These are the same, but moved from the plugin to the scene:
-- After a track list or visibility change, lists stay in range and show the
+- After a track list or track filter change, lists stay in range and show the
   new tracks, and a deleted folder returns the track list to the master track.
   This happens in the scene's run, rather than in `OnTracksChanged()` before
   it.
@@ -130,7 +130,7 @@ These are the same, but moved from the plugin to the scene:
 ### common: TrackCache versions (track_cache.h)
 
 - `GetTrackListVersion()` changes on every `Refresh()`, and on
-  `RefreshVisibility()` when anything changed. `GetSelectionVersion()` changes
+  `RefreshFilters()` when anything changed. `GetSelectionVersion()` changes
   on `OnSelectionChanged()`.
 - These let anything below `plugin` react to track list and selection changes
   without the plugin forwarding them, so a scene built later (a reloaded

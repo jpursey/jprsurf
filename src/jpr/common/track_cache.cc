@@ -144,13 +144,13 @@ void TrackCache::Refresh() {
     }
   }
 
-  // Read visibility and routing for the new track list and recompute the
+  // Read the filters and routing for the new track list and recompute the
   // per-filter indices. The track list itself changed, so this is done
   // unconditionally. Routes are read here, after every track has been added to
   // the track ID map, so the other end of every route can be looked up.
   int route_count = 0;
   for (Track* track : all_tracks_) {
-    track->UpdateVisibility();
+    track->UpdateFilters();
     if (track->UpdateRoutes()) {
       routes_changed.push_back(track);
     }
@@ -187,16 +187,16 @@ void TrackCache::Refresh() {
   }
 }
 
-bool TrackCache::RefreshVisibility() {
-  gb::ProfileScope<"TrackCache::RefreshVisibility"> scope;
+bool TrackCache::RefreshFilters() {
+  gb::ProfileScope<"TrackCache::RefreshFilters"> scope;
 
-  // A track changing visibility changes the filtered child list of its parent,
-  // which is what hierarchy listeners care about. There is no need to diff
-  // anything: the visibility scan already knows exactly which tracks moved.
+  // A change to which filters include a track changes the filtered child list
+  // of its parent, which is what hierarchy listeners care about. There is no
+  // need to diff anything: the scan already knows exactly which tracks moved.
   bool changed = false;
   absl::flat_hash_set<Track*> changed_parents;
   for (Track* track : all_tracks_) {
-    if (!track->UpdateVisibility()) {
+    if (!track->UpdateFilters()) {
       continue;
     }
     changed = true;
@@ -223,7 +223,7 @@ void TrackCache::RebuildTrackIndices() {
     for (Track* track : all_tracks_) {
       Track::FilterState& state = track->filter_state_[i];
       state.global_index =
-          state.visible ? std::optional<int>(global_index++) : std::nullopt;
+          state.included ? std::optional<int>(global_index++) : std::nullopt;
     }
 
     // Index within the parent's filtered child list, and the number of children
@@ -243,7 +243,7 @@ int TrackCache::AssignChildIndices(Track* track, int filter_index) {
   int index = 0;
   for (Track* child : track->child_tracks_) {
     Track::FilterState& state = child->filter_state_[filter_index];
-    state.index = state.visible ? std::optional<int>(index++) : std::nullopt;
+    state.index = state.included ? std::optional<int>(index++) : std::nullopt;
   }
   return index;
 }

@@ -55,8 +55,8 @@ class ControlSurfaceListener {
 // It keeps the rest of the common library up to date with REAPER, and passes
 // the events a surface needs on to its ControlSurfaceListener:
 // - TrackCache is refreshed at the start of the next run after the track list
-//   changes. Changes to track visibility are picked up within
-//   kVisibilityInterval.
+//   changes. Changes to the track filters (see TrackFilter) are picked up
+//   within kTrackFilterInterval.
 // - TrackCache follows selection, automation mode, and last touched track
 //   changes.
 // - ContinuousUndo is updated at the start of every run.
@@ -71,13 +71,13 @@ class ControlSurfaceListener {
 
 class ControlSurface final : private IReaperControlSurface {
  public:
-  // How often track visibility is polled. REAPER gives control surfaces no
-  // notification when a track is shown or hidden, so the only way to see it is
-  // to query every track in the project, which is far too much to do on every
-  // run. Hiding a track is a deliberate, infrequent action taken in the Track
-  // Manager, so a delay of up to this long before the surface follows is not
-  // noticeable.
-  static constexpr absl::Duration kVisibilityInterval = absl::Seconds(1);
+  // How often the track filters (each track's Track Manager settings) are
+  // polled. REAPER gives control surfaces no notification when a track is
+  // shown or hidden, so the only way to see it is to query every track in the
+  // project, which is far too much to do on every run. Hiding a track is a
+  // deliberate, infrequent action taken in the Track Manager, so a delay of up
+  // to this long before the surface follows is not noticeable.
+  static constexpr absl::Duration kTrackFilterInterval = absl::Seconds(1);
 
   // A type of control surface, which the user can add in REAPER's
   // preferences.
@@ -196,9 +196,9 @@ class ControlSurface final : private IReaperControlSurface {
   // refreshes TrackCache.
   bool track_list_changed_ = false;
 
-  // When track visibility was last polled, in seconds of REAPER's clock. This
+  // When the track filters were last polled, in seconds of REAPER's clock. This
   // defaults to the distant past so that the first run always polls.
-  double last_visibility_time_ = -std::numeric_limits<double>::infinity();
+  double last_track_filter_time_ = -std::numeric_limits<double>::infinity();
 };
 
 }  // namespace jpr

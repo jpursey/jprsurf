@@ -76,8 +76,8 @@ The plumbing, and when it runs relative to the listener:
 
 `Run()`, in order:
 1. If the track list changed, `TrackCache::Refresh()`, which also restarts the
-   visibility poll. Otherwise, once a second, `TrackCache::RefreshVisibility()`
-   (REAPER reports no visibility changes).
+   track filter poll. Otherwise, once a second, `TrackCache::RefreshFilters()`
+   (REAPER reports no changes to the Track Manager's settings).
 2. `OnRun(now)`.
 3. `ContinuousUndo::Update(now)`.
 

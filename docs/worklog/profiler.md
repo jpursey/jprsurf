@@ -113,7 +113,7 @@ neither of which REAPER calls from inside a timed point.
   and `MidiOut` in `MidiPorts`, `Device` and `Scene` in `PluginSurface`), so a
   name per runner says as much as one per runnable, and a hundred controls cost
   one pair of timer reads.
-- **TrackCache:** `Refresh()` and `RefreshVisibility()` are scopes, and
+- **TrackCache:** `Refresh()` and `RefreshFilters()` are scopes, and
   `Refresh()` sets `tracks` and `routes` (counting each send once).
 
 ### device: Control

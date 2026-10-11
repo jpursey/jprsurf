@@ -290,7 +290,7 @@ TEST_F(ViewListTest, TheTrackListChangingKeepsThePositionInRange) {
 
   // The surface polls for a track shown or hidden.
   project_.ShowInMixer(top_[0], false);
-  surface_->RunFor(ControlSurface::kVisibilityInterval +
+  surface_->RunFor(ControlSurface::kTrackFilterInterval +
                    FakeReaper::GetRunTime());
   EXPECT_THAT(GetShown(list), ElementsAre("T3", "T4"));
 

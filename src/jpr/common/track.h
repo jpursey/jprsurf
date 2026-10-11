@@ -167,13 +167,13 @@ class Track final : public std::enable_shared_from_this<Track> {
   // true for kAll, and for the master track. It is the track's Track Manager
   // setting, not whether REAPER shows it (see "Track filtering" above). This
   // is updated whenever TrackCache::Refresh() or
-  // TrackCache::RefreshVisibility() is called.
+  // TrackCache::RefreshFilters() is called.
   //
   // This does *not* imply Exists(): the stub track and tracks that have been
-  // deleted report the default, which is visible. Callers that need a track
+  // deleted report the default, which is included. Callers that need a track
   // they can actually operate on must check Exists() as well.
-  bool IsVisible(TrackFilter filter) const {
-    return filter_state_[GetTrackFilterIndex(filter)].visible;
+  bool IsIncluded(TrackFilter filter) const {
+    return filter_state_[GetTrackFilterIndex(filter)].included;
   }
 
   // Refreshes the track's ID and cached state from REAPER.
@@ -239,10 +239,10 @@ class Track final : public std::enable_shared_from_this<Track> {
   // master and stub tracks). A returned value is always a valid index into
   // GetParentTrack()->GetChildTracks(filter), so callers that have one may
   // dereference it without a further check. This is updated whenever
-  // TrackCache::Refresh() or TrackCache::RefreshVisibility() is called.
+  // TrackCache::Refresh() or TrackCache::RefreshFilters() is called.
   //
-  // Note that IsVisible() is not sufficient to imply a value here, as the
-  // master track is always visible but never appears in a track list.
+  // Note that IsIncluded() is not sufficient to imply a value here, as the
+  // master track is always included but never appears in a track list.
   std::optional<int> GetIndex(TrackFilter filter) const {
     return filter_state_[GetTrackFilterIndex(filter)].index;
   }
@@ -256,13 +256,13 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // All immediate child tracks of this track, in order, regardless of filter.
   // Callers that want only the children included by a filter should iterate
-  // these and skip any for which IsVisible(filter) is false; the count of those
-  // is cached by GetChildTrackCount(). This is updated whenever
+  // these and skip any for which IsIncluded(filter) is false; the count of
+  // those is cached by GetChildTrackCount(). This is updated whenever
   // TrackCache::Refresh() is called.
   absl::Span<Track* const> GetChildTracks() const { return child_tracks_; }
 
   // The number of immediate child tracks included by the filter. This is
-  // updated whenever TrackCache::Refresh() or TrackCache::RefreshVisibility()
+  // updated whenever TrackCache::Refresh() or TrackCache::RefreshFilters()
   // is called.
   int GetChildTrackCount(TrackFilter filter) const {
     return filter_state_[GetTrackFilterIndex(filter)].child_count;
@@ -319,13 +319,13 @@ class Track final : public std::enable_shared_from_this<Track> {
   // Everything about this track under one TrackFilter, held as one entry per
   // filter in filter_state_.
   //
-  // Visibility is the input, read from REAPER by UpdateVisibility(); the rest
+  // Inclusion is the input, read from REAPER by UpdateFilters(); the rest
   // is derived from it by TrackCache::RebuildTrackIndices(). Note that the
   // child count is meaningful even for a track the filter excludes, and for the
   // master track, neither of which appears in a track list at all.
   struct FilterState {
     // True if the filter includes this track.
-    bool visible = true;
+    bool included = true;
 
     // Index of this track within TrackCache::GetTracks() once the filter is
     // applied, or nullopt if the filter excludes it, it does not exist, or it
@@ -345,10 +345,10 @@ class Track final : public std::enable_shared_from_this<Track> {
   // corresponding cached state for this track.
   void DoRefresh(MediaTrack* track_id);
 
-  // Re-reads this track's panel visibility flags from REAPER, returning true if
-  // any of them changed. This is called only by the TrackCache, which owns
-  // recomputing the per-filter indices when visibility changes.
-  bool UpdateVisibility();
+  // Re-reads this track's Track Manager settings from REAPER, returning true if
+  // either changed. This is called only by the TrackCache, which owns
+  // recomputing the per-filter indices when they change.
+  bool UpdateFilters();
 
   // Rebuilds the send and receive lists from REAPER, returning true if they
   // changed. This is called only by the TrackCache during Refresh() for tracks
@@ -411,7 +411,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   bool rec_arm_ = false;
 
   // Track hierarchy. There is a single child track list holding every child,
-  // and membership of a filtered list is derived from each child's visibility.
+  // and membership of a filtered list is derived from IsIncluded().
   // The indices and counts are the part that cannot be derived without a scan,
   // so those are cached alongside it, one entry per TrackFilter.
   Track* parent_track_ = nullptr;

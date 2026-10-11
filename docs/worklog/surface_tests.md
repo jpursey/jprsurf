@@ -124,7 +124,7 @@ when a function is added to the API list.
 
 ### common, device: Times tests wait for
 
-`ControlSurface::kVisibilityInterval` (how often visibility is polled) and
+`ControlSurface::kTrackFilterInterval` (how often the track filters are polled) and
 `Control::kLongPressDurationSecs` and `kDoublePressWindowSecs` are public, so
 the fixtures wait for exactly them, and follow any change.
 
@@ -220,7 +220,7 @@ Checked in REAPER, and held by the fake and the notifier:
   `AddSurface()`, and uses the press helpers and `RunUntilShown()`, never a
   hand-counted number of runs.
 - **A delay** a test waits for is a public constant of the code that has it
-  (`ContinuousUndo::kDelay`, `ControlSurface::kVisibilityInterval`), plus a run.
+  (`ContinuousUndo::kDelay`, `ControlSurface::kTrackFilterInterval`), plus a run.
 - **A change in REAPER's own UI** is a notifier function, made only for what a
   trace has shown, with its own test.
 - **An empty strip shows nothing** by a condition on `exists` on each mapping
