@@ -77,9 +77,9 @@ namespace jpr {
 // TestControlSurface, so each is an entry point of its own. Calls are only
 // made while a surface is open.
 //
-// Brittleness: it knows only what traces showed. A function JPRSurf starts
-// calling that makes REAPER call back needs a new trace and a new hook here,
-// or tests silently get no callback.
+// Brittleness: it knows only what traces showed. A function the extension
+// starts calling that makes REAPER call back needs a new trace and a new hook
+// here, or tests silently get no callback.
 //==============================================================================
 
 class SurfaceNotifier final {
@@ -100,9 +100,9 @@ class SurfaceNotifier final {
   // calls REAPER makes on the surface for it, as traces showed. REAPER makes
   // them between runs, so a test does too, outside any PreventUIRefresh()
   // scope. A change no trace has shown, such as one to the master, fails the
-  // test, and changes nothing. A change to what JPRSurf polls, such as a
-  // volume or a route, needs none of these: a test sets the fake. Setting the
-  // global automation override in REAPER calls what
+  // test, and changes nothing. A change to what the extension polls, such as
+  // a volume or a route, needs none of these: a test sets the fake. Setting
+  // the global automation override in REAPER calls what
   // SetGlobalAutomationOverride() does.
   //----------------------------------------------------------------------------
 

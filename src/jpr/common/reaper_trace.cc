@@ -171,7 +171,7 @@ constexpr absl::Duration kFlushInterval = absl::Milliseconds(100);
 
 class Tracer final {
  public:
-  explicit Tracer(const std::filesystem::path& path);
+  Tracer(const std::filesystem::path& path, std::string_view name);
   Tracer(const Tracer&) = delete;
   Tracer& operator=(const Tracer&) = delete;
   ~Tracer();
@@ -257,13 +257,13 @@ class Tracer final {
   absl::flat_hash_map<MediaTrack*, std::string> track_names_;
 };
 
-Tracer::Tracer(const std::filesystem::path& path)
+Tracer::Tracer(const std::filesystem::path& path, std::string_view name)
     : file_(path, std::ios::trunc), start_time_(absl::Now()) {
   if (!file_.is_open()) {
     LOG(ERROR) << "Failed to open REAPER trace file " << path.string();
     return;
   }
-  file_ << "JPRSurf REAPER trace, started "
+  file_ << name << " REAPER trace, started "
         << absl::FormatTime("%Y-%m-%d %H:%M:%S", start_time_,
                             gb::GetLocalTimeZone())
         << "\n";
@@ -704,15 +704,17 @@ HWND ShowTracedConfig(const char* type_string, HWND parent,
 // destroyed.
 class ReaperTrace::Impl final {
  public:
-  explicit Impl(const std::filesystem::path& path) : tracer(path) {}
+  Impl(const std::filesystem::path& path, std::string_view name)
+      : tracer(path, name) {}
 
   Tracer tracer;
   ReaperApiHooks<TraceHook> hooks;
 };
 
-ReaperTrace::ReaperTrace(const std::filesystem::path& path) {
+ReaperTrace::ReaperTrace(const std::filesystem::path& path,
+                         std::string_view name) {
   CHECK(g_tracer == nullptr) << "Only one ReaperTrace may exist at a time";
-  impl_ = std::make_unique<Impl>(path);
+  impl_ = std::make_unique<Impl>(path, name);
   g_tracer = &impl_->tracer;
 }
 

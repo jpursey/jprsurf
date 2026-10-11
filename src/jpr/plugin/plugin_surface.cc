@@ -5,7 +5,6 @@
 
 #include "jpr/plugin/plugin_surface.h"
 
-#include <filesystem>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -166,12 +165,12 @@ void AddTrackAnchorMapping(View* view, std::string_view name,
 //------------------------------------------------------------------------------
 
 bool PluginSurface::Register(reaper_plugin_info_t& plugin_info,
-                             const std::filesystem::path& profile_path) {
+                             const ReaperProfiler::Options& profile) {
   return ControlSurface::Register(plugin_info,
                                   {.type_string = kTypeString,
                                    .description = kDescString,
                                    .create_listener = PluginSurface::Create,
-                                   .profile_path = profile_path});
+                                   .profile = profile});
 }
 
 std::unique_ptr<ControlSurfaceListener> PluginSurface::Create(

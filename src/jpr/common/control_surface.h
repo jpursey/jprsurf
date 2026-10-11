@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <filesystem>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -95,9 +94,9 @@ class ControlSurface final : private IReaperControlSurface {
     std::unique_ptr<ControlSurfaceListener> (*create_listener)(
         std::string_view config);
 
-    // Where each surface writes its profile (see ReaperProfiler) when it is
-    // destroyed, replacing the last one, or empty for no profiling.
-    std::filesystem::path profile_path;
+    // The profile each surface writes when it is destroyed (see
+    // ReaperProfiler), replacing the last one. An empty path is no profiling.
+    ReaperProfiler::Options profile;
   };
 
   // Registers the control surface type with REAPER. Only one type may be

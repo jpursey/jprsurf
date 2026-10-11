@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -13,6 +12,7 @@
 #include "gb/config/config.h"
 #include "jpr/common/control_surface.h"
 #include "jpr/common/midi_ports.h"
+#include "jpr/common/reaper_profiler.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
@@ -24,10 +24,10 @@ namespace jpr {
 class PluginSurface final : private ControlSurfaceListener {
  public:
   // Registers JPRSurf as a control surface type with REAPER, whose surfaces
-  // write their profile to `profile_path`, or none if it is empty. Returns
-  // false (and logs an error) if registration fails.
+  // write `profile`, or none if its path is empty. Returns false (and logs an
+  // error) if registration fails.
   static bool Register(reaper_plugin_info_t& plugin_info,
-                       const std::filesystem::path& profile_path);
+                       const ReaperProfiler::Options& profile);
 
   PluginSurface(const PluginSurface&) = delete;
   PluginSurface& operator=(const PluginSurface&) = delete;

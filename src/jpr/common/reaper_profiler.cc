@@ -19,7 +19,6 @@
 #include "gb/base/local_time.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
-#include "jpr/common/build_info.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -48,12 +47,6 @@ std::string FormatRunTime(absl::Duration time) {
     return absl::StrFormat("%.1fus", absl::ToDoubleMicroseconds(time));
   }
   return absl::StrFormat("%.1fms", absl::ToDoubleMilliseconds(time));
-}
-
-// Returns JPRSurf's and REAPER's time per run.
-std::string FormatRunSplit(absl::Duration jprsurf, absl::Duration reaper) {
-  return absl::StrCat("JPRSurf ", FormatRunTime(jprsurf), ", REAPER ",
-                      FormatRunTime(reaper));
 }
 
 //==============================================================================
@@ -142,8 +135,8 @@ class ProfiledMidiOutput final : public midi_Output {
 // ReaperProfiler
 //==============================================================================
 
-ReaperProfiler::ReaperProfiler(std::filesystem::path path)
-    : path_(std::move(path)),
+ReaperProfiler::ReaperProfiler(Options options)
+    : options_(std::move(options)),
       start_time_(absl::Now()),
       profiler_({.budget_per_frame = kBudgetPerRun,
                  .budget_fraction = kBudgetFraction,
@@ -170,13 +163,13 @@ ReaperProfiler::RunSplit ReaperProfiler::GetRunSplit() const {
         break;
       case gb::ProfilePoint::Kind::kFrame:
       case gb::ProfilePoint::Kind::kScope:
-        split.jprsurf += profiler_.GetSelfTime(point.GetName());
+        split.extension += profiler_.GetSelfTime(point.GetName());
         break;
       default:
         break;
     }
   }
-  split.jprsurf /= runs;
+  split.extension /= runs;
   split.reaper /= runs;
   return split;
 }
@@ -189,29 +182,33 @@ midi_Output* ReaperProfiler::MidiPortHook::Wrap(midi_Output* port) {
   return port != nullptr ? new ProfiledMidiOutput(port) : nullptr;
 }
 
+std::string ReaperProfiler::FormatRunSplit(const RunSplit& split) const {
+  return absl::StrCat(options_.name, " ", FormatRunTime(split.extension),
+                      ", REAPER ", FormatRunTime(split.reaper));
+}
+
 void ReaperProfiler::WriteSnapshot(const RunSplit& split) const {
   const absl::Time end_time = absl::Now();
   const std::string snapshot = absl::StrCat(
-      "JPRSurf profile\n", "Build:    ", kBuildCommit,
-      kBuildModified ? " (modified)" : "", "\n", "Date:     ",
+      options_.name, " profile\n", "Build:    ", options_.build, "\n",
+      "Date:     ",
       absl::FormatTime("%Y-%m-%d %H:%M", start_time_, gb::GetLocalTimeZone()),
       ", ", absl::ToInt64Seconds(end_time - start_time_), "s\n",
-      "Per run:  ", FormatRunSplit(split.jprsurf, split.reaper), "\n\n",
-      profiler_.GetReport());
+      "Per run:  ", FormatRunSplit(split), "\n\n", profiler_.GetReport());
 
   std::FILE* file = nullptr;
-  if (_wfopen_s(&file, path_.c_str(), L"w") != 0 || file == nullptr) {
-    LOG(ERROR) << "Failed to open " << path_.string()
+  if (_wfopen_s(&file, options_.path.c_str(), L"w") != 0 || file == nullptr) {
+    LOG(ERROR) << "Failed to open " << options_.path.string()
                << " to write the profile.";
     return;
   }
   const bool written = (std::fwrite(snapshot.data(), 1, snapshot.size(),
                                     file) == snapshot.size());
   if (std::fclose(file) != 0 || !written) {
-    LOG(ERROR) << "Failed to write the profile to " << path_.string();
+    LOG(ERROR) << "Failed to write the profile to " << options_.path.string();
     return;
   }
-  LOG(INFO) << "Wrote the profile to " << path_.string();
+  LOG(INFO) << "Wrote the profile to " << options_.path.string();
 }
 
 void ReaperProfiler::LogSummary(const RunSplit& split) const {
@@ -219,9 +216,8 @@ void ReaperProfiler::LogSummary(const RunSplit& split) const {
   const std::string text = absl::StrCat(
       summary.frames, " runs, p50 ", FormatRunTime(summary.p50), ", p99 ",
       FormatRunTime(summary.p99), ", max ", FormatRunTime(summary.max),
-      ", avg ", FormatRunTime(summary.average), " (",
-      FormatRunSplit(split.jprsurf, split.reaper), "), profiler ",
-      FormatRunTime(summary.profiler_cost), "/run (budget ",
+      ", avg ", FormatRunTime(summary.average), " (", FormatRunSplit(split),
+      "), profiler ", FormatRunTime(summary.profiler_cost), "/run (budget ",
       FormatRunTime(summary.budget), ")");
   if (summary.profiler_cost > summary.budget) {
     LOG(WARNING) << "Profile over budget: " << text;

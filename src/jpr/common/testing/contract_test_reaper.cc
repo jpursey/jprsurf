@@ -45,9 +45,10 @@ namespace {
 // File: Quit REAPER.
 constexpr int kQuitAction = 40004;
 
-// REAPER's Main_openProject(), GetMainHwnd(), and CSurf_FlushUndo(). JPRSurf
-// never calls them, so they aren't on the API list (see reaper_api.h), and the
-// fake must never fake them. The entry point loads them by name.
+// REAPER's Main_openProject(), GetMainHwnd(), and CSurf_FlushUndo(). The
+// extension never calls them, so they aren't on the API list (see
+// reaper_api.h), and the fake must never fake them. The entry point loads them
+// by name.
 using MainOpenProject = void (*)(const char* name);
 using GetMainHwnd = HWND (*)();
 using CSurfFlushUndo = void (*)(bool force);

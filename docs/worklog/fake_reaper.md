@@ -94,13 +94,13 @@ caught by the fake's teardown check, but a missed global is otherwise silent.
 
 ### common, plugin: The profile is the plugin's
 
-`ControlSurface::Type::profile_path` says where each surface writes its
-profile, or is empty for none. `ControlSurface` holds its `ReaperProfiler` in a
-`std::optional`, declared before the listener, and creates it only when there
-is a path. `PluginSurface::Register()` gives `GetLogPath("jprsurf_profile.txt")`.
-Tests register a type with no path, so they write nothing. The rest of
-`common`'s references to JPRSurf are the backlog's *Keep common free of the
-plugin's name*.
+`ControlSurface::Type::profile` says where each surface writes its profile, or
+has an empty path for none, and gives the extension's name and build, which
+head it. `ControlSurface` holds its `ReaperProfiler` in a `std::optional`,
+declared before the listener, and creates it only when there is a path. The
+plugin gives `GetLogPath("jprsurf_profile.txt")`. Tests register a type with no
+path, so they write nothing. `ReaperTrace` takes the extension's name the same
+way.
 
 ### common/testing: FakeReaper (fake_reaper.h)
 

@@ -50,8 +50,8 @@ class ContractTest : public ::testing::Test {
 
   // Ends the test's calls so far, as one of REAPER's calls on a surface would
   // end. Under the fake, its checks see each part on its own (see "Checks" in
-  // FakeReaper), such as two changes to different tracks that JPRSurf would
-  // batch. In REAPER, it does nothing.
+  // FakeReaper), such as two changes to different tracks that the extension
+  // would batch. In REAPER, it does nothing.
   void EndEntryPoint();
 
   // Returns the calls the RecordingSurface got since the last time, and forgets

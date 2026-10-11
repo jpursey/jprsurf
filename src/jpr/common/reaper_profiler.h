@@ -6,6 +6,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <utility>
 
 #include "absl/time/time.h"
@@ -20,7 +21,7 @@ namespace jpr {
 //==============================================================================
 // ReaperProfiler
 //
-// Profiles JPRSurf for as long as it exists: every point defined with
+// Profiles the extension for as long as it exists: every point defined with
 // gb/profile on the thread that created it, which must be REAPER's UI thread
 // (see gb::Profiler), every call to a function on the REAPER API list (see
 // reaper_api.h), as a call point with the function's name, and every call on a
@@ -36,10 +37,24 @@ namespace jpr {
 
 class ReaperProfiler final {
  public:
+  // What is profiled, and where the profile is written.
+  struct Options {
+    // The file the profile is written to, replacing it.
+    std::filesystem::path path;
+
+    // The extension's name, which heads the profile and labels the extension's
+    // time per run, beside REAPER's.
+    std::string name;
+
+    // The build profiled, such as its version or commit, which the profile's
+    // header shows.
+    std::string build;
+  };
+
   // Starts profiling. A run over 8ms logs a warning with its breakdown. When
-  // the profiler is destroyed, it writes the profile to the file at `path`,
-  // replacing it, and logs a summary.
-  explicit ReaperProfiler(std::filesystem::path path);
+  // the profiler is destroyed, it writes the profile to the file at
+  // `options.path`, and logs a summary.
+  explicit ReaperProfiler(Options options);
   ReaperProfiler(const ReaperProfiler&) = delete;
   ReaperProfiler& operator=(const ReaperProfiler&) = delete;
   ~ReaperProfiler();
@@ -50,10 +65,10 @@ class ReaperProfiler final {
   void Reset() { profiler_.Reset(); }
 
  private:
-  // JPRSurf's and REAPER's self time per run: every call point is REAPER's,
-  // and every other timed point is JPRSurf's.
+  // The extension's and REAPER's self time per run: every call point is
+  // REAPER's, and every other timed point is the extension's.
   struct RunSplit {
-    absl::Duration jprsurf;
+    absl::Duration extension;
     absl::Duration reaper;
   };
   RunSplit GetRunSplit() const;
@@ -79,14 +94,17 @@ class ReaperProfiler final {
     static midi_Output* Wrap(midi_Output* port);
   };
 
-  // Writes the profile to path_.
+  // Returns the extension's and REAPER's time per run.
+  std::string FormatRunSplit(const RunSplit& split) const;
+
+  // Writes the profile to options_.path.
   void WriteSnapshot(const RunSplit& split) const;
 
   // Logs a summary of the profile, as a warning if the profiler was over its
   // budget.
   void LogSummary(const RunSplit& split) const;
 
-  const std::filesystem::path path_;
+  const Options options_;
   const absl::Time start_time_;
   gb::Profiler profiler_;
 

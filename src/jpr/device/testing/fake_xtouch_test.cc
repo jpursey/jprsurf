@@ -30,7 +30,8 @@ using ScribbleColor = FakeXTouch::ScribbleColor;
 using StripButton = FakeXTouch::StripButton;
 
 //==============================================================================
-// The fake against the protocol's raw bytes, from JPRSurf's end of its ports.
+// The fake against the protocol's raw bytes, from the extension's end of its
+// ports.
 //==============================================================================
 
 class FakeXTouchTest : public ::testing::Test {
@@ -45,8 +46,9 @@ class FakeXTouchTest : public ::testing::Test {
     output_->Destroy();
   }
 
-  // Sends a message to the hardware: three bytes with Send(), as JPRSurf's
-  // MIDI output sends short messages, and anything else with SendMsg().
+  // Sends a message to the hardware: three bytes with Send(), as the
+  // extension's MIDI output sends short messages, and anything else with
+  // SendMsg().
   void Send(const std::vector<uint8_t>& bytes) {
     if (bytes.size() == 3) {
       output_->Send(bytes[0], bytes[1], bytes[2], /*frame_offset=*/-1);
@@ -92,7 +94,7 @@ class FakeXTouchExtenderTest : public FakeXTouchTest {
 };
 
 //------------------------------------------------------------------------------
-// Into JPRSurf
+// What the hardware sends
 //------------------------------------------------------------------------------
 
 TEST_F(FakeXTouchTest, ButtonsSendTheirNotes) {
@@ -232,7 +234,8 @@ TEST_F(FakeXTouchTest, RingsShowTheirModeAndPosition) {
 }
 
 TEST_F(FakeXTouchTest, MetersShowTheirLevel) {
-  // With its one data byte, and as JPRSurf sends it, with a third byte.
+  // With its one data byte, and as the extension sends it, with a third
+  // byte.
   Send({0xD0, 0x2E});
   Send({0xD0, 0x75, 0x00});
   EXPECT_EQ(xtouch_.GetMeter(2), 0xE);

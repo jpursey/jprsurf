@@ -101,8 +101,8 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
 }
 
 ControlSurface::ControlSurface(std::string_view config) {
-  if (!s_type_.profile_path.empty()) {
-    profiler_.emplace(s_type_.profile_path);
+  if (!s_type_.profile.path.empty()) {
+    profiler_.emplace(s_type_.profile);
   }
   listener_ = s_type_.create_listener(config);
   CHECK(listener_ != nullptr)

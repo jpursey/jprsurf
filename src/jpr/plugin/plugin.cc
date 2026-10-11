@@ -12,9 +12,18 @@
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/reaper_trace.h"
 #include "jpr/common/test_reset.h"
+#include "jpr/plugin/build_info.h"
 #include "jpr/plugin/plugin_surface.h"
 
 namespace jpr {
+
+namespace {
+
+// The extension's name, which heads its trace and profile. It is shown, not
+// stored, so unlike the control surface's type string, it may change.
+constexpr char kName[] = "JPRSurf";
+
+}  // namespace
 
 Plugin* Plugin::s_instance_ = nullptr;
 
@@ -47,10 +56,12 @@ bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& plugin_info,
   // surface.
   std::unique_ptr<ReaperTrace> trace;
   if (!options.trace_path.empty()) {
-    trace = std::make_unique<ReaperTrace>(options.trace_path);
+    trace = std::make_unique<ReaperTrace>(options.trace_path, kName);
   }
 
-  if (!PluginSurface::Register(plugin_info, options.profile_path)) {
+  if (!PluginSurface::Register(
+          plugin_info,
+          {.path = options.profile_path, .name = kName, .build = kBuild})) {
     return false;
   }
 

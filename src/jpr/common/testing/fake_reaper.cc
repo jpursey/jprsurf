@@ -578,7 +578,7 @@ class FakeReaper::Api final {
     }
   }
 
-  // Writes a position in the modes JPRSurf reads, as REAPER does (see
+  // Writes a position in the modes the extension reads, as REAPER does (see
   // FakeReaper's class comment for the project's tempo and rates).
   static void format_timestr_pos(double position, char* text, int text_size,
                                  int mode) {
@@ -1021,7 +1021,8 @@ std::unique_ptr<TestControlSurface> FakeReaper::AddSurface(
   }
   if (surface_ != nullptr) {
     ADD_FAILURE() << "A second control surface was created while one is open. "
-                     "JPRSurf has one surface, with a listener for each use.";
+                     "The extension has one surface, with a listener for each "
+                     "use.";
     delete surface;
     EndEntryPoint();
     return nullptr;

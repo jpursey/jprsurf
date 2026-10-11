@@ -52,6 +52,7 @@ set(jpr_common_TEST_SOURCE
   numbered_name_test.cc
   prefixed_name_test.cc
   reaper_api_test.cc
+  reaper_profiler_test.cc
   reaper_trace_test.cc
   timeline_test.cc
   track_cache_test.cc
@@ -67,19 +68,3 @@ gb_add_library(jpr_common)
 target_include_directories(jpr_common PUBLIC "../..")
 
 add_subdirectory(testing)
-
-# jpr/common/build_info.h, with the git commit and whether it was modified, for
-# the profile snapshot. It is regenerated on every build, but only rewritten
-# when it changes (see build_info.cmake).
-find_package(Git QUIET)
-set(JPR_BUILD_INFO_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-set(JPR_BUILD_INFO_HEADER "${JPR_BUILD_INFO_DIR}/jpr/common/build_info.h")
-add_custom_target(jpr_build_info
-  COMMAND "${CMAKE_COMMAND}"
-    "-DGIT=${GIT_EXECUTABLE}"
-    "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
-    "-DOUTPUT=${JPR_BUILD_INFO_HEADER}"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/build_info.cmake"
-  BYPRODUCTS "${JPR_BUILD_INFO_HEADER}")
-add_dependencies(jpr_common jpr_build_info)
-target_include_directories(jpr_common PRIVATE "${JPR_BUILD_INFO_DIR}")

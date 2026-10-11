@@ -21,8 +21,8 @@ namespace jpr {
 // FakeMidiEventList
 //
 // The MIDI_eventlist a FakeMidiInput delivers its events in. Each event is
-// kept whole, and EnumItems() steps through them in order. JPRSurf only reads
-// it, so the rest isn't faked yet.
+// kept whole, and EnumItems() steps through them in order. The extension only
+// reads it, so the rest isn't faked yet.
 //==============================================================================
 
 class FakeMidiEventList final : public MIDI_eventlist {

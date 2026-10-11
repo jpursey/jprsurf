@@ -214,7 +214,7 @@ FakeXTouch::FakeXTouch(FakeReaper& reaper, Type type,
 FakeXTouch::~FakeXTouch() { output_->Disconnect(); }
 
 //------------------------------------------------------------------------------
-// Into JPRSurf
+// What the hardware sends
 //------------------------------------------------------------------------------
 
 void FakeXTouch::Press(Button button) {

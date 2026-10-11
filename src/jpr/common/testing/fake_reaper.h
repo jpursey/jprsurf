@@ -63,10 +63,10 @@ struct FakeCommand {
 // an action a handler for what it would change. A test that needs one function
 // to behave otherwise hooks it over the fake with gb::FunctionHook.
 //
-// Text is in REAPER's formats, as far as JPRSurf reads it: volumes and pans as
-// mkvolstr() and mkpanstr() write them, and positions as format_timestr_pos()
-// writes them, for a project at REAPER's defaults of 120 BPM in 4/4, with 30
-// frames and 44100 samples a second.
+// Text is in REAPER's formats, as far as the extension reads it: volumes and
+// pans as mkvolstr() and mkpanstr() write them, and positions as
+// format_timestr_pos() writes them, for a project at REAPER's defaults of 120
+// BPM in 4/4, with 30 frames and 44100 samples a second.
 //
 // Undo points are part of the state: each holds the project's undoable state,
 // as REAPER's do, so Edit: Undo restores it (see "Undo and saving" in
@@ -80,7 +80,7 @@ struct FakeCommand {
 // The fake fails the test, with ADD_FAILURE(), naming what broke, on:
 // - A call the fake doesn't support yet, such as a parameter it doesn't model.
 // - A track or project pointer that isn't in an open project.
-// - A second control surface created while one is open: JPRSurf has one
+// - A second control surface created while one is open: the extension has one
 //   surface, with a ControlSurfaceListener for each use.
 // - A MIDI port created while it is open, or used after it is destroyed.
 // - A control surface or MIDI port still open when the fake is destroyed.
@@ -91,8 +91,8 @@ struct FakeCommand {
 //   balanced, and follow the TrackBatch rule: an entry point that changes the
 //   mute, solo, rec arm, or selection of several tracks makes them one change,
 //   in one PreventUIRefresh() scope, or one call outside of any. Each change
-//   costs a refresh of REAPER's UI, and JPRSurf adds its own undo point for
-//   each.
+//   costs a refresh of REAPER's UI, and the extension adds its own undo point
+//   for each.
 //==============================================================================
 
 class FakeReaper final {
@@ -149,10 +149,11 @@ class FakeReaper final {
   bool IsUIRefreshPrevented() const { return batch_depth_ > 0; }
 
   // Ends the entry point: checks what was called since the last one ended (see
-  // Checks), and starts the next. A test that calls JPRSurf's code directly,
-  // rather than through a surface, ends each call REAPER would have made, so
-  // each is checked on its own. It ends them only where REAPER's calls would
-  // end, never in the middle of one, which would hide what the checks catch.
+  // Checks), and starts the next. A test that calls the extension's code
+  // directly, rather than through a surface, ends each call REAPER would have
+  // made, so each is checked on its own. It ends them only where REAPER's
+  // calls would end, never in the middle of one, which would hide what the
+  // checks catch.
   void EndEntryPoint();
 
   //----------------------------------------------------------------------------

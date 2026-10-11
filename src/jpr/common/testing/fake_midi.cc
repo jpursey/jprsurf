@@ -91,7 +91,7 @@ void FakeMidiInput::Send(absl::Span<const uint8_t> bytes) {
 }
 
 void FakeMidiInput::SwapBufs(unsigned int timestamp) {
-  ADD_FAILURE() << "midi_Input::SwapBufs() isn't faked; JPRSurf calls "
+  ADD_FAILURE() << "midi_Input::SwapBufs() isn't faked; the extension calls "
                    "SwapBufsPrecise()";
 }
 

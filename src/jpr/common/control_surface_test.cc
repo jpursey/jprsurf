@@ -52,7 +52,7 @@ ControlSurface::Type MakeType(std::filesystem::path profile_path = {}) {
   return {.type_string = "TEST",
           .description = "Test surface",
           .create_listener = &CreateTestListener,
-          .profile_path = std::move(profile_path)};
+          .profile = {.path = std::move(profile_path)}};
 }
 
 class ControlSurfaceTest : public ::testing::Test {

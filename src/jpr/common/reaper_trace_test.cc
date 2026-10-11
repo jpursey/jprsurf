@@ -39,7 +39,8 @@ constexpr int kTimeWidth = 11;
 //------------------------------------------------------------------------------
 
 // What the surface does when REAPER calls its Run() or SetTrackListChange():
-// the calls a test makes, as JPRSurf only calls REAPER from inside a callback.
+// the calls a test makes, as the extension only calls REAPER from inside a
+// callback.
 std::function<void()> g_surface_calls = [] {};
 
 // The last mute the surface was set to.
@@ -101,7 +102,7 @@ class ReaperTraceTest : public ::testing::Test {
   }
 
   void SetUp() override {
-    trace_ = std::make_unique<ReaperTrace>(path_);
+    trace_ = std::make_unique<ReaperTrace>(path_, "Test");
     reaper_.GetPluginInfo().Register(
         "csurf", ReaperTrace::TraceSurfaceRegistration(&g_test_surface_reg));
     surface_ = reaper_.AddSurface("config");
@@ -120,7 +121,7 @@ class ReaperTraceTest : public ::testing::Test {
     std::ifstream file(path_);
     std::string line;
     std::getline(file, line);
-    EXPECT_THAT(line, StartsWith("JPRSurf REAPER trace, started "));
+    EXPECT_THAT(line, StartsWith("Test REAPER trace, started "));
     std::vector<std::string> lines;
     while (std::getline(file, line) && line != "Trace ended") {
       lines.push_back(line.substr(kTimeWidth));

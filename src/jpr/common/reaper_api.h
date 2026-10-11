@@ -6,7 +6,7 @@
 #pragma once
 
 //==============================================================================
-// The REAPER API functions JPRSurf calls.
+// The REAPER API functions the extension calls.
 //
 // Include this header rather than the SDK's reaper_plugin_functions.h, which
 // then declares only these functions, so calling any other doesn't compile.
@@ -80,7 +80,8 @@
 #include "gb/base/function_hook.h"
 #include "sdk/reaper_plugin_functions.h"
 
-// Every REAPER API function JPRSurf calls. X(name) is expanded for each one.
+// Every REAPER API function the extension calls. X(name) is expanded for each
+// one.
 #define JPR_REAPER_API(X)        \
   X(AnyTrackSolo)                \
   X(CountSelectedMediaItems)     \

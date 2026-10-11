@@ -170,7 +170,7 @@ class FakeXTouch final {
   ~FakeXTouch();
 
   //----------------------------------------------------------------------------
-  // Into JPRSurf
+  // What the hardware sends
   //
   // Each is sent on the input port, at the fake's current time, and delivered
   // on the next MidiPorts::RunInput(). Nothing is sent unless the port is open

@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <string_view>
 
 #include "sdk/reaper_plugin.h"
 
@@ -15,10 +16,10 @@ namespace jpr {
 //==============================================================================
 // ReaperTrace
 //
-// Writes every call between JPRSurf and REAPER to a file, in order, for as long
-// as it exists: every function on the REAPER API list (see reaper_api.h), and
-// every call REAPER makes on a control surface registered through
-// TraceSurfaceRegistration().
+// Writes every call between the extension and REAPER to a file, in order, for
+// as long as it exists: every function on the REAPER API list (see
+// reaper_api.h), and every call REAPER makes on a control surface registered
+// through TraceSurfaceRegistration().
 //
 // Each call is one line, with its arguments, its result, and the values of its
 // output parameters after the call (shown as "out" in the arguments). Tracks
@@ -40,9 +41,10 @@ namespace jpr {
 
 class ReaperTrace final {
  public:
-  // Starts tracing to the file at `path`, replacing it. The REAPER API must
-  // already be loaded, and only one ReaperTrace may exist at a time.
-  explicit ReaperTrace(const std::filesystem::path& path);
+  // Starts tracing to the file at `path`, replacing it, headed with `name`, the
+  // extension's name. The REAPER API must already be loaded, and only one
+  // ReaperTrace may exist at a time.
+  ReaperTrace(const std::filesystem::path& path, std::string_view name);
   ReaperTrace(const ReaperTrace&) = delete;
   ReaperTrace& operator=(const ReaperTrace&) = delete;
   ~ReaperTrace();

@@ -87,8 +87,10 @@ A call point's count is its call count, so the MIDI messages sent are
   closing ports. What is left outside runs is small: the devices' and MIDI
   outputs' last run as the surface is destroyed, and REAPER's callbacks
   between runs, which only set flags.
-- **The build:** `build_info.cmake` writes `jpr/common/build_info.h` on every
-  build, with the git commit and whether tracked files have changes. It only
+- **The name and build** come from the plugin, in `ReaperProfiler::Options`,
+  so `common` doesn't know which extension it is in. The plugin's
+  `build_info.cmake` writes `jpr/plugin/build_info.h` on every build, with the
+  git commit, marked "(modified)" if tracked files have changes. It only
   rewrites the header when it changes, so a build with no change recompiles
   nothing.
 - **The file** is written with `std::fopen`, as one string written once needs
@@ -160,7 +162,7 @@ Found while building this, on an 81-track project:
   kind of runnable only needs its own runner.
 - **`gb::GetLocalTimeZone()` (gb/base/local_time.h)**: the local time zone, for
   any time JPRSurf writes, as `absl::LocalTimeZone()` is UTC inside REAPER.
-- **`build_info.h` (generated in `jpr_common`)**: the build's commit, and
+- **`build_info.h` (generated in `jpr_plugin`)**: the build's commit, and
   whether it was modified.
 
 ## Performance

@@ -30,6 +30,22 @@ set(jpr_plugin_TEST_DEPS
 gb_add_library(jpr_plugin)
 target_include_directories(jpr_plugin PUBLIC "../..")
 
+# jpr/plugin/build_info.h, with the git commit and whether it was modified, for
+# the profile. It is regenerated on every build, but only rewritten when it
+# changes (see build_info.cmake).
+find_package(Git QUIET)
+set(JPR_BUILD_INFO_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(JPR_BUILD_INFO_HEADER "${JPR_BUILD_INFO_DIR}/jpr/plugin/build_info.h")
+add_custom_target(jpr_build_info
+  COMMAND "${CMAKE_COMMAND}"
+    "-DGIT=${GIT_EXECUTABLE}"
+    "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DOUTPUT=${JPR_BUILD_INFO_HEADER}"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/build_info.cmake"
+  BYPRODUCTS "${JPR_BUILD_INFO_HEADER}")
+add_dependencies(jpr_plugin jpr_build_info)
+target_include_directories(jpr_plugin PRIVATE "${JPR_BUILD_INFO_DIR}")
+
 add_subdirectory(testing)
 add_subdirectory(default_config)
 
