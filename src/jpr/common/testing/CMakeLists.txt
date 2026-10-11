@@ -33,7 +33,7 @@ gb_add_library(jpr_common_contract)
 
 # The contract tests, which act only through REAPER's API. They build into
 # jpr_common_testing_test, which runs them under the fake, and into
-# reaper_jprsurf_check, which runs them in REAPER.
+# reaper_jpr_check, which runs them in REAPER.
 
 set(jpr_common_contract_TESTS
   fake_reaper_contract_test.cc
@@ -86,12 +86,12 @@ gb_add_library(jpr_common_testing)
 # the target that runs it there (see "Contract tests in REAPER" in
 # docs/testing_and_profiling.md).
 
-set(reaper_jprsurf_check_SOURCE
+set(reaper_jpr_check_SOURCE
   contract_test_reaper.cc
   ${jpr_common_contract_TESTS}
 )
 
-set(reaper_jprsurf_check_DEPS
+set(reaper_jpr_check_DEPS
   absl::function_ref
   absl::log
   absl::strings
@@ -103,13 +103,13 @@ set(reaper_jprsurf_check_DEPS
   reaper_sdk
 )
 
-gb_add_shared_library(reaper_jprsurf_check)
+gb_add_shared_library(reaper_jpr_check)
 
 add_custom_target(check_in_reaper
   COMMAND ${CMAKE_COMMAND}
-      -DCHECK_DLL=$<TARGET_FILE:reaper_jprsurf_check>
+      -DCHECK_DLL=$<TARGET_FILE:reaper_jpr_check>
       -P "${CMAKE_CURRENT_SOURCE_DIR}/check_in_reaper.cmake"
-  DEPENDS reaper_jprsurf_check
+  DEPENDS reaper_jpr_check
   USES_TERMINAL
   COMMENT "Running the contract tests in REAPER..."
 )

@@ -47,8 +47,8 @@ needed a redo undo a change).
 | `RecordingSurface`      | A control surface that records every call it gets, as text                 | `TestControlSurface`, the fake's wrapper of the surface under test      |
 | `WriteProjectFile()`    | Writes a `FakeProject` as an RPP file REAPER opens                         | REAPER's own `Main_SaveProject()`                                       |
 | Test install            | A portable REAPER only for contract tests, with its own `UserPlugins`      | The user's REAPER, which the plugin deploys to                          |
-| `reaper_jprsurf_check`  | The DLL that runs the contract tests inside the test install               | `reaper_jprsurf`, the plugin                                            |
-| `check_in_reaper`       | The build target that runs `reaper_jprsurf_check` in the test install      | `ctest`, which runs the same tests under the fake                       |
+| `reaper_jpr_check`      | The DLL that runs the contract tests inside the test install               | `reaper_jprsurf`, the plugin                                            |
+| `check_in_reaper`       | The build target that runs `reaper_jpr_check` in the test install          | `ctest`, which runs the same tests under the fake                       |
 
 ## Structure
 
@@ -65,7 +65,7 @@ doesn't link the fake, and a contract test that reaches for it
   and the list both use, so a wrong ID in the plugin fails a contract test.
 - `jpr_common_testing` (the fake) depends on it. The contract tests
   (`jpr_common_contract_TESTS`) build into both `jpr_common_testing_test` and
-  `reaper_jprsurf_check`.
+  `reaper_jpr_check`.
 
 ### common/testing: ContractTest (contract_test.h)
 
@@ -100,12 +100,12 @@ test, naming it, for state a project can't open with: playing, a peak, a dirty
 flag, or undo points. `FakeProject::Create()` makes a project outside the fake,
 for the REAPER side.
 
-### common/testing: Running them in REAPER (reaper_jprsurf_check)
+### common/testing: Running them in REAPER (reaper_jpr_check)
 
 - **The DLL** loads the API from REAPER's `GetFunc`, and registers
-  `RecordingSurface`'s type. With `JPRSURF_CHECK_DIR` set, the surface's first
-  run runs every test (`RUN_ALL_TESTS()`), each finishing within the call, then
-  opens an empty project. The next posts File: Quit REAPER to the main window,
+  `RecordingSurface`'s type. With `JPR_REAPER_CHECK_RUN_DIR` set, the
+  surface's first run runs every test (`RUN_ALL_TESTS()`), each finishing
+  within the call, then opens an empty project. The next posts File: Quit REAPER to the main window,
   as quitting from inside a run destroys the surface while it runs. It writes
   `output.txt` (gtest's output), `result.txt`, `log.txt` (how far it got), and
   `project.rpp` (the last project opened).

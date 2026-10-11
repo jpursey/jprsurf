@@ -617,8 +617,8 @@ as a `FakeProject`, which REAPER opens from a project file. The design is in
 [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md).
 
 In REAPER, they run in a test install: a portable REAPER of their own, with
-the `reaper_jprsurf_check` DLL in its `UserPlugins`, and not the plugin. The
-user's own REAPER and its settings are never touched.
+the `reaper_jpr_check` DLL in its `UserPlugins`, and not the plugin. The user's
+own REAPER and its settings are never touched.
 
 ### Setting up the test install
 
@@ -636,7 +636,7 @@ Once, by hand:
      so it never takes an audio device from your own REAPER.
    - Quit.
 
-Each run sets up the rest: it copies `reaper_jprsurf_check.dll` into the test
+Each run sets up the rest: it copies `reaper_jpr_check.dll` into the test
 install's `UserPlugins`, and makes the recording surface its only control
 surface in its `reaper.ini`.
 

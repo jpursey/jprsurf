@@ -187,27 +187,6 @@ frame on performance cores. What is left is `smoke.txt`, unless *Measure
 REAPER's costs* retires it first, recorded the same way at the end of the next
 feature that profiles the smoke test.
 
-## Keep the contract test DLL free of the plugin's name
-
-- **Layers:** common
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
-  (Contract tests in REAPER)
-
-`common`, `device`, and `scene` shouldn't know which plugin they are in, and
-their code and comments no longer name JPRSurf. What is left is the DLL that
-runs the contract tests in REAPER, which `common/testing` builds: its target
-and file are `reaper_jprsurf_check`, and it reads its output directory from
-the `JPRSURF_CHECK_DIR` environment variable. Give both names that don't name
-the plugin (the DLL still needs REAPER's `reaper_` prefix to be loaded), in
-`common/testing/CMakeLists.txt`, `check_in_reaper.cmake`,
-`contract_test_reaper.cc`, and the docs that name them
-(`testing_and_profiling.md` and `worklog/check_fakes_in_reaper.md`). The test
-install's `UserPlugins` keeps the copy under the old name, which REAPER would
-still load beside the new one, so the rename removes it.
-
 ## Units in the names of plain times
 
 - **Layers:** common, device, scene, plugin

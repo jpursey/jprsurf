@@ -3,12 +3,12 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-// ContractTest in REAPER, and the entry point of reaper_jprsurf_check, the DLL
+// ContractTest in REAPER, and the entry point of reaper_jpr_check, the DLL
 // that runs the contract tests inside the test install of REAPER (see
 // "Contract tests in REAPER" in docs/testing_and_profiling.md).
 //
 // REAPER creates the RecordingSurface at startup, from the test install's
-// reaper.ini. If the JPRSURF_CHECK_DIR environment variable names a
+// reaper.ini. If the JPR_REAPER_CHECK_RUN_DIR environment variable names a
 // directory, its first run runs every test, its second quits REAPER, and the
 // directory gets:
 // - output.txt: what gtest printed.
@@ -56,15 +56,16 @@ MainOpenProject g_main_open_project = nullptr;
 GetMainHwnd g_get_main_hwnd = nullptr;
 CSurfFlushUndo g_csurf_flush_undo = nullptr;
 
-// Where the DLL writes its files, from JPRSURF_CHECK_DIR, or empty if it isn't
-// set.
+// Where the DLL writes its files, from JPR_REAPER_CHECK_RUN_DIR, or empty if it
+// isn't set.
 std::filesystem::path g_dir;
 
-// Returns the directory JPRSURF_CHECK_DIR names, or empty if it isn't set.
-std::filesystem::path GetCheckDir() {
+// Returns the directory JPR_REAPER_CHECK_RUN_DIR names, or empty if it isn't
+// set.
+std::filesystem::path GetRunDir() {
   wchar_t* value = nullptr;
   size_t length = 0;
-  if (_wdupenv_s(&value, &length, L"JPRSURF_CHECK_DIR") != 0 ||
+  if (_wdupenv_s(&value, &length, L"JPR_REAPER_CHECK_RUN_DIR") != 0 ||
       value == nullptr) {
     return {};
   }
@@ -128,7 +129,7 @@ void RunTests() {
   }
 
   int argc = 1;
-  char program[] = "reaper_jprsurf_check";
+  char program[] = "reaper_jpr_check";
   char* argv[] = {program, nullptr};
   ::testing::InitGoogleTest(&argc, argv);
   const int result = RUN_ALL_TESTS();
@@ -182,7 +183,7 @@ REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(
   if (plugin_info == nullptr) {
     return 0;
   }
-  jpr::g_dir = jpr::GetCheckDir();
+  jpr::g_dir = jpr::GetRunDir();
   if (!jpr::g_dir.empty()) {
     gb::InitLogging();
     jpr::g_log_file = std::make_unique<gb::LogFile>(

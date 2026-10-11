@@ -6,7 +6,7 @@
 # Runs the contract tests in the test install of REAPER, the portable REAPER in
 # the folder JPR_REAPER_CHECK_DIR names (see "Contract tests in REAPER" in
 # docs/testing_and_profiling.md). The check_in_reaper target runs this, with
-# CHECK_DLL set to the reaper_jprsurf_check DLL it built.
+# CHECK_DLL set to the reaper_jpr_check DLL it built.
 #
 # It copies the DLL into the test install's UserPlugins, makes the
 # RecordingSurface its only control surface, and runs REAPER until the DLL
@@ -68,7 +68,7 @@ set(check_dir "${install_dir}/check")
 file(REMOVE_RECURSE "${check_dir}")
 file(MAKE_DIRECTORY "${check_dir}")
 file(TO_NATIVE_PATH "${check_dir}" native_check_dir)
-set(ENV{JPRSURF_CHECK_DIR} "${native_check_dir}")
+set(ENV{JPR_REAPER_CHECK_RUN_DIR} "${native_check_dir}")
 
 execute_process(
   COMMAND "${reaper_exe}" -newinst -nosplash -new
@@ -97,7 +97,7 @@ if(NOT failure STREQUAL "")
   if(EXISTS "${check_dir}/log.txt")
     execute_process(COMMAND "${CMAKE_COMMAND}" -E cat "${check_dir}/log.txt")
   else()
-    message(STATUS "(none, so REAPER didn't load reaper_jprsurf_check.dll)")
+    message(STATUS "(none, so REAPER didn't load reaper_jpr_check.dll)")
   endif()
   message(FATAL_ERROR "${failure}")
 endif()
