@@ -72,10 +72,11 @@ struct CallCost {
   // the end of the scope, and the call itself is then moderate.
   bool batched = false;
 
-  // How many leading arguments name what a refresh or command acts on, such
-  // as a track, or a track and a route's index, so a second call on the same
-  // thing in a run is found.
-  int target_args = 0;
+  // How many leading arguments, with the function, identify a refresh or
+  // command, so a second call in a run with the same ones is found as a
+  // repeat. They name what it acts on, such as a track, or a track and a
+  // route's index, and leave out the value it sets.
+  int repeat_key_args = 0;
 };
 
 // Returns the cost of a call to `function`, which must be on the API list.
@@ -98,19 +99,19 @@ CallCost GetCallCost(std::string_view function);
   to defer (mute, solo, rec arm, and selection, whose callbacks come at the
   end of the batch) are `batched`. *Batch each run* and *Measure REAPER's
   costs* can relax this with what they find.
-- **`PreventUIRefresh()`** is cheap, except a `-1` that ends the outermost
-  scope, which is a refresh, whether or not anything changed in it, until
-  *Batch each run* finds what an empty scope costs. It is the one function
-  whose cost depends on its argument, so `CallCounter` handles it by name.
+- **`PreventUIRefresh()`** is cheap in the table. The call that ends the
+  outermost scope is a refresh, whether or not anything changed in it, until
+  *Batch each run* finds what an empty scope costs, and `CallCounter` finds it
+  from the fake's scope rather than by name.
 - **A call whose cost grows with the project** is weighed at the size of the
   large project (below). The table is refreshed occasionally, from a new
   snapshot, rather than with each change.
 - **Functions only called as the surface starts,** such as the MIDI port
   functions and `NamedCommandLookup()`, are moderate. Starting up isn't
   bounded.
-- A test expands `JPR_REAPER_API` to check that every function on the list has
-  a cost, and the table has nothing else, so adding a function to the list
-  fails until its cost is given, as `reaper_api_test` does for loading.
+- A `static_assert` checks that the table has every function on the list, in
+  its order, and nothing else, so adding a function to the list doesn't
+  compile until its cost is given.
 
 ### common/testing: Counting calls (call_counter.h)
 
@@ -134,8 +135,9 @@ struct CallCounts {
 // for a run that:
 // - Refreshes REAPER's UI more than once.
 // - Adds more than one undo point.
-// - Makes a refresh or a command twice on the same target, such as a track's
-//   mute, or a route's volume.
+// - Repeats a refresh or a command: makes it twice with the same repeat key
+//   (see CallCost::repeat_key_args), such as a track's mute, or a route's
+//   volume.
 //
 // It hooks every function on the API list over whatever is loaded, so it is
 // created after anything that makes REAPER's calls back to the surface (a
@@ -158,8 +160,8 @@ class CallCounter final {
   the run it was made in, and a run is checked when a call is made in a later
   one, or when the counts are taken, or the counter is destroyed.
 - **Batches** come from the fake: a batched setter inside a scope
-  (`FakeReaper::IsUIRefreshPrevented()`) is moderate, and a
-  `PreventUIRefresh(-1)` after which no scope is open is the refresh.
+  (`FakeReaper::IsUIRefreshPrevented()`) is moderate, and a call before which
+  a scope was open, and after which none is, is the refresh.
 - The hooks reach the counter through a file-local global, as the trace's do,
   since `ReaperApiHooks` constructs each hook from its function's name alone.
 - **Undo points** are the extension's own (`Undo_OnStateChangeEx()`). REAPER
@@ -167,9 +169,9 @@ class CallCounter final {
   the extension's calls.
 
 **Brittleness:** a function added to the API list needs a cost, which the
-table's test enforces. Whether it is a setter, and what its target arguments
-are, is the table's to get right; a refresh given no target arguments counts
-any second call in a run as a repeat, which errs toward failing.
+table enforces. Whether it is a setter, and its repeat key, are the table's to
+get right; a refresh whose key has no arguments counts any second call in a
+run as a repeat, which errs toward failing.
 
 ### common/testing: The large project (large_project.h)
 
@@ -243,7 +245,7 @@ and *Measure REAPER's costs* to check.
 
 ## CLs
 
-### CL1 [ ] common/testing: The cost table
+### CL1 [x] common/testing: The cost table
 
 Depends on: nothing.
 
@@ -253,8 +255,8 @@ Depends on: nothing.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
-- `call_cost_test.cc`: every function on the API list has a cost, and the
-  table has no other names.
+- The table doesn't compile unless it matches the API list.
+- `call_cost_test.cc`: finding a function's cost.
 
 ### CL2 [ ] common/testing: CallCounter
 

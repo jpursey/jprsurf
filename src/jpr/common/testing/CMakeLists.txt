@@ -45,6 +45,7 @@ set(jpr_common_contract_TESTS
 
 set(jpr_common_testing_SOURCE
   cached_track.h
+  call_cost.cc call_cost.h
   contract_test_fake.cc
   fake_midi.cc fake_midi.h
   fake_reaper.cc fake_reaper.h
@@ -71,6 +72,7 @@ set(jpr_common_testing_DEPS
 )
 
 set(jpr_common_testing_TEST_SOURCE
+  call_cost_test.cc
   fake_midi_test.cc
   fake_reaper_test.cc
   project_file_test.cc
