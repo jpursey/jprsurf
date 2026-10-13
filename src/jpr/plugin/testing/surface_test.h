@@ -10,6 +10,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/testing/call_counter.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -32,7 +33,9 @@ namespace jpr {
 // SurfaceNotifier, and the fake has REAPER's actions (see AddReaperActions()).
 // Anything logged at ERROR or above, from the fixture's construction to its
 // destruction, fails the test, unless the test takes it from
-// log_error_guard_.
+// log_error_guard_. So does an entry point, such as a run, that breaks a rule
+// on REAPER's costly calls, such as refreshing REAPER's UI twice, and calls_
+// counts every call by cost (see CallCounter).
 //==============================================================================
 
 class SurfaceTest : public ::testing::Test {
@@ -103,6 +106,7 @@ class SurfaceTest : public ::testing::Test {
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;
   SurfaceNotifier notifier_{&reaper_};
+  CallCounter calls_{&reaper_};  // After the notifier (see CallCounter).
   std::unique_ptr<TestControlSurface> surface_;
 
  private:

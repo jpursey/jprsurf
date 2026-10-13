@@ -8,7 +8,10 @@
 #include "absl/log/log.h"
 #include "gb/test/log_recorder.h"
 #include "gmock/gmock.h"
+#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
+#include "jpr/common/reaper_api.h"
+#include "jpr/common/testing/fake_track.h"
 
 namespace jpr {
 namespace {
@@ -25,6 +28,16 @@ TEST_F(SurfaceTestTest, ErrorsLoggedAreKeptToFailTheTest) {
   LOG(ERROR) << "Expected";
   EXPECT_THAT(log_error_guard_.TakeMessages(),
               ElementsAre(Field(&gb::LogRecorder::Message::text, "Expected")));
+}
+
+// The rules themselves are tested with the counter (see CallCounterTest).
+TEST_F(SurfaceTestTest, RepeatingASetterFailsTheTest) {
+  MediaTrack* track = ToMediaTrack(AddTracks(1)[0]);
+  PreventUIRefresh(1);
+  SetTrackUIMute(track, 1, 0);
+  SetTrackUIMute(track, 0, 0);
+  PreventUIRefresh(-1);
+  EXPECT_NONFATAL_FAILURE(reaper_.EndEntryPoint(), "repeated SetTrackUIMute");
 }
 
 }  // namespace

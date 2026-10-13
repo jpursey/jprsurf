@@ -299,7 +299,7 @@ Depends on: nothing.
 - `large_project_test.cc`: the track count, the folders' depths, and the
   routes of a bus and of a folder.
 
-### CL4 [ ] plugin/testing: Rules in every surface test
+### CL4 [x] plugin/testing: Rules in every surface test
 
 Depends on: CL2.
 
@@ -307,11 +307,13 @@ Depends on: CL2.
 - If a surface test breaks a rule, the gesture is fixed first, in a CL of its
   own in the library at fault, inserted before this one, with the surface test
   that shows it. Which gestures break a rule isn't known until this runs.
+  None did: every surface test passed the rules as they were.
 
 **Verify**
 - Standard checks: every surface test passes the rules.
-- `surface_test_test.cc`: a surface test that repeats a setter in a run fails
-  (with a test hook over the fake that makes the repeat).
+- `surface_test_test.cc`: a surface test that repeats a setter fails, with the
+  repeat made by the test's own calls (an entry point of their own), as the
+  counter's tests cover runs.
 
 ### CL5 [ ] plugin/default_config: Steady state and infrequent events
 
