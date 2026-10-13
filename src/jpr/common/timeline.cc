@@ -10,6 +10,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "jpr/common/action_ids.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/test_reset.h"
 
@@ -98,16 +99,16 @@ void SetRulerMode(TimelineMode mode) {
   }
   switch (mode) {
     case TimelineMode::kBeats:
-      Main_OnCommand(g_last_ruler_modes.beats, 0);
+      RunAction(g_last_ruler_modes.beats);
       break;
     case TimelineMode::kTime:
-      Main_OnCommand(g_last_ruler_modes.time, 0);
+      RunAction(g_last_ruler_modes.time);
       break;
     case TimelineMode::kFrames:
-      Main_OnCommand(g_last_ruler_modes.frames, 0);
+      RunAction(g_last_ruler_modes.frames);
       break;
     case TimelineMode::kSamples:
-      Main_OnCommand(kRulerSamples, 0);
+      RunAction(kRulerSamples);
       break;
   }
 }
@@ -147,13 +148,13 @@ void SetRulerSecondaryMode(TimelineMode mode) {
       ClearRulerSecondaryMode();
       break;
     case TimelineMode::kTime:
-      Main_OnCommand(g_last_ruler_modes.secondary_time, 0);
+      RunAction(g_last_ruler_modes.secondary_time);
       break;
     case TimelineMode::kFrames:
-      Main_OnCommand(g_last_ruler_modes.secondary_frames, 0);
+      RunAction(g_last_ruler_modes.secondary_frames);
       break;
     case TimelineMode::kSamples:
-      Main_OnCommand(kRulerSecondarySamples, 0);
+      RunAction(kRulerSecondarySamples);
       break;
   }
 }
@@ -164,7 +165,7 @@ void ClearRulerSecondaryMode() {
   if (!GetRulerSecondaryMode().has_value()) {
     return;
   }
-  Main_OnCommand(kRulerSecondaryNone, 0);
+  RunAction(kRulerSecondaryNone);
 }
 
 bool IsCurrentRulerMode(TimelineMode mode) { return GetRulerMode() == mode; }

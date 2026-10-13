@@ -245,6 +245,26 @@ TEST_F(SurfaceNotifierContractTest,
                   "SetSurfaceMute(B, true)", "SetSurfaceSolo(B, false)"));
 }
 
+// RunAction() ends and resumes nested deferred refreshes in one call each.
+TEST_F(SurfaceNotifierContractTest, OneCallCanEndOrStartSeveralLevels) {
+  PreventUIRefresh(1);
+  PreventUIRefresh(1);
+  SetTrackUIMute(a_, 1, 0);
+  TakeCalls();
+  PreventUIRefresh(-2);
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceMute(A, true)",
+                                       "SetSurfaceSolo(A, false)"));
+
+  PreventUIRefresh(2);
+  SetTrackUISolo(a_, 1, 0);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceMute(A, true)",
+                                       "SetSurfaceSolo(A, true)"));
+}
+
 TEST_F(SurfaceNotifierContractTest,
        MuteOutsideADeferredRefreshIsSentWhenOneEnds) {
   SetTrackUIMute(a_, 1, 0);

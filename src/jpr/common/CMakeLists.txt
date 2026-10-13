@@ -9,6 +9,7 @@ set(jpr_common_SOURCE
   automation.cc automation.h
   color.cc color.h
   control_surface.cc control_surface.h
+  deferred_refresh.cc deferred_refresh.h
   guid.cc guid.h
   log_path.cc log_path.h
   midi_message.h
@@ -46,6 +47,7 @@ set(jpr_common_TEST_SOURCE
   automation_test.cc
   color_test.cc
   control_surface_test.cc
+  deferred_refresh_test.cc
   guid_test.cc
   midi_port_test.cc
   midi_ports_test.cc

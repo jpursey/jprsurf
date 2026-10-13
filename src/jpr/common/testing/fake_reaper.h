@@ -85,6 +85,9 @@ struct FakeCommand {
 //   surface, with a ControlSurfaceListener for each use.
 // - A MIDI port created while it is open, or used after it is destroyed.
 // - A control surface or MIDI port still open when the fake is destroyed.
+// - An action run inside a deferred refresh (a PreventUIRefresh() scope): an
+//   action may open REAPER's UI, so the extension runs every action with
+//   RunAction(), which runs it outside one.
 // - The end of an entry point that broke a rule for using REAPER. An entry
 //   point is each call on a TestControlSurface, and the test's own calls since
 //   the last one, which are checked when the test ends them (EndEntryPoint()),

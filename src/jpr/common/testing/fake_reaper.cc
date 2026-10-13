@@ -669,6 +669,11 @@ class FakeReaper::Api final {
       ADD_FAILURE() << "Main_OnCommand() with flag " << flag
                     << " isn't faked yet";
     }
+    if (s_instance_->IsUIRefreshPrevented()) {
+      ADD_FAILURE() << "Main_OnCommand(" << command
+                    << ") inside a deferred refresh. An action may open "
+                       "REAPER's UI, so run it with RunAction().";
+    }
     s_instance_->commands_run_.push_back(command);
     FakeCommand* fake_command = FindCommand(command);
     if (fake_command != nullptr && fake_command->on_run) {

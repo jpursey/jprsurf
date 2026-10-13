@@ -13,6 +13,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/color.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/guid.h"
 #include "sdk/reaper_plugin.h"
 
@@ -440,7 +441,7 @@ class Track final : public std::enable_shared_from_this<Track> {
 // TrackGrouping::kGrouped its grouped tracks are not brought into line.
 class TrackBatch final {
  public:
-  TrackBatch();
+  TrackBatch() = default;
   TrackBatch(const TrackBatch&) = delete;
   TrackBatch& operator=(const TrackBatch&) = delete;
   ~TrackBatch();
@@ -466,6 +467,8 @@ class TrackBatch final {
   }
 
  private:
+  DeferredRefresh deferred_refresh_;
+
   // The name of the undo point to add when the batch ends, or null if nothing
   // that adds one has changed.
   const char* undo_name_ = nullptr;

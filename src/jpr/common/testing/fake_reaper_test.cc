@@ -743,6 +743,14 @@ TEST(FakeReaperTest, ActionsRunTheirHandlers) {
   EXPECT_STREQ(::kbd_getTextFromCmd(40044, nullptr), "");
 }
 
+TEST(FakeReaperTest, ActionInADeferredRefreshFailsTheTest) {
+  FakeReaper reaper;
+  ::PreventUIRefresh(1);
+  EXPECT_NONFATAL_FAILURE(::Main_OnCommand(40044, 0),
+                          "Main_OnCommand(40044) inside a deferred refresh");
+  ::PreventUIRefresh(-1);
+}
+
 TEST(FakeReaperTest, ActionsHandlersCanBeSetAfterTheyAreAdded) {
   FakeReaper reaper;
   reaper.AddCommand({.id = 40029, .text = "Edit: Undo"});

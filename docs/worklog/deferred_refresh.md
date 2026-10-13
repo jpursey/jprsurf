@@ -139,6 +139,9 @@ otherwise.
 - **The override sends a mute not yet sent,** after the track's pan, and so do
   the automation mode actions, in or out of a deferred refresh. The notifier
   didn't, which is fixed.
+- **One call ends or starts several levels:** `PreventUIRefresh(-2)` ends two
+  nested deferred refreshes, sending what waited, and `PreventUIRefresh(2)`
+  starts two, as `RunAction()` relies on (found in CL4).
 - **Routes don't defer:** their calls come during the setter, as outside one.
 - **Undo points behave as outside one**, both the extension's and REAPER's own
   for a surface volume change.
@@ -223,7 +226,7 @@ Depends on: CL2 (an empty deferred refresh costs nothing).
 **Verify**
 - Standard checks.
 
-### CL4 [ ] common: DeferredRefresh and RunAction
+### CL4 [x] common: DeferredRefresh and RunAction
 
 Depends on: CL3.
 
@@ -231,7 +234,9 @@ Depends on: CL3.
   `deferred_refresh_test.cc`: nesting, and an action run inside one, with the
   deferred refresh paid before it and resumed after.
 - `TrackBatch` holds a `DeferredRefresh` rather than calling
-  `PreventUIRefresh()` itself.
+  `PreventUIRefresh()` itself. Its undo point is now added before the deferred
+  refresh ends, rather than after, as it will be inside a run's (CL6), which
+  REAPER treats as outside one (`UndoContractTest`).
 - `Timeline` runs the ruler mode actions with `RunAction()`.
 - The fake fails `Main_OnCommand()` inside a deferred refresh.
 - No change in behavior: nothing runs an action inside a deferred refresh yet.
