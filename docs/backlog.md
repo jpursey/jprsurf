@@ -754,6 +754,26 @@ ignores it, and the tests match it with `_`. Passing on only the bytes the
 status has would make the raw messages exact, as the hardware receives them,
 once it is checked what REAPER sends for them.
 
+## Model the envelope a volume change writes
+
+- **Layers:** common
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Seen
+  in traces), [deferred_refresh.md](worklog/deferred_refresh.md)
+
+Only worth doing if a test needs it. With the automation override in a mode
+that writes automation (Write or Latch), a track's first volume change from
+the surface adds a volume envelope, which REAPER sends to the surface as a
+change to the track: its selection twice, then its rec arm, mute, solo,
+volume, and pan, during the call, or as a track list change at the end of a
+deferred refresh. The fake adds no envelope and `SurfaceNotifier` sends
+nothing for it, so surface tests of a fader moved under the override miss a
+track list refresh. Whether a track's own automation mode, or a pan, does the
+same, and how the fake should hold envelopes, are still to check, with a
+contract test.
+
 ## Profile snapshots on demand
 
 - **Layers:** common, plugin

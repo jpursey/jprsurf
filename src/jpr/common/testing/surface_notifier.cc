@@ -59,12 +59,14 @@ void SurfaceNotifier::OnPreventUIRefresh(decltype(PreventUIRefresh) original,
   // Taken first, as a call on the surface may change more.
   const auto rec_arm = std::exchange(deferred_rec_arm_, {});
   const auto selected = std::exchange(deferred_selected_, {});
+  const auto volume = std::exchange(deferred_volume_, {});
   IReaperControlSurface* surface = GetWrappedSurface();
   if (surface == nullptr) {
     GetUnsent().clear();
     return;
   }
-  if (rec_arm.empty() && selected.empty() && GetUnsent().empty()) {
+  if (rec_arm.empty() && selected.empty() && volume.empty() &&
+      GetUnsent().empty()) {
     return;
   }
 
@@ -76,18 +78,17 @@ void SurfaceNotifier::OnPreventUIRefresh(decltype(PreventUIRefresh) original,
     SendMasterSolo(*surface);
   }
   for (FakeTrack* track : GetTracks()) {
-    if (rec_arm.contains(track)) {
+    // A track whose rec arm changed sends its volume, mute, and solo with the
+    // change, so only its selection still waits.
+    const bool rec_arm_changed = rec_arm.contains(track);
+    const bool volume_waits = !rec_arm_changed && volume.contains(track);
+    if (rec_arm_changed) {
       SendTitleRecArmAndSelected(*surface, track);
       SendRecArmChange(*surface, track);
-    } else {
-      if (track_list_changed) {
-        SendState(*surface, track);
-      }
-      SendRefresh(*surface, track);
+    } else if (track_list_changed) {
+      SendState(*surface, track, /*unsent_volume=*/volume_waits);
     }
-    if (selected.contains(track)) {
-      surface->SetSurfaceSelected(ToMediaTrack(track), track->selected);
-    }
+    SendRefresh(*surface, track, volume_waits, selected.contains(track));
   }
 }
 
@@ -158,10 +159,30 @@ void SurfaceNotifier::OnSetTrackSelected(decltype(SetTrackSelected) original,
 double SurfaceNotifier::OnVolumeOrPanChange(
     decltype(CSurf_OnVolumeChangeEx) original, MediaTrack* track, double value,
     bool relative, bool allow_gang) {
+  // Only a deferred refresh needs to know which tracks ganging changed.
+  const bool deferred = reaper_->IsUIRefreshPrevented();
+  std::vector<std::pair<double, double>> before;
+  if (deferred) {
+    before = GetVolumesAndPans();
+  }
   const double result = original(track, value, relative, allow_gang);
-  if (IReaperControlSurface* surface = GetWrappedSurface()) {
-    surface->IsKeyDown(kShiftKey);
-    surface->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, track, nullptr, nullptr);
+  IReaperControlSurface* surface = GetWrappedSurface();
+  if (surface == nullptr) {
+    return result;
+  }
+  surface->IsKeyDown(kShiftKey);
+  surface->Extended(CSURF_EXT_SETLASTTOUCHEDTRACK, track, nullptr, nullptr);
+
+  // The track is sent at the refresh even if nothing changed, and so is each
+  // track ganging changed.
+  if (deferred) {
+    deferred_volume_.insert(ToFakeTrack(track));
+    const std::vector<FakeTrack*> tracks = GetTracks();
+    for (int i = 0; i < static_cast<int>(before.size()); ++i) {
+      if (before[i] != std::pair(tracks[i]->volume, tracks[i]->pan)) {
+        deferred_volume_.insert(tracks[i]);
+      }
+    }
   }
   return result;
 }
@@ -189,9 +210,20 @@ bool SurfaceNotifier::OnSetTrackSendUIPan(decltype(SetTrackSendUIPan) original,
 void SurfaceNotifier::OnSetGlobalAutomationOverride(
     decltype(SetGlobalAutomationOverride) original, int mode) {
   original(mode);
-  if (IReaperControlSurface* surface = GetWrappedSurface()) {
-    SendAutomationChange(*surface);
+  IReaperControlSurface* surface = GetWrappedSurface();
+  if (surface == nullptr) {
+    return;
   }
+
+  // In a deferred refresh, every track's volume, pan, and selection wait for
+  // it.
+  if (reaper_->IsUIRefreshPrevented()) {
+    const std::vector<FakeTrack*> tracks = GetTracks();
+    deferred_volume_.insert(tracks.begin(), tracks.end());
+    deferred_selected_.insert(tracks.begin(), tracks.end());
+    return;
+  }
+  SendAutomationChange(*surface);
 }
 
 void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
@@ -345,6 +377,14 @@ std::vector<FakeTrack*> SurfaceNotifier::GetChanges(
   return changed;
 }
 
+std::vector<std::pair<double, double>> SurfaceNotifier::GetVolumesAndPans() {
+  std::vector<std::pair<double, double>> volumes_and_pans;
+  for (const FakeTrack* track : GetTracks()) {
+    volumes_and_pans.emplace_back(track->volume, track->pan);
+  }
+  return volumes_and_pans;
+}
+
 void SurfaceNotifier::SendSelectionChanges(
     const std::vector<FakeTrack*>& changed) {
   if (reaper_->IsUIRefreshPrevented()) {
@@ -383,8 +423,8 @@ void SurfaceNotifier::AddUnsent(const std::vector<TrackFlags>& before) {
   }
 }
 
-void SurfaceNotifier::SendRefresh(IReaperControlSurface& surface,
-                                  FakeTrack* track) {
+void SurfaceNotifier::SendUnsentMuteAndSolo(IReaperControlSurface& surface,
+                                            FakeTrack* track) {
   auto& unsent = GetUnsent();
   const auto it = unsent.find(track);
   if (it == unsent.end()) {
@@ -394,6 +434,18 @@ void SurfaceNotifier::SendRefresh(IReaperControlSurface& surface,
   unsent.erase(it);
   if (sent.mute != track->mute || sent.solo != track->solo) {
     SendMuteAndSolo(surface, track);
+  }
+}
+
+void SurfaceNotifier::SendRefresh(IReaperControlSurface& surface,
+                                  FakeTrack* track, bool volume,
+                                  bool selected) {
+  if (volume) {
+    SendVolumeAndPan(surface, track);
+  }
+  SendUnsentMuteAndSolo(surface, track);
+  if (selected) {
+    surface.SetSurfaceSelected(ToMediaTrack(track), track->selected);
   }
 }
 
@@ -433,8 +485,10 @@ void SurfaceNotifier::SendVolumeAndPan(IReaperControlSurface& surface,
 }
 
 void SurfaceNotifier::SendState(IReaperControlSurface& surface,
-                                FakeTrack* track) {
-  SendVolumeAndPan(surface, track);
+                                FakeTrack* track, bool unsent_volume) {
+  if (!unsent_volume) {
+    SendVolumeAndPan(surface, track);
+  }
   if (!GetUnsent().contains(track)) {
     SendMuteAndSolo(surface, track);
   }
@@ -457,8 +511,7 @@ void SurfaceNotifier::SendRecArmChange(IReaperControlSurface& surface,
 
 void SurfaceNotifier::SendAutomationChange(IReaperControlSurface& surface) {
   for (FakeTrack* track : GetTracks()) {
-    SendVolumeAndPan(surface, track);
-    surface.SetSurfaceSelected(ToMediaTrack(track), track->selected);
+    SendRefresh(surface, track, /*volume=*/true, /*selected=*/true);
   }
 }
 

@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -48,23 +49,31 @@ namespace jpr {
 //   whose selection changed, outside a deferred refresh, and otherwise at the
 //   refresh.
 // - CSurf_OnVolumeChangeEx() and CSurf_OnPanChangeEx(): IsKeyDown(VK_SHIFT),
-//   then the track as the last touched.
+//   then the track as the last touched. In a deferred refresh, the volume and
+//   pan of the track, and of each track ganging changed, at the refresh, even
+//   if they changed back.
 // - SetTrackSendUIVol() and SetTrackSendUIPan(), unless they end an edit
 //   (isend 1): the new value as the source track's send, and for a send to a
 //   track, as the destination's receive. A route's mute sends nothing.
 // - SetGlobalAutomationOverride(): every track's volume, pan, and selection,
-//   even if nothing changed.
+//   even if nothing changed, with a track's mute and solo after its pan if
+//   they aren't sent yet. In a deferred refresh, at the refresh, once.
 // - Main_OnCommand(), after the action's handler: for the automation mode
 //   actions, SetAutoMode() with the mode, then as the override does if any
 //   track's mode changed. For Edit: Undo and Edit: Redo, everything (see
 //   SendUndo()), if there was something to undo or redo.
 //
 // The refresh is when the outermost deferred refresh (a PreventUIRefresh()
-// scope) ends. Outside a deferred refresh, REAPER sends a track's mute and solo
-// before the next run, which a contract test can't span, so it isn't made: they
-// are forgotten when the surface next runs. Until they are sent, every track's
-// state leaves them out. They are only sent if they differ from what was last
-// sent.
+// scope) ends. It sends each track's volume and pan, then its mute and solo,
+// then its selection, for those that wait for it. After a rec arm, every
+// track's state comes first, leaving out what waits. Outside a deferred
+// refresh, REAPER sends a track's mute and solo before the next run, which a
+// contract test can't span, so it isn't made: they are forgotten when the
+// surface next runs. Until they are sent, every track's state leaves them out.
+// They are only sent if they differ from what was last sent.
+//
+// A volume or pan change in a mode that writes automation adds an envelope the
+// first time, which REAPER sends as a change to the track. That isn't made.
 //
 // Tracks are sent master first, then in order, from the current project. It
 // makes every call the contract tests show, not just those ControlSurface acts
@@ -198,6 +207,9 @@ class SurfaceNotifier final {
   // the hooked functions adds or removes tracks.
   std::vector<FakeTrack*> GetChanges(const std::vector<TrackFlags>& before);
 
+  // Returns GetTracks()' volumes and pans, to compare with after a change.
+  std::vector<std::pair<double, double>> GetVolumesAndPans();
+
   // Sends the selection of each of `changed`, or inside a deferred refresh,
   // leaves it for its end.
   void SendSelectionChanges(const std::vector<FakeTrack*>& changed);
@@ -232,9 +244,15 @@ class SurfaceNotifier final {
   // was last sent for it.
   void AddUnsent(const std::vector<TrackFlags>& before);
 
-  // Sends `track`'s mute and solo at the refresh (see the class comment), if
-  // they aren't sent yet, and differ from what was.
-  void SendRefresh(IReaperControlSurface& surface, FakeTrack* track);
+  // Sends `track`'s mute and solo, if they aren't sent yet, and differ from
+  // what was.
+  void SendUnsentMuteAndSolo(IReaperControlSurface& surface, FakeTrack* track);
+
+  // Sends what waits for the refresh (see the class comment) for `track`: its
+  // volume and pan if `volume`, its mute and solo if they aren't sent yet, and
+  // its selection if `selected`.
+  void SendRefresh(IReaperControlSurface& surface, FakeTrack* track,
+                   bool volume, bool selected);
 
   //----------------------------------------------------------------------------
   // Calls on the surface
@@ -254,8 +272,10 @@ class SurfaceNotifier final {
   void SendVolumeAndPan(IReaperControlSurface& surface, FakeTrack* track);
 
   // Sends a track's whole state, as after a track list change, without its
-  // mute and solo if they aren't sent yet.
-  void SendState(IReaperControlSurface& surface, FakeTrack* track);
+  // mute and solo if they aren't sent yet, or its volume and pan if
+  // `unsent_volume`.
+  void SendState(IReaperControlSurface& surface, FakeTrack* track,
+                 bool unsent_volume = false);
 
   // Sends a track's title, rec arm, and selection, the end of its state.
   void SendTitleRecArmAndSelected(IReaperControlSurface& surface,
@@ -265,8 +285,8 @@ class SurfaceNotifier final {
   // pan.
   void SendRecArmChange(IReaperControlSurface& surface, FakeTrack* track);
 
-  // Sends every track's volume, pan, and selection, as after a change to
-  // automation modes.
+  // Sends every track's volume, pan, mute and solo if they aren't sent yet,
+  // and selection, as after a change to automation modes.
   void SendAutomationChange(IReaperControlSurface& surface);
 
   // Sends the new value of `track`'s route at `index`, as the *TrackSendUI*
@@ -282,9 +302,11 @@ class SurfaceNotifier final {
   absl::flat_hash_map<const FakeTrack*, Unsent> unsent_;
   int64_t unsent_run_ = 0;
 
-  // The tracks whose rec arm or selection changed in the deferred refresh.
+  // The tracks whose rec arm, selection, or volume and pan changed in the
+  // deferred refresh.
   absl::flat_hash_set<const FakeTrack*> deferred_rec_arm_;
   absl::flat_hash_set<const FakeTrack*> deferred_selected_;
+  absl::flat_hash_set<const FakeTrack*> deferred_volume_;
 
   gb::FunctionHook<&PreventUIRefresh,
                    Hook<&SurfaceNotifier::OnPreventUIRefresh>>

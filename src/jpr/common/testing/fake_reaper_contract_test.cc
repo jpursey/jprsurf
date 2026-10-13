@@ -1060,6 +1060,22 @@ TEST_F(UndoContractTest, AnUndoPointHoldsEveryChangeSinceTheLast) {
   EXPECT_EQ(GetRedo(), std::nullopt);
 }
 
+TEST_F(UndoContractTest, AnUndoPointInADeferredRefreshHoldsItsChanges) {
+  PreventUIRefresh(1);
+  ChangeA();
+  AddUndoPoint("Change");
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+  PreventUIRefresh(-1);
+
+  Undo();
+  ExpectAChanged(false);
+  EXPECT_EQ(GetRedo(), "Change");
+
+  Redo();
+  ExpectAChanged(true);
+  EXPECT_EQ(GetRedo(), std::nullopt);
+}
+
 TEST_F(UndoContractTest, AnUndoPointIsOnlyAddedForAChange) {
   AddUndoPoint("Nothing");
   SetMute(a_, true);
@@ -1206,6 +1222,29 @@ TEST_F(UndoContractTest, SurfaceChangesAddAPointWhenTheOtherKindChanges) {
   CSurf_OnPanChangeEx(b_, 0.5, false, false);
   EXPECT_EQ(IsProjectDirty(nullptr), 1);
   CSurf_OnVolumeChangeEx(a_, 0.25, false, false);
+
+  Undo();
+  EXPECT_EQ(GetVolume(a_), 0.5);
+  EXPECT_EQ(GetVolume(b_), 0.5);
+  EXPECT_EQ(GetPan(b_), 0.5);
+  EXPECT_EQ(GetRedo(), "Adjust track pan (via surface)");
+  Undo();
+  EXPECT_EQ(GetVolume(a_), 1.0);
+  EXPECT_EQ(GetVolume(b_), 1.0);
+  EXPECT_EQ(GetPan(b_), 0.0);
+  EXPECT_EQ(GetRedo(), "Adjust track volume (via surface)");
+}
+
+TEST_F(UndoContractTest,
+       SurfaceChangesInADeferredRefreshAddAPointAsOutsideOne) {
+  PreventUIRefresh(1);
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, false);
+  CSurf_OnVolumeChangeEx(b_, 0.5, false, false);
+  EXPECT_EQ(IsProjectDirty(nullptr), 0);
+  CSurf_OnPanChangeEx(b_, 0.5, false, false);
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+  CSurf_OnVolumeChangeEx(a_, 0.25, false, false);
+  PreventUIRefresh(-1);
 
   Undo();
   EXPECT_EQ(GetVolume(a_), 0.5);

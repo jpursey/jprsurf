@@ -118,6 +118,38 @@ two cheap calls a run, and where a run's callbacks moved.
   holds the changes made in it, and REAPER's own undo point for a track volume
   moved from a surface is held and added as it is outside one.
 
+**Found** (2026-10-13), and now contract tests the fake passes:
+- **Faders and pans defer.** During `CSurf_OnVolumeChangeEx()` and
+  `CSurf_OnPanChangeEx()` REAPER calls what it does outside one
+  (`IsKeyDown(VK_SHIFT)`, then the last touched track). At the end of the
+  outermost deferred refresh it sends the volume, pan, and pan mode of each
+  track whose volume or pan was set in it, ganged tracks too, once, with their
+  last values, even if they changed back. A change made outside one isn't sent
+  at a later one's end. Outside a deferred refresh they send nothing.
+- **The override defers.** In a deferred refresh, `SetGlobalAutomationOverride()`
+  sends nothing during the call, and one round of every track's volume, pan,
+  and selection at its end, however often it was set, which also covers the
+  volumes and selection changed in it.
+- **The order at the end:** each track in order, its volume and pan, then its
+  mute and solo, then its selection, for those that wait. After a rec arm,
+  every track's state comes first, leaving out the volume and pan that wait,
+  which follow it.
+- **The override sends a mute not yet sent,** after the track's pan, and so do
+  the automation mode actions, in or out of a deferred refresh. The notifier
+  didn't, which is fixed.
+- **Routes don't defer:** their calls come during the setter, as outside one.
+- **Undo points behave as outside one**, both the extension's and REAPER's own
+  for a surface volume change.
+- **Unrelated:** with the override in a mode that writes automation (Write or
+  Latch), each track's first volume change adds an envelope, which REAPER sends
+  as a change to the track (and inside a deferred refresh, as a track list
+  change). The fake doesn't model it, which is in the backlog.
+
+What this means for the later CLs: REAPER defers what fader, pan, and override
+changes send to a surface, which suggests it defers their UI refresh too, so
+each run's deferred refresh batches them. The cost table could mark them
+`deferrable` now (CL3), rather than waiting for *Measure REAPER's costs*.
+
 **In the user's REAPER**, with temporary code that holds a `PreventUIRefresh()`
 pair around each run:
 - **What an empty deferred refresh costs.** A 10 second idle profile: the
@@ -125,6 +157,13 @@ pair around each run:
   `profiles/idle.txt`. A deferred refresh is paid inside `PreventUIRefresh(-1)`
   (a mute's is about 2.5ms there), so a refresh for an empty one would show in
   that row.
+
+**Found** (2026-10-13, an 81-track project, 629 runs): an empty deferred
+refresh costs nothing measurable. `PreventUIRefresh` was 2 calls a run at
+66.5ns each (133ns a run), and every other count matched `profiles/idle.txt`.
+Run times were about 20% above the bar, but JPRSurf's own scopes, which the
+pair can't touch, were up as much (`View::SyncMappings` 8.30us to 9.92us), so
+it is the session, and CL6's profile compares back to back if it still is.
 
 ## CLs
 
@@ -146,7 +185,7 @@ Depends on: nothing.
 - Standard checks (Release build, clang-format, ctest).
 - `check_in_reaper` passes (contract test names change).
 
-### CL2 [ ] common: Check deferred refreshes in REAPER
+### CL2 [x] common: Check deferred refreshes in REAPER
 
 Depends on: CL1.
 

@@ -395,20 +395,37 @@ REAPER's calls on the surface follow these.
   the route's index as these functions index it (hardware outputs first), and
   the value, then for a send to a track, `SETRECVVOLUME` or `SETRECVPAN` with
   the destination and its index among its receives. A call that ends an edit
-  (isend 1) calls nothing back, and neither does `ToggleTrackSendUIMute()`.
+  (isend 1) calls nothing back, and neither does `ToggleTrackSendUIMute()`. A
+  deferred refresh changes none of this.
 - **Automation modes resend volume, pan, and selection.** Inside
   `Main_OnCommand()` for the automation mode actions (40400 to 40404, and
   42023 for Latch Preview), REAPER called `SetAutoMode()` with the mode (0 to
   5), then, if a selected track's mode changed, for every track, master first,
   `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`,
-  and `SetSurfaceSelected()`. `SetGlobalAutomationOverride()` calls the same,
-  without `SetAutoMode()`, even if nothing changed.
+  the track's `SetSurfaceMute()` and `SetSurfaceSolo()` if they aren't sent
+  yet, and `SetSurfaceSelected()`. `SetGlobalAutomationOverride()` calls the
+  same, without `SetAutoMode()`, even if nothing changed. In a deferred
+  refresh, the override calls nothing, and the same round comes once at its
+  end (see the refresh below).
+- **A volume change in a mode that writes automation** (Write or Latch, as
+  the override) adds an envelope the first time for each track, which REAPER
+  sends as a change to the track: its selection twice, then its rec arm, mute,
+  solo, volume, and pan, before the last touched track. In a deferred refresh,
+  it is a track list change at its end. The fake doesn't model this.
 - **`SetSurfaceSolo(master, on)`** reports whether any track is soloed, as the
   SDK says.
-- **Faders and pans don't notify.** `CSurf_OnVolumeChangeEx()` and
-  `CSurf_OnPanChangeEx()` call neither `SetSurfaceVolume()` nor
-  `SetSurfacePan()`. During each call, REAPER calls `IsKeyDown(VK_SHIFT)`, then
-  `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)` with the track.
+- **Faders and pans notify only in a deferred refresh.** During
+  `CSurf_OnVolumeChangeEx()` and `CSurf_OnPanChangeEx()`, REAPER calls
+  `IsKeyDown(VK_SHIFT)`, then `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)` with
+  the track. Outside a deferred refresh, they call neither `SetSurfaceVolume()`
+  nor `SetSurfacePan()`. In one, at its end, each track whose volume or pan was
+  set in it (ganged tracks too) has its `SetSurfaceVolume()`,
+  `SetSurfacePan()`, and `Extended(CSURF_EXT_SETPAN_EX)` sent once, with its
+  last values, even if they changed back.
+- **The end of a deferred refresh** sends, for each track in order, its volume
+  and pan, then its mute and solo, then its selection, for those that wait for
+  it. After a rec arm, every track's state comes first, leaving out the volume
+  and pan that wait, which follow it.
 - **Changes in REAPER's own UI** arrive between runs. Muting a track with its
   button called `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)`, then the track's
   `SetSurfaceMute()` and `SetSurfaceSolo()`. Clicking a track in the track

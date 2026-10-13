@@ -137,6 +137,15 @@ std::vector<std::string> State(MediaTrack* track, bool unsent = false) {
   return calls;
 }
 
+// A track's whole state, as after a track list change in a deferred refresh
+// its volume or pan was set in: the rest of its state, then its volume and pan.
+std::vector<std::string> StateThenVolumeAndPan(MediaTrack* track) {
+  std::vector<std::string> calls = MuteAndSolo(track);
+  Append(calls, TitleRecArmAndSelected(track));
+  Append(calls, VolumeAndPan(track));
+  return calls;
+}
+
 // Every track's whole state, leaving out the mute and solo of `unsent`.
 std::vector<std::string> EveryState(MediaTrack* unsent = nullptr) {
   std::vector<std::string> calls;
@@ -170,11 +179,15 @@ std::vector<std::string> RecArmOutsideADeferredRefresh(
   return calls;
 }
 
-// Every track's volume, pan, and selection, as after an automation change.
-std::vector<std::string> AutomationChange() {
+// Every track's volume, pan, and selection, as after an automation change,
+// with the mute and solo of `unsent`, as they weren't sent yet.
+std::vector<std::string> AutomationChange(MediaTrack* unsent = nullptr) {
   std::vector<std::string> calls;
   for (MediaTrack* track : GetTracks()) {
     Append(calls, VolumeAndPan(track));
+    if (track == unsent) {
+      Append(calls, MuteAndSolo(track));
+    }
     calls.push_back(Selected(track));
   }
   return calls;
@@ -433,6 +446,97 @@ TEST_F(SurfaceNotifierContractTest, VolumeAndPanChangesTouchTheTrack) {
 }
 
 TEST_F(SurfaceNotifierContractTest,
+       VolumeAndPanChangesInADeferredRefreshSendTheTracksAtItsEnd) {
+  PreventUIRefresh(1);
+  PreventUIRefresh(1);
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, true);
+  EXPECT_THAT(TakeCalls(),
+              ElementsAre("IsKeyDown(16)", "Extended(SETLASTTOUCHEDTRACK, A)"));
+  CSurf_OnPanChangeEx(b_, -0.25, false, true);
+  EXPECT_THAT(TakeCalls(),
+              ElementsAre("IsKeyDown(16)", "Extended(SETLASTTOUCHEDTRACK, B)"));
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+
+  // Only the outermost one's end sends them, in track order.
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = VolumeAndPan(a_);
+  Append(expected, VolumeAndPan(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       VolumeInADeferredRefreshIsSentOnceEvenIfChangedBack) {
+  PreventUIRefresh(1);
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, true);
+  CSurf_OnPanChangeEx(a_, 0.5, false, true);
+  CSurf_OnVolumeChangeEx(a_, 1.0, false, true);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(VolumeAndPan(a_)));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       VolumeGangedInADeferredRefreshSendsEveryTrackItChanged) {
+  SetTrackSelected(a_, true);
+  EndEntryPoint();
+  SetTrackSelected(b_, true);
+  PreventUIRefresh(1);
+  CSurf_OnVolumeChangeEx(b_, 0.5, false, /*allowGang=*/true);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = VolumeAndPan(a_);
+  Append(expected, VolumeAndPan(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       VolumeOutsideADeferredRefreshIsntSentAtOnesEnd) {
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, true);
+  TakeCalls();
+  PreventUIRefresh(1);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+
+  PreventUIRefresh(1);
+  SetTrackUIMute(b_, 1, 0);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(MuteAndSolo(b_)));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       InADeferredRefreshATracksVolumeComesBeforeItsMuteAndSelection) {
+  PreventUIRefresh(1);
+  SetTrackUIMute(a_, 1, 0);
+  SetTrackSelected(a_, true);
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, true);
+  CSurf_OnVolumeChangeEx(b_, 0.5, false, true);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = VolumeAndPan(a_);
+  Append(expected, MuteAndSolo(a_));
+  expected.push_back(Selected(a_));
+  Append(expected, VolumeAndPan(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmInADeferredRefreshSendsAVolumeChangeAfterTheTracksState) {
+  PreventUIRefresh(1);
+  SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
+  CSurf_OnVolumeChangeEx(b_, 0.5, false, true);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  Append(expected, State(master_));
+  Append(expected, TitleRecArmAndSelected(a_));
+  Append(expected, RecArmChange(a_));
+  Append(expected, StateThenVolumeAndPan(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
        AutomationOverrideSendsVolumePanAndSelection) {
   SetGlobalAutomationOverride(3);
   EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange()));
@@ -440,6 +544,70 @@ TEST_F(SurfaceNotifierContractTest,
   // Even when it changes nothing.
   SetGlobalAutomationOverride(3);
   EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange()));
+}
+
+TEST_F(SurfaceNotifierContractTest, AutomationOverrideSendsAMuteNotSentYet) {
+  SetTrackUIMute(a_, 1, 0);
+  TakeCalls();
+  SetGlobalAutomationOverride(3);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange(/*unsent=*/a_)));
+
+  // It is then sent.
+  SetGlobalAutomationOverride(3);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange()));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       AutomationOverrideInADeferredRefreshSendsEveryTrackAtItsEnd) {
+  // Modes that don't write automation, as a volume change in one that does
+  // adds an envelope, which REAPER sends as a change to the track.
+  PreventUIRefresh(1);
+  SetGlobalAutomationOverride(static_cast<int>(AutoOverride::kRead));
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+
+  // Once, however often it is set, with the volumes and selection changed in
+  // the deferred refresh, and a mute not sent yet.
+  SetGlobalAutomationOverride(static_cast<int>(AutoOverride::kBypass));
+  SetTrackUIMute(a_, 1, 0);
+  CSurf_OnVolumeChangeEx(a_, 0.5, false, true);
+  SetTrackSelected(b_, true);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(AutomationChange(/*unsent=*/a_)));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecArmAndTheAutomationOverrideInADeferredRefreshSendOneRound) {
+  PreventUIRefresh(1);
+  SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
+  SetGlobalAutomationOverride(3);
+  TakeCalls();
+  PreventUIRefresh(-1);
+
+  // Every volume is sent after the track's state, as a volume change is.
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  for (MediaTrack* track : GetTracks()) {
+    if (track == a_) {
+      Append(expected, TitleRecArmAndSelected(track));
+      Append(expected, RecArmChange(track));
+    } else {
+      Append(expected, StateThenVolumeAndPan(track));
+    }
+    expected.push_back(Selected(track));
+  }
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest, AutomationModeActionsSendAMuteNotSentYet) {
+  SetTrackSelected(a_, true);
+  EndEntryPoint();
+  SetTrackUIMute(b_, 1, 0);
+  TakeCalls();
+  Main_OnCommand(GetAutoModeAction(AutoMode::kTouch), 0);
+  std::vector<std::string> expected = {
+      absl::StrCat("SetAutoMode(", static_cast<int>(AutoMode::kTouch), ")")};
+  Append(expected, AutomationChange(/*unsent=*/b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
 
 TEST_F(SurfaceNotifierContractTest,
@@ -581,6 +749,21 @@ TEST_F(SurfaceNotifierRouteContractTest, MuteChangesSendNothing) {
   ToggleTrackSendUIMute(a_, kOutputIndex);
   ToggleTrackSendUIMute(a_, kSendIndex);
   ToggleTrackSendUIMute(b_, kReceiveIndex);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+TEST_F(SurfaceNotifierRouteContractTest, ChangesInADeferredRefreshSendAtOnce) {
+  PreventUIRefresh(1);
+  SetTrackSendUIVol(a_, kSendIndex, 0.5, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDVOLUME, A, 1, 0.5)",
+                                       "Extended(SETRECVVOLUME, B, 0, 0.5)"));
+  SetTrackSendUIPan(a_, kSendIndex, -0.25, 0);
+  EXPECT_THAT(TakeCalls(), ElementsAre("Extended(SETSENDPAN, A, 1, -0.25)",
+                                       "Extended(SETRECVPAN, B, 0, -0.25)"));
+  ToggleTrackSendUIMute(a_, kSendIndex);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+
+  PreventUIRefresh(-1);
   EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 
