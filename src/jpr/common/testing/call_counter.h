@@ -72,10 +72,10 @@ struct CallCounts {
 //
 // A deferrable refresh (CallCost::deferrable) is moderate inside a deferred
 // refresh (a PreventUIRefresh() scope), and the call that ends the outermost
-// deferred refresh is the refresh. Any other refresh is one inside a deferred
-// refresh too, so in one that ends, it is a second. Undo points are those the
-// extension adds: REAPER's own, such as for a track volume moved from a
-// surface, aren't calls.
+// deferred refresh is the refresh, if one was made in it. An empty one is no
+// refresh. Any other refresh is one inside a deferred refresh too, so beside a
+// deferrable one, it is a second. Undo points are those the extension adds:
+// REAPER's own, such as for a track volume moved from a surface, aren't calls.
 //
 // It hooks every function on the API list over whatever is loaded, so it is
 // created after anything that makes REAPER's calls back to a surface (a
@@ -111,6 +111,10 @@ class CallCounter final {
     int undo_points = 0;
     absl::flat_hash_set<RepeatKey> keys;
     std::vector<std::string_view> repeats;
+
+    // True if a deferrable refresh was made in the current deferred refresh,
+    // so its end is a refresh.
+    bool refresh_deferred = false;
   };
 
   // A gb::FunctionHook's Hook, which counts each call to the function `name`

@@ -100,10 +100,12 @@ changes to count the end as a refresh only if a deferrable setter was called in
 it. Any other refresh in a deferred refresh is still a refresh of its own, as
 today.
 
-The cost table doesn't change otherwise: which other setters REAPER really
-defers is measured by *Measure REAPER's costs*, which then marks them
-`deferrable`, and the bounds drop with it. Until then the bounds move by the
-two cheap calls a run, and where a run's callbacks moved.
+The cost table also marks `CSurf_OnVolumeChangeEx()`, `CSurf_OnPanChangeEx()`,
+and `SetGlobalAutomationOverride()` `deferrable`, as REAPER defers what they
+send to a surface (To confirm), so each run's deferred refresh batches them,
+and the bounds show it. The route setters stay refreshes of their own, as
+their calls back aren't deferred, until *Measure REAPER's costs* says
+otherwise.
 
 ### To confirm
 
@@ -203,15 +205,20 @@ Depends on: CL1.
 - `check_in_reaper` passes.
 - The user's idle profile, with the findings recorded.
 
-### CL3 [ ] common: Count only a deferred refresh that changed something
+### CL3 [x] common: Count only a deferred refresh that changed something
 
 Depends on: CL2 (an empty deferred refresh costs nothing).
 
 - `CallCounter` counts the end of an outermost deferred refresh as a refresh
   only if a deferrable setter was called in it.
+- The cost table marks `CSurf_OnVolumeChangeEx()`, `CSurf_OnPanChangeEx()`,
+  and `SetGlobalAutomationOverride()` `deferrable`.
 - `call_counter_test.cc`: an empty one, and one with only a refresh that isn't
-  deferrable, end with no refresh of their own.
-- Any bound in `call_count_test.cc` that counted an empty `TrackBatch` drops.
+  deferrable, end with no refresh of their own. `call_cost_test.cc`: faders,
+  pans, and the override are deferrable.
+- No bound in `call_count_test.cc` moves: no gesture ends with an empty
+  `TrackBatch`, and faders, pans, and the override aren't called in a deferred
+  refresh until runs are (CL6).
 
 **Verify**
 - Standard checks.

@@ -96,13 +96,32 @@ TEST_F(CallCounterTest, DeferrableSettersAreModerateAndTheEndARefresh) {
 }
 
 TEST_F(CallCounterTest, OnlyTheEndOfTheOutermostDeferredRefreshIsARefresh) {
-  RunWith([] {
+  RunWith([this] {
     PreventUIRefresh(1);
     PreventUIRefresh(1);
+    CSurf_OnVolumeChangeEx(a_, 0.5, false, false);
     PreventUIRefresh(-1);
     PreventUIRefresh(-1);
   });
-  EXPECT_EQ(counter_.TakeCounts(), (CallCounts{.cheap = 3, .refreshes = 1}));
+  EXPECT_EQ(counter_.TakeCounts(),
+            (CallCounts{.cheap = 3, .moderate = 1, .refreshes = 1}));
+}
+
+TEST_F(CallCounterTest, EmptyDeferredRefreshIsNoRefresh) {
+  RunWith([] {
+    PreventUIRefresh(1);
+    PreventUIRefresh(-1);
+  });
+  EXPECT_EQ(counter_.TakeCounts(), (CallCounts{.cheap = 2}));
+}
+
+TEST_F(CallCounterTest, RefreshThatIsntDeferrableIsOnlyItsOwn) {
+  RunWith([this] {
+    PreventUIRefresh(1);
+    SetTrackSendUIVol(a_, 0, 0.5, 0);
+    PreventUIRefresh(-1);
+  });
+  EXPECT_EQ(counter_.TakeCounts(), (CallCounts{.cheap = 2, .refreshes = 1}));
 }
 
 TEST_F(CallCounterTest, CountsUndoPoints) {
@@ -173,10 +192,12 @@ TEST_F(CallCounterTest, RepeatedActionFails) {
   EXPECT_NONFATAL_FAILURE(RunWith(std::move(calls)), "repeated Main_OnCommand");
 }
 
-TEST_F(CallCounterTest, RefreshThatIsntDeferrableIsASecondRefresh) {
+TEST_F(CallCounterTest,
+       RefreshThatIsntDeferrableIsASecondBesideADeferrableOne) {
   auto calls = [this] {
     PreventUIRefresh(1);
     SetTrackSendUIVol(a_, 0, 0.5, 0);
+    SetTrackUIMute(b_, 1, 0);
     PreventUIRefresh(-1);
   };
   EXPECT_NONFATAL_FAILURE(

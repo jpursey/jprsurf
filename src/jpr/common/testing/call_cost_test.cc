@@ -27,5 +27,16 @@ TEST(CallCostTest, TrackSettersAreDeferrableRefreshesOfTheTrack) {
   EXPECT_EQ(cost.repeat_key_args, 1);
 }
 
+TEST(CallCostTest, FadersPansAndTheOverrideAreDeferrable) {
+  EXPECT_TRUE(GetCallCost("CSurf_OnVolumeChangeEx").deferrable);
+  EXPECT_TRUE(GetCallCost("CSurf_OnPanChangeEx").deferrable);
+  EXPECT_TRUE(GetCallCost("SetGlobalAutomationOverride").deferrable);
+}
+
+TEST(CallCostTest, RouteSettersArentDeferrable) {
+  EXPECT_FALSE(GetCallCost("SetTrackSendUIVol").deferrable);
+  EXPECT_FALSE(GetCallCost("ToggleTrackSendUIMute").deferrable);
+}
+
 }  // namespace
 }  // namespace jpr

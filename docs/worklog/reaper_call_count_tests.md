@@ -61,7 +61,7 @@ it was, so no gesture needed a fix. What the counts showed:
   the action's).
 - **`deferrable`:** a refresh that a deferred refresh (a `PreventUIRefresh()`
   scope) puts off to its end, which is then moderate inside one: mute, solo,
-  rec arm, and selection.
+  rec arm, selection, volume, pan, and the automation override.
 - **`repeat_key_args`:** how many leading arguments, with the function, say
   what a refresh or command acts on (a track, a track and a route's index, or
   an action), so a second call with the same ones is a repeat.
@@ -69,8 +69,9 @@ it was, so no gesture needed a fix. What the counts showed:
 The categories came from the per-call self times in `profiles/idle.txt` and
 `profiles/smoke.txt` (an 81-track project), which fall into clear groups.
 They are conservative where nobody has measured: every setter is a refresh,
-`CSurf_OnVolumeChangeEx()`, the route setters, and the override included, and
-only the track setters known to be deferred are `deferrable`.
+the route setters included, and only the setters whose calls back a deferred
+refresh is known to put off are `deferrable` (see
+[deferred_refresh.md](deferred_refresh.md)).
 `PreventUIRefresh()` itself is cheap; `CallCounter` finds the deferred
 refresh's end from the fake.
 
@@ -91,8 +92,9 @@ ends:
 - **Deferred refreshes:** a deferrable setter inside a deferred refresh
   (`IsUIRefreshPrevented()` as it is called) is moderate. The call that ends
   the outermost deferred refresh (one was open before it, and none is after)
-  is the refresh, whatever it is. Any other refresh in a deferred refresh is a
-  refresh too, so in one that ends, it is a second.
+  is the refresh, whatever it is, if a deferrable setter was called in it, so
+  an empty one is no refresh. Any other refresh in a deferred refresh is a
+  refresh too, so beside a deferrable one, it is a second.
 - **Entry points** are the fake's, through `FakeReaper::SetEntryPointCheck()`,
   which `EndEntryPoint()` calls after the fake's own checks. So a failure
   points at the call on the surface that caused it, and REAPER's calls between

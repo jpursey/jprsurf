@@ -707,8 +707,9 @@ and what they found are in
   on the surface, or the test's own calls between them) that refreshes
   REAPER's UI twice, adds two undo points, or repeats a refresh or a command
   on the same track, route, or action. A setter whose refresh REAPER puts off
-  in a deferred refresh (mute, solo, rec arm, and selection) isn't a refresh
-  there; the deferred refresh's end is.
+  in a deferred refresh (mute, solo, rec arm, selection, volume, pan, and the
+  automation override) isn't a refresh there; the deferred refresh's end is,
+  if one was made in it.
 - **Bounds:** `CallCountTest` (`plugin/default_config/call_count_test.cc`)
   runs JPRSurf's own surface on the large project (`AddLargeProject()`, 128
   tracks in folders, with buses and sends), and bounds the calls of starting

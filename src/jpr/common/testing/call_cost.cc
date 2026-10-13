@@ -24,9 +24,10 @@ constexpr CallCost Refresh(int repeat_key_args) {
   return {.kind = Kind::kRefresh, .repeat_key_args = repeat_key_args};
 }
 
-// A refresh a deferred refresh puts off: mute, solo, rec arm, and selection,
-// whose calls back to the surface come at the end of the deferred refresh (see
-// "Seen in traces" in docs/testing_and_profiling.md).
+// A refresh a deferred refresh puts off: mute, solo, rec arm, selection,
+// volume, pan, and the automation override, whose calls back to the surface
+// come at the end of the deferred refresh (see "Seen in traces" in
+// docs/testing_and_profiling.md).
 constexpr CallCost DeferrableRefresh(int repeat_key_args) {
   return {.kind = Kind::kRefresh,
           .deferrable = true,
@@ -47,8 +48,8 @@ constexpr NamedCost kCosts[] = {
     {"CountTracks", kCheap},
     {"CreateMIDIInput", kModerate},
     {"CreateMIDIOutput", kModerate},
-    {"CSurf_OnPanChangeEx", Refresh(1)},
-    {"CSurf_OnVolumeChangeEx", Refresh(1)},
+    {"CSurf_OnPanChangeEx", DeferrableRefresh(1)},
+    {"CSurf_OnVolumeChangeEx", DeferrableRefresh(1)},
     {"format_timestr_pos", kModerate},
     {"GetCursorPosition", kCheap},
     {"GetGlobalAutomationOverride", kCheap},
@@ -84,7 +85,7 @@ constexpr NamedCost kCosts[] = {
     {"mkvolstr", kModerate},
     {"NamedCommandLookup", kModerate},
     {"PreventUIRefresh", kCheap},
-    {"SetGlobalAutomationOverride", Refresh(0)},
+    {"SetGlobalAutomationOverride", DeferrableRefresh(0)},
     {"SetOnlyTrackSelected", DeferrableRefresh(0)},
     {"SetTrackSelected", DeferrableRefresh(1)},
     {"SetTrackSendUIPan", Refresh(2)},

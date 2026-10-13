@@ -64,8 +64,10 @@ void CallCounter::Count(const Hook& hook, const int64_t* key_args,
                         bool deferred) {
   ++counts_.calls[hook.name_];
 
-  // The call that ends the outermost deferred refresh pays for it.
-  if (deferred && !reaper_->IsUIRefreshPrevented()) {
+  // The call that ends the outermost deferred refresh pays for what it put
+  // off, if anything.
+  if (deferred && !reaper_->IsUIRefreshPrevented() &&
+      std::exchange(entry_point_calls_.refresh_deferred, false)) {
     AddRefresh(hook);
     return;
   }
@@ -81,6 +83,7 @@ void CallCounter::Count(const Hook& hook, const int64_t* key_args,
     case CallCost::Kind::kRefresh:
       if (cost.deferrable && deferred) {
         ++counts_.moderate;
+        entry_point_calls_.refresh_deferred = true;
       } else {
         AddRefresh(hook);
       }
