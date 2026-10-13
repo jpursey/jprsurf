@@ -61,6 +61,10 @@ class ControlSurfaceListener {
 // - ContinuousUndo is updated at the start of every run.
 // - Each run reads REAPER's clock once, and passes that time to everything in
 //   the run.
+// - Each run is one deferred refresh (see DeferredRefresh): what it changes
+//   refreshes REAPER's UI once, as it ends, and REAPER calls back for a
+//   deferrable change (such as a mute) then, after the listener's OnRun().
+//   Actions run outside it (see RunAction()).
 // - If its type has a profile path, a ReaperProfiler profiles its runs, from
 //   once the listener is created until the surface is destroyed.
 //

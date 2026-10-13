@@ -255,7 +255,7 @@ Depends on: CL4.
 **Verify**
 - Standard checks.
 
-### CL6 [ ] common: Defer each run's refresh
+### CL6 [x] common: Defer each run's refresh
 
 Depends on: CL5.
 
@@ -278,6 +278,12 @@ Depends on: CL5.
 - A 10 second idle profile, against `profiles/idle.txt`: two
   `PreventUIRefresh` calls a run, and no change in run times beyond the usual
   10%.
+
+**Found** (2026-10-13, back to back on a quiet machine, an 81-track project):
+the two calls cost 130ns a run, and `ControlSurface::Run`'s own time rose
+0.41us (1.90us to 2.31us, and 2.26us in a second run), likely the profiler's
+hooks around them. Run times didn't move: P50 39.8us both, P99 79.7us to
+74.5us, average 44.2us to 43.2us.
 
 ### Summary [ ] docs: Summarize the feature
 

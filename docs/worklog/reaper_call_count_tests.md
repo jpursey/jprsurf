@@ -107,9 +107,9 @@ ends:
   created after the `SurfaceNotifier`, and also counts the calls the surface
   makes from inside REAPER's calls back.
 
-It overlaps the fake's own TrackBatch check, so a missed batch in a surface
-test fails twice. The fake's check stays, as it applies to every library's
-tests.
+It overlaps the fake's own one refresh rule, so a change to several tracks
+outside a deferred refresh in a surface test fails twice. The fake's check
+stays, as it applies to every library's tests.
 
 ### common/testing: The large project (large_project.h)
 

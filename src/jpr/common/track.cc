@@ -464,8 +464,8 @@ void Track::Unsubscribe(TrackListener* listener) { listeners_.erase(listener); }
 //==============================================================================
 
 TrackBatch::~TrackBatch() {
-  // The undo point is added before the deferred refresh ends, and holds the
-  // changes made in it (see UndoContractTest).
+  // The undo point is added before the run's deferred refresh ends, and holds
+  // the changes made in it (see UndoContractTest).
   if (undo_name_ != nullptr) {
     Undo_OnStateChangeEx(undo_name_, UNDO_STATE_TRACKCFG, -1);
   }

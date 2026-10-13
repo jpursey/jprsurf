@@ -65,15 +65,14 @@ The surface behaves as it did, except in these rare cases:
     volume and pan.
 - **Single setters.** `Track::Set()` and its forwarders each make their own
   change.
-  - Each is a batch of one, with its own undo point (except selection) and UI
-    refresh.
+  - Each is a batch of one, with its own undo point (except selection).
   - They are not part of any `TrackBatch` that is alive at the time.
   - `SetVolume()` and `SetPan()` skip a value equal to the cached one, and
     aren't batched.
   - `SelectOnly()` is REAPER's `SetOnlyTrackSelected()`. It updates and notifies
     this track only, and the other tracks catch up when views refresh them.
-- **`TrackBatch`** is RAII, and holds a deferred refresh (a `PreventUIRefresh`
-  scope) for its lifetime.
+- **`TrackBatch`** is RAII. REAPER's UI refresh is deferred by the run it is
+  made in, not the batch (see [deferred_refresh.md](deferred_refresh.md)).
   - Each `Set()` compares against REAPER's live value (one `GetTrackState()`
     reads all four), since the cache is only current for tracks a view shows.
   - A track that already has the value is skipped, even with `kGrouped`, so its
@@ -83,8 +82,7 @@ The surface behaves as it did, except in these rare cases:
   - Before its first change that creates an undo point, it calls
     `ContinuousUndo::Flush()`, so the batch's undo point doesn't absorb pending
     send or receive changes.
-  - It ends the deferred refresh first, and then adds one undo point if
-    anything changed:
+  - As it ends, it adds one undo point if anything changed:
     - One kind of change gets its own name, such as "JPR:Toggle Mute".
     - A mix gets "JPR:Change Tracks".
     - Selection alone adds none.
@@ -173,8 +171,8 @@ them from.
 ## Building blocks
 
 - **`TrackBatch` (common/track.h):** change any number of tracks as one change,
-  with one UI refresh and at most one undo point. Any change to more than one
-  track should use one.
+  with at most one undo point. Any change to more than one track should use
+  one. The run it is made in pays REAPER's UI refresh once.
 - **`TrackRange` (common/track.h):** the tracks between two tracks under a
   filter, optionally limited to one parent.
 - **`TrackGrouping` (common/track.h):** grouping and ganging as an explicit

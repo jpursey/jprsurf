@@ -187,7 +187,7 @@ one is caught.
 ### Checks
 
 The fake fails the test where a rule breaks, with `ADD_FAILURE()`, naming it:
-- **The `TrackBatch` rule:** an entry point (each call on a
+- **The one refresh rule:** an entry point (each call on a
   `TestControlSurface`, and the test's own calls, checked at teardown) that
   changes the mute, solo, rec arm, or selection of several tracks makes them
   one change, in one deferred refresh (a `PreventUIRefresh()` scope), or one

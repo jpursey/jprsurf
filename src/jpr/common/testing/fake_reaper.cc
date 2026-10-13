@@ -1236,8 +1236,8 @@ void FakeReaper::EndEntryPoint() {
     ADD_FAILURE() << "Mute, solo, rec arm, or selection changed on "
                   << changed_tracks_.size() << " tracks, in " << change_count_
                   << " separate changes, in one entry point. Change several "
-                     "tracks in one TrackBatch, for one UI refresh and one "
-                     "undo point.";
+                     "tracks in one deferred refresh, as a run is, for one UI "
+                     "refresh.";
   }
   change_count_ = 0;
   changed_tracks_.clear();

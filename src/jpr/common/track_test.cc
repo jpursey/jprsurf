@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "gmock/gmock.h"
-#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
@@ -379,6 +379,7 @@ TEST_F(TrackTest, BatchAddsOneUndoPoint) {
   FakeTrack* bass = project_.AddTrack("Bass");
   TrackCache::Get().Refresh();
   {
+    DeferredRefresh deferred_refresh;  // As a run holds.
     TrackBatch batch;
     batch.SetMute(GetCachedTrack(drums), true);
     batch.SetMute(GetCachedTrack(bass), true);
@@ -394,6 +395,7 @@ TEST_F(TrackTest, BatchOfSeveralPropertiesAddsOneUndoPoint) {
   FakeTrack* bass = project_.AddTrack("Bass");
   TrackCache::Get().Refresh();
   {
+    DeferredRefresh deferred_refresh;  // As a run holds.
     TrackBatch batch;
     batch.SetSolo(GetCachedTrack(drums), true);
     batch.SetRecArm(GetCachedTrack(bass), true);
@@ -411,6 +413,7 @@ TEST_F(TrackTest, BatchOfSelectionAloneAddsNoUndoPoint) {
   FakeTrack* bass = project_.AddTrack("Bass");
   TrackCache::Get().Refresh();
   {
+    DeferredRefresh deferred_refresh;  // As a run holds.
     TrackBatch batch;
     batch.SetSelected(GetCachedTrack(drums), true);
     batch.SetSelected(GetCachedTrack(bass), true);
@@ -436,20 +439,6 @@ TEST_F(TrackTest, GroupingChangesTheGroup) {
   GetCachedTrack(drums)->SetPan(0.25, TrackGrouping::kGrouped);
   EXPECT_TRUE(kick->solo);
   EXPECT_EQ(kick->pan, 0.25);
-}
-
-// The fake checks the test's own calls when it is destroyed.
-TEST(TrackBatchTest, ChangingSeveralTracksWithoutABatchFailsTheTest) {
-  EXPECT_NONFATAL_FAILURE(
-      {
-        FakeReaper reaper;
-        FakeTrack* drums = reaper.GetProject().AddTrack("Drums");
-        FakeTrack* bass = reaper.GetProject().AddTrack("Bass");
-        TrackCache::Get().Refresh();
-        GetCachedTrack(drums)->SetMute(true);
-        GetCachedTrack(bass)->SetMute(true);
-      },
-      "in one TrackBatch");
 }
 
 //------------------------------------------------------------------------------

@@ -92,11 +92,11 @@ struct FakeCommand {
 //   point is each call on a TestControlSurface, and the test's own calls since
 //   the last one, which are checked when the test ends them (EndEntryPoint()),
 //   or when the fake is destroyed. Each must leave PreventUIRefresh()
-//   balanced, and follow the TrackBatch rule: an entry point that changes the
+//   balanced, and follow the one refresh rule: an entry point that changes the
 //   mute, solo, rec arm, or selection of several tracks makes them one change,
 //   in one deferred refresh (a PreventUIRefresh() scope), or one call outside
-//   of any. Each change costs a refresh of REAPER's UI, and the extension adds
-//   its own undo point for each.
+//   of any. Each change costs a refresh of REAPER's UI. A run is one deferred
+//   refresh (see ControlSurface), so this catches changes made outside one.
 //==============================================================================
 
 class FakeReaper final {
@@ -291,7 +291,7 @@ class FakeReaper final {
   // Checks (see the class comment)
   //----------------------------------------------------------------------------
 
-  // PreventUIRefresh(), and a change the TrackBatch rule covers.
+  // PreventUIRefresh(), and a change the one refresh rule covers.
   void OnPreventUIRefresh(int count);
   void OnDeferrableChange(const FakeTrack* track);
 
@@ -331,7 +331,7 @@ class FakeReaper final {
   GUID unknown_guid_ = {};   // The unknown track's GUID (see GetTrackGUID()).
   std::string console_text_;
 
-  // The current entry point's changes, for the TrackBatch rule.
+  // The current entry point's changes, for the one refresh rule.
   int deferred_depth_ = 0;               // PreventUIRefresh()'s count.
   bool changed_while_deferred_ = false;  // A change in this deferred refresh.
   int change_count_ = 0;

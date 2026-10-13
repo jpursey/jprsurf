@@ -668,7 +668,7 @@ TEST(FakeReaperTest, ChangesToSeveralTracksMustBeDeferredTogether) {
     ::SetTrackSelected(bass, true);
     ::PreventUIRefresh(-1);
   };
-  EXPECT_NONFATAL_FAILURE(surface->Run(), "in one TrackBatch");
+  EXPECT_NONFATAL_FAILURE(surface->Run(), "in one deferred refresh");
 }
 
 TEST(FakeReaperTest, TheTestsOwnChangesAreCheckedAtTheEnd) {
@@ -679,7 +679,7 @@ TEST(FakeReaperTest, TheTestsOwnChangesAreCheckedAtTheEnd) {
         ::SetTrackUIMute(ToMediaTrack(project.AddTrack("Drums")), 1, 0);
         ::SetTrackUIMute(ToMediaTrack(project.AddTrack("Bass")), 1, 0);
       },
-      "in one TrackBatch");
+      "in one deferred refresh");
 }
 
 TEST(FakeReaperTest, TheTestCanEndItsOwnEntryPoints) {
@@ -701,7 +701,7 @@ TEST(FakeReaperTest, TheTestCanEndItsOwnEntryPoints) {
         ::SetTrackUIMute(bass, 0, 0);
         reaper.EndEntryPoint();
       },
-      "in one TrackBatch");
+      "in one deferred refresh");
 }
 
 TEST(FakeReaperTest, EntryPointCheckIsCalledAtTheEndOfEachEntryPoint) {

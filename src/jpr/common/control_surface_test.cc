@@ -5,15 +5,19 @@
 
 #include "jpr/common/control_surface.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string_view>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/surface_notifier.h"
 #include "jpr/common/testing/test_control_surface.h"
 #include "jpr/common/track_cache.h"
 
@@ -31,9 +35,15 @@ class TestListener final : public ControlSurfaceListener {
 
   void OnRun(const RunTime& time) override {
     run_times.push_back(time.precise);
+    if (on_run) {
+      on_run();
+    }
   }
 
   std::vector<double> run_times;
+
+  // Called on each run, after it is recorded, if set.
+  absl::AnyInvocable<void()> on_run;
 };
 
 // The listener that exists, if any.
@@ -68,6 +78,7 @@ class ControlSurfaceTest : public ::testing::Test {
   }
 
   FakeReaper reaper_;
+  SurfaceNotifier notifier_{&reaper_};
 };
 
 TEST_F(ControlSurfaceTest, RegistersOneType) {
@@ -104,6 +115,35 @@ TEST_F(ControlSurfaceTest, RunsWithREAPERsTime) {
   surface->Run();
   EXPECT_THAT(g_listener->run_times,
               ElementsAre(first_time, reaper_.GetTime()));
+}
+
+TEST_F(ControlSurfaceTest, RunsTheListenerInADeferredRefresh) {
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  ASSERT_NE(g_listener, nullptr);
+  bool prevented = false;
+  g_listener->on_run = [&] { prevented = reaper_.IsUIRefreshPrevented(); };
+
+  surface->Run();
+  EXPECT_TRUE(prevented);
+  EXPECT_FALSE(reaper_.IsUIRefreshPrevented());
+}
+
+// REAPER calls back for a deferred change as the run's deferred refresh ends.
+TEST_F(ControlSurfaceTest, FollowsTheRunsChangesAfterTheListener) {
+  reaper_.GetProject().AddTrack("A");
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  ASSERT_NE(g_listener, nullptr);
+  surface->Run();
+  const int64_t version = TrackCache::Get().GetSelectionVersion();
+  int64_t version_in_run = -1;
+  g_listener->on_run = [&] {
+    SetTrackSelected(GetTrack(nullptr, 0), true);
+    version_in_run = TrackCache::Get().GetSelectionVersion();
+  };
+
+  surface->Run();
+  EXPECT_EQ(version_in_run, version);
+  EXPECT_GT(TrackCache::Get().GetSelectionVersion(), version);
 }
 
 TEST_F(ControlSurfaceTest, RefreshesTrackCacheOnTheRunAfterTheTrackList) {

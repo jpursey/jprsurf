@@ -13,7 +13,6 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "jpr/common/color.h"
-#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/guid.h"
 #include "sdk/reaper_plugin.h"
 
@@ -433,9 +432,13 @@ class Track final : public std::enable_shared_from_this<Track> {
 // Changes to more than one track
 //==============================================================================
 
-// Changes to any number of tracks, made as one change: REAPER refreshes its UI
-// once, and adds one undo point if anything changed (none for selection alone),
-// when the batch ends. Any change to more than one track should use one.
+// Changes to any number of tracks, made as one undo point: it adds one if
+// anything changed (none for selection alone), when the batch ends. Any change
+// to more than one track should use one.
+//
+// REAPER's UI refresh is deferred by the run (see ControlSurface), not the
+// batch, so a batch made outside a run is made inside a DeferredRefresh, for
+// one refresh.
 //
 // A track that already has the value is left alone, so with
 // TrackGrouping::kGrouped its grouped tracks are not brought into line.
@@ -467,8 +470,6 @@ class TrackBatch final {
   }
 
  private:
-  DeferredRefresh deferred_refresh_;
-
   // The name of the undo point to add when the batch ends, or null if nothing
   // that adds one has changed.
   const char* undo_name_ = nullptr;

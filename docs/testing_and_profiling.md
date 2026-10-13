@@ -477,10 +477,13 @@ REAPER's calls on the surface follow these.
 
 The fake also checks rules for using REAPER that are only prose today, and
 fails the test when one is broken:
-- **Batching:** an entry point that changes the mute, solo, rec arm, or
+- **One refresh:** an entry point that changes the mute, solo, rec arm, or
   selection of more than one track makes them one change, in one deferred
-  refresh, for one UI refresh and one undo point. This is the `TrackBatch`
-  rule in CLAUDE.md, enforced.
+  refresh, for one UI refresh. Each run is one, so this catches changes made
+  outside a run, such as by a test, or REAPER's calls between runs. This is
+  the rule on track setters in CLAUDE.md's Performance section, enforced.
+- An action run inside a deferred refresh fails: the extension runs every
+  action with `RunAction()`, outside one, as an action may open REAPER's UI.
 - `PreventUIRefresh()` must be balanced by the end of each entry point.
 - A call with a deleted track's pointer fails, where REAPER might crash.
 - At teardown, a surface, plugin, or MIDI port still open fails.

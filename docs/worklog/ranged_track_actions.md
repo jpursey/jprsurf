@@ -83,8 +83,9 @@ Each layer only knows what it needs to:
   `SetRange()`, which use `TrackRange::Between()` to find the tracks between
   the two ends in the scene's track filter.
 - Multi-track changes (ranges, and the Alt and Opt behaviors) are each one
-  `TrackBatch`, so REAPER pays its UI refresh once rather than per track, and
-  the change is one undo point. See Performance.
+  `TrackBatch`, so the change is one undo point, and the run's deferred
+  refresh pays REAPER's UI refresh once rather than per track. See
+  Performance.
 
 ### scene: View anchor and CallbackToggleProperty
 
@@ -147,7 +148,7 @@ Each layer only knows what it needs to:
 - **Long press `IsPressed`**: act for as long as a button is held past a long
   press.
 - **`TrackBatch` (common/track.h)**: change any number of tracks as one change,
-  with one UI refresh and one undo point.
+  with one undo point.
 
 ## Performance
 

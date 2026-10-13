@@ -119,7 +119,7 @@ void CallCounter::CheckEntryPoint() {
                   << calls.refreshes.size() << " times, with "
                   << absl::StrJoin(calls.refreshes, ", ")
                   << ". A gesture pays one refresh at most: change several "
-                     "tracks in one TrackBatch.";
+                     "tracks in one deferred refresh, as a run is.";
   }
   if (calls.undo_points > 1) {
     ADD_FAILURE() << "An entry point added " << calls.undo_points

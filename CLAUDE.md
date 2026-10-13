@@ -129,7 +129,7 @@ New work whose cost matters gets a scope (`gb::ProfileScope`), and work that sca
 
 Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
 
-REAPER track setters (mute, solo, rec arm, select) each pay a UI refresh of ~2–17ms per call. Any action that changes a UI-visible property on more than one track must make the changes in one deferred refresh (a `PreventUIRefresh()` scope, which puts REAPER's UI refresh off until the outermost one ends; see `TrackBatch` in `src/jpr/common/track.h`), so the refresh is paid once.
+REAPER track setters (mute, solo, rec arm, select) each pay a UI refresh of ~2–17ms per call, unless they are made in a deferred refresh (a `PreventUIRefresh()` scope, which puts REAPER's UI refresh off until the outermost one ends). Each run is one (see `ControlSurface` and `DeferredRefresh` in `src/jpr/common/`), so everything a run changes pays the refresh once, and actions run outside it, with `RunAction()`, as an action may open REAPER's UI. Code that changes several tracks outside a run holds a `DeferredRefresh`, and a change to several tracks is made in one `TrackBatch`, for one undo point.
 
 ### Format
 

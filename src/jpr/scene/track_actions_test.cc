@@ -8,10 +8,12 @@
 #include <string>
 #include <vector>
 
+#include "absl/functional/function_ref.h"
 #include "gb/test/log_error_guard.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/anchor.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
@@ -44,26 +46,31 @@ class TrackActionsTest : public ::testing::Test {
     TrackCache::Get().Refresh();
   }
 
-  // Each runs the action on `track`, with `modifiers` held.
+  // Each runs the action on `track`, with `modifiers` held (see Act()).
   void Select(FakeTrack* track, Modifiers modifiers = 0) {
-    GetCachedTrack(track)->Refresh();
-    SetModifiers(modifiers, true);
-    actions_.UiSelect(GetCachedTrack(track));
-    EndAction(modifiers);
+    Act(track, modifiers, [this](Track* cached) { actions_.UiSelect(cached); });
   }
   void Toggle(FakeTrack* track, TrackBoolProperty property,
               Modifiers modifiers = 0) {
-    GetCachedTrack(track)->Refresh();
-    SetModifiers(modifiers, true);
-    actions_.UiToggle(GetCachedTrack(track), property);
-    EndAction(modifiers);
+    Act(track, modifiers, [this, property](Track* cached) {
+      actions_.UiToggle(cached, property);
+    });
   }
   void Mute(FakeTrack* track, Modifiers modifiers = 0) {
     Toggle(track, TrackBoolProperty::kMute, modifiers);
   }
 
-  // Ends an action run with `modifiers` held.
-  void EndAction(Modifiers modifiers) {
+  // Runs `action` on `track`'s cached track, with `modifiers` held, as a run
+  // would: in a deferred refresh, and then the end of the entry point.
+  void Act(FakeTrack* track, Modifiers modifiers,
+           absl::FunctionRef<void(Track*)> action) {
+    Track* cached = GetCachedTrack(track);
+    cached->Refresh();
+    SetModifiers(modifiers, true);
+    {
+      DeferredRefresh deferred_refresh;
+      action(cached);
+    }
     SetModifiers(modifiers, false);
     reaper_.EndEntryPoint();
   }

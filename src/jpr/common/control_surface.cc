@@ -18,6 +18,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "gb/profile/profile_timer.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/reaper_trace.h"
 #include "jpr/common/runner.h"
@@ -143,6 +144,9 @@ const char* ControlSurface::GetConfigString() {
 void ControlSurface::Run() {
   gb::ProfileFrame<"ControlSurface::Run"> frame;
   const RunTime time = RunTime::Now();
+
+  // Everything the run changes refreshes REAPER's UI once, as it ends.
+  DeferredRefresh deferred_refresh;
 
   if (track_list_changed_) {
     track_list_changed_ = false;
