@@ -9,6 +9,7 @@
 #include <string>
 
 #include "absl/strings/numbers.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -17,7 +18,10 @@ namespace jpr {
 // CommandActionProperty
 //==============================================================================
 
-void CommandActionProperty::TriggerAction() { Main_OnCommand(command_id_, 0); }
+void CommandActionProperty::TriggerAction() {
+  // Qualified, as ViewProperty::RunAction() hides it.
+  jpr::RunAction(command_id_);
+}
 
 //==============================================================================
 // CommandToggleProperty
@@ -35,7 +39,7 @@ bool CommandToggleProperty::ReadBool() const { return value_; }
 
 void CommandToggleProperty::WriteBool(bool value) {
   if (value != value_) {
-    Main_OnCommand(command_id_, 0);
+    jpr::RunAction(command_id_);
     UpdateState();
   }
 }

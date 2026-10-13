@@ -244,7 +244,7 @@ Depends on: CL3.
 **Verify**
 - Standard checks.
 
-### CL5 [ ] scene: Run actions with RunAction
+### CL5 [x] scene: Run actions with RunAction
 
 Depends on: CL4.
 

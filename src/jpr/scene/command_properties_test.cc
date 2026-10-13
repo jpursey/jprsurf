@@ -12,6 +12,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/action_ids.h"
+#include "jpr/common/deferred_refresh.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/scene/scene.h"
@@ -92,6 +93,19 @@ TEST_F(CommandPropertiesTest, WritingAToggleRunsItsCommand) {
   metronome->SetBool(true);
   EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(40364));
   EXPECT_TRUE(metronome->GetBool());
+}
+
+// The fake fails an action run inside a deferred refresh.
+TEST_F(CommandPropertiesTest, CommandsRunOutsideADeferredRefresh) {
+  ToggleMetronomeWhenRun();
+  std::unique_ptr<ViewProperty> undo = CreateCommandProperty(&scene_, kCmdUndo);
+  std::unique_ptr<ViewProperty> metronome =
+      CreateCommandProperty(&scene_, kCmdMetronome);
+
+  DeferredRefresh deferred_refresh;
+  undo->RunAction();
+  metronome->SetBool(true);
+  EXPECT_THAT(reaper_.GetCommandsRun(), ElementsAre(kUndoAction, 40364));
 }
 
 TEST_F(CommandPropertiesTest, NamedCommandsAreFoundByName) {
