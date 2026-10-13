@@ -33,7 +33,7 @@ CLAUDE.md) has the rest.
 - **Layers:** common
 - **Size:** small
 - **Feature workflow:** yes
-- **Depends on:** *REAPER call count tests*
+- **Depends on:** nothing
 - **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Seen
   in traces)
 
@@ -44,7 +44,13 @@ also batch what isn't batched today: `CSurf_OnVolumeChangeEx()` and
 refresh REAPER's UI, and more than one gesture in a run, such as two faders
 moved at once. A new behavior would then need no rule to remember. It is a
 plain pair, not a `TrackBatch`, which also makes its gesture's undo point, so
-undo points stay one a gesture. The call count tests show what it saves.
+undo points stay one a gesture. The call count bounds
+(`plugin/default_config/call_count_test.cc`) show what it saves. `CallCounter`
+counts the end of every outermost `PreventUIRefresh()` scope as a refresh, empty
+or not, so with each run batched every idle run counts one: the rules still
+pass, but every steady state bound shows 30 refreshes a second. Once the empty
+pair's cost is known (below), the counter matches it (an empty batch is no
+refresh, if it is cheap), and the bounds move with it.
 
 To confirm, in REAPER:
 - **What an empty pair costs.** It runs every run, idle or not. If REAPER
@@ -65,7 +71,7 @@ To confirm, in REAPER:
 - **Layers:** plugin
 - **Size:** small
 - **Feature workflow:** no
-- **Depends on:** *REAPER call count tests*
+- **Depends on:** nothing
 - **Background:** [testing_and_profiling.md](testing_and_profiling.md)
   (Profiler)
 
@@ -83,20 +89,20 @@ with the same scenario every time. They miss REAPER's effect on JPRSurf's own
 code (the cache, and its UI work on the same thread), which an occasional
 profile in REAPER still shows.
 
-With *REAPER call count tests*, this replaces the idle profile in REAPER that
-CLAUDE.md's Performance section asks of a CL that changes per-run work: call
-count bounds in `ctest` for every change, a benchmark when a change touches
-JPRSurf's own per-run work, and profiles in REAPER only occasionally, and at
-the end of a feature, with the log's "Slow run" warnings from the user's test.
-CLAUDE.md changes when both are done. *Measure REAPER's costs* then retires the
-smoke profile.
+With the call count bounds already in `ctest` (CLAUDE.md, Performance: Call
+counts), this replaces the idle profile in REAPER that CLAUDE.md's Performance
+section asks of a CL that changes per-run work: call count bounds for every
+change, a benchmark when a change touches JPRSurf's own per-run work, and
+profiles in REAPER only occasionally, and at the end of a feature, with the
+log's "Slow run" warnings from the user's test. CLAUDE.md changes when this is
+done. *Measure REAPER's costs* then retires the smoke profile.
 
 ## Measure REAPER's costs
 
 - **Layers:** common
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *Check the fakes in REAPER*, *REAPER call count tests*
+- **Depends on:** nothing
 - **Background:** [testing_and_profiling.md](testing_and_profiling.md)
   (Profiler), [profiles/README.md](../profiles/README.md)
 
@@ -106,13 +112,16 @@ gestures: inside a `PreventUIRefresh()` batch or not, and as it scales with the
 project (tracks, selected tracks, and routes). The end of a batch, an undo
 point, and each action JPRSurf runs are measured the same way. No device or
 config is involved: the measurements call REAPER's API directly, on generated
-projects, in the test install and runner *Check the fakes in REAPER* builds.
+projects, in the test install and runner *Check the fakes in REAPER* built.
 - **Deferred work:** some of a call's cost comes after it returns, in REAPER's
   UI refresh. A measurement times the runs after the call too, against runs
   with no call, so what REAPER puts off is still counted.
-- **The result** is the cost table *REAPER call count tests* weighs calls with:
-  each function's category, and how it scales. It is measured again when the
-  API list grows, or REAPER updates, rather than with each change.
+- **The result** refines the cost table the call count tests weigh calls with
+  (`GetCallCost()` in `jpr/common/testing/call_cost.h`), which today comes from
+  the profile snapshots, and is conservative where nobody has measured: each
+  function's category, which setters a batch really defers, and how each cost
+  scales with the project. It is measured again when the API list grows, or
+  REAPER updates, rather than with each change.
 
 The smoke scenario and its profile (`profiles/smoke.txt`) then go: a gesture's
 cost is its calls, bounded by the call count tests and weighed by this table,
@@ -787,7 +796,7 @@ once it is checked what REAPER sends for them.
 - **Layers:** common, plugin
 - **Size:** small
 - **Feature workflow:** no
-- **Depends on:** *Profiler*
+- **Depends on:** nothing
 - **Background:** [testing_and_profiling.md](testing_and_profiling.md)
   (Output)
 
