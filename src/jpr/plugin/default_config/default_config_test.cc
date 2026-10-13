@@ -8,6 +8,8 @@
 #include <string>
 
 #include "absl/strings/ascii.h"
+#include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/undo.h"
 
 namespace jpr {
 
@@ -37,6 +39,24 @@ FakeXTouch::Light DefaultConfigTest::GetLight(FakeXTouch::StripButton button,
   return GetXTouch(strip).GetLight(button, GetXTouchStrip(strip));
 }
 
+void DefaultConfigTest::TapWith(FakeXTouch::Button modifier,
+                                FakeXTouch::Button button) {
+  xtouch_.Press(modifier);
+  surface_->Run();
+  Tap(xtouch_, button);
+  xtouch_.Release(modifier);
+  surface_->Run();
+}
+
+void DefaultConfigTest::PressRange(FakeXTouch::StripButton button, int first,
+                                   int last) {
+  GetXTouch(first).Press(button, GetXTouchStrip(first));
+  surface_->Run();
+  Tap(GetXTouch(last), button, GetXTouchStrip(last));
+  GetXTouch(first).Release(button, GetXTouchStrip(first));
+  surface_->Run();
+}
+
 void DefaultConfigTest::TapSelect(int strip) {
   Tap(GetXTouch(strip), FakeXTouch::StripButton::kSelect,
       GetXTouchStrip(strip));
@@ -59,6 +79,18 @@ void DefaultConfigTest::SelectRange(int first, int last) {
 void DefaultConfigTest::EnterSendMode(int strip) {
   TapSelect(strip);
   Tap(xtouch_, FakeXTouch::Button::kAssignSend);
+}
+
+void DefaultConfigTest::PickWithSendHeld(int strip) {
+  xtouch_.Press(FakeXTouch::Button::kAssignSend);
+  surface_->Run();
+  TapSelect(strip);
+  xtouch_.Release(FakeXTouch::Button::kAssignSend);
+  RunUntilShown();
+}
+
+void DefaultConfigTest::WaitForUndo() {
+  surface_->RunFor(ContinuousUndo::kDelay + FakeReaper::GetRunTime());
 }
 
 }  // namespace jpr

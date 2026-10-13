@@ -301,11 +301,7 @@ TEST_P(ToggleButtonTest, EmptyStripPressDoesNothing) {
 // Holding the button on T7, on the extender, and pressing it on T10, on the
 // X-Touch, sets the tracks from one to the other to T7's new value.
 TEST_P(ToggleButtonTest, HoldingAndPressingAnotherSetsTheRange) {
-  xtouch_ext_->Press(GetParam().button, 6);
-  surface_->Run();
-  Tap(xtouch_, GetParam().button, 1);
-  xtouch_ext_->Release(GetParam().button, 6);
-  surface_->Run();
+  PressRange(GetParam().button, 6, 9);
 
   for (int i = 0; i < kTrackCount; ++i) {
     EXPECT_EQ(GetValue(tracks_[i]), i >= 6) << tracks_[i]->name;

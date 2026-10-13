@@ -15,10 +15,13 @@ breaks them, which is then fixed first (see CL4).
 Three kinds of check, from the most general to the most specific:
 - **Rules for every run,** in every surface test: a run pays one UI refresh at
   most, adds one undo point at most, and never makes the same setter call
-  twice on the same track or route. A gesture's work is all done in one run
-  (REAPER's callbacks only set flags), so checking each run covers every
-  gesture, however a test drives it. The same rules hold for each of REAPER's
-  calls on the surface between runs. A new behavior that misses a batch, or
+  twice on the same track or route. A gesture's work is done in the runs it
+  acts in (REAPER's callbacks only set flags), so checking each run covers
+  every gesture, however a test drives it. Most act in one run. A ranged
+  press acts in two by design, the held track as it is pressed, and then the
+  range (see [ranged_track_actions.md](ranged_track_actions.md)), so the rules
+  hold for each run, not each gesture. The same rules hold for each of
+  REAPER's calls on the surface between runs. A new behavior that misses a batch, or
   repeats a call, fails without a test of its own.
 - **Steady state:** in each mode, an idle second of runs makes no refresh, no
   undo point, and no action, and its other calls are bounded.
@@ -239,8 +242,8 @@ TEST_F(CallCountTest, TappingMute) {
   track list (bank, channel, Global and holding it, and a track clicked in
   REAPER), Send/Receive mode (entering it and the Send hold pick, a route's
   fader, pot, mute, and select, paging, and returning with Track), and the
-  global buttons (automation modes, transport, undo and redo, and the
-  timecode mode).
+  global buttons (automation modes, the timecode mode, and one button for
+  each way a button runs an action: see CL6).
 - **Infrequent events:** a track list refresh (`SetTrackListChange()`), a bank
   change, and each mode change, which are among the gestures above or a call
   REAPER makes.
@@ -327,19 +330,41 @@ Depends on: CL3, CL4.
   formatted once.
 - Found: Send/Receive mode on the bus reads all 31 of its receives each run,
   not only the 15 its strips show. They are cheap reads (62 a run), so it is
-  left as the bound shows it, for the backlog's *Refresh only the routes
-  Send/Receive mode shows*.
+  left as the bound shows it, for the backlog's *Poll only the routes a
+  routes list shows*, which already had it.
 - `DoublePressSelect()` moves from `TrackListTest` to `DefaultConfigTest`,
   beside `TapSelect()`, for this test to use too.
 
 **Verify**
 - Standard checks.
 
-### CL6 [ ] plugin/default_config: Gesture bounds
+### CL6 [x] plugin/default_config: Gesture bounds
 
 Depends on: CL5.
 
 - Bounds of every other gesture the surface tests make, as listed in Design.
+  Of the global buttons that run an action, one stands for each way a button
+  runs one: a plain tap (Play), a step that depends on Nudge and Marker
+  (Rewind), a modifier (Shift for Redo), a long press (holding Solo), and a
+  tap on a button that also has a long press (Solo in front). The rest share
+  those mappings, so their counts differ only in the action.
+- Also the gestures the Design list left out: a route's pot press, Send
+  switching between sends and receives, and the master fader.
+- `TapWith()`, `PickWithSendHeld()`, and `WaitForUndo()` move from the
+  global and Send/Receive tests to `DefaultConfigTest`, for these tests to use
+  too.
+- Found: a rec arm refreshes the whole track cache, as REAPER calls
+  `SetTrackListChange()` after `SetTrackUIRecArm()` (see "Seen in traces"):
+  on the large project, 2,400 more cheap calls than a mute, and 129 more
+  moderate (`guidToString()`). The bound includes the full refresh REAPER asks
+  for, which is accepted: REAPER doesn't say why the track list changed, so
+  the surface can't know a rec arm was the only change, and checking for
+  changes costs most of what the refresh does. Well under a millisecond, on a
+  gesture that already pays REAPER's UI refresh, it isn't worth more. A
+  cheaper `TrackCache::Refresh()` would help every refresh, if one ever shows
+  up as slow.
+- A ranged mute has two refreshes and two undo points, and a selected range
+  two refreshes, one in each of the runs the gesture acts in (see Design).
 
 **Verify**
 - Standard checks.

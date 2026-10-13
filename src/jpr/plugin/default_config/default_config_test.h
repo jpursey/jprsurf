@@ -51,6 +51,13 @@ class DefaultConfigTest : public SurfaceTest {
   // Returns the light of `button` on `strip`.
   FakeXTouch::Light GetLight(FakeXTouch::StripButton button, int strip);
 
+  // Taps `button` on the X-Touch while holding `modifier`.
+  void TapWith(FakeXTouch::Button modifier, FakeXTouch::Button button);
+
+  // Presses `button` on `first`, and taps it on `last` before releasing it,
+  // which sets the tracks from one to the other as the press set `first`.
+  void PressRange(FakeXTouch::StripButton button, int first, int last);
+
   // Taps select on `strip`, which selects only its track.
   void TapSelect(int strip);
 
@@ -65,6 +72,13 @@ class DefaultConfigTest : public SurfaceTest {
   // Selects only the track on `strip`, and taps Send, which enters
   // Send/Receive mode for it if it has routes.
   void EnterSendMode(int strip);
+
+  // Holds Send, and taps select on `strip`, which shows its track's routes in
+  // Send/Receive mode if it has any.
+  void PickWithSendHeld(int strip);
+
+  // Runs until the undo point for route moves is added (see ContinuousUndo).
+  void WaitForUndo();
 
   std::optional<FakeXTouch> xtouch_ext_;  // Strips 0-7, if there is one.
   FakeXTouch xtouch_;                     // Strips 8-15, or 0-7 alone.

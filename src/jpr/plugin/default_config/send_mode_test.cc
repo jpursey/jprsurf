@@ -5,13 +5,10 @@
 
 #include <vector>
 
-#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_project.h"
-#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
-#include "jpr/common/undo.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/default_config/default_config_test.h"
 
@@ -56,20 +53,6 @@ class SendModeTest : public DefaultConfigTest {
     project.AddSend(tracks_[2], tracks_[kBus]);
     project.AddSend(tracks_[kBus], tracks_[kOnlyReceives]);
     AddSurface();
-  }
-
-  // Holds Send, and taps select on `strip`.
-  void PickWithSendHeld(int strip) {
-    xtouch_.Press(Button::kAssignSend);
-    surface_->Run();
-    TapSelect(strip);
-    xtouch_.Release(Button::kAssignSend);
-    RunUntilShown();
-  }
-
-  // Lets the route changes' undo point be added.
-  void WaitForUndo() {
-    surface_->RunFor(ContinuousUndo::kDelay + FakeReaper::GetRunTime());
   }
 
   // Adds `count` tracks, each with a send from T1, as the user does in REAPER.

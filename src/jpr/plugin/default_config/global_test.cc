@@ -42,15 +42,6 @@ class GlobalTest : public DefaultConfigTest {
     AddSurface();
   }
 
-  // Taps `button` while holding `modifier`.
-  void TapWith(Button modifier, Button button) {
-    xtouch_.Press(modifier);
-    surface_->Run();
-    Tap(xtouch_, button);
-    xtouch_.Release(modifier);
-    surface_->Run();
-  }
-
   // Sets the automation mode of the track on `strip`, by selecting only it,
   // and tapping the mode's button.
   void SetMode(int strip, Button mode) {
