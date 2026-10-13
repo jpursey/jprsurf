@@ -57,6 +57,7 @@ profiler writes.
 | Surface notifier | REAPER's calls on the surface from inside its own functions, as traced     | `jpr/common/testing`      |
 | REAPER's actions | The actions JPRSurf uses, as traced, and the effects tests need            | `jpr/common/testing`      |
 | Fake X-Touch     | The hardware end of an X-Touch's MIDI ports                                | `jpr/device/testing`      |
+| Call counter     | Counts REAPER calls by cost, and checks each run's costly calls            | `jpr/common/testing`      |
 | Surface harness  | The plugin loaded into the fake, with fake X-Touches                       | `jpr/plugin/testing`      |
 | Contract tests   | Tests of the fakes through REAPER's API, run under the fake and in REAPER  | `jpr/common/testing`      |
 
@@ -231,8 +232,10 @@ rather than each runnable (a runner only ever holds one kind); `Run()` is the
 only one of the surface's callbacks that is timed (the others only set flags);
 and there is no periodic `Run()` log line.
 
-Tests use the same profiler: loaded with the plugin into the fake, its call
-counts are what call count tests check.
+Tests don't load the profiler. Call count tests count with a `CallCounter`
+instead (see Tests), which hooks the same API list, and also sees what the
+profiler doesn't: whether a `PreventUIRefresh()` batch is open, and a call's
+arguments, which say whether it repeats one already made.
 
 ## Trace
 
@@ -672,17 +675,31 @@ doesn't touch them is verified under the fake alone.
 
 Existing tests that need no REAPER stay as they are.
 
-**Call count tests** check performance where it is deterministic, for a
-config: JPRSurf's own surface, in `plugin/default_config`. A generated project
-(100+ tracks, with sends and receives) is run in the harness, and tests bound
-the REAPER calls in a steady state run, in each gesture, and in each
-infrequent event (a track list refresh, a bank change, a mode change). Every
-gesture also makes the fewest expensive calls that do what it asks: one UI
-refresh at most, one undo point at most, and no call twice. A bound is set to
-the count when the test is written, so a regression fails, and an improvement
-lowers it in the same change. Weighting the counts by what each call costs in
-REAPER, measured on its own (*Measure REAPER's costs*), estimates what they
-cost.
+**Call count tests** check performance where it is deterministic. The design
+and what they found are in
+[reaper_call_count_tests.md](worklog/reaper_call_count_tests.md).
+- **Costs:** every function on the API list has a cost (`GetCallCost()` in
+  `jpr/common/testing/call_cost.h`): cheap (a read), moderate (text, a scan of
+  the project, or a batched setter's own work), a refresh of REAPER's UI, an
+  undo point, or a command. A `static_assert` keeps the table in line with the
+  list.
+- **Rules in every surface test:** `SurfaceTest` holds a `CallCounter`
+  (`calls_`), which fails any of the fake's entry points (a run, another call
+  on the surface, or the test's own calls between them) that refreshes
+  REAPER's UI twice, adds two undo points, or repeats a refresh or a command
+  on the same track, route, or action. A setter whose refresh REAPER puts off
+  in a `PreventUIRefresh()` batch (mute, solo, rec arm, and selection) isn't a
+  refresh there; the batch's end is.
+- **Bounds:** `CallCountTest` (`plugin/default_config/call_count_test.cc`)
+  runs JPRSurf's own surface on the large project (`AddLargeProject()`, 128
+  tracks in folders, with buses and sends), and bounds the calls of starting
+  up, a second of steady state in each mode, each gesture the surface tests
+  make, and the infrequent events, as exact `CallCounts`. A regression fails,
+  and so does an improvement, until its bound is lowered in the same change. A
+  failure lists each function's count, to show what changed.
+
+Weighting the counts by what each call costs in REAPER, measured on its own
+(*Measure REAPER's costs*), estimates what they cost.
 
 **What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees

@@ -369,7 +369,7 @@ Depends on: CL5.
 **Verify**
 - Standard checks.
 
-### CL7 [ ] docs: Call count tests in the workflow
+### CL7 [x] docs: Call count tests in the workflow
 
 Depends on: CL6.
 
@@ -378,6 +378,10 @@ Depends on: CL6.
 - CLAUDE.md, the smoke test bullet: a feature that adds a gesture adds its
   call count bounds, as it adds its surface tests. Replacing the idle profile
   waits for *Benchmarks under the fake*, as the backlog says.
+- CLAUDE.md, Performance: a Call counts bullet, for the rules every surface
+  test checks, and the bounds a change that moves them updates.
+- `testing_and_profiling.md` also gets the call counter in its pieces table,
+  and its Tests section describes the costs, rules, and bounds as built.
 
 **Verify**
 - The docs read correctly.
