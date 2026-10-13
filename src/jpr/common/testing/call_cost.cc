@@ -24,12 +24,12 @@ constexpr CallCost Refresh(int repeat_key_args) {
   return {.kind = Kind::kRefresh, .repeat_key_args = repeat_key_args};
 }
 
-// A refresh a PreventUIRefresh() scope puts off: mute, solo, rec arm, and
-// selection, whose calls back to the surface come at the end of the scope (see
+// A refresh a deferred refresh puts off: mute, solo, rec arm, and selection,
+// whose calls back to the surface come at the end of the deferred refresh (see
 // "Seen in traces" in docs/testing_and_profiling.md).
-constexpr CallCost BatchedRefresh(int repeat_key_args) {
+constexpr CallCost DeferrableRefresh(int repeat_key_args) {
   return {.kind = Kind::kRefresh,
-          .batched = true,
+          .deferrable = true,
           .repeat_key_args = repeat_key_args};
 }
 
@@ -85,13 +85,13 @@ constexpr NamedCost kCosts[] = {
     {"NamedCommandLookup", kModerate},
     {"PreventUIRefresh", kCheap},
     {"SetGlobalAutomationOverride", Refresh(0)},
-    {"SetOnlyTrackSelected", BatchedRefresh(0)},
-    {"SetTrackSelected", BatchedRefresh(1)},
+    {"SetOnlyTrackSelected", DeferrableRefresh(0)},
+    {"SetTrackSelected", DeferrableRefresh(1)},
     {"SetTrackSendUIPan", Refresh(2)},
     {"SetTrackSendUIVol", Refresh(2)},
-    {"SetTrackUIMute", BatchedRefresh(1)},
-    {"SetTrackUIRecArm", BatchedRefresh(1)},
-    {"SetTrackUISolo", BatchedRefresh(1)},
+    {"SetTrackUIMute", DeferrableRefresh(1)},
+    {"SetTrackUIRecArm", DeferrableRefresh(1)},
+    {"SetTrackUISolo", DeferrableRefresh(1)},
     {"ShowConsoleMsg", Refresh(0)},
     {"stringToGuid", kModerate},
     {"time_precise", kCheap},

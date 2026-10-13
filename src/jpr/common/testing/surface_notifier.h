@@ -36,16 +36,17 @@ namespace jpr {
 // - SetTrackUIMute() and SetTrackUISolo(): the master's solo (whether any track
 //   is soloed), even if nothing changed. A track's own mute and solo are sent
 //   at the next refresh (see below).
-// - SetTrackUIRecArm(), if a track's rec arm changed: outside a batch, the
-//   track's change (its rec arm, mute, solo, volume, and pan), then
-//   SetTrackListChange() and every track's state, then the master's solo and
-//   the change of each track whose rec arm changed. In a batch,
+// - SetTrackUIRecArm(), if a track's rec arm changed: outside a deferred
+//   refresh, the track's change (its rec arm, mute, solo, volume, and pan),
+//   then SetTrackListChange() and every track's state, then the master's solo
+//   and the change of each track whose rec arm changed. In a deferred refresh,
 //   SetTrackListChange() and the master's solo, and the rest at the refresh.
 //   A change to a selected track with selection ganging (group flags without
 //   &2), or to a track in a group with grouping (without &1), is sent as a
 //   change to every track.
 // - SetOnlyTrackSelected() and SetTrackSelected(): the selection of each track
-//   whose selection changed, outside a batch, and otherwise at the refresh.
+//   whose selection changed, outside a deferred refresh, and otherwise at the
+//   refresh.
 // - CSurf_OnVolumeChangeEx() and CSurf_OnPanChangeEx(): IsKeyDown(VK_SHIFT),
 //   then the track as the last touched.
 // - SetTrackSendUIVol() and SetTrackSendUIPan(), unless they end an edit
@@ -58,11 +59,12 @@ namespace jpr {
 //   track's mode changed. For Edit: Undo and Edit: Redo, everything (see
 //   SendUndo()), if there was something to undo or redo.
 //
-// The refresh is when the outermost PreventUIRefresh() scope ends. Outside a
-// batch, REAPER sends a track's mute and solo before the next run, which a
-// contract test can't span, so it isn't made: they are forgotten when the
-// surface next runs. Until they are sent, every track's state leaves them out.
-// They are only sent if they differ from what was last sent.
+// The refresh is when the outermost deferred refresh (a PreventUIRefresh()
+// scope) ends. Outside a deferred refresh, REAPER sends a track's mute and solo
+// before the next run, which a contract test can't span, so it isn't made: they
+// are forgotten when the surface next runs. Until they are sent, every track's
+// state leaves them out. They are only sent if they differ from what was last
+// sent.
 //
 // Tracks are sent master first, then in order, from the current project. It
 // makes every call the contract tests show, not just those ControlSurface acts
@@ -98,8 +100,8 @@ class SurfaceNotifier final {
   //
   // Each changes the current project as the user does in REAPER, and makes the
   // calls REAPER makes on the surface for it, as traces showed. REAPER makes
-  // them between runs, so a test does too, outside any PreventUIRefresh()
-  // scope. A change no trace has shown, such as one to the master, fails the
+  // them between runs, so a test does too, outside any deferred refresh. A
+  // change no trace has shown, such as one to the master, fails the
   // test, and changes nothing. A change to what the extension polls, such as
   // a volume or a route, needs none of these: a test sets the fake. Setting
   // the global automation override in REAPER calls what
@@ -196,8 +198,8 @@ class SurfaceNotifier final {
   // the hooked functions adds or removes tracks.
   std::vector<FakeTrack*> GetChanges(const std::vector<TrackFlags>& before);
 
-  // Sends the selection of each of `changed`, or leaves it for the refresh in
-  // a batch.
+  // Sends the selection of each of `changed`, or inside a deferred refresh,
+  // leaves it for its end.
   void SendSelectionChanges(const std::vector<FakeTrack*>& changed);
 
   // Selects `clicked`, and only it if `only` is true, as a click on it
@@ -208,9 +210,9 @@ class SurfaceNotifier final {
   bool IsMaster(const FakeTrack* track);
 
   // Each returns true if a change in REAPER's UI can be made, and otherwise
-  // fails the test: outside any PreventUIRefresh() scope, and only if
+  // fails the test: outside any deferred refresh, and only if
   // `traced`, for the `change` no trace has shown.
-  bool CheckOutsideBatch();
+  bool CheckNotDeferred();
   bool CheckTraced(bool traced, std::string_view change);
 
   // Returns the surface to make calls from inside a function on, or null if
@@ -280,9 +282,9 @@ class SurfaceNotifier final {
   absl::flat_hash_map<const FakeTrack*, Unsent> unsent_;
   int64_t unsent_run_ = 0;
 
-  // The tracks whose rec arm or selection changed in the batch.
-  absl::flat_hash_set<const FakeTrack*> batch_rec_arm_;
-  absl::flat_hash_set<const FakeTrack*> batch_selected_;
+  // The tracks whose rec arm or selection changed in the deferred refresh.
+  absl::flat_hash_set<const FakeTrack*> deferred_rec_arm_;
+  absl::flat_hash_set<const FakeTrack*> deferred_selected_;
 
   gb::FunctionHook<&PreventUIRefresh,
                    Hook<&SurfaceNotifier::OnPreventUIRefresh>>

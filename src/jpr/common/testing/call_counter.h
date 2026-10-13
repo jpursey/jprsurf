@@ -70,11 +70,12 @@ struct CallCounts {
 // destroyed are checked then. A gesture's work is done in a run, so this
 // checks every gesture, however a test makes it.
 //
-// A refresh a PreventUIRefresh() scope puts off (CallCost::batched) is
-// moderate inside a scope, and the call that ends the outermost scope is the
-// refresh. Any other refresh is one inside a scope too, so in a scope that
-// ends, it is a second. Undo points are those the extension adds: REAPER's
-// own, such as for a track volume moved from a surface, aren't calls.
+// A deferrable refresh (CallCost::deferrable) is moderate inside a deferred
+// refresh (a PreventUIRefresh() scope), and the call that ends the outermost
+// deferred refresh is the refresh. Any other refresh is one inside a deferred
+// refresh too, so in one that ends, it is a second. Undo points are those the
+// extension adds: REAPER's own, such as for a track volume moved from a
+// surface, aren't calls.
 //
 // It hooks every function on the API list over whatever is loaded, so it is
 // created after anything that makes REAPER's calls back to a surface (a
@@ -130,9 +131,9 @@ class CallCounter final {
             ? (void)(key_args[index++] = ToKeyArg(args))
             : (void)0),
        ...);
-      const bool in_scope = s_counter_->reaper_->IsUIRefreshPrevented();
+      const bool deferred = s_counter_->reaper_->IsUIRefreshPrevented();
       const absl::Cleanup count = [&] {
-        s_counter_->Count(*this, key_args, in_scope);
+        s_counter_->Count(*this, key_args, deferred);
       };
       return original(args...);
     }
@@ -160,9 +161,9 @@ class CallCounter final {
   static constexpr int kMaxRepeatKeyArgs = 2;
 
   // Counts a call to `hook`'s function, with the arguments of its repeat key,
-  // made with a PreventUIRefresh() scope open if `in_scope`. A command's
-  // repeat key is its action.
-  void Count(const Hook& hook, const int64_t* key_args, bool in_scope);
+  // made inside a deferred refresh if `deferred`. A command's repeat key is
+  // its action.
+  void Count(const Hook& hook, const int64_t* key_args, bool deferred);
 
   // Counts a call to `hook`'s function as a refresh.
   void AddRefresh(const Hook& hook);

@@ -190,7 +190,8 @@ The fake fails the test where a rule breaks, with `ADD_FAILURE()`, naming it:
 - **The `TrackBatch` rule:** an entry point (each call on a
   `TestControlSurface`, and the test's own calls, checked at teardown) that
   changes the mute, solo, rec arm, or selection of several tracks makes them
-  one change, in one `PreventUIRefresh()` scope, or one call outside of any.
+  one change, in one deferred refresh (a `PreventUIRefresh()` scope), or one
+  call outside of any.
 - **`PreventUIRefresh()` unbalanced** at the end of an entry point.
 - **A deleted or unknown track**, or a closed project, passed to any function.
 - **A second control surface** while one is open, or a MIDI port created while
@@ -240,7 +241,7 @@ Against the bar (aa14a5e), on the SurfaceTest project (81 tracks, 2 devices,
 - **One clock** is the plugin's one change in cost: `time_precise` is called
   once a run, not four times (6,090 calls in the smoke run, not 23,558).
   Everything else is the same: the smoke run's actions made the same calls to
-  REAPER (31 actions, 22 `PreventUIRefresh()` scopes, 11 undo points, and 6
+  REAPER (31 actions, 22 deferred refreshes, 11 undo points, and 6
   track list refreshes), with the same work done each run.
 - **Smoke:** p50 32.1us and p99 257us, against 29.6us and 236us.
 - **Idle:** p50 37.3us and p99 74.5us, against 29.6us and 64.3us, with every

@@ -80,7 +80,7 @@ traces" in the design doc, and REAPER facts below):
 | Automation modes (40400-40404, 42023) | `SetAutoMode()`, then as the override does       |
 | Undo and redo (40029, 40030)        | Everything                                         |
 
-- **When:** a track setter's calls come at the end of its batch
+- **When:** a track setter's calls come at the end of its deferred refresh
   (`PreventUIRefresh(-1)`), or in the call when there is none. The rest come in
   the call, after the action's handler has made its change. Every track's
   state is master first, then each track in order.
@@ -96,7 +96,8 @@ traces" in the design doc, and REAPER facts below):
   between runs, so they are made on the `TestControlSurface`
   (`FakeReaper::GetSurface()`), each an entry point of its own. A change no
   trace has shown (one to the master, a Ctrl+click that unselects, or a mute of
-  one of several selected tracks), or one made inside a batch, fails the test.
+  one of several selected tracks), or one made inside a deferred refresh,
+  fails the test.
 - **Order of hooks:** the notifier is created before the plugin loads and
   destroyed after it unloads, so its hooks are under the profiler's and the
   trace's, as REAPER's own functions are.
@@ -192,8 +193,9 @@ left to *Scene tests*.
 Checked in REAPER, and held by the fake and the notifier:
 - **The 2026-09-29 smoke trace:** selection notifies each track whose
   selection changed (`SetOnlyTrackSelected()` during the call,
-  `SetTrackSelected()` at the end of the batch); solo notifies as mute does;
-  rec arm calls `SetTrackListChange()` and resends every track's state; sends
+  `SetTrackSelected()` at the end of the deferred refresh); solo notifies as
+  mute does; rec arm calls `SetTrackListChange()` and resends every track's
+  state; sends
   notify nothing; the automation mode actions call `SetAutoMode()`, then resend
   every track's volume, pan, and selection, as `SetGlobalAutomationOverride()`
   does.

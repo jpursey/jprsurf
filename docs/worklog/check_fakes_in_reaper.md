@@ -160,9 +160,9 @@ modes in `timeline.h`; and `kEndEdit` in `fake_project.h`.
 
 | File                                | What                                                                                                                                         |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fake_reaper_contract_test.cc`      | Tracks, track changes (grouping, ganging, batches), selection, routes, the project, undo, text formats, and GUID text, through the API only  |
+| `fake_reaper_contract_test.cc`      | Tracks, track changes (grouping, ganging, deferred refreshes), selection, routes, the project, undo, text formats, and GUID text, through the API only |
 | `reaper_actions_contract_test.cc`   | Each action's text and toggle state, the automation mode actions, `NamedCommandLookup()`, and the ruler's time units                          |
-| `surface_notifier_contract_test.cc` | What REAPER calls on a surface during each setter, in and out of a batch, for routes, groups, the override, actions, and Undo and Redo      |
+| `surface_notifier_contract_test.cc` | What REAPER calls on a surface during each setter, in and out of a deferred refresh, for routes, groups, the override, actions, and Undo and Redo |
 | `project_file_test.cc`              | Each field's text, and the state a project can't open with failing the test                                                                 |
 | `recording_surface_test.cc`         | Only one exists at a time, and its run can be replaced from inside a run                                                                    |
 | `fake_reaper_test.cc`               | What needs the fake: its checks, `FakeProject`'s own methods, undo points as the fake lists them, and what it doesn't model failing the test |
@@ -264,13 +264,13 @@ the notifier.
 
 **What REAPER calls on a surface:**
 - **A track's mute and solo wait for the refresh:** the end of the outermost
-  batch, or outside a batch, before the next run, when REAPER sends those that
-  differ from what it last sent. Until then, every track's state leaves them
-  out. Outside a batch, a mute or solo sends only the master's solo during the
-  call.
+  deferred refresh (a `PreventUIRefresh()` scope), or outside one, before the
+  next run, when REAPER sends those that differ from what it last sent. Until
+  then, every track's state leaves them out. Outside a deferred refresh, a mute
+  or solo sends only the master's solo during the call.
 - **Rec arm** sends the track's change around every track's state outside a
-  batch, and in a batch sends each changed track's change in every track's
-  state at its end. A rec arm that changes nothing sends nothing. One that
+  deferred refresh, and in one sends each changed track's change in every
+  track's state at its end. A rec arm that changes nothing sends nothing. One that
   ganging or grouping could take to other tracks is sent as a change to every
   track.
 - **The automation mode actions** resend only if a selected track's mode

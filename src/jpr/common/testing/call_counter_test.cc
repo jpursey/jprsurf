@@ -79,12 +79,12 @@ TEST_F(CallCounterTest, TextListsEachFunctionsCountByName) {
             "  mkvolstr: 1");
 }
 
-TEST_F(CallCounterTest, SetterOutsideAScopeIsARefresh) {
+TEST_F(CallCounterTest, SetterOutsideADeferredRefreshIsARefresh) {
   RunWith([this] { SetTrackUIMute(a_, 1, 0); });
   EXPECT_EQ(counter_.TakeCounts(), (CallCounts{.refreshes = 1}));
 }
 
-TEST_F(CallCounterTest, BatchedSettersInAScopeAreModerateAndItsEndARefresh) {
+TEST_F(CallCounterTest, DeferrableSettersAreModerateAndTheEndARefresh) {
   RunWith([this] {
     PreventUIRefresh(1);
     SetTrackUIMute(a_, 1, 0);
@@ -95,7 +95,7 @@ TEST_F(CallCounterTest, BatchedSettersInAScopeAreModerateAndItsEndARefresh) {
             (CallCounts{.cheap = 1, .moderate = 2, .refreshes = 1}));
 }
 
-TEST_F(CallCounterTest, OnlyTheEndOfTheOutermostScopeIsARefresh) {
+TEST_F(CallCounterTest, OnlyTheEndOfTheOutermostDeferredRefreshIsARefresh) {
   RunWith([] {
     PreventUIRefresh(1);
     PreventUIRefresh(1);
@@ -173,7 +173,7 @@ TEST_F(CallCounterTest, RepeatedActionFails) {
   EXPECT_NONFATAL_FAILURE(RunWith(std::move(calls)), "repeated Main_OnCommand");
 }
 
-TEST_F(CallCounterTest, UnbatchedRefreshInAScopeIsASecondRefresh) {
+TEST_F(CallCounterTest, RefreshThatIsntDeferrableIsASecondRefresh) {
   auto calls = [this] {
     PreventUIRefresh(1);
     SetTrackSendUIVol(a_, 0, 0.5, 0);

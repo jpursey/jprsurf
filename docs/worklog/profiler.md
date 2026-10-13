@@ -151,7 +151,7 @@ Found while building this, on an 81-track project:
 - Opening the four X-Touch MIDI ports takes about 80ms, and closing the two
   inputs about 50ms each.
 - A single mute from the surface costs about 2.5ms in `PreventUIRefresh(-1)`,
-  REAPER's batched UI refresh.
+  REAPER's deferred UI refresh.
 
 ## Building blocks
 

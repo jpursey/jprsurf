@@ -34,7 +34,7 @@ The surface behaves as it did, except in these rare cases:
   Shift+Alt, when only this track and its grouped tracks have the property on,
   clears them and sets them back, and REAPER adds no undo point.
 - `GetTrackState()` reflects a change made earlier in the same
-  `PreventUIRefresh` scope.
+  deferred refresh (`PreventUIRefresh` scope).
 - A track fader move followed by a mute is one undo point, and so is one
   followed by a send fader (seen again in *Fake REAPER*'s CL1). REAPER creates
   the undo point for a surface volume or pan change itself, and folds the
@@ -72,8 +72,8 @@ The surface behaves as it did, except in these rare cases:
     aren't batched.
   - `SelectOnly()` is REAPER's `SetOnlyTrackSelected()`. It updates and notifies
     this track only, and the other tracks catch up when views refresh them.
-- **`TrackBatch`** is RAII, and holds a `PreventUIRefresh` scope for its
-  lifetime.
+- **`TrackBatch`** is RAII, and holds a deferred refresh (a `PreventUIRefresh`
+  scope) for its lifetime.
   - Each `Set()` compares against REAPER's live value (one `GetTrackState()`
     reads all four), since the cache is only current for tracks a view shows.
   - A track that already has the value is skipped, even with `kGrouped`, so its
@@ -83,7 +83,7 @@ The surface behaves as it did, except in these rare cases:
   - Before its first change that creates an undo point, it calls
     `ContinuousUndo::Flush()`, so the batch's undo point doesn't absorb pending
     send or receive changes.
-  - It ends the `PreventUIRefresh` scope first, and then adds one undo point if
+  - It ends the deferred refresh first, and then adds one undo point if
     anything changed:
     - One kind of change gets its own name, such as "JPR:Toggle Mute".
     - A mix gets "JPR:Change Tracks".
@@ -190,4 +190,4 @@ On a 150-track project, a single mute press takes ~3.7ms. The 150-track mute and
 rec arm ranges are on par with, or better than, before (see
 [ranged_track_actions.md](ranged_track_actions.md), Performance). The steady
 state `Run()` averages ~24–28µs. `TrackActions` makes the same REAPER calls as
-the code it replaced, in the same `PreventUIRefresh` scopes.
+the code it replaced, in the same deferred refreshes.

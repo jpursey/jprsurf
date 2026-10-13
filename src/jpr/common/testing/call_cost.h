@@ -30,7 +30,8 @@ struct CallCost {
     // Work that refreshes nothing, but is more than a read: text (about
     // 0.5-3us), reads that scan the project (counting selected items),
     // functions only called as the extension starts (opening MIDI ports), and
-    // a batched refresh's own work inside a scope (about 20-200us).
+    // a deferrable refresh's own work inside a deferred refresh (about
+    // 20-200us).
     kModerate,
 
     // A change REAPER's UI shows, which refreshes it: about 2-17ms, much of
@@ -47,11 +48,12 @@ struct CallCost {
 
   Kind kind = Kind::kCheap;
 
-  // For a refresh: true if a PreventUIRefresh() scope puts the refresh off to
-  // the end of the outermost scope, and the call itself is then moderate. The
-  // call that ends the outermost scope is the refresh, whatever its own cost,
-  // which a caller finds from the scope rather than from this table.
-  bool batched = false;
+  // For a refresh: true if a deferred refresh (a PreventUIRefresh() scope)
+  // puts the refresh off to the end of the outermost one, and the call itself
+  // is then moderate. The call that ends the outermost deferred refresh is the
+  // refresh, whatever its own cost, which a caller finds from the deferred
+  // refresh rather than from this table.
+  bool deferrable = false;
 
   // For a refresh or a command: how many of its leading arguments, with the
   // function, identify a call, so a second call in a run with the same ones is

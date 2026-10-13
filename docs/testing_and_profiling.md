@@ -234,8 +234,10 @@ and there is no periodic `Run()` log line.
 
 Tests don't load the profiler. Call count tests count with a `CallCounter`
 instead (see Tests), which hooks the same API list, and also sees what the
-profiler doesn't: whether a `PreventUIRefresh()` batch is open, and a call's
-arguments, which say whether it repeats one already made.
+profiler doesn't: whether a deferred refresh is open, and a call's arguments,
+which say whether it repeats one already made. A deferred refresh is a
+`PreventUIRefresh()` scope: REAPER puts off refreshing its UI until the
+outermost one ends.
 
 ## Trace
 
@@ -363,22 +365,22 @@ REAPER's calls on the surface follow these.
   `SetTrackUISolo()`, REAPER only calls `SetSurfaceSolo(master)`, even if
   nothing changed. A track's `SetSurfaceMute()` and `SetSurfaceSolo()` come at
   the refresh, for each track whose mute or solo differs from what was last
-  sent, in track order: at `PreventUIRefresh(-1)` for the outermost batch, or
-  outside a batch, before the next run. Until then, every track's state leaves
-  them out. The surface that made the change is notified too.
+  sent, in track order: at `PreventUIRefresh(-1)` for the outermost deferred
+  refresh, or outside one, before the next run. Until then, every track's
+  state leaves them out. The surface that made the change is notified too.
 - **Selection notifies each track whose selection changed,** in track order:
-  outside a batch during the call (a track already selected isn't sent), and
-  in a batch at `PreventUIRefresh(-1)`.
+  outside a deferred refresh during the call (a track already selected isn't
+  sent), and in one at `PreventUIRefresh(-1)`.
 - **Rec arm changes the track list,** if it changes a track. A track's change
   is its `SetSurfaceRecArm()`, `SetSurfaceMute()`, `SetSurfaceSolo()`, and
-  volume and pan (as in every track's state, below). Outside a batch, during
-  `SetTrackUIRecArm()`, REAPER sends the track's change,
+  volume and pan (as in every track's state, below). Outside a deferred
+  refresh, during `SetTrackUIRecArm()`, REAPER sends the track's change,
   `SetTrackListChange()`, every track's state, `SetSurfaceSolo(master)`, and
-  the track's change again. In a batch, it calls `SetTrackListChange()` and
-  `SetSurfaceSolo(master)`, and at `PreventUIRefresh(-1)` come
-  `Extended(CSURF_EXT_SETMIXERSCROLL)`, `SetTrackListChange()`,
-  `SetSurfaceSolo(master)`, and every track's state, once for the batch. In
-  it, a track whose rec arm changed has only its title, rec arm, and
+  the track's change again. In a deferred refresh, it calls
+  `SetTrackListChange()` and `SetSurfaceSolo(master)`, and at
+  `PreventUIRefresh(-1)` come `Extended(CSURF_EXT_SETMIXERSCROLL)`,
+  `SetTrackListChange()`, `SetSurfaceSolo(master)`, and every track's state,
+  once for the deferred refresh. In it, a track whose rec arm changed has only its title, rec arm, and
   selection, then its change. A track whose mute or solo is still to be sent
   has them after its selection, and one whose selection changed has its
   selection again.
@@ -459,9 +461,9 @@ REAPER's calls on the surface follow these.
 The fake also checks rules for using REAPER that are only prose today, and
 fails the test when one is broken:
 - **Batching:** an entry point that changes the mute, solo, rec arm, or
-  selection of more than one track makes them one change, in one
-  `PreventUIRefresh()` scope, for one UI refresh and one undo point. This is
-  the `TrackBatch` rule in CLAUDE.md, enforced.
+  selection of more than one track makes them one change, in one deferred
+  refresh, for one UI refresh and one undo point. This is the `TrackBatch`
+  rule in CLAUDE.md, enforced.
 - `PreventUIRefresh()` must be balanced by the end of each entry point.
 - A call with a deleted track's pointer fails, where REAPER might crash.
 - At teardown, a surface, plugin, or MIDI port still open fails.
@@ -680,7 +682,7 @@ and what they found are in
 [reaper_call_count_tests.md](worklog/reaper_call_count_tests.md).
 - **Costs:** every function on the API list has a cost (`GetCallCost()` in
   `jpr/common/testing/call_cost.h`): cheap (a read), moderate (text, a scan of
-  the project, or a batched setter's own work), a refresh of REAPER's UI, an
+  the project, or a deferrable setter's own work), a refresh of REAPER's UI, an
   undo point, or a command. A `static_assert` keeps the table in line with the
   list.
 - **Rules in every surface test:** `SurfaceTest` holds a `CallCounter`
@@ -688,8 +690,8 @@ and what they found are in
   on the surface, or the test's own calls between them) that refreshes
   REAPER's UI twice, adds two undo points, or repeats a refresh or a command
   on the same track, route, or action. A setter whose refresh REAPER puts off
-  in a `PreventUIRefresh()` batch (mute, solo, rec arm, and selection) isn't a
-  refresh there; the batch's end is.
+  in a deferred refresh (mute, solo, rec arm, and selection) isn't a refresh
+  there; the deferred refresh's end is.
 - **Bounds:** `CallCountTest` (`plugin/default_config/call_count_test.cc`)
   runs JPRSurf's own surface on the large project (`AddLargeProject()`, 128
   tracks in folders, with buses and sends), and bounds the calls of starting

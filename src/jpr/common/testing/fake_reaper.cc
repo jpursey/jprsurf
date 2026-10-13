@@ -288,7 +288,7 @@ class FakeReaper::Api final {
   // `mute > 0`. Returns the new mute.
   static int SetTrackUIMute(MediaTrack* track_id, int mute, int group_flags) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    s_instance_->OnBatchedChange(&track);
+    s_instance_->OnDeferrableChange(&track);
     s_instance_->GetProjectOf(track).BeforeChange();
     const bool new_mute = GetNewValue(mute, track.mute);
     for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
@@ -303,7 +303,7 @@ class FakeReaper::Api final {
   // even for the master, whose solo is never in place.
   static int SetTrackUISolo(MediaTrack* track_id, int solo, int group_flags) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    s_instance_->OnBatchedChange(&track);
+    s_instance_->OnDeferrableChange(&track);
     FakeProject& project = s_instance_->GetProjectOf(track);
     project.BeforeChange();
     if (solo == 3 || solo > 4) {
@@ -327,7 +327,7 @@ class FakeReaper::Api final {
   static int SetTrackUIRecArm(MediaTrack* track_id, int rec_arm,
                               int group_flags) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    s_instance_->OnBatchedChange(&track);
+    s_instance_->OnDeferrableChange(&track);
     FakeProject& project = s_instance_->GetProjectOf(track);
     project.BeforeChange();
     const FakeTrack* master = project.GetMasterTrack();
@@ -411,13 +411,13 @@ class FakeReaper::Api final {
 
   static void SetTrackSelected(MediaTrack* track_id, bool selected) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    s_instance_->OnBatchedChange(&track);
+    s_instance_->OnDeferrableChange(&track);
     track.selected = selected;
   }
 
   static void SetOnlyTrackSelected(MediaTrack* track_id) {
     FakeTrack& track = s_instance_->GetTrack(track_id);
-    s_instance_->OnBatchedChange(&track);
+    s_instance_->OnDeferrableChange(&track);
     ReaProject* project = ToReaProject(&s_instance_->GetProjectOf(track));
     for (FakeTrack* other : GetSelectedTracks(project, /*want_master=*/true)) {
       other->selected = false;
@@ -1193,39 +1193,39 @@ FakeProject* FakeReaper::FindOpenProject(const FakeTrack* track) {
 //------------------------------------------------------------------------------
 
 void FakeReaper::OnPreventUIRefresh(int count) {
-  batch_depth_ += count;
-  if (batch_depth_ < 0) {
+  deferred_depth_ += count;
+  if (deferred_depth_ < 0) {
     ADD_FAILURE() << "PreventUIRefresh(" << count
-                  << ") ended a scope that wasn't started";
-    batch_depth_ = 0;
+                  << ") ended a deferred refresh that wasn't started";
+    deferred_depth_ = 0;
   }
-  if (batch_depth_ == 0) {
-    EndBatch();
+  if (deferred_depth_ == 0) {
+    EndDeferredRefresh();
   }
 }
 
-void FakeReaper::EndBatch() {
-  if (changed_in_batch_) {
-    changed_in_batch_ = false;
+void FakeReaper::EndDeferredRefresh() {
+  if (changed_while_deferred_) {
+    changed_while_deferred_ = false;
     ++change_count_;
   }
 }
 
-void FakeReaper::OnBatchedChange(const FakeTrack* track) {
+void FakeReaper::OnDeferrableChange(const FakeTrack* track) {
   changed_tracks_.insert(track);
-  if (batch_depth_ > 0) {
-    changed_in_batch_ = true;
+  if (deferred_depth_ > 0) {
+    changed_while_deferred_ = true;
   } else {
     ++change_count_;
   }
 }
 
 void FakeReaper::EndEntryPoint() {
-  if (batch_depth_ != 0) {
-    ADD_FAILURE() << "PreventUIRefresh() is unbalanced by " << batch_depth_
+  if (deferred_depth_ != 0) {
+    ADD_FAILURE() << "PreventUIRefresh() is unbalanced by " << deferred_depth_
                   << " at the end of an entry point";
-    batch_depth_ = 0;
-    EndBatch();
+    deferred_depth_ = 0;
+    EndDeferredRefresh();
   }
   if (change_count_ > 1 && changed_tracks_.size() > 1) {
     ADD_FAILURE() << "Mute, solo, rec arm, or selection changed on "

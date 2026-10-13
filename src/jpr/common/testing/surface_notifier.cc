@@ -57,8 +57,8 @@ void SurfaceNotifier::OnPreventUIRefresh(decltype(PreventUIRefresh) original,
   }
 
   // Taken first, as a call on the surface may change more.
-  const auto rec_arm = std::exchange(batch_rec_arm_, {});
-  const auto selected = std::exchange(batch_selected_, {});
+  const auto rec_arm = std::exchange(deferred_rec_arm_, {});
+  const auto selected = std::exchange(deferred_selected_, {});
   IReaperControlSurface* surface = GetWrappedSurface();
   if (surface == nullptr) {
     GetUnsent().clear();
@@ -69,7 +69,7 @@ void SurfaceNotifier::OnPreventUIRefresh(decltype(PreventUIRefresh) original,
   }
 
   // After a rec arm, every track's state, with a track whose rec arm changed
-  // sent as it changes outside a batch.
+  // sent as it changes outside a deferred refresh.
   const bool track_list_changed = !rec_arm.empty();
   if (track_list_changed) {
     surface->SetTrackListChange();
@@ -124,7 +124,7 @@ int SurfaceNotifier::OnSetTrackUIRecArm(decltype(SetTrackUIRecArm) original,
     changed.erase(changed.begin());
   }
   if (reaper_->IsUIRefreshPrevented()) {
-    batch_rec_arm_.insert(changed.begin(), changed.end());
+    deferred_rec_arm_.insert(changed.begin(), changed.end());
     surface->SetTrackListChange();
     SendMasterSolo(*surface);
     return result;
@@ -224,14 +224,14 @@ void SurfaceNotifier::OnMainOnCommand(decltype(Main_OnCommand) original,
 //------------------------------------------------------------------------------
 
 void SurfaceNotifier::ClickTrack(FakeTrack* track) {
-  if (CheckOutsideBatch() &&
+  if (CheckNotDeferred() &&
       CheckTraced(!IsMaster(track), "a click on the master")) {
     ClickToSelect(track, /*only=*/true);
   }
 }
 
 void SurfaceNotifier::CtrlClickTrack(FakeTrack* track) {
-  if (CheckOutsideBatch() &&
+  if (CheckNotDeferred() &&
       CheckTraced(!IsMaster(track), "a Ctrl+click on the master") &&
       CheckTraced(!track->selected, "a Ctrl+click that unselects a track")) {
     ClickToSelect(track, /*only=*/false);
@@ -242,7 +242,7 @@ void SurfaceNotifier::ClickMute(FakeTrack* track) {
   // REAPER may mute every selected track, when the one clicked is selected.
   const int selected_count = static_cast<int>(
       reaper_->GetProject().GetSelectedTracks(/*include_master=*/true).size());
-  if (!CheckOutsideBatch() ||
+  if (!CheckNotDeferred() ||
       !CheckTraced(!IsMaster(track), "a click on the master's mute") ||
       !CheckTraced(!track->selected || selected_count == 1,
                    "a click on the mute of one of several selected tracks")) {
@@ -281,10 +281,11 @@ bool SurfaceNotifier::IsMaster(const FakeTrack* track) {
   return track == reaper_->GetProject().GetMasterTrack();
 }
 
-bool SurfaceNotifier::CheckOutsideBatch() {
+bool SurfaceNotifier::CheckNotDeferred() {
   if (reaper_->IsUIRefreshPrevented()) {
-    ADD_FAILURE() << "A change in REAPER's UI was made inside a "
-                     "PreventUIRefresh() scope, which REAPER's UI can't do";
+    ADD_FAILURE() << "A change in REAPER's UI was made inside a deferred "
+                     "refresh (a PreventUIRefresh() scope), which REAPER's UI "
+                     "can't do";
     return false;
   }
   return true;
@@ -347,7 +348,7 @@ std::vector<FakeTrack*> SurfaceNotifier::GetChanges(
 void SurfaceNotifier::SendSelectionChanges(
     const std::vector<FakeTrack*>& changed) {
   if (reaper_->IsUIRefreshPrevented()) {
-    batch_selected_.insert(changed.begin(), changed.end());
+    deferred_selected_.insert(changed.begin(), changed.end());
     return;
   }
   if (IReaperControlSurface* surface = GetWrappedSurface()) {

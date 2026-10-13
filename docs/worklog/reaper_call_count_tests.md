@@ -55,12 +55,13 @@ it was, so no gesture needed a fix. What the counts showed:
 
 `GetCallCost(name)` returns a function's `CallCost`:
 - **`kind`:** cheap (a read, under about 0.4us), moderate (text, a scan of the
-  project, a function only called as the surface starts, or a batched setter's
-  own work), a refresh of REAPER's UI (2-17ms), an undo point
+  project, a function only called as the surface starts, or a deferrable
+  setter's own work), a refresh of REAPER's UI (2-17ms), an undo point
   (`Undo_OnStateChangeEx()`), or a command (`Main_OnCommand()`, whose cost is
   the action's).
-- **`batched`:** a refresh that a `PreventUIRefresh()` batch puts off to its
-  end, which is then moderate inside one: mute, solo, rec arm, and selection.
+- **`deferrable`:** a refresh that a deferred refresh (a `PreventUIRefresh()`
+  scope) puts off to its end, which is then moderate inside one: mute, solo,
+  rec arm, and selection.
 - **`repeat_key_args`:** how many leading arguments, with the function, say
   what a refresh or command acts on (a track, a track and a route's index, or
   an action), so a second call with the same ones is a repeat.
@@ -69,8 +70,9 @@ The categories came from the per-call self times in `profiles/idle.txt` and
 `profiles/smoke.txt` (an 81-track project), which fall into clear groups.
 They are conservative where nobody has measured: every setter is a refresh,
 `CSurf_OnVolumeChangeEx()`, the route setters, and the override included, and
-only the track setters known to be deferred are `batched`. `PreventUIRefresh()`
-itself is cheap; `CallCounter` finds the batch's end from the fake.
+only the track setters known to be deferred are `deferrable`.
+`PreventUIRefresh()` itself is cheap; `CallCounter` finds the deferred
+refresh's end from the fake.
 
 The table lists the API in its order, and a `static_assert` checks it against
 `JPR_REAPER_API`, so a function added to the list doesn't compile until it has
@@ -86,10 +88,11 @@ ends:
   `==` compares all but `calls`, and `ToString()` lists `calls` by name, so a
   failed `EXPECT_EQ` shows which functions moved. `TakeCounts()` returns the
   counts and starts again.
-- **Batches:** a batched setter inside a scope (`IsUIRefreshPrevented()` as
-  it is called) is moderate. The call that ends the outermost scope (one was
-  open before it, and none is after) is the refresh, whatever it is. Any other
-  refresh in a scope is a refresh too, so in a scope that ends, it is a second.
+- **Deferred refreshes:** a deferrable setter inside a deferred refresh
+  (`IsUIRefreshPrevented()` as it is called) is moderate. The call that ends
+  the outermost deferred refresh (one was open before it, and none is after)
+  is the refresh, whatever it is. Any other refresh in a deferred refresh is a
+  refresh too, so in one that ends, it is a second.
 - **Entry points** are the fake's, through `FakeReaper::SetEntryPointCheck()`,
   which `EndEntryPoint()` calls after the fake's own checks. So a failure
   points at the call on the surface that caused it, and REAPER's calls between
@@ -169,14 +172,14 @@ from the files that had their own.
 
 ## Tests
 
-| File                    | What                                                                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `call_cost_test.cc`     | Finding a function's cost, and the track setters' batching and repeat keys                                                      |
-| `call_counter_test.cc`  | Each category; batched setters in and out of a scope; the outermost scope's end; each rule failing, and passing where it should |
-| `fake_reaper_test.cc`   | The entry point check runs at the end of each entry point                                                                       |
-| `large_project_test.cc` | The track count, the folders and their depths, the buses' receives, and the folders' sends                                      |
-| `surface_test_test.cc`  | A surface test that repeats a setter fails                                                                                      |
-| `call_count_test.cc`    | The bounds (above): 40 tests                                                                                                    |
+| File                    | What                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `call_cost_test.cc`     | Finding a function's cost, and the track setters' deferral and repeat keys                                                                  |
+| `call_counter_test.cc`  | Each category; deferrable setters in and out of a deferred refresh; the outermost one's end; each rule failing, and passing where it should |
+| `fake_reaper_test.cc`   | The entry point check runs at the end of each entry point                                                                                   |
+| `large_project_test.cc` | The track count, the folders and their depths, the buses' receives, and the folders' sends                                                  |
+| `surface_test_test.cc`  | A surface test that repeats a setter fails                                                                                                  |
+| `call_count_test.cc`    | The bounds (above): 40 tests                                                                                                                |
 
 ## Building blocks
 
@@ -190,15 +193,17 @@ from the files that had their own.
   how much a run. A count off by 256 cheap reads is the track filter poll
   moving in or out of a second.
 - **A function added to the API list** gets a cost in `call_cost.cc`, in the
-  list's order: a refresh if REAPER's UI shows what it changes, `batched` only
-  if a batch is known to defer it, and the arguments that name what it acts on.
+  list's order: a refresh if REAPER's UI shows what it changes, `deferrable`
+  only if a deferred refresh is known to put it off, and the arguments that
+  name what it acts on.
 - **Counts in any surface test:** `calls_.TakeCounts()`, for a test that wants
   to show a change made fewer calls.
 
 ## Decisions
 
 - **A hook, not the profiler.** The profiler would give each function's
-  count, but not whether a batch was open, or which track a setter acted on.
+  count, but not whether a deferred refresh was open, or which track a setter
+  acted on.
   The profiler under the fake is left for *Benchmarks under the fake*, which
   times JPRSurf's own code.
 - **Exact counts,** compared with `EXPECT_EQ`, so an improvement fails too,

@@ -20,10 +20,10 @@ TEST(CallCostTest, FindsTheFunctionsCost) {
   EXPECT_EQ(GetCallCost("Undo_OnStateChangeEx").kind, Kind::kUndoPoint);
 }
 
-TEST(CallCostTest, TrackSettersAreBatchedRefreshesOfTheTrack) {
+TEST(CallCostTest, TrackSettersAreDeferrableRefreshesOfTheTrack) {
   const CallCost cost = GetCallCost("SetTrackUIMute");
   EXPECT_EQ(cost.kind, Kind::kRefresh);
-  EXPECT_TRUE(cost.batched);
+  EXPECT_TRUE(cost.deferrable);
   EXPECT_EQ(cost.repeat_key_args, 1);
 }
 

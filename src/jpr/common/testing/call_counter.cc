@@ -61,11 +61,11 @@ CallCounter::~CallCounter() {
 }
 
 void CallCounter::Count(const Hook& hook, const int64_t* key_args,
-                        bool in_scope) {
+                        bool deferred) {
   ++counts_.calls[hook.name_];
 
-  // The call that ends the outermost scope pays the refresh the scope put off.
-  if (in_scope && !reaper_->IsUIRefreshPrevented()) {
+  // The call that ends the outermost deferred refresh pays for it.
+  if (deferred && !reaper_->IsUIRefreshPrevented()) {
     AddRefresh(hook);
     return;
   }
@@ -79,7 +79,7 @@ void CallCounter::Count(const Hook& hook, const int64_t* key_args,
       ++counts_.moderate;
       break;
     case CallCost::Kind::kRefresh:
-      if (cost.batched && in_scope) {
+      if (cost.deferrable && deferred) {
         ++counts_.moderate;
       } else {
         AddRefresh(hook);

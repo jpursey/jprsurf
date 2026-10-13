@@ -636,7 +636,7 @@ TEST_F(TrackChangeContractTest, GangedTracksChangeTheirGroupsButNotTheReverse) {
   }
 }
 
-TEST_F(TrackChangeContractTest, ChangesInABatchReadBackAtOnce) {
+TEST_F(TrackChangeContractTest, ChangesInADeferredRefreshReadBackAtOnce) {
   OpenProject([](FakeProject& project) {
     project.AddTrack("Drums");
     project.AddTrack("Bass");

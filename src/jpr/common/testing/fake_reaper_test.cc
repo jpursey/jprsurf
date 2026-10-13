@@ -629,14 +629,15 @@ TEST(FakeReaperTest, UnbalancedPreventUIRefreshFailsTheTest) {
   EXPECT_NONFATAL_FAILURE(::PreventUIRefresh(-1), "wasn't started");
 }
 
-TEST(FakeReaperTest, ChangesToSeveralTracksMustBeBatched) {
+TEST(FakeReaperTest, ChangesToSeveralTracksMustBeDeferredTogether) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
   MediaTrack* drums = ToMediaTrack(project.AddTrack("Drums"));
   MediaTrack* bass = ToMediaTrack(project.AddTrack("Bass"));
   std::unique_ptr<TestControlSurface> surface = AddTestSurface(reaper);
 
-  // One scope for several tracks, or several changes to one track, is fine.
+  // One deferred refresh for several tracks, or several changes to one track,
+  // is fine.
   g_test_surface->on_run = [&] {
     ::PreventUIRefresh(1);
     ::SetTrackUIMute(drums, 1, 0);
@@ -650,14 +651,15 @@ TEST(FakeReaperTest, ChangesToSeveralTracksMustBeBatched) {
   };
   surface->Run();
 
-  // Each change to a different track outside a scope is a change of its own.
+  // Each change to a different track outside a deferred refresh is a change of
+  // its own.
   g_test_surface->on_run = [&] {
     ::SetTrackUIMute(drums, 1, 0);
     ::SetTrackUIMute(bass, 0, 0);
   };
   EXPECT_NONFATAL_FAILURE(surface->Run(), "on 2 tracks, in 2 separate");
 
-  // So is each scope.
+  // So is each deferred refresh.
   g_test_surface->on_run = [&] {
     ::PreventUIRefresh(1);
     ::SetTrackSelected(drums, true);

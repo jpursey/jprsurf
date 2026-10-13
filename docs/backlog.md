@@ -28,44 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Batch each run
-
-- **Layers:** common
-- **Size:** small
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md) (Seen
-  in traces)
-
-Every track setter already goes through a `TrackBatch`, even for one track.
-Wrapping each run in one `PreventUIRefresh()` pair, in `ControlSurface`, would
-also batch what isn't batched today: `CSurf_OnVolumeChangeEx()` and
-`CSurf_OnPanChangeEx()`, the send setters, and `Main_OnCommand()`, if they
-refresh REAPER's UI, and more than one gesture in a run, such as two faders
-moved at once. A new behavior would then need no rule to remember. It is a
-plain pair, not a `TrackBatch`, which also makes its gesture's undo point, so
-undo points stay one a gesture. The call count bounds
-(`plugin/default_config/call_count_test.cc`) show what it saves. `CallCounter`
-counts the end of every outermost `PreventUIRefresh()` scope as a refresh, empty
-or not, so with each run batched every idle run counts one: the rules still
-pass, but every steady state bound shows 30 refreshes a second. Once the empty
-pair's cost is known (below), the counter matches it (an empty batch is no
-refresh, if it is cheap), and the bounds move with it.
-
-To confirm, in REAPER:
-- **What an empty pair costs.** It runs every run, idle or not. If REAPER
-  refreshes whenever the count goes back to zero, even with nothing changed,
-  the batch opens at the run's first write instead.
-- **Callbacks come later.** REAPER calls a batched setter's callbacks (such
-  as `SetSurfaceSelected()`) at the end of the batch, so they would all come
-  after the run's work, rather than after each gesture. `TrackBatch` keeps the
-  cache in line with JPRSurf's own changes, but what only a callback refreshes
-  (today, the selected tracks' automation modes) would show a run later. The
-  fake already defers these callbacks, so the surface tests show the effect.
-- **Actions inside a batch:** whether every action JPRSurf runs behaves the
-  same inside `PreventUIRefresh()`, such as Undo (which resends everything),
-  the ruler modes, and anything that scrolls or redraws.
-
 ## Benchmarks under the fake
 
 - **Layers:** plugin
@@ -108,8 +70,9 @@ done. *Measure REAPER's costs* then retires the smoke profile.
 
 What each function on the API list costs in REAPER, measured on its own, under
 the conditions its cost depends on, rather than through the default config's
-gestures: inside a `PreventUIRefresh()` batch or not, and as it scales with the
-project (tracks, selected tracks, and routes). The end of a batch, an undo
+gestures: inside a deferred refresh (a `PreventUIRefresh()` scope) or not, and
+as it scales with the project (tracks, selected tracks, and routes). The end of
+a deferred refresh, an undo
 point, and each action JPRSurf runs are measured the same way. No device or
 config is involved: the measurements call REAPER's API directly, on generated
 projects, in the test install and runner *Check the fakes in REAPER* built.
@@ -119,7 +82,7 @@ projects, in the test install and runner *Check the fakes in REAPER* built.
 - **The result** refines the cost table the call count tests weigh calls with
   (`GetCallCost()` in `jpr/common/testing/call_cost.h`), which today comes from
   the profile snapshots, and is conservative where nobody has measured: each
-  function's category, which setters a batch really defers, and how each cost
+  function's category, which setters are really deferrable, and how each cost
   scales with the project. It is measured again when the API list grows, or
   REAPER updates, rather than with each change.
 

@@ -154,10 +154,10 @@ std::vector<std::string> RecArmChange(MediaTrack* track) {
   return calls;
 }
 
-// What a rec arm of `track` outside a batch sends: its change, the track list
-// change with every track's state, leaving out the mute and solo of `unsent`,
-// the master's solo, and then the change of each of `changed`.
-std::vector<std::string> RecArmOutsideABatch(
+// What a rec arm of `track` outside a deferred refresh sends: its change, the
+// track list change with every track's state, leaving out the mute and solo of
+// `unsent`, the master's solo, and then the change of each of `changed`.
+std::vector<std::string> RecArmOutsideADeferredRefresh(
     MediaTrack* track, const std::vector<MediaTrack*>& changed,
     MediaTrack* unsent = nullptr) {
   std::vector<std::string> calls = RecArmChange(track);
@@ -213,7 +213,8 @@ TEST_F(SurfaceNotifierContractTest, MuteThatChangesNothingSendsTheMastersSolo) {
   EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)"));
 }
 
-TEST_F(SurfaceNotifierContractTest, MuteAndSoloInABatchSendTheTracksAtItsEnd) {
+TEST_F(SurfaceNotifierContractTest,
+       MuteAndSoloInADeferredRefreshSendTheTracksAtItsEnd) {
   PreventUIRefresh(1);
   PreventUIRefresh(1);
   SetTrackUIMute(b_, 1, 0);
@@ -221,7 +222,7 @@ TEST_F(SurfaceNotifierContractTest, MuteAndSoloInABatchSendTheTracksAtItsEnd) {
   EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)",
                                        "SetSurfaceSolo(master, true)"));
 
-  // Only the outermost scope's end sends them, in track order.
+  // Only the outermost deferred refresh's end sends them, in track order.
   PreventUIRefresh(-1);
   EXPECT_THAT(TakeCalls(), IsEmpty());
   PreventUIRefresh(-1);
@@ -231,7 +232,8 @@ TEST_F(SurfaceNotifierContractTest, MuteAndSoloInABatchSendTheTracksAtItsEnd) {
                   "SetSurfaceMute(B, true)", "SetSurfaceSolo(B, false)"));
 }
 
-TEST_F(SurfaceNotifierContractTest, MuteOutsideABatchIsSentAtABatchsEnd) {
+TEST_F(SurfaceNotifierContractTest,
+       MuteOutsideADeferredRefreshIsSentWhenOneEnds) {
   SetTrackUIMute(a_, 1, 0);
   TakeCalls();
   EndEntryPoint();
@@ -259,7 +261,8 @@ TEST_F(SurfaceNotifierContractTest, MuteChangedBackIsNeverSent) {
 TEST_F(SurfaceNotifierContractTest,
        RecArmSendsTheTrackThenTheTrackListChangeThenTheTrackAgain) {
   SetTrackUIRecArm(a_, 1, 0);
-  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_})));
+  EXPECT_THAT(TakeCalls(),
+              ElementsAreArray(RecArmOutsideADeferredRefresh(a_, {a_})));
 }
 
 TEST_F(SurfaceNotifierContractTest, EveryStateLeavesOutAMuteNotSentYet) {
@@ -268,8 +271,8 @@ TEST_F(SurfaceNotifierContractTest, EveryStateLeavesOutAMuteNotSentYet) {
   EndEntryPoint();
 
   SetTrackUIRecArm(a_, 1, 0);
-  EXPECT_THAT(TakeCalls(),
-              ElementsAreArray(RecArmOutsideABatch(a_, {a_}, /*unsent=*/b_)));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideADeferredRefresh(
+                               a_, {a_}, /*unsent=*/b_)));
 }
 
 TEST_F(SurfaceNotifierContractTest,
@@ -279,7 +282,8 @@ TEST_F(SurfaceNotifierContractTest,
   EndEntryPoint();
 
   SetTrackUIRecArm(a_, 1, 0);
-  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_, b_})));
+  EXPECT_THAT(TakeCalls(),
+              ElementsAreArray(RecArmOutsideADeferredRefresh(a_, {a_, b_})));
 }
 
 TEST_F(SurfaceNotifierContractTest,
@@ -289,7 +293,8 @@ TEST_F(SurfaceNotifierContractTest,
   EndEntryPoint();
 
   SetTrackUIRecArm(a_, 1, kPreventSelectionGanging);
-  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_})));
+  EXPECT_THAT(TakeCalls(),
+              ElementsAreArray(RecArmOutsideADeferredRefresh(a_, {a_})));
 }
 
 TEST_F(SurfaceNotifierContractTest, RecArmThatChangesNothingSendsNothing) {
@@ -303,14 +308,15 @@ TEST_F(SurfaceNotifierContractTest, RecArmThatChangesNothingSendsNothing) {
 }
 
 TEST_F(SurfaceNotifierContractTest,
-       RecArmInABatchSendsTheTrackListChangeAtItsEnd) {
+       RecArmInADeferredRefreshSendsTheTrackListChangeAtItsEnd) {
   PreventUIRefresh(1);
   SetTrackUIRecArm(a_, 1, 0);
   SetTrackUIRecArm(b_, 1, 0);
   EXPECT_THAT(TakeCalls(), ElementsAre("SetTrackListChange()", MasterSolo(),
                                        "SetTrackListChange()", MasterSolo()));
 
-  // Each track whose rec arm changed is sent as it is outside a batch.
+  // Each track whose rec arm changed is sent as it is outside a deferred
+  // refresh.
   PreventUIRefresh(-1);
   std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
   Append(expected, State(master_));
@@ -321,7 +327,8 @@ TEST_F(SurfaceNotifierContractTest,
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
 
-TEST_F(SurfaceNotifierContractTest, RecArmChangedBackInABatchIsStillSent) {
+TEST_F(SurfaceNotifierContractTest,
+       RecArmChangedBackInADeferredRefreshIsStillSent) {
   PreventUIRefresh(1);
   SetTrackUIRecArm(a_, 1, 0);
   SetTrackUIRecArm(a_, 0, 0);
@@ -337,7 +344,7 @@ TEST_F(SurfaceNotifierContractTest, RecArmChangedBackInABatchIsStillSent) {
 }
 
 TEST_F(SurfaceNotifierContractTest,
-       RecArmInABatchSendsAnotherTracksMuteAfterItsState) {
+       RecArmInADeferredRefreshSendsAnotherTracksMuteAfterItsState) {
   PreventUIRefresh(1);
   SetTrackUIMute(a_, 1, 0);
   SetTrackUIRecArm(b_, 1, 0);
@@ -354,7 +361,7 @@ TEST_F(SurfaceNotifierContractTest,
 }
 
 TEST_F(SurfaceNotifierContractTest,
-       RecArmOfASelectedTrackInABatchIsSentAsAChangeToEveryTrack) {
+       RecArmOfASelectedTrackInADeferredRefreshIsSentAsAChangeToEveryTrack) {
   PreventUIRefresh(1);
   SetTrackSelected(b_, true);
   SetTrackUIRecArm(b_, 1, 0);
@@ -372,7 +379,7 @@ TEST_F(SurfaceNotifierContractTest,
 }
 
 TEST_F(SurfaceNotifierContractTest,
-       RecArmInABatchSendsAnotherTracksSelectionAgain) {
+       RecArmInADeferredRefreshSendsAnotherTracksSelectionAgain) {
   PreventUIRefresh(1);
   SetTrackSelected(a_, true);
   SetTrackUIRecArm(b_, 1, 0);
@@ -404,7 +411,7 @@ TEST_F(SurfaceNotifierContractTest,
   EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 
-TEST_F(SurfaceNotifierContractTest, SelectionInABatchIsSentAtItsEnd) {
+TEST_F(SurfaceNotifierContractTest, SelectionInADeferredRefreshIsSentAtItsEnd) {
   PreventUIRefresh(1);
   SetTrackSelected(b_, true);
   SetTrackSelected(a_, true);
@@ -599,14 +606,15 @@ class SurfaceNotifierGroupContractTest : public ContractTest {
 TEST_F(SurfaceNotifierGroupContractTest,
        RecArmOfAGroupedTrackIsSentAsAChangeToEveryTrack) {
   SetTrackUIRecArm(a_, 1, kPreventSelectionGanging);
-  EXPECT_THAT(TakeCalls(),
-              ElementsAreArray(RecArmOutsideABatch(a_, {a_, b_, c_})));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideADeferredRefresh(
+                               a_, {a_, b_, c_})));
 }
 
 TEST_F(SurfaceNotifierGroupContractTest,
        RecArmOfAGroupedTrackWithoutGroupingIsSentAsAChangeToIt) {
   SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
-  EXPECT_THAT(TakeCalls(), ElementsAreArray(RecArmOutsideABatch(a_, {a_})));
+  EXPECT_THAT(TakeCalls(),
+              ElementsAreArray(RecArmOutsideADeferredRefresh(a_, {a_})));
 }
 
 }  // namespace

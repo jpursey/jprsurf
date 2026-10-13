@@ -67,9 +67,9 @@ class SurfaceNotifierTest : public ::testing::Test {
 };
 
 TEST_F(SurfaceNotifierTest, CallsDuringARunArePartOfIt) {
-  // A run that changes two tracks in one batch, which the fake would fail as
-  // separate changes, or as an unbalanced batch, if the calls the notifier
-  // makes during it ended the run.
+  // A run that changes two tracks in one deferred refresh, which the fake would
+  // fail as separate changes, or as an unbalanced deferred refresh, if the
+  // calls the notifier makes during it ended the run.
   RecordingSurface::Get()->SetOnRun([this] {
     PreventUIRefresh(1);
     SetTrackUIMute(a_, 1, 0);
@@ -94,9 +94,11 @@ TEST_F(SurfaceNotifierTest, SendsNothingWithNoSurfaceOpen) {
   Main_OnCommand(kUndoAction, 0);
 }
 
-// A mute or solo outside a batch is sent before the next run, which isn't made
-// (see SurfaceNotifier), so the next run's batch doesn't send it.
-TEST_F(SurfaceNotifierTest, MuteOutsideABatchIsForgottenAtTheNextRun) {
+// A mute or solo outside a deferred refresh is sent before the next run, which
+// isn't made (see SurfaceNotifier), so the next run's deferred refresh doesn't
+// send it.
+TEST_F(SurfaceNotifierTest,
+       MuteOutsideADeferredRefreshIsForgottenAtTheNextRun) {
   SetTrackUIMute(a_, 1, 0);
   EXPECT_THAT(TakeCalls(), ElementsAre("SetSurfaceSolo(master, false)"));
   reaper_.EndEntryPoint();
@@ -209,10 +211,10 @@ TEST_F(SurfaceNotifierTest, ChangesNoTraceHasShownFail) {
   EXPECT_THAT(TakeCalls(), IsEmpty());
 }
 
-TEST_F(SurfaceNotifierTest, ChangesInsideABatchFail) {
+TEST_F(SurfaceNotifierTest, ChangesInsideADeferredRefreshFail) {
   FakeTrack* const a = reaper_.GetProject().GetTrack(0);
   PreventUIRefresh(1);
-  EXPECT_NONFATAL_FAILURE(notifier_.ClickMute(a), "PreventUIRefresh() scope");
+  EXPECT_NONFATAL_FAILURE(notifier_.ClickMute(a), "inside a deferred refresh");
   EXPECT_FALSE(a->mute);
   PreventUIRefresh(-1);
   EXPECT_THAT(TakeCalls(), IsEmpty());

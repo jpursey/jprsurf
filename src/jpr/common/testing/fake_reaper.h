@@ -91,9 +91,9 @@ struct FakeCommand {
 //   or when the fake is destroyed. Each must leave PreventUIRefresh()
 //   balanced, and follow the TrackBatch rule: an entry point that changes the
 //   mute, solo, rec arm, or selection of several tracks makes them one change,
-//   in one PreventUIRefresh() scope, or one call outside of any. Each change
-//   costs a refresh of REAPER's UI, and the extension adds its own undo point
-//   for each.
+//   in one deferred refresh (a PreventUIRefresh() scope), or one call outside
+//   of any. Each change costs a refresh of REAPER's UI, and the extension adds
+//   its own undo point for each.
 //==============================================================================
 
 class FakeReaper final {
@@ -146,8 +146,8 @@ class FakeReaper final {
   // TestControlSurface::GetWrapped()).
   TestControlSurface* GetSurface() { return surface_; }
 
-  // Returns true while a PreventUIRefresh() scope is open.
-  bool IsUIRefreshPrevented() const { return batch_depth_ > 0; }
+  // Returns true inside a deferred refresh (a PreventUIRefresh() scope).
+  bool IsUIRefreshPrevented() const { return deferred_depth_ > 0; }
 
   // Ends the entry point: checks what was called since the last one ended (see
   // Checks), and starts the next. A test that calls the extension's code
@@ -290,11 +290,11 @@ class FakeReaper final {
 
   // PreventUIRefresh(), and a change the TrackBatch rule covers.
   void OnPreventUIRefresh(int count);
-  void OnBatchedChange(const FakeTrack* track);
+  void OnDeferrableChange(const FakeTrack* track);
 
-  // Ends a PreventUIRefresh() scope, counting it as one change if anything
+  // Ends the outermost deferred refresh, counting it as one change if anything
   // changed in it.
-  void EndBatch();
+  void EndDeferredRefresh();
 
   // The one instance that exists, if any.
   static FakeReaper* s_instance_;
@@ -329,8 +329,8 @@ class FakeReaper final {
   std::string console_text_;
 
   // The current entry point's changes, for the TrackBatch rule.
-  int batch_depth_ = 0;            // PreventUIRefresh()'s count.
-  bool changed_in_batch_ = false;  // A change in the current scope.
+  int deferred_depth_ = 0;               // PreventUIRefresh()'s count.
+  bool changed_while_deferred_ = false;  // A change in this deferred refresh.
   int change_count_ = 0;
   absl::flat_hash_set<const FakeTrack*> changed_tracks_;
 
