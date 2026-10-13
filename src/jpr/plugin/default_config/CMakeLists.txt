@@ -17,6 +17,7 @@ set(jpr_default_config_DEPS
 )
 
 set(jpr_default_config_TEST_SOURCE
+  call_count_test.cc
   default_config_test_test.cc
   global_test.cc
   send_mode_test.cc

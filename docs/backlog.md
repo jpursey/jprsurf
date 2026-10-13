@@ -143,6 +143,24 @@ frame on performance cores. What is left is `smoke.txt`, unless *Measure
 REAPER's costs* retires it first, recorded the same way at the end of the next
 feature that profiles the smoke test.
 
+## Refresh only the routes Send/Receive mode shows
+
+- **Layers:** common, scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [reaper_call_count_tests.md](worklog/reaper_call_count_tests.md)
+  (CL5)
+
+In Send/Receive mode, `RouteList::Sync()` (`scene/view_list.cc`) calls
+`Track::RefreshRoutes()` each run, which reads the volume, pan, and mute of
+every send and receive of the track (`common/track.cc`), not only the routes of
+the type and bank its strips show. On the large project's bus, with 31
+receives, that is 62 reads a run where 30 would do, about 2us a run in REAPER
+by the smoke profile's per-call times, and it grows with the track's routes.
+Refreshing only the shown type over the shown bank brings it down, and
+`CallCountTest.SendReceiveModeOnABus` shows the saving.
+
 ## Units in the names of plain times
 
 - **Layers:** common, device, scene, plugin

@@ -54,6 +54,10 @@ class DefaultConfigTest : public SurfaceTest {
   // Taps select on `strip`, which selects only its track.
   void TapSelect(int strip);
 
+  // Double presses select on `strip`, which goes into its track if it is a
+  // folder.
+  void DoublePressSelect(int strip);
+
   // Holds select on `first`, and taps it on `last`, which selects the tracks
   // from one to the other.
   void SelectRange(int first, int last);

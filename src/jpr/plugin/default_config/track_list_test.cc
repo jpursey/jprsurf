@@ -39,10 +39,6 @@ class TrackListTest : public DefaultConfigTest {
     AddSurface();
   }
 
-  void DoublePressSelect(int strip) {
-    DoublePress(GetXTouch(strip), StripButton::kSelect, GetXTouchStrip(strip));
-  }
-
   // Goes into T20, which a bank right shows.
   void GoIntoBigFolder() {
     Tap(xtouch_, Button::kBankRight);

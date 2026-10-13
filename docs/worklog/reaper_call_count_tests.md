@@ -231,7 +231,7 @@ TEST_F(CallCountTest, TappingMute) {
   polls changes every gesture's cheap count.
 - **Steady state:** a second of runs (30, which includes one poll of the track
   filters), in Track mode at the top level and in a folder, while playing (the
-  timecode is formatted each run), and in Send/Receive mode on a bus with 30
+  timecode is formatted each run), and in Send/Receive mode on a bus with 31
   receives.
 - **Gestures:** each one the surface tests make, by area as the surface tests
   are: track strips (mute, solo, rec arm, a ranged mute, a fader, a pot and
@@ -315,12 +315,22 @@ Depends on: CL2.
   repeat made by the test's own calls (an entry point of their own), as the
   counter's tests cover runs.
 
-### CL5 [ ] plugin/default_config: Steady state and infrequent events
+### CL5 [x] plugin/default_config: Steady state and infrequent events
 
 Depends on: CL3, CL4.
 
 - `call_count_test.cc`: `CallCountTest`, the steady state tests, and the
-  bounds of a track list refresh, a bank change, and the mode changes.
+  bounds of starting up, a track list refresh, a bank change, and the mode
+  changes (entering Send/Receive mode, and returning to Track mode).
+- The fake doesn't move the play position while playing, so the playing test
+  moves it before each run, as REAPER does, or the timecode would only be
+  formatted once.
+- Found: Send/Receive mode on the bus reads all 31 of its receives each run,
+  not only the 15 its strips show. They are cheap reads (62 a run), so it is
+  left as the bound shows it, for the backlog's *Refresh only the routes
+  Send/Receive mode shows*.
+- `DoublePressSelect()` moves from `TrackListTest` to `DefaultConfigTest`,
+  beside `TapSelect()`, for this test to use too.
 
 **Verify**
 - Standard checks.

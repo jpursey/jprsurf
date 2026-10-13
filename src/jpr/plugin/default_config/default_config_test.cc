@@ -42,6 +42,11 @@ void DefaultConfigTest::TapSelect(int strip) {
       GetXTouchStrip(strip));
 }
 
+void DefaultConfigTest::DoublePressSelect(int strip) {
+  DoublePress(GetXTouch(strip), FakeXTouch::StripButton::kSelect,
+              GetXTouchStrip(strip));
+}
+
 void DefaultConfigTest::SelectRange(int first, int last) {
   Hold(GetXTouch(first), FakeXTouch::StripButton::kSelect,
        GetXTouchStrip(first));
