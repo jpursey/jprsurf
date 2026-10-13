@@ -189,12 +189,14 @@ is often a test's many calls.
 void AddLargeProject(FakeProject* project);
 ```
 
-128 tracks: 4 buses at the top, then 12 folders of 10 tracks, the second of
-which is a folder of 3. Every other track sends to a bus, in turn, so each bus
-has about 30 receives, and the first track of each folder also sends to the
-rest of its folder (9 sends). It is in `common/testing`, rather than the
-default config's tests, so *Benchmarks under the fake* and *Measure REAPER's
-costs* (in the test install, from a `FakeProject`) can use the same project.
+128 tracks: 4 buses at the top (T1 to T4), then 12 folders (T5 to T16) of 9
+tracks each, the first of the second (T6.1) itself a folder of 4. Every track
+but the buses sends to a bus, in turn, so each bus has 31 receives, and each
+folder also sends to each track directly in it (9 sends). It is in
+`common/testing`, rather than the default config's tests, and in the contract
+library beside `FakeProject` (`jpr_common_contract`), so *Benchmarks under the
+fake* and *Measure REAPER's costs* (in the test install, from a `FakeProject`)
+can use the same project.
 
 ### plugin/testing: Rules in every surface test
 
@@ -286,7 +288,7 @@ Depends on: CL1.
   points, and a repeated setter on the same track, but not on two tracks, in
   two runs, or in a run and the calls after it.
 
-### CL3 [ ] common/testing: The large project
+### CL3 [x] common/testing: The large project
 
 Depends on: nothing.
 
@@ -295,7 +297,7 @@ Depends on: nothing.
 **Verify**
 - Standard checks.
 - `large_project_test.cc`: the track count, the folders' depths, and the
-  routes of a bus and of a folder's first track.
+  routes of a bus and of a folder.
 
 ### CL4 [ ] plugin/testing: Rules in every surface test
 

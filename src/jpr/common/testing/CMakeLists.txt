@@ -11,6 +11,7 @@ set(jpr_common_contract_SOURCE
   contract_test.h
   fake_project.cc fake_project.h
   fake_track.h
+  large_project.cc large_project.h
   project_file.cc project_file.h
   reaper_action_list.h
   recording_surface.cc recording_surface.h
@@ -80,6 +81,7 @@ set(jpr_common_testing_TEST_SOURCE
   call_counter_test.cc
   fake_midi_test.cc
   fake_reaper_test.cc
+  large_project_test.cc
   project_file_test.cc
   reaper_actions_test.cc
   recording_surface_test.cc
