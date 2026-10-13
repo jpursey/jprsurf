@@ -702,6 +702,19 @@ TEST(FakeReaperTest, TheTestCanEndItsOwnEntryPoints) {
       "in one TrackBatch");
 }
 
+TEST(FakeReaperTest, EntryPointCheckIsCalledAtTheEndOfEachEntryPoint) {
+  FakeReaper reaper;
+  int checks = 0;
+  reaper.SetEntryPointCheck([&checks] { ++checks; });
+  reaper.EndEntryPoint();
+  reaper.EndEntryPoint();
+  EXPECT_EQ(checks, 2);
+
+  reaper.SetEntryPointCheck({});
+  reaper.EndEntryPoint();
+  EXPECT_EQ(checks, 2);
+}
+
 TEST(FakeReaperTest, RecordsConsoleText) {
   FakeReaper reaper;
   ::ShowConsoleMsg("Hello, ");

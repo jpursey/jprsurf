@@ -46,6 +46,7 @@ set(jpr_common_contract_TESTS
 set(jpr_common_testing_SOURCE
   cached_track.h
   call_cost.cc call_cost.h
+  call_counter.cc call_counter.h
   contract_test_fake.cc
   fake_midi.cc fake_midi.h
   fake_reaper.cc fake_reaper.h
@@ -55,7 +56,10 @@ set(jpr_common_testing_SOURCE
 )
 
 set(jpr_common_testing_DEPS
+  absl::algorithm_container
   absl::any_invocable
+  absl::cleanup
+  absl::flat_hash_map
   absl::flat_hash_set
   absl::function_ref
   absl::log
@@ -73,6 +77,7 @@ set(jpr_common_testing_DEPS
 
 set(jpr_common_testing_TEST_SOURCE
   call_cost_test.cc
+  call_counter_test.cc
   fake_midi_test.cc
   fake_reaper_test.cc
   project_file_test.cc

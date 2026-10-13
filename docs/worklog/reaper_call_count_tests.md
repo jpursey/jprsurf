@@ -17,7 +17,8 @@ Three kinds of check, from the most general to the most specific:
   most, adds one undo point at most, and never makes the same setter call
   twice on the same track or route. A gesture's work is all done in one run
   (REAPER's callbacks only set flags), so checking each run covers every
-  gesture, however a test drives it. A new behavior that misses a batch, or
+  gesture, however a test drives it. The same rules hold for each of REAPER's
+  calls on the surface between runs. A new behavior that misses a batch, or
   repeats a call, fails without a test of its own.
 - **Steady state:** in each mode, an idle second of runs makes no refresh, no
   undo point, and no action, and its other calls are bounded.
@@ -131,8 +132,8 @@ struct CallCounts {
 // CallCounter
 //
 // Counts the extension's calls to the REAPER API by cost (see GetCallCost()),
-// for as long as it exists, and fails the test, naming the run and its calls,
-// for a run that:
+// for as long as it exists, and fails the test, naming the calls, for an
+// entry point (see FakeReaper) that:
 // - Refreshes REAPER's UI more than once.
 // - Adds more than one undo point.
 // - Repeats a refresh or a command: makes it twice with the same repeat key
@@ -156,9 +157,12 @@ class CallCounter final {
 };
 ```
 
-- **Runs** are the fake's (`FakeReaper::GetRuns()`): each call is counted to
-  the run it was made in, and a run is checked when a call is made in a later
-  one, or when the counts are taken, or the counter is destroyed.
+- **Entry points** are the fake's: each call on the surface, such as a run,
+  with what the surface does in REAPER's calls back from inside its functions,
+  and the test's own calls between them. The counter checks each as it ends,
+  through `FakeReaper::SetEntryPointCheck()`, so a failure shows at the
+  statement that caused it, and calls between runs (such as destroying the
+  surface) are checked on their own rather than with the run before.
 - **Batches** come from the fake: a batched setter inside a scope
   (`FakeReaper::IsUIRefreshPrevented()`) is moderate, and a call before which
   a scope was open, and after which none is, is the refresh.
@@ -170,8 +174,11 @@ class CallCounter final {
 
 **Brittleness:** a function added to the API list needs a cost, which the
 table enforces. Whether it is a setter, and its repeat key, are the table's to
-get right; a refresh whose key has no arguments counts any second call in a
-run as a repeat, which errs toward failing.
+get right; a refresh whose key has no arguments counts any second call in an
+entry point as a repeat, which errs toward failing. The fake's own TrackBatch
+check overlaps the first rule, so a missed batch in a surface test fails
+twice; it stays, as it applies to every library's tests, where an entry point
+is often a test's many calls.
 
 ### common/testing: The large project (large_project.h)
 
@@ -258,21 +265,26 @@ Depends on: nothing.
 - The table doesn't compile unless it matches the API list.
 - `call_cost_test.cc`: finding a function's cost.
 
-### CL2 [ ] common/testing: CallCounter
+### CL2 [x] common/testing: CallCounter
 
 Depends on: CL1.
 
+- `FakeReaper::SetEntryPointCheck()`: a test's own check at the end of each
+  entry point.
 - `call_counter.h/.cc`: `CallCounts` and `CallCounter`, as in Design.
 - Unused outside its tests, so no visible change.
 
 **Verify**
-- Standard checks.
+- Standard checks, and `check_in_reaper`, as the fake changes.
+- `fake_reaper_test.cc`: the entry point check is called at each end, until
+  it is cleared.
 - `call_counter_test.cc`, calling the API directly on the fake, a run at a
   time: each category counted, a batched setter moderate inside a scope and a
   refresh outside one, only the outermost `PreventUIRefresh(-1)` a refresh,
   the actions run, `TakeCounts()` starting again, and each rule failing (with
-  `EXPECT_NONFATAL_FAILURE`) for two refreshes, two undo points, and a repeated
-  setter on the same track, but not on two tracks, or in two runs.
+  `EXPECT_NONFATAL_FAILURE`) as the run ends, for two refreshes, two undo
+  points, and a repeated setter on the same track, but not on two tracks, in
+  two runs, or in a run and the calls after it.
 
 ### CL3 [ ] common/testing: The large project
 

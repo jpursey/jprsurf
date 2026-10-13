@@ -1236,6 +1236,9 @@ void FakeReaper::EndEntryPoint() {
   }
   change_count_ = 0;
   changed_tracks_.clear();
+  if (entry_point_check_) {
+    entry_point_check_();
+  }
 }
 
 void* FakeReaper::GetFakeFunc(const char* name) {

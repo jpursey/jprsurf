@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -155,6 +156,13 @@ class FakeReaper final {
   // calls would end, never in the middle of one, which would hide what the
   // checks catch.
   void EndEntryPoint();
+
+  // Calls `check` at the end of each entry point, after the fake's own checks,
+  // for a test's checks of its own (such as CallCounter's), replacing any
+  // check set before. An empty `check` stops it.
+  void SetEntryPointCheck(absl::AnyInvocable<void()> check) {
+    entry_point_check_ = std::move(check);
+  }
 
   //----------------------------------------------------------------------------
   // Time
@@ -325,6 +333,8 @@ class FakeReaper final {
   bool changed_in_batch_ = false;  // A change in the current scope.
   int change_count_ = 0;
   absl::flat_hash_set<const FakeTrack*> changed_tracks_;
+
+  absl::AnyInvocable<void()> entry_point_check_;
 };
 
 }  // namespace jpr
