@@ -100,6 +100,31 @@ does. Many don't yet: `kDependentBindingDelay` and `kMotorizedBindingDelay` in
 the code for them, and either add the unit (`Secs`, `Ms`) or, where it reads
 better and costs nothing on the realtime path, use the Abseil type.
 
+## Write files through gb::FileSystem
+
+- **Layers:** common, plugin
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [profiler.md](worklog/profiler.md) (Structure)
+
+Three places write a whole text file with their own `_wfopen_s`, `fwrite`, and
+`fclose` checks: `ReaperProfiler::WriteSnapshot()` (the profile),
+`WriteCheckFile()` in `contract_test_reaper.cc` (the contract tests' results
+in the test install), and `WriteSummary()` in the benchmark. Game Bits'
+`gb::FileSystem::WriteFile()` already does this, so each writes through it
+instead, and the error handling lives in one place.
+- **Setup:** `jpr_common` links `gb_file`. A `FileSystem` path is relative to
+  a protocol's root, so each writer registers a `LocalFileProtocol` rooted at
+  the folder its file goes in, once (the profile's folder, the test install's
+  `g_dir`, the benchmark's output directory), and writes by file name.
+- **Line endings:** `LocalFileProtocol` writes in binary mode, so the files
+  come out with LF rather than the CRLF text mode writes today. Git's
+  `autocrlf` normalizes the committed profile snapshots either way.
+- **Docs:** `profiler.md` says the profile is written with `std::fopen` as
+  "one string written once needs no abstraction"; that line changes to say
+  how it is written now.
+
 ## Undo points in the project the changes were made in
 
 - **Layers:** common
