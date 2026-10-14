@@ -40,15 +40,6 @@ void LogSlowRun(std::string_view report) {
                               << report;
 }
 
-// Returns `time` in microseconds, or milliseconds from 1ms, to one decimal
-// place.
-std::string FormatRunTime(absl::Duration time) {
-  if (time < absl::Milliseconds(1)) {
-    return absl::StrFormat("%.1fus", absl::ToDoubleMicroseconds(time));
-  }
-  return absl::StrFormat("%.1fms", absl::ToDoubleMilliseconds(time));
-}
-
 //==============================================================================
 // Profiled MIDI ports
 //
@@ -131,6 +122,13 @@ class ProfiledMidiOutput final : public midi_Output {
 
 }  // namespace
 
+std::string FormatRunTime(absl::Duration time) {
+  if (time < absl::Milliseconds(1)) {
+    return absl::StrFormat("%.1fus", absl::ToDoubleMicroseconds(time));
+  }
+  return absl::StrFormat("%.1fms", absl::ToDoubleMilliseconds(time));
+}
+
 //==============================================================================
 // ReaperProfiler
 //==============================================================================
@@ -151,8 +149,8 @@ ReaperProfiler::~ReaperProfiler() {
 
 ReaperProfiler::RunSplit ReaperProfiler::GetRunSplit() const {
   RunSplit split;
-  const int64_t runs = profiler_.GetFrameSummary().frames;
-  if (runs == 0) {
+  split.runs = profiler_.GetFrameSummary().frames;
+  if (split.runs == 0) {
     return split;
   }
   for (const gb::ProfilePoint& point :
@@ -169,8 +167,8 @@ ReaperProfiler::RunSplit ReaperProfiler::GetRunSplit() const {
         break;
     }
   }
-  split.extension /= runs;
-  split.reaper /= runs;
+  split.extension /= split.runs;
+  split.reaper /= split.runs;
   return split;
 }
 

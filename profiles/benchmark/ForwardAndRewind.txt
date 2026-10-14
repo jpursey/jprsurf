@@ -1,0 +1,100 @@
+JPRSurf profile
+Build:    0ac044d (modified)
+Date:     2026-10-13 18:10, 0s
+Per run:  JPRSurf 5.9us, REAPER 6.6us
+
+Frames      800
+Total       9.98ms
+Average     12.5us
+P50         12.2us
+P90         12.2us
+P99         29.6us
+Max         31.4us
+Profiler    1.53us per frame, budget 3.00us
+Point cost  11.8ns
+Tick rate   3.19GHz measured, 3.19GHz reported
+
+Core     Frames  Average     Max
+class 1     800   12.5us  31.4us
+
+Point                            Kind      Count  Count/frame    Self  Self/call  Self/frame
+ControlSurface::Run              frame       800         1.00   124us      155ns       155ns
+Runner: Device                   scope       800         1.00  1.89ms     2.36us      2.36us
+Runner: MidiIn                   scope       800         1.00  73.2us     91.2ns      91.2ns
+Runner: MidiOut                  scope       800         1.00  37.5us     46.8ns      46.8ns
+Runner: Scene                    scope       800         1.00  60.8us     76.0ns      76.0ns
+Scene::ApplyViewConditions       scope       800         1.00  6.04us     7.50ns      7.50ns
+Scene::UpdateReferences          scope       800         1.00   170us      213ns       213ns
+SceneStateProperty::UpdateState  scope       800         1.00   249us      312ns       312ns
+TrackCache::RefreshFilters       scope        26         0.03  72.3us     2.78us      90.2ns
+View::SyncMappings               scope       800         1.00  2.05ms     2.56us      2.56us
+AnyTrackSolo                     call        800         1.00  65.8us     82.2ns      82.2ns
+CountSelectedMediaItems          call        800         1.00  30.5us     38.0ns      38.0ns
+GetCursorPosition                call        800         1.00  24.5us     30.5ns      30.5ns
+GetGlobalAutomationOverride      call        800         1.00  28.9us     36.0ns      36.0ns
+GetMediaTrackInfo_Value          call       6656         8.32   353us     52.8ns       441ns
+GetPlayState                     call        800         1.00  22.0us     27.5ns      27.5ns
+GetToggleCommandState            call      10400         13.0   412us     39.5ns       515ns
+GetTrackColor                    call      14400         18.0   836us     58.0ns      1.04us
+GetTrackState                    call      14400         18.0  1.40ms     96.8ns      1.75us
+GetTrackUIVolPan                 call      14400         18.0   619us     42.8ns       774ns
+IsProjectDirty                   call        800         1.00  22.6us     28.2ns      28.2ns
+Main_OnCommand                   call        100         0.12  17.8us      178ns      22.0ns
+PreventUIRefresh                 call       1800         2.25  72.9us     40.5ns      91.0ns
+Track_GetPeakInfo                call      25600         32.0  1.24ms     48.2ns      1.55us
+Undo_CanRedo2                    call        800         1.00  23.3us     29.0ns      29.0ns
+midi_Input::GetReadBuf           call       1600         2.00  13.2us     8.00ns      16.2ns
+midi_Input::SwapBufsPrecise      call       1600         2.00  48.8us     30.5ns      61.0ns
+time_precise                     call       1000         1.25  33.6us     33.5ns      42.0ns
+Device runnables                 counter  116000          145       -          -           -
+MIDI messages in                 counter     200         0.25       -          -           -
+MidiIn runnables                 counter    1600         2.00       -          -           -
+MidiOut runnables                counter    1600         2.00       -          -           -
+Scene runnables                  counter     800         1.00       -          -           -
+control inputs                   counter     200         0.25       -          -           -
+mappings synced                  counter  366400          458       -          -           -
+views synced                     counter   16000         20.0       -          -           -
+
+Slowest frame: 31.4us, core class 1, profiler 4.46us
+Kind     Self
+frame   182ns
+scope  9.24us
+call   21.9us
+
+Point                            Kind     Count    Self
+GetMediaTrackInfo_Value          call       256  14.9us
+TrackCache::RefreshFilters       scope        1  2.95us
+View::SyncMappings               scope        1  2.87us
+Runner: Device                   scope        1  2.56us
+GetTrackState                    call        18  1.92us
+Track_GetPeakInfo                call        32  1.78us
+GetTrackColor                    call        18  1.19us
+GetTrackUIVolPan                 call        18   870ns
+GetToggleCommandState            call        13   568ns
+SceneStateProperty::UpdateState  scope        1   322ns
+Scene::UpdateReferences          scope        1   238ns
+ControlSurface::Run              frame        1   182ns
+PreventUIRefresh                 call         4   171ns
+Runner: MidiIn                   scope        1   166ns
+midi_Input::SwapBufsPrecise      call         2   117ns
+Main_OnCommand                   call         1   115ns
+AnyTrackSolo                     call         1  91.0ns
+Runner: Scene                    scope        1  78.2ns
+GetGlobalAutomationOverride      call         1  59.5ns
+Runner: MidiOut                  scope        1  48.0ns
+CountSelectedMediaItems          call         1  38.0ns
+GetCursorPosition                call         1  34.0ns
+time_precise                     call         1  33.0ns
+Undo_CanRedo2                    call         1  32.2ns
+IsProjectDirty                   call         1  32.0ns
+GetPlayState                     call         1  28.0ns
+midi_Input::GetReadBuf           call         2  16.2ns
+Scene::ApplyViewConditions       scope        1  8.25ns
+Device runnables                 counter    145       -
+MIDI messages in                 counter      1       -
+MidiIn runnables                 counter      2       -
+MidiOut runnables                counter      2       -
+Scene runnables                  counter      1       -
+control inputs                   counter      1       -
+mappings synced                  counter    458       -
+views synced                     counter     20       -

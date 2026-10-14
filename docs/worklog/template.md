@@ -69,9 +69,8 @@ Depends on: nothing.
 - Standard checks (Release build, clang-format, ctest).
 - *Unit tests of what changes, against the fake for code that depends on
   REAPER.*
-- *Performance, only for a change to per-run work: a short idle profile,
-  against the feature's last snapshot and the bar. For a change to an
-  infrequent event, its cost with a large project.*
+- *Performance, only for a change to per-run work or an infrequent event: the
+  benchmark, against the feature's last snapshot and the bar.*
 
 ### CL2 [ ] *library*: *what it does*
 

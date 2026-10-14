@@ -232,12 +232,45 @@ rather than each runnable (a runner only ever holds one kind); `Run()` is the
 only one of the surface's callbacks that is timed (the others only set flags);
 and there is no periodic `Run()` log line.
 
-Tests don't load the profiler. Call count tests count with a `CallCounter`
-instead (see Tests), which hooks the same API list, and also sees what the
+Tests don't load the profiler, except the benchmarks (below). Call count tests
+count with a `CallCounter` instead (see Tests), which hooks the same API list, and also sees what the
 profiler doesn't: whether a deferred refresh is open, and a call's arguments,
 which say whether it repeats one already made. A deferred refresh is a
 `PreventUIRefresh()` scope: REAPER puts off refreshing its UI until the
 outermost one ends.
+
+### Benchmarks
+
+JPRSurf's own time, without REAPER. `jpr_benchmark`
+(`plugin/default_config/benchmark.cc`) runs the default config on the large
+project (`AddLargeProject()`) under the fake, as the surface tests do, with a
+`ReaperProfiler` of its own. Its times depend on the machine and its load, so
+it isn't a ctest test: the `benchmark` target runs it on demand (see CLAUDE.md),
+and its summary is compared against a snapshot (see `profiles/README.md`).
+- **What it times:** each steady state the call count tests count (at the top,
+  in a folder, while playing, and Send/Receive mode on a bus), for 3000 runs;
+  and each kind of action in the smoke scenario, and a few other gestures, 100
+  times, as the surface tests make them. An action is repeated with what undoes
+  it (mute on and off, into a folder and back out), so each repeat does the
+  same work.
+- **What it reports:** a profile of each benchmark's runs alone, without
+  setting up, and a summary with JPRSurf's self time per run, and for an
+  action, per action. An action's runs include the ones that settle it, which
+  would cost something with nothing happening, so an action's time is beyond
+  the idle time of the state it starts from, timed just before it.
+- **What isn't JPRSurf's:** self time leaves out every timed call inside a
+  point, and every call into the fake (with the `CallCounter` and
+  `SurfaceNotifier` hooked over it) and on a MIDI port is one, so neither the
+  fake nor the fake X-Touches' decoding is counted. What the profile shows as
+  REAPER's is theirs, which says nothing about REAPER.
+- **Noise:** how closely runs agree, and so what a change must move to count,
+  is in "Benchmark" in `profiles/README.md`.
+- **What it misses:** REAPER's effect on JPRSurf's own code. An idle run is
+  about 6us of JPRSurf's time under the fake, on 128 tracks, against about
+  28us in REAPER on 81 tracks (`profiles/idle.txt`); REAPER's work between
+  runs (its UI on the same thread, and audio) most likely leaves JPRSurf's code
+  and data out of the cache. A change whose cost is in that, such as one that
+  touches more memory, shows in REAPER, not here.
 
 ## Trace
 
@@ -727,7 +760,8 @@ Weighting the counts by what each call costs in REAPER, measured on its own
 **What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees
 with the hardware, what REAPER's own UI shows, the undo points REAPER adds
-between runs, and times. The smoke test in CLAUDE.md checks those by hand.
+between runs, and REAPER's times, with its effect on JPRSurf's (the benchmarks
+time JPRSurf's own code alone). The smoke test in CLAUDE.md checks those by hand.
 
 ## Getting there
 

@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -17,6 +18,10 @@
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
+
+// Returns `time` as a profile shows a time per run: in microseconds, or
+// milliseconds from 1ms, to one decimal place.
+std::string FormatRunTime(absl::Duration time);
 
 //==============================================================================
 // ReaperProfiler
@@ -51,6 +56,15 @@ class ReaperProfiler final {
     std::string build;
   };
 
+  // The runs recorded, and the extension's and REAPER's self time per run:
+  // every call point is REAPER's, and every other timed point is the
+  // extension's. With no runs, the times are zero.
+  struct RunSplit {
+    int64_t runs = 0;
+    absl::Duration extension;
+    absl::Duration reaper;
+  };
+
   // Starts profiling. A run over 8ms logs a warning with its breakdown. When
   // the profiler is destroyed, it writes the profile to the file at
   // `options.path`, and logs a summary.
@@ -59,20 +73,15 @@ class ReaperProfiler final {
   ReaperProfiler& operator=(const ReaperProfiler&) = delete;
   ~ReaperProfiler();
 
+  // Returns the runs recorded so far, and the split of their time.
+  RunSplit GetRunSplit() const;
+
   // Clears everything recorded so far, such as one time costs of starting up,
   // including values, which must then be set again. It must not be called
   // inside a timed point.
   void Reset() { profiler_.Reset(); }
 
  private:
-  // The extension's and REAPER's self time per run: every call point is
-  // REAPER's, and every other timed point is the extension's.
-  struct RunSplit {
-    absl::Duration extension;
-    absl::Duration reaper;
-  };
-  RunSplit GetRunSplit() const;
-
   // Hooks CreateMIDIInput() or CreateMIDIOutput(), returning a port that times
   // every call on the port REAPER created, or null if REAPER returned null.
   class MidiPortHook final {

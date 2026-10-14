@@ -1,18 +1,45 @@
 # Profiles
 
-Snapshots of `jprsurf_profile.txt` (see CLAUDE.md, Performance), kept so a
-change can be compared against them without rebuilding an older version.
+Snapshots of `jprsurf_profile.txt`, and of the benchmark (see CLAUDE.md,
+Performance), kept so a change can be compared against them without
+rebuilding an older version.
 
-- **The bar:** `idle.txt` and `smoke.txt`, one per scenario below. They change
-  only on purpose: after an optimization, or when a new cost is accepted.
-- **A feature's snapshots:** `<feature>/idle.txt`, committed with each CL of a
-  feature that changes per-run work (see Performance in CLAUDE.md). Each CL
-  compares against the feature's last snapshot, which catches a regression in
-  the CL that caused it, and against the bar.
-- **The end of a feature:** an idle and a smoke snapshot of the finished
-  feature, compared against the bar. The user decides whether they replace it,
-  and the feature's directory is deleted either way. The smoke test is a long
-  manual run, so it is only recorded here.
+- **The bar:** `idle.txt` and `smoke.txt`, profiles in REAPER, one per
+  scenario below, and `benchmark/`, everything the benchmark writes (see
+  Benchmark below). They change only on purpose: after an optimization, or
+  when a new cost is accepted.
+- **A feature's snapshots:** `<feature>/benchmark.txt`, the benchmark's
+  summary, committed with each CL of a feature that changes per-run work or
+  an infrequent event (see Performance in CLAUDE.md). Each CL compares against
+  the feature's last snapshot, which catches a regression in the CL that
+  caused it, and against the bar.
+- **The end of a feature:** an idle and a smoke snapshot in REAPER of the
+  finished feature, and its benchmark, compared against the bar. The user
+  decides whether they replace it, and the feature's directory is deleted
+  either way. The smoke test is a long manual run, so it is only recorded
+  here.
+
+## Benchmark
+
+`benchmark/summary.txt` has a line for each benchmark: its runs, JPRSurf's
+self time per run, and for an action, its actions (100) and JPRSurf's time
+per action, beyond the idle time of its runs. Beside it is each benchmark's
+profile, of its runs alone, for finding the point behind a change. The
+benchmarks are described in "Benchmarks" in `docs/testing_and_profiling.md`.
+
+**Comparing:** run counts compare directly. On a quiet machine, the times
+agree within about 3% between runs, and the larger actions within about 5%. An
+action under about 2us is noise: it costs about as much as an idle run. Every
+frame so far has run on performance cores (the profiles' core tables show it),
+but a run made while the machine is busy, such as with another session
+building, isn't comparable, and is run again.
+
+**Replacing it:** from a run of every benchmark (no `GTEST_FILTER`) that
+passed, copy `out/build/x64-Release/benchmark/` over `benchmark/`, removing any
+profile of a benchmark that no longer exists. A filtered run writes a summary
+of only the benchmarks it ran.
+
+## Profiles in REAPER
 
 **Comparing:** call counts, and counts per action, compare directly. Times
 depend on the kind of core the code ran on. On this machine (an i9-14900KF, with

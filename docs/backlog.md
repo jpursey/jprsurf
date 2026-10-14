@@ -28,37 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Benchmarks under the fake
-
-- **Layers:** plugin
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
-  (Profiler)
-
-The second part of JPRSurf's cost: its own code, without REAPER. The surface
-tests' scenarios (idle runs, the smoke scenario's actions) run under the fake
-with the profiler on, and report JPRSurf's self time per run and per action.
-Self time already leaves out every timed call inside a point, and every call
-into the fake and every MIDI port call is one, so neither the fake nor the fake
-X-Touches' decoding is counted.
-
-Times vary with the machine and its load, so these aren't pass/fail tests in
-`ctest`. They run on demand, under a label a plain `ctest` skips, and compare
-against a snapshot, as the idle profile does today, but without REAPER, and
-with the same scenario every time. They miss REAPER's effect on JPRSurf's own
-code (the cache, and its UI work on the same thread), which an occasional
-profile in REAPER still shows.
-
-With the call count bounds already in `ctest` (CLAUDE.md, Performance: Call
-counts), this replaces the idle profile in REAPER that CLAUDE.md's Performance
-section asks of a CL that changes per-run work: call count bounds for every
-change, a benchmark when a change touches JPRSurf's own per-run work, and
-profiles in REAPER only occasionally, and at the end of a feature, with the
-log's "Slow run" warnings from the user's test. CLAUDE.md changes when this is
-done. *Measure REAPER's costs* then retires the smoke profile.
-
 ## Measure REAPER's costs
 
 - **Layers:** common
@@ -88,7 +57,7 @@ projects, in the test install and runner *Check the fakes in REAPER* built.
 
 The smoke scenario and its profile (`profiles/smoke.txt`) then go: a gesture's
 cost is its calls, bounded by the call count tests and weighed by this table,
-and JPRSurf's own time, from *Benchmarks under the fake*. CLAUDE.md's smoke
+and JPRSurf's own time, from the benchmarks under the fake. CLAUDE.md's smoke
 test, checked by hand at the end of a feature, no longer rides along with a
 profiled run. What isolated measurements miss, REAPER's effect on JPRSurf's own
 code, the log's "Slow run" warnings show in everyday use.
