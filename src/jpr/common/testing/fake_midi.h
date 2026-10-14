@@ -82,10 +82,10 @@ class FakeMidiInput final : public midi_Input {
   // midi_Input
   void start() override { started_ = true; }
   void stop() override { started_ = false; }
-  void SwapBufs(unsigned int timestamp) override;
+  void SwapBufs(unsigned int timestamp_ms) override;
   MIDI_eventlist* GetReadBuf() override { return &read_buffer_; }
-  void SwapBufsPrecise(unsigned int coarse_timestamp,
-                       double precise_timestamp) override;
+  void SwapBufsPrecise(unsigned int coarse_timestamp_ms,
+                       double precise_timestamp_secs) override;
   void Destroy() override;
 
  private:
@@ -94,7 +94,7 @@ class FakeMidiInput final : public midi_Input {
   // An event sent into the port, and the time it was sent.
   struct Event {
     std::vector<uint8_t> bytes;
-    double time = 0.0;
+    double time_secs = 0.0;
   };
 
   explicit FakeMidiInput(std::string_view name) : name_(name) {}

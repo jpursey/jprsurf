@@ -60,9 +60,9 @@ class ProfiledMidiInput final : public midi_Input {
 
   void start() override { port_->start(); }
   void stop() override { port_->stop(); }
-  void SwapBufs(unsigned int timestamp) override {
+  void SwapBufs(unsigned int timestamp_ms) override {
     gb::ProfileCall<"midi_Input::SwapBufs"> call;
-    port_->SwapBufs(timestamp);
+    port_->SwapBufs(timestamp_ms);
   }
   void RunPreNoteTracking(int is_accum) override {
     gb::ProfileCall<"midi_Input::RunPreNoteTracking"> call;
@@ -72,10 +72,10 @@ class ProfiledMidiInput final : public midi_Input {
     gb::ProfileCall<"midi_Input::GetReadBuf"> call;
     return port_->GetReadBuf();
   }
-  void SwapBufsPrecise(unsigned int coarse_timestamp,
-                       double precise_timestamp) override {
+  void SwapBufsPrecise(unsigned int coarse_timestamp_ms,
+                       double precise_timestamp_secs) override {
     gb::ProfileCall<"midi_Input::SwapBufsPrecise"> call;
-    port_->SwapBufsPrecise(coarse_timestamp, precise_timestamp);
+    port_->SwapBufsPrecise(coarse_timestamp_ms, precise_timestamp_secs);
   }
   void Destroy() override {
     port_->Destroy();

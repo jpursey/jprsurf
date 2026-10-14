@@ -34,15 +34,15 @@ constexpr uint8_t kTestSysexPrefix[] = {0x00, 0x20, 0x32};
 
 // A message, and the time a listener received it.
 struct Received {
-  double time;
+  double time_secs;
   MidiMessage message;
 };
 
 // Records the messages a MIDI input passes it.
 class TestListener final : public MidiListener {
  public:
-  void OnMidiMessage(double time, const MidiMessage& message) override {
-    received.push_back({time, message});
+  void OnMidiMessage(double time_secs, const MidiMessage& message) override {
+    received.push_back({time_secs, message});
   }
 
   // Returns the messages received, without their times.
@@ -168,7 +168,7 @@ TEST_F(MidiPortTest, MessagesHaveTheTimeTheyWereSent) {
   TestListener listener;
   input_->Subscribe(&listener, 0x90);
 
-  const double first_time = ::time_precise();
+  const double first_time_secs = ::time_precise();
   fake_input_->Send(MidiMessage{0x90, 60, 127});
   reaper_.AdvanceTime(absl::Milliseconds(10));
   fake_input_->Send(MidiMessage{0x90, 60, 0});
@@ -176,10 +176,11 @@ TEST_F(MidiPortTest, MessagesHaveTheTimeTheyWereSent) {
   RunInput();
 
   // Event times are in 1/1024000s, so they round to within a microsecond.
-  EXPECT_THAT(
-      listener.received,
-      ElementsAre(Field(&Received::time, DoubleNear(first_time, 1e-6)),
-                  Field(&Received::time, DoubleNear(first_time + 0.01, 1e-6))));
+  EXPECT_THAT(listener.received,
+              ElementsAre(Field(&Received::time_secs,
+                                DoubleNear(first_time_secs, 1e-6)),
+                          Field(&Received::time_secs,
+                                DoubleNear(first_time_secs + 0.01, 1e-6))));
   input_->Unsubscribe(&listener);
 }
 

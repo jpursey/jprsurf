@@ -129,10 +129,10 @@ class ControlTest : public ::testing::Test {
   // input since the last run.
   void Run() {
     ++run_count_;
-    const double time = kStartTime + static_cast<double>(run_count_) /
-                                         FakeReaper::kRunsPerSecond;
-    runner_.Run(
-        {.precise = time, .coarse = static_cast<unsigned int>(time * 1000.0)});
+    const double time_secs = kStartTimeSecs + static_cast<double>(run_count_) /
+                                                  FakeReaper::kRunsPerSecond;
+    runner_.Run({.precise_secs = time_secs,
+                 .coarse_ms = static_cast<unsigned int>(time_secs * 1000.0)});
     for (absl::AnyInvocable<void()>& input : inputs_) {
       input();
     }
@@ -186,7 +186,7 @@ class ControlTest : public ::testing::Test {
  private:
   // The clock's time before the first run. Any will do, but REAPER's doesn't
   // start at zero either.
-  static constexpr double kStartTime = 1000.0;
+  static constexpr double kStartTimeSecs = 1000.0;
 
   struct PressRead {
     Control* control;

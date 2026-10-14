@@ -153,10 +153,10 @@ void ControlSurface::Run() {
     TrackCache::Get().Refresh();
 
     // Refresh() re-read every track's filters, so the poll can wait.
-    last_track_filter_time_ = time.precise;
-  } else if (absl::Seconds(time.precise - last_track_filter_time_) >
+    last_track_filter_time_secs_ = time.precise_secs;
+  } else if (absl::Seconds(time.precise_secs - last_track_filter_time_secs_) >
              kTrackFilterInterval) {
-    last_track_filter_time_ = time.precise;
+    last_track_filter_time_secs_ = time.precise_secs;
     TrackCache::Get().RefreshFilters();
   }
 

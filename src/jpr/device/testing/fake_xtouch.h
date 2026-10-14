@@ -235,7 +235,7 @@ class FakeXTouch final {
   // A meter's level, and when it was sent.
   struct Meter {
     int level = 0;
-    double time = 0.0;
+    double time_secs = 0.0;
   };
 
   static constexpr int kStripCount = 8;

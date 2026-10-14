@@ -336,7 +336,7 @@ class Control final {
     std::vector<InputId> tap_ids;
 
     State state = State::kIdle;
-    double state_start_time = 0.0;
+    double state_start_time_secs = 0.0;
 
     // The number of press events that occurred during the first press (should
     // be 1, but tracked for correctness).
@@ -345,7 +345,7 @@ class Control final {
     // When the button was pressed, if this group has taps and handled the
     // press. The tap is delivered on release if it was held for less than a
     // long press. Tap timing is independent of the state machine above.
-    std::optional<double> tap_press_time;
+    std::optional<double> tap_press_time_secs;
   };
 
   struct PendingOutput {
@@ -356,7 +356,7 @@ class Control final {
   void OnRun(const RunTime& time);
   void UpdateRunHandle();
   void ResetVirtualInputs();
-  void UpdatePressTimers(double current_time);
+  void UpdatePressTimers(double current_time_secs);
   void SendPendingOutput();
   void UnregisterOutputWriter();
   void ClearOutputs();
@@ -386,14 +386,14 @@ class Control final {
   const std::unique_ptr<ControlTextOutput> text_output_;
   const std::unique_ptr<ControlColorOutput> color_output_;
   const Binding binding_;
-  const double binding_delay_;
+  const double binding_delay_secs_;
   Inputs input_types_;
   Outputs output_types_;
 
   // Runtime state.
   RunHandle run_handle_;
-  double last_run_time_ = 0.0;
-  std::optional<double> last_input_time_;
+  double last_run_time_secs_ = 0.0;
+  std::optional<double> last_input_time_secs_;
   std::optional<PendingOutput> pending_output_;
 
   // Output writer state. The outputs are cleared on the next run after the

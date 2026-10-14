@@ -69,12 +69,12 @@ class ContinuousUndo final {
   ContinuousUndo() = default;
 
   // The current run's time, in seconds (see Update()).
-  double time_ = 0.0;
+  double time_secs_ = 0.0;
 
   bool pending_ = false;
   std::string description_;
   int undo_state_flags_ = 0;
-  double last_change_time_ = 0.0;
+  double last_change_time_secs_ = 0.0;
 };
 
 }  // namespace jpr

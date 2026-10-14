@@ -15,9 +15,9 @@
 namespace jpr {
 
 RunTime RunTime::Now() {
-  const double precise = time_precise();
-  return {.precise = precise,
-          .coarse = static_cast<unsigned>(precise * 1000.0)};
+  const double precise_secs = time_precise();
+  return {.precise_secs = precise_secs,
+          .coarse_ms = static_cast<unsigned>(precise_secs * 1000.0)};
 }
 
 RunHandle::RunHandle(RunHandle&& other)

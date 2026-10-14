@@ -52,7 +52,7 @@ class ControlPressInputMidiMsg : public ControlPressInput,
 
  private:
   // Implements MidiListener.
-  void OnMidiMessage(double time, const MidiMessage& message) override;
+  void OnMidiMessage(double time_secs, const MidiMessage& message) override;
 
   MidiIn* midi_in_;
   MidiMessage press_;
@@ -94,7 +94,7 @@ class ControlDeltaInputMidiCcSignMagnitude : public ControlDeltaInput,
 
  private:
   // Implements MidiListener.
-  void OnMidiMessage(double time, const MidiMessage& message) override;
+  void OnMidiMessage(double time_secs, const MidiMessage& message) override;
 
   MidiIn* midi_in_;
   double scaling_;
@@ -133,7 +133,7 @@ class ControlValueInputMcuFader : public ControlValueInput,
 
  private:
   // Implements MidiListener.
-  void OnMidiMessage(double time, const MidiMessage& message) override;
+  void OnMidiMessage(double time_secs, const MidiMessage& message) override;
 
   MidiIn* midi_in_;
   uint8_t channel_;

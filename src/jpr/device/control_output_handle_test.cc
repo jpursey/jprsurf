@@ -31,15 +31,15 @@ class ControlOutputHandleTest : public ::testing::Test {
 
   // Runs the control, and returns its text.
   const std::string& RunAndGetText() {
-    time_ += 1.0;
-    runner_.Run({.precise = time_, .coarse = 0});
+    time_secs_ += 1.0;
+    runner_.Run({.precise_secs = time_secs_, .coarse_ms = 0});
     return output_->GetText();
   }
 
   Runner runner_{"Controls"};
   std::unique_ptr<Control> control_;
   FakeTextOutput* output_ = nullptr;
-  double time_ = 1000.0;
+  double time_secs_ = 1000.0;
 };
 
 TEST_F(ControlOutputHandleTest, DefaultHandleIsntRegistered) {

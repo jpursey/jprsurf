@@ -333,7 +333,8 @@ int FakeXTouch::GetMeter(int strip) const {
   // Whole runs since the level was sent, allowing for rounding in the clock.
   const Meter& meter = meters_[strip];
   const int runs = static_cast<int>(std::floor(
-      (reaper_.GetTime() - meter.time) * FakeReaper::kRunsPerSecond + 1e-6));
+      (reaper_.GetTimeSecs() - meter.time_secs) * FakeReaper::kRunsPerSecond +
+      1e-6));
   return std::max(meter.level - runs, 0);
 }
 
@@ -463,7 +464,7 @@ void FakeXTouch::ReceiveMeter(absl::Span<const uint8_t> bytes) {
     FailMessage(bytes, "a meter's level is 0x0-0xE");
     return;
   }
-  meters_[strip] = {.level = level, .time = reaper_.GetTime()};
+  meters_[strip] = {.level = level, .time_secs = reaper_.GetTimeSecs()};
 }
 
 void FakeXTouch::ReceiveFader(absl::Span<const uint8_t> bytes) {

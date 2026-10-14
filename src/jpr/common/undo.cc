@@ -37,12 +37,13 @@ void ContinuousUndo::OnChange(std::string_view description,
     description_ = description;
     undo_state_flags_ = undo_state_flags;
   }
-  last_change_time_ = time_;
+  last_change_time_secs_ = time_secs_;
 }
 
 void ContinuousUndo::Update(const RunTime& time) {
-  time_ = time.precise;
-  if (pending_ && absl::Seconds(time_ - last_change_time_) >= kDelay) {
+  time_secs_ = time.precise_secs;
+  if (pending_ &&
+      absl::Seconds(time_secs_ - last_change_time_secs_) >= kDelay) {
     Flush();
   }
 }

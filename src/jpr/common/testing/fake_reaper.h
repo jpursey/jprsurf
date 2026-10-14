@@ -174,7 +174,7 @@ class FakeReaper final {
   // What time_precise() returns, in seconds. A test never waits on real time:
   // the clock only moves when a surface runs (see TestControlSurface::Run()),
   // or the test advances it.
-  double GetTime() const;
+  double GetTimeSecs() const;
 
   // How many times the surface has run.
   int64_t GetRuns() const { return run_count_; }

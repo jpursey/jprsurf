@@ -14,17 +14,17 @@ namespace {
 
 // Wait time in seconds to delay output updates after input events have stopped
 // for controls with kDependent or kMotorized bindings.
-constexpr double kDependentBindingDelay = 0.125;
-constexpr double kMotorizedBindingDelay = 0.375;
+constexpr double kDependentBindingDelaySecs = 0.125;
+constexpr double kMotorizedBindingDelaySecs = 0.375;
 
-double GetBindingDelay(Control::Binding binding) {
+double GetBindingDelaySecs(Control::Binding binding) {
   switch (binding) {
     case Control::Binding::kIndependent:
       return 0.0;
     case Control::Binding::kDependent:
-      return kDependentBindingDelay;
+      return kDependentBindingDelaySecs;
     case Control::Binding::kMotorized:
-      return kMotorizedBindingDelay;
+      return kMotorizedBindingDelaySecs;
   }
   // Should never reach here, but return zero to avoid compiler warning.
   return 0.0;
@@ -43,7 +43,7 @@ Control::Control(RunRegistry& run_registry, Options options)
       text_output_(std::move(options.text_output)),
       color_output_(std::move(options.color_output)),
       binding_(options.binding),
-      binding_delay_(GetBindingDelay(options.binding)) {
+      binding_delay_secs_(GetBindingDelaySecs(options.binding)) {
   if (value_input_ != nullptr) {
     input_types_.Set(ControlInput::Type::kValue);
   }
@@ -435,7 +435,7 @@ void Control::OnValueInputChanged() {
     return;
   }
   gb::ProfileCount<"control inputs">(1);
-  last_input_time_ = last_run_time_;
+  last_input_time_secs_ = last_run_time_secs_;
   double physical_value = value_input_->GetValue();
 
   for (auto& [id, reg] : registrations_) {
@@ -455,7 +455,7 @@ void Control::OnDeltaInputChanged() {
     return;
   }
   gb::ProfileCount<"control inputs">(1);
-  last_input_time_ = last_run_time_;
+  last_input_time_secs_ = last_run_time_secs_;
   double physical_delta = delta_input_->ReadDelta();
 
   for (auto& [id, reg] : registrations_) {
@@ -475,7 +475,7 @@ void Control::OnPressInputChanged() {
     return;
   }
   gb::ProfileCount<"control inputs">(1);
-  last_input_time_ = last_run_time_;
+  last_input_time_secs_ = last_run_time_secs_;
 
   if (press_input_->HasRelease()) {
     OnPressInputChangedWithRelease();
@@ -498,7 +498,7 @@ void Control::OnPressInputChangedWithRelease() {
       }
 
       if (!group.tap_ids.empty()) {
-        group.tap_press_time = last_run_time_;
+        group.tap_press_time_secs = last_run_time_secs_;
       }
       if (group.long_press_ids.empty() && group.double_press_ids.empty()) {
         DeliverPress(group.normal_ids, /*hold=*/true);
@@ -506,7 +506,7 @@ void Control::OnPressInputChangedWithRelease() {
         group.state = (!group.long_press_ids.empty()
                            ? PressGroup::State::kPendingLong
                            : PressGroup::State::kPendingRelease);
-        group.state_start_time = last_run_time_;
+        group.state_start_time_secs = last_run_time_secs_;
         group.pending_press_count = 1;
       } else if (group.state == PressGroup::State::kPendingDouble) {
         DeliverPress(group.double_press_ids);
@@ -517,20 +517,22 @@ void Control::OnPressInputChangedWithRelease() {
     // On release, don't check modifiers. Release whichever group latched the
     // press, identified by is_pressed state or pending state machine state.
     for (auto& group : press_groups_) {
-      if (group.tap_press_time.has_value()) {
-        if (last_run_time_ - *group.tap_press_time < kLongPressDurationSecs) {
+      if (group.tap_press_time_secs.has_value()) {
+        if (last_run_time_secs_ - *group.tap_press_time_secs <
+            kLongPressDurationSecs) {
           DeliverPress(group.tap_ids);
         }
-        group.tap_press_time.reset();
+        group.tap_press_time_secs.reset();
       }
       if (group.long_press_ids.empty() && group.double_press_ids.empty()) {
         ReleasePressed(group.normal_ids);
       } else if (group.state == PressGroup::State::kPendingLong ||
                  group.state == PressGroup::State::kPendingRelease) {
         if (!group.double_press_ids.empty() &&
-            last_run_time_ - group.state_start_time < kDoublePressWindowSecs) {
+            last_run_time_secs_ - group.state_start_time_secs <
+                kDoublePressWindowSecs) {
           group.state = PressGroup::State::kPendingDouble;
-          group.state_start_time = last_run_time_;
+          group.state_start_time_secs = last_run_time_secs_;
         } else {
           DeliverPress(group.normal_ids);
           group.state = PressGroup::State::kIdle;
@@ -576,7 +578,7 @@ void Control::OnPressInputChangedWithoutRelease() {
       case PressGroup::State::kIdle:
         // First press: start the double press window.
         group.state = PressGroup::State::kPendingDouble;
-        group.state_start_time = last_run_time_;
+        group.state_start_time_secs = last_run_time_secs_;
         group.pending_press_count = 1;
         break;
 
@@ -584,7 +586,7 @@ void Control::OnPressInputChangedWithoutRelease() {
       case PressGroup::State::kPendingRelease:
         // Should not happen without release, but treat as first press.
         group.state = PressGroup::State::kPendingDouble;
-        group.state_start_time = last_run_time_;
+        group.state_start_time_secs = last_run_time_secs_;
         group.pending_press_count = 1;
         break;
 
@@ -632,9 +634,9 @@ void Control::UpdateRunHandle() {
 }
 
 void Control::OnRun(const RunTime& time) {
-  last_run_time_ = time.precise;
+  last_run_time_secs_ = time.precise_secs;
   ResetVirtualInputs();
-  UpdatePressTimers(time.precise);
+  UpdatePressTimers(time.precise_secs);
   if (clear_check_pending_) {
     clear_check_pending_ = false;
     if (output_writer_count_ == 0) {
@@ -645,21 +647,23 @@ void Control::OnRun(const RunTime& time) {
   UpdateRunHandle();
 }
 
-void Control::UpdatePressTimers(double current_time) {
+void Control::UpdatePressTimers(double current_time_secs) {
   for (auto& group : press_groups_) {
     switch (group.state) {
       case PressGroup::State::kIdle:
         break;
 
       case PressGroup::State::kPendingLong:
-        if (current_time - group.state_start_time >= kLongPressDurationSecs) {
+        if (current_time_secs - group.state_start_time_secs >=
+            kLongPressDurationSecs) {
           DeliverPress(group.long_press_ids, /*hold=*/true);
           group.state = PressGroup::State::kIdle;
         }
         break;
 
       case PressGroup::State::kPendingRelease:
-        if (current_time - group.state_start_time >= kDoublePressWindowSecs) {
+        if (current_time_secs - group.state_start_time_secs >=
+            kDoublePressWindowSecs) {
           // Held too long for a double press. Deliver as a normal press.
           DeliverPress(group.normal_ids);
           group.state = PressGroup::State::kIdle;
@@ -667,7 +671,8 @@ void Control::UpdatePressTimers(double current_time) {
         break;
 
       case PressGroup::State::kPendingDouble:
-        if (current_time - group.state_start_time >= kDoublePressWindowSecs) {
+        if (current_time_secs - group.state_start_time_secs >=
+            kDoublePressWindowSecs) {
           // Double press window expired without a second press.
           // Deliver as a normal press.
           DeliverPress(group.normal_ids);
@@ -706,8 +711,9 @@ void Control::SendPendingOutput() {
     if (press_input_->IsPressed()) {
       return;
     }
-  } else if (last_input_time_.has_value() &&
-             last_run_time_ - last_input_time_.value() < binding_delay_) {
+  } else if (last_input_time_secs_.has_value() &&
+             last_run_time_secs_ - last_input_time_secs_.value() <
+                 binding_delay_secs_) {
     return;
   }
 

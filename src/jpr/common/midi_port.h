@@ -34,7 +34,7 @@ class MidiListener {
   // This is called when a MIDI message is received on the port that this
   // listener is registered to. The time parameter is the time that the message
   // was received, in seconds.
-  virtual void OnMidiMessage(double time, const MidiMessage& message) = 0;
+  virtual void OnMidiMessage(double time_secs, const MidiMessage& message) = 0;
 };
 
 //==============================================================================

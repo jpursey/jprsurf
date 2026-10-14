@@ -24,7 +24,7 @@ using ::testing::IsEmpty;
 // Records the messages a MIDI input passes it.
 class TestListener final : public MidiListener {
  public:
-  void OnMidiMessage(double time, const MidiMessage& message) override {
+  void OnMidiMessage(double time_secs, const MidiMessage& message) override {
     messages.push_back(message);
   }
 

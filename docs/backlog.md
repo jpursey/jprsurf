@@ -84,22 +84,6 @@ frame on performance cores. What is left is `smoke.txt`, unless *Measure
 REAPER's costs* retires it first, recorded the same way at the end of the next
 feature that profiles the smoke test.
 
-## Units in the names of plain times
-
-- **Layers:** common, device, scene, plugin
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** none
-
-A time held as a plain number, rather than an `absl::Duration` or
-`absl::Time`, says its unit in its name, as `Control::kLongPressDurationSecs`
-does. Many don't yet: `kDependentBindingDelay` and `kMotorizedBindingDelay` in
-`control.cc`, and the run times kept as seconds, such as `last_run_time_`,
-`state_start_time`, `last_change_time_`, and `last_track_filter_time_`. Scrub
-the code for them, and either add the unit (`Secs`, `Ms`) or, where it reads
-better and costs nothing on the realtime path, use the Abseil type.
-
 ## Write the trace through GetFileSystem()
 
 - **Layers:** common, plugin

@@ -201,7 +201,8 @@ class ControlSurface final : private IReaperControlSurface {
 
   // When the track filters were last polled, in seconds of REAPER's clock. This
   // defaults to the distant past so that the first run always polls.
-  double last_track_filter_time_ = -std::numeric_limits<double>::infinity();
+  double last_track_filter_time_secs_ =
+      -std::numeric_limits<double>::infinity();
 };
 
 }  // namespace jpr

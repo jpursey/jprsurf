@@ -87,16 +87,16 @@ void FakeMidiInput::Send(absl::Span<const uint8_t> bytes) {
     return;
   }
   sent_.push_back({.bytes = std::vector<uint8_t>(bytes.begin(), bytes.end()),
-                   .time = ::time_precise()});
+                   .time_secs = ::time_precise()});
 }
 
-void FakeMidiInput::SwapBufs(unsigned int timestamp) {
+void FakeMidiInput::SwapBufs(unsigned int timestamp_ms) {
   ADD_FAILURE() << "midi_Input::SwapBufs() isn't faked; the extension calls "
                    "SwapBufsPrecise()";
 }
 
-void FakeMidiInput::SwapBufsPrecise(unsigned int coarse_timestamp,
-                                    double precise_timestamp) {
+void FakeMidiInput::SwapBufsPrecise(unsigned int coarse_timestamp_ms,
+                                    double precise_timestamp_secs) {
   if (!open_) {
     ADD_FAILURE() << "MIDI input \"" << name_ << "\" was used after Destroy()";
     return;
@@ -107,8 +107,8 @@ void FakeMidiInput::SwapBufsPrecise(unsigned int coarse_timestamp,
   for (const Event& event : sent_) {
     read_buffer_.Add(
         event.bytes,
-        static_cast<int>(std::lround((event.time - precise_timestamp) *
-                                     kMidiTicksPerSecond)));
+        static_cast<int>(std::lround(
+            (event.time_secs - precise_timestamp_secs) * kMidiTicksPerSecond)));
   }
   sent_.clear();
 }

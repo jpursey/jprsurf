@@ -80,11 +80,11 @@ TEST(FakeReaperTest, UnloadsTheApiWhenDestroyed) {
 
 // Stands in for time_precise(), returning a fixed time.
 struct FixedTimeHook {
-  static constexpr double kTime = 42.0;
+  static constexpr double kTimeSecs = 42.0;
 
   template <typename Function>
   double Call(Function original) {
-    return kTime;
+    return kTimeSecs;
   }
 };
 
@@ -93,7 +93,7 @@ TEST(FakeReaperTest, LoadingTheApiFromThePluginInfoKeepsHooks) {
   gb::FunctionHook<&time_precise, FixedTimeHook> hook;
 
   ASSERT_TRUE(LoadReaperApi(reaper.GetPluginInfo().GetFunc));
-  EXPECT_EQ(time_precise(), FixedTimeHook::kTime);
+  EXPECT_EQ(time_precise(), FixedTimeHook::kTimeSecs);
 }
 
 TEST(FakeReaperTest, RegisteringAnythingButASurfaceFailsTheTest) {
@@ -142,22 +142,22 @@ TEST(FakeReaperTest, SurfaceRunsAdvanceTheClock) {
   FakeReaper reaper;
   std::unique_ptr<TestControlSurface> surface = AddTestSurface(reaper);
   ASSERT_NE(surface, nullptr);
-  const double start_time = reaper.GetTime();
-  EXPECT_EQ(::time_precise(), start_time);
+  const double start_time_secs = reaper.GetTimeSecs();
+  EXPECT_EQ(::time_precise(), start_time_secs);
 
   surface->Run();
   EXPECT_EQ(g_test_surface->run_count, 1);
-  EXPECT_DOUBLE_EQ(::time_precise(), start_time + 1.0 / 30);
+  EXPECT_DOUBLE_EQ(::time_precise(), start_time_secs + 1.0 / 30);
 
   surface->RunFor(absl::Seconds(1));
   EXPECT_EQ(g_test_surface->run_count, 31);
-  EXPECT_DOUBLE_EQ(::time_precise(), start_time + 31.0 / 30);
+  EXPECT_DOUBLE_EQ(::time_precise(), start_time_secs + 31.0 / 30);
 
   surface->RunFor(absl::Milliseconds(10));
   EXPECT_EQ(g_test_surface->run_count, 32);
 
   reaper.AdvanceTime(absl::Milliseconds(500));
-  EXPECT_DOUBLE_EQ(::time_precise(), start_time + 32.0 / 30 + 0.5);
+  EXPECT_DOUBLE_EQ(::time_precise(), start_time_secs + 32.0 / 30 + 0.5);
   EXPECT_EQ(g_test_surface->run_count, 32);
 }
 

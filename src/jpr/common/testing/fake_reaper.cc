@@ -640,7 +640,7 @@ class FakeReaper::Api final {
     }
   }
 
-  static double time_precise() { return s_instance_->GetTime(); }
+  static double time_precise() { return s_instance_->GetTimeSecs(); }
 
   static void ShowConsoleMsg(const char* message) {
     s_instance_->console_text_ += message;
@@ -1106,10 +1106,10 @@ int FakeReaper::GetRunCount(absl::Duration duration) {
                           kNanosecondsPerSecond);
 }
 
-double FakeReaper::GetTime() const {
+double FakeReaper::GetTimeSecs() const {
   // REAPER's clock doesn't start at zero either.
-  constexpr double kStartTime = 1000.0;
-  return kStartTime + static_cast<double>(run_count_) / kRunsPerSecond +
+  constexpr double kStartTimeSecs = 1000.0;
+  return kStartTimeSecs + static_cast<double>(run_count_) / kRunsPerSecond +
          absl::ToDoubleSeconds(advanced_time_);
 }
 

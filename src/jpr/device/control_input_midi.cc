@@ -39,7 +39,7 @@ ControlPressInputMidiMsg::~ControlPressInputMidiMsg() {
   midi_in_->Unsubscribe(this);
 }
 
-void ControlPressInputMidiMsg::OnMidiMessage(double time,
+void ControlPressInputMidiMsg::OnMidiMessage(double time_secs,
                                              const MidiMessage& message) {
   if (message.status == press_.status && message.data1 == press_.data1 &&
       message.data2 == press_.data2) {
@@ -80,7 +80,7 @@ ControlDeltaInputMidiCcSignMagnitude::~ControlDeltaInputMidiCcSignMagnitude() {
 }
 
 void ControlDeltaInputMidiCcSignMagnitude::OnMidiMessage(
-    double time, const MidiMessage& message) {
+    double time_secs, const MidiMessage& message) {
   double delta = (message.data2 & 0x3F) * scaling_;
   if (message.data2 & 0x40) {
     delta = -delta;
@@ -126,7 +126,7 @@ ControlValueInputMcuFader::~ControlValueInputMcuFader() {
   midi_in_->Unsubscribe(this);
 }
 
-void ControlValueInputMcuFader::OnMidiMessage(double time,
+void ControlValueInputMcuFader::OnMidiMessage(double time_secs,
                                               const MidiMessage& message) {
   double pitch_bend = static_cast<double>(
       (static_cast<int>(message.data2) << 7) | message.data1);

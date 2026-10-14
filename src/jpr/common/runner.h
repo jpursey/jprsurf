@@ -23,8 +23,8 @@ struct RunTime {
   // Reads REAPER's clock (time_precise()).
   static RunTime Now();
 
-  double precise;       // Time in seconds, with high precision.
-  unsigned int coarse;  // Time in milliseconds, with lower precision.
+  double precise_secs;     // Time in seconds, with high precision.
+  unsigned int coarse_ms;  // Time in milliseconds, with lower precision.
 };
 
 // This class represents a handle to a runnable.

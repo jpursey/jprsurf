@@ -107,7 +107,7 @@ void MidiIn::Poll(const RunTime& time) {
   if (port_ == nullptr) {
     return;
   }
-  port_->SwapBufsPrecise(time.coarse, time.precise);
+  port_->SwapBufsPrecise(time.coarse_ms, time.precise_secs);
 
   auto* event_list = port_->GetReadBuf();
   int bpos = 0;
@@ -125,8 +125,8 @@ void MidiIn::Poll(const RunTime& time) {
     }
 
     // Convert to a 3-byte MIDI message, and time.
-    double message_time =
-        time.precise + event->frame_offset * kSecondsPerMidiTick;
+    double message_time_secs =
+        time.precise_secs + event->frame_offset * kSecondsPerMidiTick;
     MidiMessage message = {.status = event->midi_message[0],
                            .data1 = event->midi_message[1],
                            .data2 = event->midi_message[2]};
@@ -136,7 +136,7 @@ void MidiIn::Poll(const RunTime& time) {
     if (auto it = listeners_.find(MakeListenerKey(message.status));
         it != listeners_.end()) {
       for (MidiListener* listener : it->second) {
-        listener->OnMidiMessage(message_time, message);
+        listener->OnMidiMessage(message_time_secs, message);
       }
     }
 
@@ -147,7 +147,7 @@ void MidiIn::Poll(const RunTime& time) {
          it->first == MakeListenerKey(message.status, message.data1);
          ++it) {
       for (MidiListener* listener : it->second) {
-        listener->OnMidiMessage(message_time, message);
+        listener->OnMidiMessage(message_time_secs, message);
       }
     }
   }

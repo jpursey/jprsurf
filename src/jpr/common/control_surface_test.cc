@@ -36,13 +36,13 @@ class TestListener final : public ControlSurfaceListener {
   ~TestListener() override;
 
   void OnRun(const RunTime& time) override {
-    run_times.push_back(time.precise);
+    run_times_secs.push_back(time.precise_secs);
     if (on_run) {
       on_run();
     }
   }
 
-  std::vector<double> run_times;
+  std::vector<double> run_times_secs;
 
   // Called on each run, after it is recorded, if set.
   absl::AnyInvocable<void()> on_run;
@@ -105,7 +105,7 @@ TEST_F(ControlSurfaceTest, RefusesASecondSurface) {
   // The first surface is untouched.
   ASSERT_NE(g_listener, nullptr);
   surface->Run();
-  EXPECT_EQ(g_listener->run_times.size(), 1);
+  EXPECT_EQ(g_listener->run_times_secs.size(), 1);
 }
 
 TEST_F(ControlSurfaceTest, RunsWithREAPERsTime) {
@@ -113,10 +113,10 @@ TEST_F(ControlSurfaceTest, RunsWithREAPERsTime) {
   ASSERT_NE(g_listener, nullptr);
 
   surface->Run();
-  const double first_time = reaper_.GetTime();
+  const double first_time_secs = reaper_.GetTimeSecs();
   surface->Run();
-  EXPECT_THAT(g_listener->run_times,
-              ElementsAre(first_time, reaper_.GetTime()));
+  EXPECT_THAT(g_listener->run_times_secs,
+              ElementsAre(first_time_secs, reaper_.GetTimeSecs()));
 }
 
 TEST_F(ControlSurfaceTest, RunsTheListenerInADeferredRefresh) {
