@@ -37,6 +37,7 @@ set(jpr_benchmark_DEPS
   absl::strings
   absl::time
   gb_base
+  gb_file
   gtest
   jpr_default_config
 )

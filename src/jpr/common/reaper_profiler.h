@@ -6,7 +6,6 @@
 #pragma once
 
 #include <cstdint>
-#include <filesystem>
 #include <string>
 #include <utility>
 
@@ -44,8 +43,9 @@ class ReaperProfiler final {
  public:
   // What is profiled, and where the profile is written.
   struct Options {
-    // The file the profile is written to, replacing it.
-    std::filesystem::path path;
+    // The file the profile is written to, replacing it, as a path in
+    // GetFileSystem(), such as "profile:/jprsurf_profile.txt".
+    std::string path;
 
     // The extension's name, which heads the profile and labels the extension's
     // time per run, beside REAPER's.

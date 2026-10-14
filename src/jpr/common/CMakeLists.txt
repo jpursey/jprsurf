@@ -10,6 +10,7 @@ set(jpr_common_SOURCE
   color.cc color.h
   control_surface.cc control_surface.h
   deferred_refresh.cc deferred_refresh.h
+  file_system.cc file_system.h
   guid.cc guid.h
   log_path.cc log_path.h
   midi_message.h
@@ -38,6 +39,7 @@ set(jpr_common_DEPS
   absl::time
   gb_base
   gb_config
+  gb_file
   gb_profile
   reaper_sdk
 )
@@ -48,6 +50,7 @@ set(jpr_common_TEST_SOURCE
   color_test.cc
   control_surface_test.cc
   deferred_refresh_test.cc
+  file_system_test.cc
   guid_test.cc
   midi_port_test.cc
   midi_ports_test.cc

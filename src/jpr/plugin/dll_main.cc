@@ -11,12 +11,17 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "absl/base/log_severity.h"
 #include "absl/log/log.h"
+#include "gb/base/context_builder.h"
 #include "gb/base/init_logging.h"
 #include "gb/base/log_file.h"
+#include "gb/base/unicode.h"
+#include "gb/file/local_file_protocol.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/log_path.h"
 #include "jpr/plugin/plugin.h"
 #include "sdk/reaper_plugin.h"
@@ -49,6 +54,22 @@ bool IsTraceOn() {
   return trace;
 }
 
+// Registers the log's folder as "profile" in GetFileSystem(), so the profile is
+// written beside the log. Returns false if it couldn't.
+bool RegisterProfileFolder() {
+  const std::filesystem::path folder = GetLogFolder();
+  if (folder.empty()) {
+    return false;
+  }
+  return GetFileSystem()->Register(
+      gb::LocalFileProtocol::Create(
+          gb::ContextBuilder()
+              .SetValue<std::string>(gb::LocalFileProtocol::kKeyRoot,
+                                     gb::ToUtf8(folder.generic_u16string()))
+              .Build()),
+      "profile");
+}
+
 // Returns the plugin's options, from its environment.
 Plugin::Options GetOptions() {
   Plugin::Options options;
@@ -59,8 +80,9 @@ Plugin::Options GetOptions() {
           << "JPRSURF_TRACE is set, but there is nowhere to write the trace.";
     }
   }
-  options.profile_path = GetLogPath("jprsurf_profile.txt");
-  if (options.profile_path.empty()) {
+  if (RegisterProfileFolder()) {
+    options.profile_path = "profile:/jprsurf_profile.txt";
+  } else {
     LOG(ERROR) << "There is nowhere to write the profile, so it is off.";
   }
   return options;

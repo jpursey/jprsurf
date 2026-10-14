@@ -10,8 +10,10 @@
 #include <memory>
 #include <string>
 
+#include "gb/file/memory_file_protocol.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/testing/fake_midi.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/test_control_surface.h"
@@ -112,14 +114,17 @@ TEST_F(PluginTest, TracesToTheTracePath) {
 }
 
 TEST_F(PluginTest, SurfacesWriteTheirProfileToTheProfilePath) {
-  const std::filesystem::path path = GetTestPath("plugin_test_profile.txt");
-  ASSERT_TRUE(Load({.profile_path = path}));
+  ASSERT_TRUE(GetFileSystem()->Register(
+      std::make_unique<gb::MemoryFileProtocol>(), "profile"));
+  ASSERT_TRUE(Load({.profile_path = "profile:/test.txt"}));
   std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface();
   ASSERT_NE(surface, nullptr);
   surface->Run();
 
   surface.reset();
-  EXPECT_EQ(ReadFirstLine(path), "JPRSurf profile");
+  std::string profile;
+  ASSERT_TRUE(GetFileSystem()->ReadFile("profile:/test.txt", &profile));
+  EXPECT_THAT(profile, StartsWith("JPRSurf profile\n"));
   Plugin::Unload();
 }
 

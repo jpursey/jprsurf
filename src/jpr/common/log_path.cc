@@ -11,15 +11,23 @@
 
 namespace jpr {
 
-std::filesystem::path GetLogPath(std::string_view file_name) {
+std::filesystem::path GetLogFolder() {
   char* appdata = nullptr;
   size_t length = 0;
   if (_dupenv_s(&appdata, &length, "APPDATA") != 0 || appdata == nullptr) {
     return {};
   }
-  std::filesystem::path path = std::filesystem::path(appdata) / file_name;
+  std::filesystem::path folder(appdata);
   free(appdata);
-  return path;
+  return folder;
+}
+
+std::filesystem::path GetLogPath(std::string_view file_name) {
+  std::filesystem::path folder = GetLogFolder();
+  if (folder.empty()) {
+    return {};
+  }
+  return folder / file_name;
 }
 
 }  // namespace jpr

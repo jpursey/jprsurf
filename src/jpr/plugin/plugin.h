@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "jpr/common/reaper_trace.h"
@@ -26,8 +27,9 @@ class Plugin final {
     // ReaperTrace), set by JPRSURF_TRACE.
     std::filesystem::path trace_path;
 
-    // Where each surface writes its profile (see ReaperProfiler).
-    std::filesystem::path profile_path;
+    // Where each surface writes its profile (see ReaperProfiler), as a path in
+    // GetFileSystem().
+    std::string profile_path;
   };
 
   // Loads the plugin from what REAPER passes its entry point: loads the REAPER

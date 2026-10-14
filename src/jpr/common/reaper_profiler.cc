@@ -6,8 +6,6 @@
 #include "jpr/common/reaper_profiler.h"
 
 #include <cstdint>
-#include <cstdio>
-#include <filesystem>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -19,6 +17,7 @@
 #include "gb/base/local_time.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
+#include "jpr/common/file_system.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -194,19 +193,11 @@ void ReaperProfiler::WriteSnapshot(const RunSplit& split) const {
       ", ", absl::ToInt64Seconds(end_time - start_time_), "s\n",
       "Per run:  ", FormatRunSplit(split), "\n\n", profiler_.GetReport());
 
-  std::FILE* file = nullptr;
-  if (_wfopen_s(&file, options_.path.c_str(), L"w") != 0 || file == nullptr) {
-    LOG(ERROR) << "Failed to open " << options_.path.string()
-               << " to write the profile.";
+  if (!GetFileSystem()->WriteFile(options_.path, snapshot)) {
+    LOG(ERROR) << "Failed to write the profile to " << options_.path;
     return;
   }
-  const bool written = (std::fwrite(snapshot.data(), 1, snapshot.size(),
-                                    file) == snapshot.size());
-  if (std::fclose(file) != 0 || !written) {
-    LOG(ERROR) << "Failed to write the profile to " << options_.path.string();
-    return;
-  }
-  LOG(INFO) << "Wrote the profile to " << options_.path.string();
+  LOG(INFO) << "Wrote the profile to " << options_.path;
 }
 
 void ReaperProfiler::LogSummary(const RunSplit& split) const {

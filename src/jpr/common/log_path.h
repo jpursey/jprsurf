@@ -10,9 +10,13 @@
 
 namespace jpr {
 
-// Returns the path of `file_name` in the folder the extension writes its log
-// to, for the log and any other file it writes beside it. The folder is the
-// user's AppData folder. Returns an empty path if the folder isn't known.
+// Returns the folder the extension writes its log to, for the log and any other
+// file it writes beside it: the user's AppData folder. Returns an empty path if
+// the folder isn't known.
+std::filesystem::path GetLogFolder();
+
+// Returns the path of `file_name` in GetLogFolder(), or an empty path if the
+// folder isn't known.
 std::filesystem::path GetLogPath(std::string_view file_name);
 
 }  // namespace jpr

@@ -25,9 +25,13 @@
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "gb/base/context_builder.h"
 #include "gb/base/init_logging.h"
 #include "gb/base/local_time.h"
+#include "gb/base/unicode.h"
+#include "gb/file/local_file_protocol.h"
 #include "gtest/gtest.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/reaper_profiler.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
@@ -60,6 +64,21 @@ std::string FormatSummaryLine(std::string_view name, std::string_view runs,
                          actions, per_action);
 }
 
+// Registers g_output_dir as "benchmark" in GetFileSystem(). The fake REAPER
+// resets the file system, so it is registered for each benchmark, after its
+// fake is created, and again for the summary, once they have all run. Returns
+// false if it couldn't.
+bool RegisterOutputDir() {
+  return GetFileSystem()->Register(
+      gb::LocalFileProtocol::Create(
+          gb::ContextBuilder()
+              .SetValue<std::string>(
+                  gb::LocalFileProtocol::kKeyRoot,
+                  gb::ToUtf8(g_output_dir.generic_u16string()))
+              .Build()),
+      "benchmark");
+}
+
 // Writes the summary to g_output_dir, and prints it. Returns false if it
 // couldn't be written.
 bool WriteSummary() {
@@ -72,18 +91,10 @@ bool WriteSummary() {
       g_summary_lines);
   std::fputs(summary.c_str(), stdout);
 
-  const std::filesystem::path path = g_output_dir / "summary.txt";
-  std::FILE* file = nullptr;
-  if (_wfopen_s(&file, path.c_str(), L"w") != 0 || file == nullptr) {
-    std::fprintf(stderr, "Failed to open %s to write the summary.\n",
-                 path.string().c_str());
-    return false;
-  }
-  const bool written =
-      (std::fwrite(summary.data(), 1, summary.size(), file) == summary.size());
-  if (std::fclose(file) != 0 || !written) {
-    std::fprintf(stderr, "Failed to write the summary to %s.\n",
-                 path.string().c_str());
+  if (!RegisterOutputDir() ||
+      !GetFileSystem()->WriteFile("benchmark:/summary.txt", summary)) {
+    std::fprintf(stderr, "Failed to write summary.txt in %s.\n",
+                 g_output_dir.string().c_str());
     return false;
   }
   return true;
@@ -152,8 +163,9 @@ class Benchmark : public DefaultConfigTest {
 
 Benchmark::Benchmark()
     : name_(::testing::UnitTest::GetInstance()->current_test_info()->name()) {
+  EXPECT_TRUE(RegisterOutputDir());
   profiler_.emplace(ReaperProfiler::Options{
-      .path = g_output_dir / absl::StrCat(name_, ".txt"),
+      .path = absl::StrCat("benchmark:/", name_, ".txt"),
       .name = kName,
       .build = kBuild});
   AddLargeProject(&reaper_.GetProject());

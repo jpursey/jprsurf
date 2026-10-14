@@ -93,8 +93,11 @@ A call point's count is its call count, so the MIDI messages sent are
   git commit, marked "(modified)" if tracked files have changes. It only
   rewrites the header when it changes, so a build with no change recompiles
   nothing.
-- **The file** is written with `std::fopen`, as one string written once needs
-  no abstraction (and no iostreams). Its date uses Game Bits'
+- **The file** is written as one string through JPRSurf's file system
+  (`GetFileSystem()` in `jpr/common/file_system.h`), to the path in
+  `ReaperProfiler::Options`. The plugin's is `"profile:/jprsurf_profile.txt"`,
+  with `dll_main.cc` registering the log's folder as "profile", and tests
+  register a `gb::MemoryFileProtocol` there instead. Its date uses Game Bits'
   `GetLocalTimeZone()` (`gb/base/local_time.h`), as `absl::LocalTimeZone()` is
   UTC inside REAPER.
 

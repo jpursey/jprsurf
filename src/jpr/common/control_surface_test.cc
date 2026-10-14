@@ -6,14 +6,16 @@
 #include "jpr/common/control_surface.h"
 
 #include <cstdint>
-#include <filesystem>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
+#include "gb/file/memory_file_protocol.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/testing/fake_reaper.h"
@@ -58,7 +60,7 @@ std::unique_ptr<ControlSurfaceListener> CreateTestListener(
   return std::make_unique<TestListener>();
 }
 
-ControlSurface::Type MakeType(std::filesystem::path profile_path = {}) {
+ControlSurface::Type MakeType(std::string profile_path = {}) {
   return {.type_string = "TEST",
           .description = "Test surface",
           .create_listener = &CreateTestListener,
@@ -69,7 +71,7 @@ class ControlSurfaceTest : public ::testing::Test {
  protected:
   // Registers the test type, and adds a surface of it.
   std::unique_ptr<TestControlSurface> AddTestSurface(
-      std::filesystem::path profile_path = {}) {
+      std::string profile_path = {}) {
     EXPECT_TRUE(ControlSurface::Register(reaper_.GetPluginInfo(),
                                          MakeType(std::move(profile_path))));
     std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface();
@@ -183,16 +185,15 @@ TEST_F(ControlSurfaceTest, KeepsTracksAcrossProjectTabs) {
 }
 
 TEST_F(ControlSurfaceTest, WritesItsProfileWhenTheTypeHasAPath) {
-  const std::filesystem::path path =
-      std::filesystem::path(::testing::TempDir()) /
-      "control_surface_test_profile.txt";
-  std::filesystem::remove(path);
-  std::unique_ptr<TestControlSurface> surface = AddTestSurface(path);
+  ASSERT_TRUE(GetFileSystem()->Register(
+      std::make_unique<gb::MemoryFileProtocol>(), "profile"));
+  std::unique_ptr<TestControlSurface> surface =
+      AddTestSurface("profile:/test.txt");
   surface->Run();
-  EXPECT_FALSE(std::filesystem::exists(path));
+  EXPECT_FALSE(GetFileSystem()->IsValidFile("profile:/test.txt"));
 
   surface.reset();
-  EXPECT_TRUE(std::filesystem::exists(path));
+  EXPECT_TRUE(GetFileSystem()->IsValidFile("profile:/test.txt"));
 }
 
 }  // namespace

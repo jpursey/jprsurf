@@ -58,6 +58,7 @@ set(reaper_jprsurf_SOURCE
 set(reaper_jprsurf_DEPS
   absl::log
   gb_base
+  gb_file
   jpr_common
   jpr_plugin
   reaper_sdk

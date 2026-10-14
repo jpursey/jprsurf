@@ -105,6 +105,7 @@ set(reaper_jpr_check_DEPS
   absl::log
   absl::strings
   gb_base
+  gb_file
   gmock
   gtest
   jpr_common
