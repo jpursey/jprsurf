@@ -62,28 +62,6 @@ test, checked by hand at the end of a feature, no longer rides along with a
 profiled run. What isolated measurements miss, REAPER's effect on JPRSurf's own
 code, the log's "Slow run" warnings show in everyday use.
 
-## Record the profile bar on performance cores
-
-- **Layers:** none (docs and profiles)
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [profiles/README.md](../profiles/README.md)
-
-Profiles of the same scenario varied by about 30% between sessions. Game Bits'
-profiler now reports the tick rate and the kind of core each frame ran on, and
-profiles from four sessions showed the cause is the core: frames on efficiency
-cores run about 25-30% slower, and Windows moves REAPER onto them when it is in
-the background. `profiles/README.md` now says to profile with REAPER in the
-foreground, and how to read the core table, which brings the variation down to
-about 10%. The profiler's own cost didn't change enough to touch its budget
-(1.48us a run, against 1.51us before).
-
-`profiles/idle.txt` has been recorded again under those conditions, with every
-frame on performance cores. What is left is `smoke.txt`, unless *Measure
-REAPER's costs* retires it first, recorded the same way at the end of the next
-feature that profiles the smoke test.
-
 ## Report touch to REAPER for automation
 
 - **Layers:** common, scene, plugin
