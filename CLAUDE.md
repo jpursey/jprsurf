@@ -63,11 +63,11 @@ cmake --build out/build/x64-Release
 
 Release (`RelWithDebInfo`) is the default build. REAPER is very latency sensitive, so the extension should always be run and tested optimized. Only build `out/build/x64-Debug` when you specifically need to step through the code in a debugger.
 
-The build also will copy the binary to the REAPER plugin directory so it can be run immediately. This is controlled by the `JPR_DEPLOY_TO_REAPER` CMake option, which defaults to ON in the main checkout and OFF in a git worktree (see Parallel sessions below).
+The build also will copy the binary to the REAPER plugin directory so it can be run immediately. The copy is its own target, `deploy_reaper_jprsurf`, which the full build includes, so building only `reaper_jprsurf` doesn't deploy it. This is controlled by the `JPR_DEPLOY_TO_REAPER` CMake option, which defaults to ON in the main checkout and OFF in a git worktree (see Parallel sessions below).
 
 A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Assume REAPER is closed and build without asking. Treat a copy or permission failure at the end of a build as "REAPER is open": ask the user to close it and build again, rather than debugging the build.
 
-Only a change to code the plugin links rebuilds and copies the DLL. While the user has REAPER open, such a change can still be checked by building only the targets the checks need, which don't deploy: each library's tests (`--target <library>_test`, such as `jpr_common_test`) and `check_in_reaper`, whose test install runs beside the user's REAPER. The full build, which deploys, then waits until REAPER is closed, before the commit.
+Only a change to code the plugin links rebuilds and copies the DLL. While the user has REAPER open, such a change can still be checked by building only the targets the checks need, which don't deploy: each library's tests (`--target <library>_test`, such as `jpr_common_test`) and `check_in_reaper` and `check_load_in_reaper`, whose test install runs beside the user's REAPER. The full build, which deploys, then waits until REAPER is closed, before the commit.
 
 ### Test
 
@@ -84,6 +84,14 @@ cmake --build out/build/x64-Release --target check_in_reaper
 ```
 
 Runs the contract tests (tests on `ContractTest`, which act only through REAPER's API, so they run under the fake in `ctest` too) in a test install of REAPER: a portable REAPER of their own, which never touches the user's, so it runs while the user has REAPER open. It prints what gtest printed, and fails if a test failed. Setting `GTEST_FILTER` runs only the tests it names. Run it for a change to the fake REAPER, `SurfaceNotifier`, or their contract tests; any other change is verified under the fake alone. It runs REAPER, so it runs in the main session only (see Parallel sessions). Setting up the test install, and the files a run leaves, are in "Contract tests in REAPER" in `docs/testing_and_profiling.md`.
+
+### Check that REAPER loads the plugin
+
+```
+cmake --build out/build/x64-Release --target check_load_in_reaper
+```
+
+Loads and unloads the plugin in the test install of REAPER (see Check in REAPER), which runs `dll_main.cc`, the only code no unit test runs. It fails if `jprsurf.log` has an error or the trace wasn't written whole. It creates no surface, and doesn't deploy, so it runs while the user has REAPER open. Run it for a change to `dll_main.cc` or to what the plugin does as it loads and unloads, and at the end of a feature. It runs REAPER, so it runs in the main session only (see Parallel sessions). How it works, and where it leaves the log and trace, are in "Loading the plugin" in `docs/testing_and_profiling.md`.
 
 ### Benchmark
 
@@ -106,6 +114,7 @@ Every change is checked as follows:
 - Touched files pass `clang-format --dry-run -Werror`.
 - `ctest` passes, with tests of what the change does.
 - `check_in_reaper` passes, for a change to the fake REAPER, `SurfaceNotifier`, or their contract tests (see Check in REAPER).
+- `check_load_in_reaper` passes, for a change to `dll_main.cc` or to what the plugin does as it loads and unloads (see Check that REAPER loads the plugin).
 - The benchmark doesn't regress, for a change to per-run work or an infrequent event (see Performance).
 - Any feature specific checks for the change (see Feature workflow below).
 
@@ -117,7 +126,7 @@ The user runs REAPER, with the extension deployed to it, only for these:
    - **The rest**, such as the hardware, REAPER's own UI, and what REAPER calls on a surface between runs, is checked in the user's REAPER, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. The calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`.
 2. **Performance**, for the changes Performance below names.
 3. **The end of a feature.** Before a feature is done, the user tests it in REAPER:
-   - REAPER loads the extension (which runs `dll_main.cc`, the only code no test runs), and `jprsurf.log` has no new errors.
+   - REAPER loads the extension: `check_load_in_reaper` passes, before the user runs REAPER (see Check that REAPER loads the plugin under Commands), and once REAPER has created the surface, `jprsurf.log` has no new errors.
    - The feature's own checks, and how it feels on the hardware.
    - **Smoke test:** what the fakes can't show. Existing behavior is covered by the surface tests in `src/jpr/plugin/default_config`, and each feature adds surface tests of its own behavior, with the call count bounds of each gesture it adds (see Call counts in Performance). These are checked by hand during the smoke scenario the end of the feature profiles anyway (see `profiles/README.md`), and anything it doesn't reach is checked after it:
      - The hardware agrees with the fake X-Touch, and the surface feels right: faders, pots, buttons and their lights, meters, scribble strips, and the timecode display.
@@ -179,7 +188,7 @@ A feature follows the feature workflow, with its CLs in library order: `common`,
 
 ## Parallel sessions
 
-These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs REAPER (see Checking in REAPER) happens one change at a time in the main session, in the main checkout. So does `check_in_reaper`, which runs the single test install, one run at a time: a change in a side session that needs it is checked by the main session, after it cherry-picks the change.
+These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs REAPER (see Checking in REAPER) happens one change at a time in the main session, in the main checkout. So do `check_in_reaper` and `check_load_in_reaper`, which run the single test install, one run at a time: a change in a side session that needs it is checked by the main session, after it cherry-picks the change.
 
 Side sessions run in their own git worktree, for work that can be verified without REAPER: most CLs, which their unit tests verify (and the benchmark, for per-run work), documentation and comment cleanup, research, and reviews.
 - A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.

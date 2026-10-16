@@ -6,9 +6,11 @@
 # Runs the contract tests in the test install of REAPER, the portable REAPER in
 # the folder JPR_REAPER_CHECK_DIR names (see "Contract tests in REAPER" in
 # docs/testing_and_profiling.md). The check_in_reaper target runs this, with
-# CHECK_DLL set to the reaper_jpr_check DLL it built.
+# CHECK_DLL set to the reaper_jpr_check DLL it built. EXTRA_DLLS, if set, lists
+# other extensions to load beside it, which are removed again once REAPER has
+# quit, whether or not the run passed.
 #
-# It copies the DLL into the test install's UserPlugins, makes the
+# It copies the DLLs into the test install's UserPlugins, makes the
 # RecordingSurface its only control surface, and runs REAPER until the DLL
 # quits it. Then it prints what gtest printed, and fails if a test failed,
 # REAPER didn't quit in time, or the DLL wrote no result. GTEST_FILTER, if set,
@@ -44,9 +46,6 @@ if(NOT EXISTS "${reaper_ini}")
       "to set it up.")
 endif()
 
-# The DLL.
-file(COPY "${CHECK_DLL}" DESTINATION "${install_dir}/UserPlugins")
-
 # The RecordingSurface, as the only control surface. REAPER keeps each surface
 # as its type and its config string, and creates none without a config string,
 # so it has one it ignores.
@@ -70,11 +69,25 @@ file(MAKE_DIRECTORY "${check_dir}")
 file(TO_NATIVE_PATH "${check_dir}" native_check_dir)
 set(ENV{JPR_REAPER_CHECK_RUN_DIR} "${native_check_dir}")
 
+# The DLLs, copied last, so nothing above can stop the run with the extra DLLs
+# left behind.
+file(COPY "${CHECK_DLL}" ${EXTRA_DLLS} DESTINATION "${install_dir}/UserPlugins")
+
 execute_process(
   COMMAND "${reaper_exe}" -newinst -nosplash -new
   TIMEOUT ${timeout_secs}
   RESULT_VARIABLE reaper_result
 )
+
+foreach(dll IN LISTS EXTRA_DLLS)
+  get_filename_component(dll_name "${dll}" NAME)
+  set(installed_dll "${install_dir}/UserPlugins/${dll_name}")
+  file(REMOVE "${installed_dll}")
+  if(EXISTS "${installed_dll}")
+    message(WARNING "Failed to remove ${installed_dll}, so REAPER will keep "
+        "loading it in the test install. Remove it by hand.")
+  endif()
+endforeach()
 
 if(EXISTS "${check_dir}/output.txt")
   execute_process(COMMAND "${CMAKE_COMMAND}" -E cat "${check_dir}/output.txt")

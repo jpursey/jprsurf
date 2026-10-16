@@ -66,11 +66,34 @@ set(reaper_jprsurf_DEPS
 
 gb_add_shared_library(reaper_jprsurf)
 
+# The deploy is a target of its own, rather than a step of reaper_jprsurf's
+# build, so targets that only need the DLL, such as check_load_in_reaper, don't
+# deploy it.
+# It runs only when the DLL changed, as the stamp is touched after the copy.
 if(JPR_DEPLOY_TO_REAPER)
-  add_custom_command(TARGET reaper_jprsurf POST_BUILD
+  set(deploy_stamp "${CMAKE_CURRENT_BINARY_DIR}/deploy_reaper_jprsurf.stamp")
+  add_custom_command(OUTPUT "${deploy_stamp}"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
       $<TARGET_FILE:reaper_jprsurf>
       "${REAPER_PLUGINS_DIR}/reaper_jprsurf.dll"
+      COMMAND ${CMAKE_COMMAND} -E touch "${deploy_stamp}"
+      DEPENDS reaper_jprsurf $<TARGET_FILE:reaper_jprsurf>
       COMMENT "Deploying plugin to Reaper..."
   )
+  add_custom_target(deploy_reaper_jprsurf ALL DEPENDS "${deploy_stamp}")
 endif()
+
+# Checks that REAPER loads and unloads the DLL, in the test install of REAPER
+# that runs the contract tests (see check_load_in_reaper.cmake).
+
+add_custom_target(check_load_in_reaper
+  COMMAND ${CMAKE_COMMAND}
+      -DPLUGIN_DLL=$<TARGET_FILE:reaper_jprsurf>
+      -DCHECK_DLL=$<TARGET_FILE:reaper_jpr_check>
+      "-DCHECK_SCRIPT=${PROJECT_SOURCE_DIR}/src/jpr/common/testing/check_in_reaper.cmake"
+      "-DRUN_DIR=${CMAKE_CURRENT_BINARY_DIR}/check_load_in_reaper"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/check_load_in_reaper.cmake"
+  DEPENDS reaper_jprsurf reaper_jpr_check
+  USES_TERMINAL
+  COMMENT "Checking that REAPER loads the plugin..."
+)

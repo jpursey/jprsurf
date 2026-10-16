@@ -84,35 +84,6 @@ frame on performance cores. What is left is `smoke.txt`, unless *Measure
 REAPER's costs* retires it first, recorded the same way at the end of the next
 feature that profiles the smoke test.
 
-## Check that REAPER loads the plugin
-
-- **Layers:** plugin
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** `check_in_reaper.cmake` in `jpr/common/testing`, and
-  "Contract tests in REAPER" in `docs/testing_and_profiling.md`
-
-`dll_main.cc` is the only code no test runs, so whether REAPER loads the
-plugin, and what the plugin reads from its environment, is only seen when the
-user runs REAPER. Add a `check_load_in_reaper` target that loads the real
-plugin in the test install, as was done by hand to check the trace:
-- Copy `reaper_jprsurf.dll` into the test install's `UserPlugins`, beside
-  `reaper_jpr_check.dll`, and remove it afterwards, whether or not the check
-  passed, so the test install only holds the plugin during the check.
-- Run REAPER with `APPDATA` set to a folder in the build tree, so the log, the
-  trace, and the profile go there rather than over the user's, and with
-  `JPRSURF_TRACE` set. `JPR_REAPER_CHECK_RUN_DIR` is set with a
-  `GTEST_FILTER` that runs no tests, so the check DLL just quits REAPER.
-- Fail if `jprsurf.log` has an error, or the trace isn't written beside it
-  with its header and "Trace ended".
-
-No JPRSurf surface is created, as one would open the X-Touch's MIDI ports,
-which the user's REAPER may hold. So it checks loading and unloading, not a
-surface's profile. It runs REAPER, so it runs in the main session only, like
-`check_in_reaper`. CLAUDE.md's Commands and the end of a feature's REAPER
-checks ("REAPER loads the extension") then name it.
-
 ## Undo points in the project the changes were made in
 
 - **Layers:** common

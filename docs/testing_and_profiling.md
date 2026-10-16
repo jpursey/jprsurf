@@ -675,8 +675,9 @@ as a `FakeProject`, which REAPER opens from a project file. The design is in
 [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md).
 
 In REAPER, they run in a test install: a portable REAPER of their own, with
-the `reaper_jpr_check` DLL in its `UserPlugins`, and not the plugin. The user's
-own REAPER and its settings are never touched.
+the `reaper_jpr_check` DLL in its `UserPlugins`, and the plugin only while
+`check_load_in_reaper` runs (see Loading the plugin). The user's own REAPER
+and its settings are never touched.
 
 ### Setting up the test install
 
@@ -718,6 +719,32 @@ It runs REAPER, so it runs from the main checkout only, one run at a time, as
 other work that needs REAPER does. It doesn't touch the user's REAPER, so
 Claude runs it to verify a change to the fake or the notifier. A change that
 doesn't touch them is verified under the fake alone.
+
+### Loading the plugin
+
+```
+cmake --build out/build/x64-Release --target check_load_in_reaper
+```
+
+`dll_main.cc` is the only code no unit test runs, so the same test install
+checks that REAPER loads and unloads the plugin
+(`jpr/plugin/check_load_in_reaper.cmake`). It copies `reaper_jprsurf.dll` into
+`UserPlugins`, beside `reaper_jpr_check.dll`, and runs the contract tests with
+a `GTEST_FILTER` that runs none, so the check DLL just quits REAPER. REAPER
+runs with `JPRSURF_TRACE` set, and with `APPDATA` set to
+`out/build/x64-Release/src/jpr/plugin/check_load_in_reaper/`, so the log and
+the trace go there rather than over the user's. It fails if the run failed,
+`jprsurf.log` has an error, or the trace isn't there with its header and
+"Trace ended". `check_in_reaper.cmake` removes the plugin from `UserPlugins`
+once REAPER quits, whether or not it passed.
+
+The test install has only the recording surface, so the plugin creates no
+surface, which would open the X-Touch's MIDI ports that the user's REAPER may
+hold. It checks loading and unloading, not a surface. It builds the plugin
+without deploying it (the deploy is a target of its own), so it runs while the
+user has REAPER open. If a run is stopped part way, the plugin may be left in
+`UserPlugins`, where the contract tests would load it too, and it would write
+its log over the user's: remove it by hand.
 
 ## Tests
 

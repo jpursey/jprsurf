@@ -4,7 +4,8 @@
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 // The DLL REAPER loads: its entry points, and everything the plugin reads from
-// its environment, which no test runs.
+// its environment, which no unit test runs. check_load_in_reaper runs them in
+// the test install of REAPER (see check_load_in_reaper.cmake).
 
 #include <windows.h>
 
