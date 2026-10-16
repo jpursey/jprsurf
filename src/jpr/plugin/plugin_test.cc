@@ -5,8 +5,6 @@
 
 #include "jpr/plugin/plugin.h"
 
-#include <filesystem>
-#include <fstream>
 #include <memory>
 #include <string>
 
@@ -23,23 +21,6 @@ namespace jpr {
 namespace {
 
 using ::testing::StartsWith;
-
-// Returns a path for a file a test writes, after removing any left from an
-// earlier run.
-std::filesystem::path GetTestPath(const char* file_name) {
-  std::filesystem::path path =
-      std::filesystem::path(::testing::TempDir()) / file_name;
-  std::filesystem::remove(path);
-  return path;
-}
-
-// Returns the first line of the file at `path`, or empty if there is none.
-std::string ReadFirstLine(const std::filesystem::path& path) {
-  std::ifstream file(path);
-  std::string line;
-  std::getline(file, line);
-  return line;
-}
 
 class PluginTest : public ::testing::Test {
  protected:
@@ -107,10 +88,13 @@ TEST_F(PluginTest, LoadingWithNoApiFails) {
 }
 
 TEST_F(PluginTest, TracesToTheTracePath) {
-  const std::filesystem::path path = GetTestPath("plugin_test_trace.txt");
-  ASSERT_TRUE(Load({.trace_path = path}));
+  ASSERT_TRUE(GetFileSystem()->Register(
+      std::make_unique<gb::MemoryFileProtocol>(), "trace"));
+  ASSERT_TRUE(Load({.trace_path = "trace:/test.txt"}));
   Plugin::Unload();
-  EXPECT_THAT(ReadFirstLine(path), StartsWith("JPRSurf REAPER trace"));
+  std::string trace;
+  ASSERT_TRUE(GetFileSystem()->ReadFile("trace:/test.txt", &trace));
+  EXPECT_THAT(trace, StartsWith("JPRSurf REAPER trace"));
 }
 
 TEST_F(PluginTest, SurfacesWriteTheirProfileToTheProfilePath) {

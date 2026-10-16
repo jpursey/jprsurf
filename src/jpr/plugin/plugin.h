@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <utility>
@@ -24,8 +23,8 @@ class Plugin final {
   // dll_main.cc). An empty path turns each off, as tests load it.
   struct Options {
     // Where to write a trace of every call between JPRSurf and REAPER (see
-    // ReaperTrace), set by JPRSURF_TRACE.
-    std::filesystem::path trace_path;
+    // ReaperTrace), as a path in GetFileSystem(), set by JPRSURF_TRACE.
+    std::string trace_path;
 
     // Where each surface writes its profile (see ReaperProfiler), as a path in
     // GetFileSystem().

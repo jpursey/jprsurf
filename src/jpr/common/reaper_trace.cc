@@ -6,7 +6,6 @@
 #include "jpr/common/reaper_trace.h"
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -25,6 +24,9 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gb/base/local_time.h"
+#include "gb/file/file.h"
+#include "gb/file/file_types.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/reaper_api.h"
 
@@ -171,7 +173,7 @@ constexpr absl::Duration kFlushInterval = absl::Milliseconds(100);
 
 class Tracer final {
  public:
-  Tracer(const std::filesystem::path& path, std::string_view name);
+  Tracer(std::string_view path, std::string_view name);
   Tracer(const Tracer&) = delete;
   Tracer& operator=(const Tracer&) = delete;
   ~Tracer();
@@ -205,6 +207,13 @@ class Tracer final {
   // that was written, if any.
   void WriteQuietCount();
 
+  // Writes `text` to the file, if it is open.
+  void Write(std::string_view text);
+
+  // Flushes the file, if it is open. If what was written didn't reach the
+  // file, it logs an error, and the trace stops.
+  void Flush();
+
   template <typename... Args>
   std::string FormatCall(std::string_view name, Args... args);
   template <typename... Args>
@@ -236,7 +245,7 @@ class Tracer final {
   std::string NameTrack(MediaTrack* value);
   std::string FormatValue(const void* value);
 
-  std::ofstream file_;
+  std::unique_ptr<gb::File> file_;  // Null if it failed to open or write.
   const absl::Time start_time_;
   absl::Time call_time_;    // When the current top level call started.
   absl::Time flush_time_;   // When the file was last flushed.
@@ -257,23 +266,27 @@ class Tracer final {
   absl::flat_hash_map<MediaTrack*, std::string> track_names_;
 };
 
-Tracer::Tracer(const std::filesystem::path& path, std::string_view name)
-    : file_(path, std::ios::trunc), start_time_(absl::Now()) {
-  if (!file_.is_open()) {
-    LOG(ERROR) << "Failed to open REAPER trace file " << path.string();
+Tracer::Tracer(std::string_view path, std::string_view name)
+    : file_(GetFileSystem()->OpenFile(path, gb::kNewFileFlags)),
+      start_time_(absl::Now()) {
+  if (file_ == nullptr) {
+    LOG(ERROR) << "Failed to open REAPER trace file " << path;
     return;
   }
-  file_ << name << " REAPER trace, started "
-        << absl::FormatTime("%Y-%m-%d %H:%M:%S", start_time_,
-                            gb::GetLocalTimeZone())
-        << "\n";
-  file_.flush();
-  LOG(INFO) << "Tracing REAPER calls to " << path.string();
+  Write(absl::StrCat(name, " REAPER trace, started ",
+                     absl::FormatTime("%Y-%m-%d %H:%M:%S", start_time_,
+                                      gb::GetLocalTimeZone()),
+                     "\n"));
+  Flush();
+  LOG(INFO) << "Tracing REAPER calls to " << path;
 }
 
 Tracer::~Tracer() {
   WriteQuietCount();
-  file_ << "Trace ended\n";
+  Write("Trace ended\n");
+  if (file_ != nullptr && !file_->Close()) {
+    LOG(ERROR) << "Failed to write the REAPER trace";
+  }
   LOG(INFO) << "REAPER trace ended";
 }
 
@@ -365,7 +378,7 @@ void Tracer::AddLine(int depth, std::string_view text) {
 void Tracer::EndTopLevelCall() {
   if (has_event_) {
     WriteQuietCount();
-    file_ << lines_;
+    Write(lines_);
   } else {
     ++quiet_count_;
   }
@@ -373,7 +386,7 @@ void Tracer::EndTopLevelCall() {
   has_event_ = false;
   track_names_.clear();
   if (call_time_ - flush_time_ >= kFlushInterval) {
-    file_.flush();
+    Flush();
     flush_time_ = call_time_;
   }
 }
@@ -382,9 +395,22 @@ void Tracer::WriteQuietCount() {
   if (quiet_count_ == 0) {
     return;
   }
-  file_ << std::string(kTimeWidth, ' ') << "(" << quiet_count_
-        << " quiet calls left out)\n";
+  Write(absl::StrCat(std::string(kTimeWidth, ' '), "(", quiet_count_,
+                     " quiet calls left out)\n"));
   quiet_count_ = 0;
+}
+
+void Tracer::Write(std::string_view text) {
+  if (file_ != nullptr) {
+    file_->WriteString(text);
+  }
+}
+
+void Tracer::Flush() {
+  if (file_ != nullptr && !file_->Flush()) {
+    LOG(ERROR) << "Failed to write the REAPER trace, so it has stopped";
+    file_ = nullptr;
+  }
 }
 
 template <typename... Args>
@@ -704,15 +730,13 @@ HWND ShowTracedConfig(const char* type_string, HWND parent,
 // destroyed.
 class ReaperTrace::Impl final {
  public:
-  Impl(const std::filesystem::path& path, std::string_view name)
-      : tracer(path, name) {}
+  Impl(std::string_view path, std::string_view name) : tracer(path, name) {}
 
   Tracer tracer;
   ReaperApiHooks<TraceHook> hooks;
 };
 
-ReaperTrace::ReaperTrace(const std::filesystem::path& path,
-                         std::string_view name) {
+ReaperTrace::ReaperTrace(std::string_view path, std::string_view name) {
   CHECK(g_tracer == nullptr) << "Only one ReaperTrace may exist at a time";
   impl_ = std::make_unique<Impl>(path, name);
   g_tracer = &impl_->tracer;

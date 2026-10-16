@@ -11,7 +11,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "absl/base/log_severity.h"
 #include "absl/log/log.h"
@@ -51,28 +53,32 @@ bool IsTraceOn() {
   return trace;
 }
 
-// Registers the log's folder as "profile" in GetFileSystem(), so the profile is
-// written beside the log. Returns false if it couldn't.
-bool RegisterProfileFolder() {
+// Registers the log's folder as "profile" and "trace" in GetFileSystem(), so
+// the profile and the trace are written beside the log. Returns false if it
+// couldn't.
+bool RegisterLogFolder() {
   const std::filesystem::path folder = GetLogFolder();
   if (folder.empty()) {
     return false;
   }
-  return GetFileSystem()->Register(gb::LocalFileProtocol::Create(folder),
-                                   "profile");
+  return GetFileSystem()->Register(
+      gb::LocalFileProtocol::Create(folder),
+      std::vector<std::string>{"profile", "trace"});
 }
 
 // Returns the plugin's options, from its environment.
 Plugin::Options GetOptions() {
   Plugin::Options options;
+  const bool has_log_folder = RegisterLogFolder();
   if (IsTraceOn()) {
-    options.trace_path = GetLogPath("jprsurf_trace.txt");
-    if (options.trace_path.empty()) {
+    if (has_log_folder) {
+      options.trace_path = "trace:/jprsurf_trace.txt";
+    } else {
       LOG(ERROR)
           << "JPRSURF_TRACE is set, but there is nowhere to write the trace.";
     }
   }
-  if (RegisterProfileFolder()) {
+  if (has_log_folder) {
     options.profile_path = "profile:/jprsurf_profile.txt";
   } else {
     LOG(ERROR) << "There is nowhere to write the profile, so it is off.";

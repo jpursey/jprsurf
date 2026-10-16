@@ -5,16 +5,18 @@
 
 #include "jpr/common/reaper_trace.h"
 
-#include <filesystem>
-#include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "gb/base/function_hook.h"
+#include "gb/file/file.h"
+#include "gb/file/file_types.h"
+#include "gb/file/memory_file_protocol.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
@@ -94,6 +96,8 @@ constexpr char kCreateLine[] = R"(csurf/Create("TEST", "config", out) -> )";
 // the calls REAPER makes back. Each test traces from creating the surface.
 class ReaperTraceTest : public ::testing::Test {
  protected:
+  static constexpr char kPath[] = "trace:/test.txt";
+
   ReaperTraceTest() {
     project_.AddTracks(2);
     drums_ = project_.AddTrack("Drums");
@@ -102,7 +106,9 @@ class ReaperTraceTest : public ::testing::Test {
   }
 
   void SetUp() override {
-    trace_ = std::make_unique<ReaperTrace>(path_, "Test");
+    ASSERT_TRUE(GetFileSystem()->Register(
+        std::make_unique<gb::MemoryFileProtocol>(), "trace"));
+    trace_ = std::make_unique<ReaperTrace>(kPath, "Test");
     reaper_.GetPluginInfo().Register(
         "csurf", ReaperTrace::TraceSurfaceRegistration(&g_test_surface_reg));
     surface_ = reaper_.AddSurface("config");
@@ -118,19 +124,21 @@ class ReaperTraceTest : public ::testing::Test {
   // column (so nested calls keep their indent).
   std::vector<std::string> ReadTrace() {
     trace_.reset();
-    std::ifstream file(path_);
-    std::string line;
-    std::getline(file, line);
-    EXPECT_THAT(line, StartsWith("Test REAPER trace, started "));
+    std::unique_ptr<gb::File> file =
+        GetFileSystem()->OpenFile(kPath, gb::kReadFileFlags);
+    EXPECT_NE(file, nullptr);
+    if (file == nullptr) {
+      return {};
+    }
+    EXPECT_THAT(file->ReadLine(), StartsWith("Test REAPER trace, started "));
     std::vector<std::string> lines;
-    while (std::getline(file, line) && line != "Trace ended") {
+    std::string line;
+    while (file->ReadLine(&line) && line != "Trace ended") {
       lines.push_back(line.substr(kTimeWidth));
     }
     return lines;
   }
 
-  const std::filesystem::path path_ =
-      std::filesystem::path(::testing::TempDir()) / "reaper_trace_test.txt";
   FakeReaper reaper_;
   FakeProject& project_ = reaper_.GetProject();
   FakeTrack* drums_ = nullptr;

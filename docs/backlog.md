@@ -84,31 +84,6 @@ frame on performance cores. What is left is `smoke.txt`, unless *Measure
 REAPER's costs* retires it first, recorded the same way at the end of the next
 feature that profiles the smoke test.
 
-## Write the trace through GetFileSystem()
-
-- **Layers:** common, plugin
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** Game Bits *Report buffered write errors*
-- **Background:** `GetFileSystem()` in `jpr/common/file_system.h`, and
-  `Tracer` in `reaper_trace.cc`
-
-The profile, the contract tests' files, and the benchmark's are written through
-`GetFileSystem()`, by a protocol name that whatever loads JPRSurf registers.
-The trace is the last file written straight to disk, streamed through a
-`std::ofstream` (which the no-iostreams rule counts against it) to the
-`std::filesystem::path` in `Plugin::Options::trace_path`. Stream it through a
-`gb::File` from `GetFileSystem()->OpenFile()` instead, to a path such as
-`"trace:/jprsurf_trace.txt"`, with `dll_main.cc` registering the log's folder
-under "trace" as well as "profile" (one protocol can have both names).
-`PluginTest.TracesToTheTracePath` then reads it back from a
-`gb::MemoryFileProtocol` rather than a temp file.
-
-The trace flushes its file every `kFlushInterval` (100ms), so a crash loses
-little of it, and `gb::File` has no `Flush()` yet: `LocalFileProtocol` buffers
-writes in a `std::fstream`. The Game Bits item adds `File::Flush()`, which the
-trace calls where it flushes now.
-
 ## Undo points in the project the changes were made in
 
 - **Layers:** common

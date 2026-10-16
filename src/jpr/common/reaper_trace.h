@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <filesystem>
 #include <memory>
 #include <string_view>
 
@@ -41,10 +40,11 @@ namespace jpr {
 
 class ReaperTrace final {
  public:
-  // Starts tracing to the file at `path`, replacing it, headed with `name`, the
+  // Starts tracing to the file at `path` in GetFileSystem(), such as
+  // "trace:/jprsurf_trace.txt", replacing it, headed with `name`, the
   // extension's name. The REAPER API must already be loaded, and only one
   // ReaperTrace may exist at a time.
-  ReaperTrace(const std::filesystem::path& path, std::string_view name);
+  ReaperTrace(std::string_view path, std::string_view name);
   ReaperTrace(const ReaperTrace&) = delete;
   ReaperTrace& operator=(const ReaperTrace&) = delete;
   ~ReaperTrace();
