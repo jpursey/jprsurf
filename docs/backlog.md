@@ -28,40 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Measure REAPER's costs
-
-- **Layers:** common
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [testing_and_profiling.md](testing_and_profiling.md)
-  (Profiler), [profiles/README.md](../profiles/README.md)
-
-What each function on the API list costs in REAPER, measured on its own, under
-the conditions its cost depends on, rather than through the default config's
-gestures: inside a deferred refresh (a `PreventUIRefresh()` scope) or not, and
-as it scales with the project (tracks, selected tracks, and routes). The end of
-a deferred refresh, an undo
-point, and each action JPRSurf runs are measured the same way. No device or
-config is involved: the measurements call REAPER's API directly, on generated
-projects, in the test install and runner *Check the fakes in REAPER* built.
-- **Deferred work:** some of a call's cost comes after it returns, in REAPER's
-  UI refresh. A measurement times the runs after the call too, against runs
-  with no call, so what REAPER puts off is still counted.
-- **The result** refines the cost table the call count tests weigh calls with
-  (`GetCallCost()` in `jpr/common/testing/call_cost.h`), which today comes from
-  the profile snapshots, and is conservative where nobody has measured: each
-  function's category, which setters are really deferrable, and how each cost
-  scales with the project. It is measured again when the API list grows, or
-  REAPER updates, rather than with each change.
-
-The smoke scenario and its profile (`profiles/smoke.txt`) then go: a gesture's
-cost is its calls, bounded by the call count tests and weighed by this table,
-and JPRSurf's own time, from the benchmarks under the fake. CLAUDE.md's smoke
-test, checked by hand at the end of a feature, no longer rides along with a
-profiled run. What isolated measurements miss, REAPER's effect on JPRSurf's own
-code, the log's "Slow run" warnings show in everyday use.
-
 ## Report touch to REAPER for automation
 
 - **Layers:** common, scene, plugin
