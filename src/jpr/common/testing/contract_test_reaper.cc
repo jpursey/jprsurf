@@ -29,10 +29,8 @@
 #include "absl/functional/function_ref.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
-#include "gb/base/context_builder.h"
 #include "gb/base/init_logging.h"
 #include "gb/base/log_file.h"
-#include "gb/base/unicode.h"
 #include "gb/file/local_file_protocol.h"
 #include "gtest/gtest.h"
 #include "jpr/common/file_system.h"
@@ -185,14 +183,8 @@ REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(
     gb::InitLogging();
     jpr::g_log_file = std::make_unique<gb::LogFile>(
         jpr::g_dir / "log.txt", absl::LogSeverityAtLeast::kInfo);
-    jpr::GetFileSystem()->Register(
-        gb::LocalFileProtocol::Create(
-            gb::ContextBuilder()
-                .SetValue<std::string>(
-                    gb::LocalFileProtocol::kKeyRoot,
-                    gb::ToUtf8(jpr::g_dir.generic_u16string()))
-                .Build()),
-        "check");
+    jpr::GetFileSystem()->Register(gb::LocalFileProtocol::Create(jpr::g_dir),
+                                   "check");
   }
   if (plugin_info->caller_version != REAPER_PLUGIN_VERSION ||
       plugin_info->GetFunc == nullptr ||

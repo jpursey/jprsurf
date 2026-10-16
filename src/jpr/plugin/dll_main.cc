@@ -11,15 +11,12 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
-#include <string>
 #include <string_view>
 
 #include "absl/base/log_severity.h"
 #include "absl/log/log.h"
-#include "gb/base/context_builder.h"
 #include "gb/base/init_logging.h"
 #include "gb/base/log_file.h"
-#include "gb/base/unicode.h"
 #include "gb/file/local_file_protocol.h"
 #include "jpr/common/file_system.h"
 #include "jpr/common/log_path.h"
@@ -61,13 +58,8 @@ bool RegisterProfileFolder() {
   if (folder.empty()) {
     return false;
   }
-  return GetFileSystem()->Register(
-      gb::LocalFileProtocol::Create(
-          gb::ContextBuilder()
-              .SetValue<std::string>(gb::LocalFileProtocol::kKeyRoot,
-                                     gb::ToUtf8(folder.generic_u16string()))
-              .Build()),
-      "profile");
+  return GetFileSystem()->Register(gb::LocalFileProtocol::Create(folder),
+                                   "profile");
 }
 
 // Returns the plugin's options, from its environment.

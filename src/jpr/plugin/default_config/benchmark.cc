@@ -25,10 +25,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "gb/base/context_builder.h"
 #include "gb/base/init_logging.h"
 #include "gb/base/local_time.h"
-#include "gb/base/unicode.h"
 #include "gb/file/local_file_protocol.h"
 #include "gtest/gtest.h"
 #include "jpr/common/file_system.h"
@@ -69,14 +67,8 @@ std::string FormatSummaryLine(std::string_view name, std::string_view runs,
 // fake is created, and again for the summary, once they have all run. Returns
 // false if it couldn't.
 bool RegisterOutputDir() {
-  return GetFileSystem()->Register(
-      gb::LocalFileProtocol::Create(
-          gb::ContextBuilder()
-              .SetValue<std::string>(
-                  gb::LocalFileProtocol::kKeyRoot,
-                  gb::ToUtf8(g_output_dir.generic_u16string()))
-              .Build()),
-      "benchmark");
+  return GetFileSystem()->Register(gb::LocalFileProtocol::Create(g_output_dir),
+                                   "benchmark");
 }
 
 // Writes the summary to g_output_dir, and prints it. Returns false if it
