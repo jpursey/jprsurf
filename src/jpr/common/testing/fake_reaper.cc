@@ -722,16 +722,33 @@ class FakeReaper::Api final {
     s_instance_->GetProject().automation_override_ = mode;
   }
 
+  // `index` is a tab's, or -1 for the current project. The fake's projects
+  // have no file, so there is no file name to return.
+  static ReaProject* EnumProjects(int index, char* file_name,
+                                  int file_name_size) {
+    if (file_name != nullptr) {
+      ADD_FAILURE() << "EnumProjects() with a file name isn't faked yet";
+    }
+    if (index == -1) {
+      return ToReaProject(&s_instance_->GetProject());
+    }
+    if (index < 0 || index >= s_instance_->GetProjectCount()) {
+      return nullptr;
+    }
+    return ToReaProject(&s_instance_->GetProjectAt(index));
+  }
+
   //----------------------------------------------------------------------------
   // Undo
   //
   // An undo point holds the project's undoable state (see "Undo and saving"
   // in FakeProject). Most setters add none of their own, and
-  // Undo_OnStateChangeEx() adds one with whatever changed since the last. The
-  // route setters do add their own: ToggleTrackSendUIMute() always, and
-  // SetTrackSendUIVol() and SetTrackSendUIPan() for an instant edit, or one
-  // that ends an edit. So do the automation mode actions (see
-  // AddReaperActions()).
+  // Undo_OnStateChangeEx() adds one to the current project, or
+  // Undo_OnStateChangeEx2() to the one it is given, with whatever changed in
+  // it since the last. The route setters do add their own:
+  // ToggleTrackSendUIMute() always, and SetTrackSendUIVol() and
+  // SetTrackSendUIPan() for an instant edit, or one that ends an edit. So do
+  // the automation mode actions (see AddReaperActions()).
   //
   // REAPER holds the undo point of a change from a control surface
   // (CSurf_On*ChangeEx()), which it adds once a change of the other kind
@@ -748,6 +765,15 @@ class FakeReaper::Api final {
       ADD_FAILURE() << "Undo_OnStateChangeEx() with a track isn't faked yet";
     }
     s_instance_->GetProject().AddUndoPoint(name, flags);
+  }
+
+  // `project` is null for the current project.
+  static void Undo_OnStateChangeEx2(ReaProject* project, const char* name,
+                                    int flags, int track_parameter) {
+    if (track_parameter != -1) {
+      ADD_FAILURE() << "Undo_OnStateChangeEx2() with a track isn't faked yet";
+    }
+    s_instance_->FindProject(project).AddUndoPoint(name, flags);
   }
 
   static const char* Undo_CanRedo2(ReaProject* project) {

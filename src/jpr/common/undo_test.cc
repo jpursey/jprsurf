@@ -106,5 +106,55 @@ TEST_F(ContinuousUndoTest, FlushAddsThePendingUndoPointNow) {
   EXPECT_EQ(project_.GetUndoPoints().size(), 1);
 }
 
+TEST_F(ContinuousUndoTest, AddsTheUndoPointInTheProjectChanged) {
+  undo_.Update(RunTime::Now());
+  undo_.OnChange("Adjust send volume", UNDO_STATE_TRACKCFG);
+  SetSendVolume(0.5);
+  FakeProject& other = reaper_.AddProject();
+  RunAfter(ContinuousUndo::kDelay);
+  EXPECT_THAT(project_.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "Adjust send volume")));
+  EXPECT_THAT(other.GetUndoPoints(), IsEmpty());
+
+  // And when it is flushed.
+  reaper_.SwitchProjectTo(0);
+  undo_.OnChange("Adjust send volume", UNDO_STATE_TRACKCFG);
+  SetSendVolume(0.25);
+  reaper_.SwitchProjectTo(1);
+  undo_.Flush();
+  EXPECT_EQ(project_.GetUndoPoints().size(), 2);
+  EXPECT_THAT(other.GetUndoPoints(), IsEmpty());
+}
+
+TEST_F(ContinuousUndoTest,
+       AChangeInAnotherProjectAddsThePendingUndoPointFirst) {
+  undo_.Update(RunTime::Now());
+  undo_.OnChange("Adjust send volume", UNDO_STATE_TRACKCFG);
+  SetSendVolume(0.5);
+  FakeProject& other = reaper_.AddProject();
+  FakeTrack* keys = other.AddTrack("Keys");
+  other.AddSend(keys, other.AddTrack("Bus"));
+  undo_.OnChange("Adjust send volume", UNDO_STATE_TRACKCFG);
+  SetTrackSendUIVol(ToMediaTrack(keys), 0, 0.5, /*isend=*/0);
+  EXPECT_THAT(project_.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "Adjust send volume")));
+  EXPECT_THAT(other.GetUndoPoints(), IsEmpty());
+
+  RunAfter(ContinuousUndo::kDelay);
+  EXPECT_EQ(project_.GetUndoPoints().size(), 1);
+  EXPECT_THAT(other.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "Adjust send volume")));
+}
+
+// The fake fails a call with a closed project.
+TEST_F(ContinuousUndoTest, AClosedProjectsUndoPointIsDropped) {
+  undo_.Update(RunTime::Now());
+  undo_.OnChange("Adjust send volume", UNDO_STATE_TRACKCFG);
+  SetSendVolume(0.5);
+  FakeProject& replacement = reaper_.NewProject();
+  RunAfter(ContinuousUndo::kDelay);
+  EXPECT_THAT(replacement.GetUndoPoints(), IsEmpty());
+}
+
 }  // namespace
 }  // namespace jpr

@@ -84,37 +84,6 @@ frame on performance cores. What is left is `smoke.txt`, unless *Measure
 REAPER's costs* retires it first, recorded the same way at the end of the next
 feature that profiles the smoke test.
 
-## Undo points in the project the changes were made in
-
-- **Layers:** common
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [fake_reaper.md](worklog/fake_reaper.md) (CL8: undo and the
-  transport are per project)
-
-Undo is per project in REAPER, but `ContinuousUndo` adds its pending undo point
-up to `kDelay` (500ms) after the last change, with `Undo_OnStateChangeEx()`,
-which takes no project, so it goes to whichever project is current then. Move a
-send fader and switch project tabs within half a second, and the undo point
-probably lands in the other tab, undoing nothing there, while the project that
-changed loses it. The same goes for a `Flush()` after a tab switch. This is read
-from the code, not yet seen in REAPER.
-
-Remember the project the pending changes were made in (`EnumProjects(-1, ...)`
-when the first change is recorded), and add the undo point to it with
-`Undo_OnStateChangeEx2()`, wherever and whenever it is flushed. A change in
-another project first adds the pending undo point to its own project, as a
-change with a different description does. Flushing when the project changes
-instead isn't enough: `SetTrackListChange()` comes with a tab switch, but
-doesn't mean the project changed, and REAPER has no other notice of it.
-
-`EnumProjects` and `Undo_OnStateChangeEx2` join the API list, so the fake fakes
-both (the current project, and an undo point in the given one). `undo_test.cc`
-then tests a change made in one tab, a switch to another, and the undo point
-landing in the first. **Verify** in REAPER: move a send fader, switch tabs at
-once, and undo in each tab.
-
 ## Report touch to REAPER for automation
 
 - **Layers:** common, scene, plugin

@@ -11,6 +11,7 @@
 #include "absl/time/time.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/test_reset.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
 
@@ -30,6 +31,13 @@ namespace jpr {
 // also includes any other change made in the meantime that doesn't create its
 // own undo point. Code that is about to create its own undo point should call
 // Flush() first, so the pending changes aren't included in it.
+//
+// Undo is per project, so the undo point is created in the project the pending
+// changes were made in (the current project when the first was recorded), even
+// if another project is current by then. A change in another project first
+// creates the pending undo point, as a change with a different description
+// does. If the project was closed in the meantime, the pending undo point is
+// dropped.
 class ContinuousUndo final {
  public:
   // How long changes must stop before their undo point is created.
@@ -42,12 +50,13 @@ class ContinuousUndo final {
   ContinuousUndo& operator=(const ContinuousUndo&) = delete;
   ~ContinuousUndo() = default;
 
-  // Records a change about to be made, to include in an undo point with the
-  // given description and undo state flags (see Undo_OnStateChangeEx). The
-  // change's time is the time last passed to Update().
+  // Records a change about to be made in the current project, to include in an
+  // undo point with the given description and undo state flags (see
+  // Undo_OnStateChangeEx2). The change's time is the time last passed to
+  // Update().
   //
-  // If a change is pending with a different description or flags, the pending
-  // undo point is created first.
+  // If a change is pending in another project, or with a different description
+  // or flags, the pending undo point is created first.
   void OnChange(std::string_view description, int undo_state_flags);
 
   // Creates the pending undo point, if the changes stopped at least kDelay
@@ -71,7 +80,8 @@ class ContinuousUndo final {
   // The current run's time, in seconds (see Update()).
   double time_secs_ = 0.0;
 
-  bool pending_ = false;
+  // The project the pending changes were made in, or null if none are pending.
+  ReaProject* project_ = nullptr;
   std::string description_;
   int undo_state_flags_ = 0;
   double last_change_time_secs_ = 0.0;

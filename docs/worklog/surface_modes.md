@@ -182,9 +182,10 @@ root                      global mappings: modifiers (including mod:send_hold),
 
 - `SetTrackSendUIVol` / `SetTrackSendUIPan` with `isend=0` don't create undo
   points, and neither do the `CSurf_On*` route functions.
-- `ContinuousUndo` creates an undo point with `Undo_OnStateChangeEx` once a
-  series of changes with the same description has stopped for 500ms, or
-  earlier when a change with a different description comes in. Route volume
+- `ContinuousUndo` creates an undo point with `Undo_OnStateChangeEx2`, in the
+  project the changes were made in, once a series of changes with the same
+  description has stopped for 500ms, or earlier when a change with a
+  different description, or in another project, comes in. Route volume
   and pan use "JPR: Adjust send/receive volume/pan". `ControlSurface` (in
   `common`) calls `Update()` after every run.
 - Route mute flushes pending changes first, so they aren't folded into its own

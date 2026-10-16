@@ -50,6 +50,7 @@ constexpr NamedCost kCosts[] = {
     {"CreateMIDIOutput", kModerate},
     {"CSurf_OnPanChangeEx", DeferrableRefresh(1)},
     {"CSurf_OnVolumeChangeEx", DeferrableRefresh(1)},
+    {"EnumProjects", kCheap},
     {"format_timestr_pos", kModerate},
     {"GetCursorPosition", kCheap},
     {"GetGlobalAutomationOverride", kCheap},
@@ -100,6 +101,7 @@ constexpr NamedCost kCosts[] = {
     {"Track_GetPeakInfo", kCheap},
     {"Undo_CanRedo2", kCheap},
     {"Undo_OnStateChangeEx", {.kind = Kind::kUndoPoint}},
+    {"Undo_OnStateChangeEx2", {.kind = Kind::kUndoPoint}},
 };
 
 constexpr std::string_view kListed[] = {

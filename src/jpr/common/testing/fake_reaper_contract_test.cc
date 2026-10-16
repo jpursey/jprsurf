@@ -934,6 +934,15 @@ TEST_F(ProjectContractTest, AProjectOpensCleanWithNothingToRedo) {
   EXPECT_EQ(Undo_CanRedo2(nullptr), nullptr);
 }
 
+// The tests open each project in REAPER's one tab.
+TEST_F(ProjectContractTest, TheCurrentProjectIsTheOneTabs) {
+  OpenProject([](FakeProject& project) {});
+  ReaProject* project = EnumProjects(-1, nullptr, 0);
+  EXPECT_NE(project, nullptr);
+  EXPECT_EQ(EnumProjects(0, nullptr, 0), project);
+  EXPECT_EQ(EnumProjects(1, nullptr, 0), nullptr);
+}
+
 TEST_F(ProjectContractTest, SelectedItemsAreCounted) {
   OpenProject([](FakeProject& project) {
     project.AddTrack("Track");
@@ -1093,6 +1102,17 @@ TEST_F(UndoContractTest, AnUndoPointIsOnlyAddedForAChange) {
   Undo();
   EXPECT_FALSE(HasFlag(a_, kTrackStateMute));
   EXPECT_EQ(GetRedo(), "All");
+}
+
+TEST_F(UndoContractTest, AnUndoPointCanBeAddedInAProject) {
+  SetMute(a_, true);
+  Undo_OnStateChangeEx2(EnumProjects(-1, nullptr, 0), "Change",
+                        UNDO_STATE_TRACKCFG, -1);
+  EXPECT_EQ(IsProjectDirty(nullptr), 1);
+
+  Undo();
+  EXPECT_FALSE(HasFlag(a_, kTrackStateMute));
+  EXPECT_EQ(GetRedo(), "Change");
 }
 
 TEST_F(UndoContractTest, SelectionAndTheOverrideArentUndone) {

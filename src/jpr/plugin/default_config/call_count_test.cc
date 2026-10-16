@@ -264,7 +264,7 @@ TEST_F(CallCountTest, MovingARouteFader) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 2862, .moderate = 34, .refreshes = 1, .undo_points = 1}));
+          .cheap = 2864, .moderate = 34, .refreshes = 1, .undo_points = 1}));
 }
 
 // Includes the undo point added once the route stops moving.
@@ -277,7 +277,7 @@ TEST_F(CallCountTest, TurningARoutePot) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 2723, .moderate = 33, .refreshes = 1, .undo_points = 1}));
+          .cheap = 2725, .moderate = 33, .refreshes = 1, .undo_points = 1}));
 }
 
 // Centers a pan, so it has one to change.
@@ -292,7 +292,7 @@ TEST_F(CallCountTest, PressingARoutePot) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 3546, .moderate = 39, .refreshes = 1, .undo_points = 1}));
+          .cheap = 3548, .moderate = 39, .refreshes = 1, .undo_points = 1}));
 }
 
 TEST_F(CallCountTest, TappingARouteMute) {

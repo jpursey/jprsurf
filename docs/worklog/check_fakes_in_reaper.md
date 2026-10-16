@@ -189,6 +189,7 @@ every test reads. A function added to the API list gets a row.
 | `CreateMIDIOutput`            |                                                          | The machine's ports                                               |
 | `CSurf_OnPanChangeEx`         | TrackChange, Undo, SurfaceNotifier                       |                                                                   |
 | `CSurf_OnVolumeChangeEx`      | TrackChange, Undo, SurfaceNotifier                       |                                                                   |
+| `EnumProjects`                | Project, Undo                                            | Other tabs: the tests only open one                               |
 | `format_timestr_pos`          | Text                                                     |                                                                   |
 | `GetCursorPosition`           | Project                                                  | Moving it: tests set it, as REAPER's UI moves it                  |
 | `GetGlobalAutomationOverride` | Project, Undo                                            |                                                                   |
@@ -239,6 +240,7 @@ every test reads. A function added to the API list gets a row.
 | `Track_GetPeakInfo`           |                                                          | Peaks need audio playing, and a project opens stopped             |
 | `Undo_CanRedo2`               | Project, Undo                                            |                                                                   |
 | `Undo_OnStateChangeEx`        | Undo                                                     |                                                                   |
+| `Undo_OnStateChangeEx2`       | Undo                                                     | A tab's project that isn't current: the tests only open one       |
 
 What the API can't reach stays fake only too: changes made in REAPER's own UI,
 which tests make by setting the fake, and what REAPER calls on a surface

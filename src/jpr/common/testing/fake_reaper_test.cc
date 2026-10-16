@@ -227,6 +227,23 @@ TEST(FakeReaperTest, NewProjectClosesOnlyTheCurrentTab) {
                           "no longer open");
 }
 
+TEST(FakeReaperTest, EnumProjectsListsTheTabsAndTheCurrentProject) {
+  FakeReaper reaper;
+  ReaProject* first = ToReaProject(&reaper.GetProject());
+  ReaProject* second = ToReaProject(&reaper.AddProject());
+  EXPECT_EQ(::EnumProjects(-1, nullptr, 0), second);
+  EXPECT_EQ(::EnumProjects(0, nullptr, 0), first);
+  EXPECT_EQ(::EnumProjects(1, nullptr, 0), second);
+  EXPECT_EQ(::EnumProjects(2, nullptr, 0), nullptr);
+
+  reaper.SwitchProjectTo(0);
+  EXPECT_EQ(::EnumProjects(-1, nullptr, 0), first);
+
+  std::array<char, 64> file_name = {};
+  EXPECT_NONFATAL_FAILURE(::EnumProjects(0, file_name.data(), file_name.size()),
+                          "a file name");
+}
+
 TEST(FakeReaperTest, SwitchingToAMissingProjectFailsTheTest) {
   FakeReaper reaper;
   EXPECT_NONFATAL_FAILURE(reaper.SwitchProjectTo(1), "only 1 project(s) open");
@@ -420,6 +437,8 @@ TEST(FakeReaperTest, ParametersItDoesntModelFailTheTest) {
   EXPECT_NONFATAL_FAILURE(
       ::format_timestr_pos(1.0, text.data(), text.size(), 3), "mode 3");
   EXPECT_NONFATAL_FAILURE(::Undo_OnStateChangeEx("Change", -1, 0), "a track");
+  EXPECT_NONFATAL_FAILURE(::Undo_OnStateChangeEx2(nullptr, "Change", -1, 0),
+                          "a track");
 }
 
 TEST(FakeReaperTest, RouteEditsItDoesntModelFailTheTest) {
@@ -559,6 +578,33 @@ TEST(FakeReaperTest, UndoPointsAreListedUntilUndone) {
   EXPECT_THAT(project.GetUndoPoints(),
               ElementsAre(Field(&FakeUndoPoint::name, "Mute")));
   EXPECT_EQ(project.GetRedo(), "Solo");
+}
+
+TEST(FakeReaperTest, UndoPointsAreAddedInTheirProject) {
+  FakeReaper reaper;
+  FakeProject& first = reaper.GetProject();
+  FakeTrack* drums = first.AddTrack("Drums");
+  FakeProject& second = reaper.AddProject();
+  FakeTrack* bass = second.AddTrack("Bass");
+  ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventGroupingAndGanging);
+  reaper.EndEntryPoint();
+  ::SetTrackUIMute(ToMediaTrack(bass), 1, kPreventGroupingAndGanging);
+
+  ::Undo_OnStateChangeEx2(ToReaProject(&first), "Mute Drums",
+                          UNDO_STATE_TRACKCFG, -1);
+  EXPECT_THAT(first.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "Mute Drums")));
+  EXPECT_THAT(second.GetUndoPoints(), IsEmpty());
+
+  // Null is the current project.
+  ::Undo_OnStateChangeEx2(nullptr, "Mute Bass", UNDO_STATE_TRACKCFG, -1);
+  EXPECT_THAT(second.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "Mute Bass")));
+  EXPECT_EQ(first.GetUndoPoints().size(), 1);
+
+  EXPECT_TRUE(first.Undo());
+  EXPECT_FALSE(drums->mute);
+  EXPECT_TRUE(bass->mute);
 }
 
 // What a test changes itself is outside undo until the API changes something.

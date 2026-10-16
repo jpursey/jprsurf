@@ -218,8 +218,8 @@ modes, and GUIDs.
 Found while building this:
 - Undo and redo, the transport, and the automation override (despite
   `GetGlobalAutomationOverride()`'s name) are each per project (2026-10-02).
-  `ContinuousUndo` doesn't yet keep the project it was changed in: see the
-  backlog's *Undo points in the project the changes were made in*.
+  `ContinuousUndo` adds its undo point to the project it was changed in, with
+  `Undo_OnStateChangeEx2()`.
 
 ## Building blocks
 

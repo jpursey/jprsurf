@@ -7,8 +7,25 @@
 
 #include "absl/time/time.h"
 #include "jpr/common/reaper_api.h"
+#include "sdk/reaper_plugin.h"
 
 namespace jpr {
+namespace {
+
+// Returns true if `project` is open in one of REAPER's project tabs.
+bool IsProjectOpen(ReaProject* project) {
+  for (int i = 0;; ++i) {
+    ReaProject* const open_project = EnumProjects(i, nullptr, 0);
+    if (open_project == nullptr) {
+      return false;
+    }
+    if (open_project == project) {
+      return true;
+    }
+  }
+}
+
+}  // namespace
 
 ContinuousUndo* ContinuousUndo::s_instance_ = nullptr;
 
@@ -26,14 +43,17 @@ const TestReset ContinuousUndo::s_test_reset_([] {
 
 void ContinuousUndo::OnChange(std::string_view description,
                               int undo_state_flags) {
+  ReaProject* const project = EnumProjects(-1, nullptr, 0);
+
   // Pending changes that stopped kDelay ago were already flushed by Update(),
   // which is the only thing that moves the time forward.
-  if (pending_ &&
-      (description != description_ || undo_state_flags != undo_state_flags_)) {
+  if (project_ != nullptr &&
+      (project != project_ || description != description_ ||
+       undo_state_flags != undo_state_flags_)) {
     Flush();
   }
-  if (!pending_) {
-    pending_ = true;
+  if (project_ == nullptr) {
+    project_ = project;
     description_ = description;
     undo_state_flags_ = undo_state_flags;
   }
@@ -42,18 +62,23 @@ void ContinuousUndo::OnChange(std::string_view description,
 
 void ContinuousUndo::Update(const RunTime& time) {
   time_secs_ = time.precise_secs;
-  if (pending_ &&
+  if (project_ != nullptr &&
       absl::Seconds(time_secs_ - last_change_time_secs_) >= kDelay) {
     Flush();
   }
 }
 
 void ContinuousUndo::Flush() {
-  if (!pending_) {
+  ReaProject* const project = project_;
+  if (project == nullptr) {
     return;
   }
-  pending_ = false;
-  Undo_OnStateChangeEx(description_.c_str(), undo_state_flags_, -1);
+  project_ = nullptr;
+
+  // A closed project's changes went with it.
+  if (IsProjectOpen(project)) {
+    Undo_OnStateChangeEx2(project, description_.c_str(), undo_state_flags_, -1);
+  }
 }
 
 }  // namespace jpr

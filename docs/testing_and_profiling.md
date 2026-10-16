@@ -70,7 +70,7 @@ Everything that passes between JPRSurf and REAPER goes one of four ways:
 
 | Way             | Direction            | Today                                                                                   |
 | --------------- | -------------------- | --------------------------------------------------------------------------------------- |
-| API functions   | JPRSurf calls REAPER | 59 of REAPER's 857 functions, from 13 files, 9 of them in `common`                      |
+| API functions   | JPRSurf calls REAPER | 61 of REAPER's 857 functions, from 13 files, 9 of them in `common`                      |
 | MIDI objects    | JPRSurf calls REAPER | `midi_Input`, `midi_Output`, and `MIDI_eventlist`: abstract classes REAPER creates      |
 | Control surface | REAPER calls JPRSurf | `ControlSurface`, the one `IReaperControlSurface`                                       |
 | Registration    | Both                 | The plugin entry point, its `reaper_plugin_info_t` (`GetFunc`), and `Register("csurf")` |
@@ -85,7 +85,7 @@ The API functions in use, by area:
 | Routes                    | `GetTrackNumSends`, `GetSetTrackSendInfo`, `GetTrackSendUIVolPan`, `GetTrackReceiveUIVolPan`, `GetTrackSendUIMute`, `GetTrackReceiveUIMute`, `SetTrackSendUIVol`, `SetTrackSendUIPan`, `ToggleTrackSendUIMute`     |
 | Transport and timeline    | `GetPlayState`, `GetPlayPosition`, `GetCursorPosition`, `format_timestr_pos`                                                                                                                                       |
 | Commands                  | `Main_OnCommand`, `GetToggleCommandState`, `NamedCommandLookup`, `kbd_getTextFromCmd`                                                                                                                              |
-| Automation, undo, project | `GetGlobalAutomationOverride`, `SetGlobalAutomationOverride`, `Undo_OnStateChangeEx`, `Undo_CanRedo2`, `IsProjectDirty`                                                                                            |
+| Automation, undo, project | `GetGlobalAutomationOverride`, `SetGlobalAutomationOverride`, `Undo_OnStateChangeEx`, `Undo_OnStateChangeEx2`, `Undo_CanRedo2`, `IsProjectDirty`, `EnumProjects`                                                   |
 | MIDI ports                | `GetNumMIDIInputs`, `GetNumMIDIOutputs`, `GetMIDIInputName`, `GetMIDIOutputName`, `CreateMIDIInput`, `CreateMIDIOutput`                                                                                            |
 | Text and time             | `guidToString`, `stringToGuid`, `mkvolstr`, `mkpanstr`, `time_precise`, `ShowConsoleMsg`                                                                                                                           |
 

@@ -26,6 +26,7 @@
 #define REAPERAPI_WANT_CreateMIDIOutput
 #define REAPERAPI_WANT_CSurf_OnPanChangeEx
 #define REAPERAPI_WANT_CSurf_OnVolumeChangeEx
+#define REAPERAPI_WANT_EnumProjects
 #define REAPERAPI_WANT_format_timestr_pos
 #define REAPERAPI_WANT_GetCursorPosition
 #define REAPERAPI_WANT_GetGlobalAutomationOverride
@@ -76,6 +77,7 @@
 #define REAPERAPI_WANT_Track_GetPeakInfo
 #define REAPERAPI_WANT_Undo_CanRedo2
 #define REAPERAPI_WANT_Undo_OnStateChangeEx
+#define REAPERAPI_WANT_Undo_OnStateChangeEx2
 
 #include "gb/base/function_hook.h"
 #include "sdk/reaper_plugin_functions.h"
@@ -92,6 +94,7 @@
   X(CreateMIDIOutput)            \
   X(CSurf_OnPanChangeEx)         \
   X(CSurf_OnVolumeChangeEx)      \
+  X(EnumProjects)                \
   X(format_timestr_pos)          \
   X(GetCursorPosition)           \
   X(GetGlobalAutomationOverride) \
@@ -141,7 +144,8 @@
   X(ToggleTrackSendUIMute)       \
   X(Track_GetPeakInfo)           \
   X(Undo_CanRedo2)               \
-  X(Undo_OnStateChangeEx)
+  X(Undo_OnStateChangeEx)        \
+  X(Undo_OnStateChangeEx2)
 
 namespace jpr {
 

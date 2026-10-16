@@ -59,6 +59,7 @@ constexpr std::string_view kQuietCalls[] = {
     JPR_QUIET_CALL(CountSelectedTracks),
     JPR_QUIET_CALL(CountSelectedTracks2),
     JPR_QUIET_CALL(CountTracks),
+    JPR_QUIET_CALL(EnumProjects),
     JPR_QUIET_CALL(format_timestr_pos),
     JPR_QUIET_CALL(GetCursorPosition),
     JPR_QUIET_CALL(GetGlobalAutomationOverride),
