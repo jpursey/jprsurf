@@ -55,21 +55,27 @@ putting off).
 
 Some of a call's cost comes after it returns, when REAPER redraws its UI from
 its own loop, which no call's time shows. So a measurement times two things:
-- **The call:** the time inside the call, with the profiler's clock.
-- **Later work:** the cycles REAPER's UI thread ran for (Game Bits' thread
-  cycles, see Depends on) from the start of the run that made the
-  call, through the runs after it, less the call, against the same span of runs
-  with no call. Thread cycles count only work, not the timer's wait between
-  runs, so later work shows even though the runs come at the same rate.
-  The surface runs on REAPER's UI thread, so it reads that thread's cycles at
-  the start of each run.
+- **The call:** the wall time inside the call, in CPU ticks
+  (`gb::ReadCpuTicks()`). A call that waits, on a file or on REAPER's audio
+  thread, holds up the UI thread as much as one that works.
+- **Later work:** the cycles REAPER's UI thread ran for
+  (`gb::GetThisThreadCycles()`) from the start of the run that made the call,
+  through the 12 runs after it (about 0.4 seconds), less the call, against the
+  same span of runs with no call. Thread cycles count only work, not the
+  timer's wait between runs, so later work shows even though the runs come at
+  the same rate. The surface runs on REAPER's UI thread, so it reads that
+  thread's cycles at the start of each run. The span is long enough to catch
+  the undo point REAPER adds for a fader about 250ms after it moves (see To
+  confirm).
 
 A measurement alternates samples with and without the call, so drift in what
 REAPER does idle cancels out, and reports the median of each, with the spread.
 A setter alternates its value (mute on, then off), so each call changes
 something, and an action is paired with what undoes it where it needs one
 (Play, then Stop). A read changes nothing, so it has no later work: it is
-timed over many calls in one run.
+timed over many calls in one run, one for each track (or route) in turn, as
+the same track read over and over stays in the cache and reads several times
+faster than the profiles show.
 
 **Conditions**, each measured where it can matter:
 - **Deferred refresh:** a deferrable setter outside one, and inside one, where
@@ -85,10 +91,12 @@ timed over many calls in one run.
 
 What can't be measured in the test install is listed with why, and keeps its
 category: the MIDI port functions (the machine's ports, called only as the
-surface starts), `ShowConsoleMsg()` (opens a window), and the actions that
-write files or open a dialog (File: Save project, Save new version, Transport:
-Record, Insert new MIDI item...). A test checks that every function on the API
-list is measured or listed, as the cost table's `static_assert` does.
+surface starts), `ShowConsoleMsg()` (opens a window), and Transport: Record
+(it records media, and stopping it may ask what to do with the files). Every
+other action runs in the test install, the saves included, which write into
+the run directory, as the project opened from there. A test checks that every
+function on the API list is measured or listed, as the cost table's
+`static_assert` does.
 
 ### common/testing: Measurements (cost_measurement.h)
 
@@ -119,8 +127,8 @@ std::vector<CostMeasurement> GetCostMeasurements();
 - An `IReaperControlSurface`, as `RecordingSurface` is, registered as its own
   type (`MEASURING`), whose runs step through the measurements: open the
   project, settle, then the samples, a run at a time.
-- Its clocks are injected (Game Bits' `FakeTicks` under the fake), so its tests
-  never wait, and check the sequence: which runs make a call, the alternation,
+- Its clocks (CPU ticks and thread cycles) are injected, so its tests never
+  wait, and check the sequence: which runs make a call, the alternation,
   medians, and the output.
 - **Output:** `costs.txt`, plain text with one line for each measurement: the
   call's time and its later work, each as a median and spread. It is read to
@@ -140,9 +148,13 @@ std::vector<CostMeasurement> GetCostMeasurements();
   main checkout only, never touches the user's REAPER, and, like the
   benchmark, needs a quiet machine.
 - **Run time:** a full measurement should take under about 15 minutes. Reads
-  take one run each; a measurement with later work takes a few runs a sample,
-  so the sample counts and sizes are set from how noisy idle runs are (see To
-  confirm).
+  take one run each. A measurement with later work takes 20 samples of 13
+  runs, and as many with no call, about 16 seconds, which is what idle noise
+  needs (see To confirm). That allows about 50 of them, so each condition is
+  only applied where it can matter, and if that isn't enough, the windows
+  with no call can be shared between measurements, as they barely drift.
+- **The machine is left alone** while it runs: REAPER takes the foreground
+  as it starts, which keeps it on performance cores (see To confirm).
 
 ### common/testing: The cost table
 
@@ -161,19 +173,52 @@ blocks) and for a REAPER update.
 
 ### To confirm
 
-Checked in the test install, with temporary code in the check DLL's runs after
-the tests (the contract tests finish within one run, so they can't see later
-work):
-- **Later work shows in UI thread cycles:** a mute outside a deferred refresh
-  costs clearly more cycles over the next runs than idle runs do, how many runs
-  it spans, and that the surface's runs are on the main window's thread.
-- **Noise:** the spread of an idle run's UI thread cycles, which sets the
-  sample counts.
-- **Cores:** whether enough samples run on efficiency cores to blur the
-  categories, with the test install in the background. If so, the median may
-  be enough, or the DLL raises its own process's priority.
-- **Actions:** which of JPRSurf's actions run in the test install without a
-  dialog or writing a file.
+Checked in the test install (2026-10-16), with temporary code in the check
+DLL's runs after the tests (the contract tests finish within one run, so they
+can't see later work), on the large project, with 20 samples of 13 runs each,
+alternating with 13 runs with no call. Times are medians.
+- **Later work shows in UI thread cycles.** The surface's runs are on the main
+  window's thread. Selecting a track takes 10us in the call, then 2.5ms of
+  later work in the run after it, and a deferred refresh doesn't change that.
+  The undo point a volume change from a surface holds adds 1.4ms of later work
+  about 8 runs (250ms) after the change, inside a deferred refresh or not.
+  Otherwise, later work all lands before the next run.
+- **Noise:** idle, REAPER's UI thread works about 0.7ms in two runs of every
+  three, and 0.1ms in the third (its own redraw timer, beside the surface's
+  31.5ms runs). A 13-run window is 6.8ms, varying by about ±0.6ms (p10 to
+  p90), so 20 samples put later work within a few hundred microseconds, which
+  is plenty for coarse categories.
+- **Cores:** on an otherwise idle machine, REAPER takes the foreground as it
+  starts, and 99% of runs were on performance cores, so nothing needs to
+  steer it. With other programs running, 12% weren't.
+- **Wall time and cycles agree** for every call except those that write a file
+  or insert an item (Save project, 6.1ms wall against 3.0ms of cycles; Insert
+  click source, 20.5ms against 13.1ms), which wait. So the call is timed by
+  wall time.
+- **Actions:** every action JPRSurf runs ran without a dialog, but Transport:
+  Record, which wasn't tried. The saves wrote into the run directory, where
+  the project was opened from.
+
+What the setters cost, to start CL5 from (call, then the end of the deferred
+refresh where there is one, then later work):
+
+| Call                                  | Outside a deferred refresh | Inside one           |
+| ------------------------------------- | -------------------------- | -------------------- |
+| `SetTrackUIMute`                      | 0.76ms, none               | 0.09ms, 0.69ms, none |
+| `SetTrackUIRecArm`                    | 4.6ms, none                | 0.28ms, 4.9ms, none  |
+| `SetTrackSelected`                    | 10us, 2.5ms                | 1us, 11us, 2.5ms     |
+| `CSurf_OnVolumeChangeEx`              | 12us, 1.4ms (undo point)   | 7us, 13us, 1.4ms     |
+| `SetTrackSendUIVol` (an instant edit) | 1.5ms, none                | 0.29ms, 1.25ms, none |
+| `Undo_OnStateChangeEx`                | 1.3ms, 1.0ms               |                      |
+| An empty deferred refresh             |                            | 0.1us                |
+
+So a deferred refresh moves a mute's, rec arm's, and send volume's refresh to
+its end, the route setters included, while a selection's cost is later work
+either way. The actions ranged from 11us (Item: Unselect all items) to about
+1ms to move the cursor, 2.5ms to play, 7.5ms for Undo and Redo (with 2.5-3ms
+of later work), and 12-20ms to insert an item. Reads of one track over and
+over were 7ns (`GetTrackUIVolPan`) and 28ns (`GetTrackState`), against 70ns
+and 166ns in the smoke profile, so reads are timed across tracks.
 
 ### Depends on
 
@@ -183,7 +228,7 @@ Bits, and is done before this feature starts.
 
 ## CLs
 
-### CL1 [ ] common/testing: Confirm how REAPER's later work can be measured
+### CL1 [x] common/testing: Confirm how REAPER's later work can be measured
 
 Depends on: Game Bits *Thread cycles*.
 
