@@ -1,102 +1,102 @@
 JPRSurf profile
-Build:    0ac044d (modified)
-Date:     2026-10-13 18:10, 0s
-Per run:  JPRSurf 5.9us, REAPER 9.7us
+Build:    9d5ec65 (modified)
+Date:     2026-10-17 12:34, 0s
+Per run:  JPRSurf 6.2us, REAPER 9.8us
 
 Frames      800
-Total       12.4ms
-Average     15.5us
+Total       12.8ms
+Average     16.0us
 P50         12.2us
-P90         32.1us
+P90         34.7us
 P99         37.3us
-Max         58.1us
-Profiler    1.64us per frame, budget 3.00us
-Point cost  12.2ns
-Tick rate   3.19GHz measured, 3.19GHz reported
+Max         67.0us
+Profiler    1.55us per frame, budget 3.00us
+Point cost  11.8ns
+Tick rate   3.19GHz
 
 Core     Frames  Average     Max
-class 1     800   15.5us  58.1us
+class 1     800   16.0us  67.0us
 
 Point                            Kind      Count  Count/frame    Self  Self/call  Self/frame
-ControlSurface::Run              frame       800         1.00   136us      170ns       170ns
-Runner: Device                   scope       800         1.00  1.74ms     2.18us      2.18us
-Runner: MidiIn                   scope       800         1.00  73.2us     91.2ns      91.2ns
-Runner: MidiOut                  scope       800         1.00  47.8us     59.8ns      59.8ns
-Runner: Scene                    scope       800         1.00  60.0us     74.8ns      74.8ns
-Scene::ApplyViewConditions       scope       800         1.00  6.06us     7.50ns      7.50ns
-Scene::UpdateReferences          scope       800         1.00   177us      221ns       221ns
-SceneStateProperty::UpdateState  scope       800         1.00   304us      380ns       380ns
-TrackCache::RefreshFilters       scope        26         0.03  71.2us     2.74us      88.8ns
-View::SyncMappings               scope       800         1.00  2.06ms     2.58us      2.58us
-AnyTrackSolo                     call        800         1.00  64.5us     80.5ns      80.5ns
-CountSelectedMediaItems          call        800         1.00  28.2us     35.0ns      35.0ns
-CountSelectedTracks              call        100         0.12  31.0us      310ns      38.5ns
-CountSelectedTracks2             call        100         0.12  28.9us      289ns      36.0ns
-GetCursorPosition                call        800         1.00  25.8us     32.0ns      32.0ns
-GetGlobalAutomationOverride      call        800         1.00  25.7us     32.0ns      32.0ns
-GetMediaTrackInfo_Value          call       7456         9.32   405us     54.2ns       506ns
-GetPlayState                     call        800         1.00  22.6us     28.2ns      28.2ns
-GetSelectedTrack2                call        800         1.00   195us      244ns       244ns
-GetToggleCommandState            call      10400         13.0   413us     39.8ns       517ns
-GetTrackColor                    call      14400         18.0   846us     58.8ns      1.06us
-GetTrackState                    call      14400         18.0  1.41ms     97.5ns      1.76us
-GetTrackUIVolPan                 call      14400         18.0   623us     43.2ns       779ns
-IsProjectDirty                   call        800         1.00  21.2us     26.5ns      26.5ns
-Main_OnCommand                   call        100         0.12  2.14ms     21.4us      2.67us
-PreventUIRefresh                 call       1800         2.25  73.6us     40.8ns      92.0ns
-Track_GetPeakInfo                call      25600         32.0  1.25ms     48.8ns      1.57us
-Undo_CanRedo2                    call        800         1.00  22.9us     28.5ns      28.5ns
-midi_Input::GetReadBuf           call       1600         2.00  13.0us     8.00ns      16.0ns
-midi_Input::SwapBufsPrecise      call       1600         2.00  46.3us     28.8ns      57.8ns
-midi_Output::Send                call        201         0.25  6.02us     29.8ns      7.50ns
-time_precise                     call       1000         1.25  32.6us     32.5ns      40.8ns
+ControlSurface::Run              frame       800         1.00   124us      155ns       155ns
+Runner: Device                   scope       800         1.00  1.96ms     2.45us      2.45us
+Runner: MidiIn                   scope       800         1.00  70.4us     88.0ns      88.0ns
+Runner: MidiOut                  scope       800         1.00  50.4us     62.8ns      62.8ns
+Runner: Scene                    scope       800         1.00  68.6us     85.8ns      85.8ns
+Scene::ApplyViewConditions       scope       800         1.00  5.78us     7.00ns      7.00ns
+Scene::UpdateReferences          scope       800         1.00   180us      224ns       224ns
+SceneStateProperty::UpdateState  scope       800         1.00   314us      393ns       393ns
+TrackCache::RefreshFilters       scope        26         0.03  78.6us     3.02us      98.2ns
+View::SyncMappings               scope       800         1.00  2.11ms     2.64us      2.64us
+AnyTrackSolo                     call        800         1.00  69.5us     86.8ns      86.8ns
+CountSelectedMediaItems          call        800         1.00  31.1us     38.8ns      38.8ns
+CountSelectedTracks              call        100         0.12  31.6us      316ns      39.5ns
+CountSelectedTracks2             call        100         0.12  29.2us      292ns      36.2ns
+GetCursorPosition                call        800         1.00  28.9us     36.0ns      36.0ns
+GetGlobalAutomationOverride      call        800         1.00  24.3us     30.2ns      30.2ns
+GetMediaTrackInfo_Value          call       7456         9.32   399us     53.2ns       498ns
+GetPlayState                     call        800         1.00  22.4us     27.8ns      27.8ns
+GetSelectedTrack2                call        800         1.00   192us      240ns       240ns
+GetToggleCommandState            call      10400         13.0   415us     39.8ns       519ns
+GetTrackColor                    call      14400         18.0   865us     60.0ns      1.08us
+GetTrackState                    call      14400         18.0  1.42ms     98.2ns      1.77us
+GetTrackUIVolPan                 call      14400         18.0   631us     43.8ns       788ns
+IsProjectDirty                   call        800         1.00  30.0us     37.2ns      37.2ns
+Main_OnCommand                   call        100         0.12  2.22ms     22.2us      2.78us
+PreventUIRefresh                 call       1800         2.25  74.0us     41.0ns      92.5ns
+Track_GetPeakInfo                call      25600         32.0  1.25ms     48.5ns      1.56us
+Undo_CanRedo2                    call        800         1.00  24.1us     30.0ns      30.0ns
+midi_Input::GetReadBuf           call       1600         2.00  12.8us     8.00ns      16.0ns
+midi_Input::SwapBufsPrecise      call       1600         2.00  56.0us     34.8ns      69.8ns
+midi_Output::Send                call        201         0.25  5.37us     26.5ns      6.50ns
+time_precise                     call       1000         1.25  32.0us     31.8ns      39.8ns
 Device runnables                 counter  116000          145       -          -           -
 MIDI messages in                 counter     200         0.25       -          -           -
 MidiIn runnables                 counter    1600         2.00       -          -           -
 MidiOut runnables                counter    1600         2.00       -          -           -
 Scene runnables                  counter     800         1.00       -          -           -
 control inputs                   counter     200         0.25       -          -           -
-mappings synced                  counter  366400          458       -          -           -
+mappings synced                  counter  392800          491       -          -           -
 views synced                     counter   16000         20.0       -          -           -
 
-Slowest frame: 58.1us, core class 1, profiler 1.54us
+Slowest frame: 67.0us, core class 1, profiler 1.46us
 Kind     Self
-frame   151ns
-scope  6.86us
-call   51.1us
+frame   193ns
+scope  7.63us
+call   59.1us
 
 Point                            Kind     Count    Self
-Main_OnCommand                   call         1  44.5us
-View::SyncMappings               scope        1  3.49us
-Runner: Device                   scope        1  2.18us
-GetTrackState                    call        18  1.77us
+Main_OnCommand                   call         1  51.8us
+View::SyncMappings               scope        1  3.62us
+Runner: Device                   scope        1  2.46us
+GetTrackState                    call        18  1.76us
 Track_GetPeakInfo                call        32  1.62us
-GetTrackColor                    call        18  1.10us
-GetTrackUIVolPan                 call        18   812ns
-GetToggleCommandState            call        13   510ns
-Runner: MidiIn                   scope        1   430ns
-SceneStateProperty::UpdateState  scope        1   333ns
-Scene::UpdateReferences          scope        1   253ns
-midi_Input::SwapBufsPrecise      call         2   228ns
-PreventUIRefresh                 call         4   218ns
-ControlSurface::Run              frame        1   151ns
-Runner: Scene                    scope        1  90.2ns
-AnyTrackSolo                     call         1  78.8ns
-Runner: MidiOut                  scope        1  72.5ns
-GetGlobalAutomationOverride      call         1  45.5ns
-CountSelectedMediaItems          call         1  36.8ns
-GetCursorPosition                call         1  31.8ns
-time_precise                     call         1  30.5ns
-IsProjectDirty                   call         1  28.0ns
-Undo_CanRedo2                    call         1  27.2ns
-GetPlayState                     call         1  26.8ns
-midi_Input::GetReadBuf           call         2  18.2ns
-Scene::ApplyViewConditions       scope        1  9.50ns
+GetTrackColor                    call        18  1.09us
+midi_Input::SwapBufsPrecise      call         2   896ns
+GetTrackUIVolPan                 call        18   821ns
+Runner: MidiIn                   scope        1   816ns
+GetToggleCommandState            call        13   504ns
+SceneStateProperty::UpdateState  scope        1   327ns
+Scene::UpdateReferences          scope        1   264ns
+PreventUIRefresh                 call         4   252ns
+ControlSurface::Run              frame        1   193ns
+AnyTrackSolo                     call         1  80.8ns
+Runner: Scene                    scope        1  75.0ns
+Runner: MidiOut                  scope        1  60.0ns
+IsProjectDirty                   call         1  55.8ns
+CountSelectedMediaItems          call         1  50.2ns
+GetCursorPosition                call         1  46.5ns
+GetGlobalAutomationOverride      call         1  38.0ns
+Undo_CanRedo2                    call         1  35.5ns
+time_precise                     call         1  29.2ns
+GetPlayState                     call         1  26.0ns
+midi_Input::GetReadBuf           call         2  13.8ns
+Scene::ApplyViewConditions       scope        1  6.50ns
 Device runnables                 counter    145       -
 MIDI messages in                 counter      1       -
 MidiIn runnables                 counter      2       -
 MidiOut runnables                counter      2       -
 Scene runnables                  counter      1       -
 control inputs                   counter      1       -
-mappings synced                  counter    458       -
+mappings synced                  counter    491       -
 views synced                     counter     20       -

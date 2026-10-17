@@ -1,34 +1,35 @@
 JPRSurf benchmark
-Build:    0ac044d (modified)
-Date:     2026-10-13 18:10
+Build:    9d5ec65 (modified)
+Date:     2026-10-17 12:34
 
 Benchmark                                  Runs JPRSurf/run Actions JPRSurf/action
-IdleAtTheTop                               3000       5.8us       -              -
-IdleInAFolder                              3000       5.5us       -              -
-IdleWhilePlaying                           3000       6.6us       -              -
-IdleInSendReceiveModeOnABus                3000       5.0us       -              -
-MutingARange                               1000       6.5us     100          7.0us
-SoloingARange                              1000       6.4us     100          6.9us
-ArmingARange                               1000      25.5us     100        197.7us
-SelectingARange                            2100       6.6us     100         19.2us
-TappingMute                                 800       5.9us     100          1.5us
-TappingSolo                                 800       6.1us     100          3.0us
-TappingRecordArm                            800      17.9us     100         96.5us
-TappingSelect                               800       6.2us     100          3.7us
-GoingIntoAFolderAndBack                     900       8.0us     100         20.4us
-EnteringSendReceiveModeAndBack              800      18.1us     100         99.6us
-TappingARouteMute                           800       5.8us     100          5.9us
-MovingARouteFader                          1900       5.2us     100          6.2us
-TurningARoutePot                           1800       5.2us     100          6.7us
-PickingWithSendHeldAndBack                  950      16.2us     100         99.8us
-GoingIntoAFolderAndHoldingGlobal           1450       7.1us     100         19.3us
-BankChange                                  800       5.7us     100         -0.2us
-Channel                                     800       5.9us     100         -0.3us
-SettingTheSelectedTracksAutomationMode      800       5.9us     100          1.3us
-TurningTheAutomationOverrideOnAndOff        800       6.2us     100          2.0us
-ForwardAndRewind                            800       5.9us     100          0.0us
-TogglingCycle                               800       5.7us     100         -0.3us
-SteppingTheTimecodeMode                     800       6.4us     100          3.8us
-MovingAFader                                300       6.4us     100          1.9us
-TurningAPot                                 200       6.4us     100          1.5us
-TrackListRefresh                            200      54.0us     100         96.3us
+IdleAtTheTop                               3000       6.0us       -              -
+IdleInAFolder                              3000       5.9us       -              -
+IdleWhilePlaying                           3000       6.8us       -              -
+IdleWhileAutomating                        3000       7.7us       -              -
+IdleInSendReceiveModeOnABus                3000       5.2us       -              -
+MutingARange                               1000       6.6us     100          6.5us
+SoloingARange                              1000       6.6us     100          6.2us
+ArmingARange                               1000      26.4us     100        203.8us
+SelectingARange                            2100       6.9us     100         19.9us
+TappingMute                                 800       6.4us     100          2.1us
+TappingSolo                                 800       6.3us     100          1.8us
+TappingRecordArm                            800      18.2us     100         97.4us
+TappingSelect                               800       6.5us     100          4.0us
+GoingIntoAFolderAndBack                     900       8.2us     100         19.4us
+EnteringSendReceiveModeAndBack              800      19.2us     100        105.6us
+TappingARouteMute                           800       6.0us     100          6.4us
+MovingARouteFader                          1900       5.5us     100          6.5us
+TurningARoutePot                           1800       5.4us     100          6.1us
+PickingWithSendHeldAndBack                  950      17.2us     100        105.6us
+GoingIntoAFolderAndHoldingGlobal           1450       7.3us     100         19.0us
+BankChange                                  800       6.0us     100         -204ns
+Channel                                     800       6.1us     100          136ns
+SettingTheSelectedTracksAutomationMode      800       6.2us     100          150ns
+TurningTheAutomationOverrideOnAndOff        800       6.3us     100          2.9us
+ForwardAndRewind                            800       6.1us     100         -182ns
+TogglingCycle                               800       6.1us     100          590ns
+SteppingTheTimecodeMode                     800       6.5us     100          3.7us
+MovingAFader                                300       6.7us     100          2.0us
+TurningAPot                                 200       6.8us     100          1.5us
+TrackListRefresh                            200      53.8us     100         95.7us
