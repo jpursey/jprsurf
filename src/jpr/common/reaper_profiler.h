@@ -19,7 +19,8 @@
 namespace jpr {
 
 // Returns `time` as a profile shows a time per run: in microseconds, or
-// milliseconds from 1ms, to one decimal place.
+// milliseconds from 1ms, to one decimal place, or whole nanoseconds under 1us.
+// A negative time is in the unit its size takes.
 std::string FormatRunTime(absl::Duration time);
 
 //==============================================================================

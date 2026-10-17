@@ -83,5 +83,17 @@ TEST_F(ReaperProfilerTest, FormatsRunTimesInMicrosecondsUnderAMillisecond) {
   EXPECT_EQ(FormatRunTime(absl::Microseconds(12300)), "12.3ms");
 }
 
+TEST_F(ReaperProfilerTest, FormatsRunTimesUnderAMicrosecondInNanoseconds) {
+  EXPECT_EQ(FormatRunTime(absl::Nanoseconds(7)), "7ns");
+  EXPECT_EQ(FormatRunTime(absl::Nanoseconds(999)), "999ns");
+  EXPECT_EQ(FormatRunTime(absl::ZeroDuration()), "0ns");
+}
+
+TEST_F(ReaperProfilerTest, FormatsNegativeRunTimesInTheUnitOfTheirSize) {
+  EXPECT_EQ(FormatRunTime(absl::Nanoseconds(-40)), "-40ns");
+  EXPECT_EQ(FormatRunTime(absl::Microseconds(-344)), "-344.0us");
+  EXPECT_EQ(FormatRunTime(absl::Microseconds(-1500)), "-1.5ms");
+}
+
 }  // namespace
 }  // namespace jpr

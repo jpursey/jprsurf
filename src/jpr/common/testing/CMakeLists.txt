@@ -49,6 +49,7 @@ set(jpr_common_testing_SOURCE
   call_cost.cc call_cost.h
   call_counter.cc call_counter.h
   contract_test_fake.cc
+  fake_measuring_environment.h
   fake_midi.cc fake_midi.h
   fake_reaper.cc fake_reaper.h
   reaper_actions.cc reaper_actions.h
@@ -73,6 +74,7 @@ set(jpr_common_testing_DEPS
   gtest
   jpr_common
   jpr_common_contract
+  jpr_common_measure
   reaper_sdk
 )
 
@@ -90,6 +92,40 @@ set(jpr_common_testing_TEST_SOURCE
 )
 
 gb_add_library(jpr_common_testing)
+
+# Measuring what REAPER's calls cost (see
+# docs/worklog/measure_reaper_costs.md), without the fake, so the DLL that
+# measures them in REAPER doesn't link it. Its tests run under the fake.
+
+set(jpr_common_measure_SOURCE
+  cost_measurement.cc cost_measurement.h
+  measuring_surface.cc measuring_surface.h
+)
+
+set(jpr_common_measure_DEPS
+  absl::algorithm_container
+  absl::any_invocable
+  absl::function_ref
+  absl::log
+  absl::str_format
+  absl::strings
+  absl::time
+  jpr_common
+  jpr_common_contract
+  reaper_sdk
+)
+
+set(jpr_common_measure_TEST_SOURCE
+  cost_measurement_test.cc
+  measuring_surface_test.cc
+)
+
+set(jpr_common_measure_TEST_DEPS
+  gb_base
+  jpr_common_testing
+)
+
+gb_add_library(jpr_common_measure)
 
 # What a DLL that runs inside the test install of REAPER needs (see "Contract
 # tests in REAPER" in docs/testing_and_profiling.md). Only those DLLs link

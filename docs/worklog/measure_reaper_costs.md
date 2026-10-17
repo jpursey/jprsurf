@@ -101,20 +101,21 @@ function on the API list is measured or listed, as the cost table's
 ### common/testing: Measurements (cost_measurement.h)
 
 ```
-// One thing measured under one condition.
+// One thing measured under one condition: a read or a change.
 struct CostMeasurement {
-  std::string name;       // "SetTrackUIMute", "Undo_OnStateChangeEx", ...
-  std::string condition;  // "in a deferred refresh, 128 tracks", ...
+  std::string name;                  // "SetTrackUIMute", matched by the filter
+  std::string condition;             // The project: "128 tracks", ...
+  bool in_deferred_refresh = false;  // The surface says so in the results.
 
-  // Fills in the project the measurement starts from.
-  absl::AnyInvocable<void(FakeProject&)> build;
+  absl::AnyInvocable<void(FakeProject&)> build;  // An empty project if unset.
+  absl::AnyInvocable<void()> prepare;  // Untimed, once the project is open.
 
-  // Makes the call, and what undoes it on the next sample, if anything.
-  absl::AnyInvocable<void()> call;
-  absl::AnyInvocable<void()> undo;
+  absl::AnyInvocable<int()> read;    // Returns how many calls it made.
+  absl::AnyInvocable<void()> call;   // A change: exactly one of these is set.
+  absl::AnyInvocable<void()> undo;   // After a change's window, if needed.
 };
 
-// Every measurement, in the order they run.
+// Every measurement, in the order they run (CL4).
 std::vector<CostMeasurement> GetCostMeasurements();
 ```
 
@@ -127,13 +128,18 @@ std::vector<CostMeasurement> GetCostMeasurements();
 - An `IReaperControlSurface`, as `RecordingSurface` is, registered as its own
   type (`MEASURING`), whose runs step through the measurements: open the
   project, settle, then the samples, a run at a time.
-- Its clocks (CPU ticks and thread cycles) are injected, so its tests never
-  wait, and check the sequence: which runs make a call, the alternation,
-  medians, and the output.
+- What it needs from where it runs is a `MeasuringEnvironment`: opening a
+  project, the wall clock and the UI thread's time (as `absl::Duration`s), and
+  the results. In the test install that is the test install and Game Bits'
+  clocks (CL4); in tests, `FakeMeasuringEnvironment`, over the fake REAPER,
+  with clocks the test moves, so its tests never wait. They check the
+  sequence: which runs make a call, the alternation, medians, and the output.
 - **Output:** `costs.txt`, plain text with one line for each measurement: the
-  call's time and its later work, each as a median and spread. It is read to
-  set the cost table, and isn't kept. A filter (`JPR_MEASURE_FILTER`) runs
-  only the measurements it names.
+  call's time and its later work, each as a median and spread, in
+  `FormatRunTime()`'s units. Each line is reported as its measurement is
+  done, so a run that stops part way keeps what it measured. It is read to set
+  the cost table, and isn't kept. A filter (`JPR_MEASURE_FILTER`,
+  `FilterCostMeasurements()`) runs only the measurements it names.
 
 ### common/testing: Running in the test install
 
@@ -258,7 +264,7 @@ Depends on: CL1.
 - Standard checks (Release build, clang-format, ctest).
 - `check_in_reaper` and `check_load_in_reaper` pass.
 
-### CL3 [ ] common/testing: MeasuringSurface
+### CL3 [x] common/testing: MeasuringSurface
 
 Depends on: CL2.
 

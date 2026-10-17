@@ -122,7 +122,11 @@ class ProfiledMidiOutput final : public midi_Output {
 }  // namespace
 
 std::string FormatRunTime(absl::Duration time) {
-  if (time < absl::Milliseconds(1)) {
+  const absl::Duration size = absl::AbsDuration(time);
+  if (size < absl::Microseconds(1)) {
+    return absl::StrFormat("%.0fns", absl::ToDoubleNanoseconds(time));
+  }
+  if (size < absl::Milliseconds(1)) {
     return absl::StrFormat("%.1fus", absl::ToDoubleMicroseconds(time));
   }
   return absl::StrFormat("%.1fms", absl::ToDoubleMilliseconds(time));
