@@ -140,8 +140,9 @@ std::vector<CostMeasurement> GetCostMeasurements();
 - The parts of `contract_test_reaper.cc` that aren't the contract tests (the
   run directory and its files, the log, opening a `FakeProject`, quitting, and
   loading the functions that aren't on the API list) move into a library both
-  DLLs use, and `check_in_reaper.cmake` is generalized to run either DLL with
-  its own surface type.
+  DLLs use (`test_install.h`), and `check_in_reaper.cmake` becomes
+  `run_in_test_install.cmake`, which runs either DLL with its own surface
+  type.
 - **`measure_in_reaper`** builds `reaper_jpr_measure`, runs it in the test
   install as it opens, and prints `costs.txt`, which it leaves in the run
   directory. Like `check_in_reaper`, it runs REAPER, so it runs in the
@@ -240,12 +241,17 @@ Depends on: Game Bits *Thread cycles*.
 **Verify**
 - `check_in_reaper` passes, with the temporary code removed.
 
-### CL2 [ ] common/testing: Share the test install between DLLs
+### CL2 [x] common/testing: Share the test install between DLLs
 
 Depends on: CL1.
 
-- The test install's host code moves out of `contract_test_reaper.cc` into a
-  library, and `check_in_reaper.cmake` runs a given DLL and surface type.
+- The test install's host code moves out of `contract_test_reaper.cc` into
+  `test_install.h/.cc` (`jpr_common_test_install`), with `FinishRun()` writing
+  the result, opening an empty project, and quitting in one call.
+- `check_in_reaper.cmake` becomes `run_in_test_install.cmake`, which runs a
+  given DLL and surface type, and removes every DLL it copied once REAPER
+  quits. The run directory is the test install's `run` folder
+  (`JPR_REAPER_RUN_DIR`).
 - `check_in_reaper` and `check_load_in_reaper` behave as before.
 
 **Verify**
@@ -272,7 +278,9 @@ Depends on: CL3.
 
 - `cost_measurements.cc`: every measurement in Design, and the scaled project
   builder beside `AddLargeProject()`.
-- `reaper_jpr_measure` and the `measure_in_reaper` target.
+- `reaper_jpr_measure` and the `measure_in_reaper` target, with a time limit
+  parameter for `run_in_test_install.cmake`, as a full run takes longer than
+  its 300 second default.
 
 **Verify**
 - Standard checks.

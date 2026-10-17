@@ -7,8 +7,8 @@
 # (see "Loading the plugin" in docs/testing_and_profiling.md). The
 # check_load_in_reaper target runs this, with:
 # - PLUGIN_DLL: the reaper_jprsurf DLL it built.
-# - CHECK_DLL: the reaper_jpr_check DLL it built.
-# - CHECK_SCRIPT: check_in_reaper.cmake, which runs the test install.
+# - CHECK_DLL: the reaper_jpr_check DLL it built, which runs no tests.
+# - RUN_SCRIPT: run_in_test_install.cmake, which runs the test install.
 # - RUN_DIR: a folder in the build tree for the plugin's files.
 
 file(REMOVE_RECURSE "${RUN_DIR}")
@@ -19,8 +19,8 @@ set(ENV{JPRSURF_TRACE} "1")
 set(ENV{GTEST_FILTER} "-*")
 
 execute_process(
-  COMMAND "${CMAKE_COMMAND}" "-DCHECK_DLL=${CHECK_DLL}"
-      "-DEXTRA_DLLS=${PLUGIN_DLL}" -P "${CHECK_SCRIPT}"
+  COMMAND "${CMAKE_COMMAND}" "-DRUN_DLL=${CHECK_DLL}" -DSURFACE_TYPE=RECORDING
+      "-DEXTRA_DLLS=${PLUGIN_DLL}" -P "${RUN_SCRIPT}"
   RESULT_VARIABLE run_result
   OUTPUT_VARIABLE run_output
   ERROR_VARIABLE run_output

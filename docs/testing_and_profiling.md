@@ -674,10 +674,10 @@ fake, in `ctest`, and inside REAPER, which checks the fake and
 as a `FakeProject`, which REAPER opens from a project file. The design is in
 [check_fakes_in_reaper.md](worklog/check_fakes_in_reaper.md).
 
-In REAPER, they run in a test install: a portable REAPER of their own, with
-the `reaper_jpr_check` DLL in its `UserPlugins`, and the plugin only while
-`check_load_in_reaper` runs (see Loading the plugin). The user's own REAPER
-and its settings are never touched.
+In REAPER, they run in a test install: a portable REAPER of their own, which
+has the `reaper_jpr_check` DLL in its `UserPlugins` only while they run, and
+the plugin only while `check_load_in_reaper` runs (see Loading the plugin).
+The user's own REAPER and its settings are never touched.
 
 ### Setting up the test install
 
@@ -695,9 +695,13 @@ Once, by hand:
      so it never takes an audio device from your own REAPER.
    - Quit.
 
-Each run sets up the rest: it copies `reaper_jpr_check.dll` into the test
-install's `UserPlugins`, and makes the recording surface its only control
-surface in its `reaper.ini`.
+Each run sets up the rest (`jpr/common/testing/run_in_test_install.cmake`): it
+copies the DLL that runs, `reaper_jpr_check.dll` for the contract tests, into
+the test install's `UserPlugins`, makes that DLL's surface its only control
+surface in its `reaper.ini`, and removes the DLL again once REAPER quits. Any
+DLL that runs there is built on `jpr/common/testing/test_install.h`: it does
+its work from its surface's runs, and writes its files to the run directory,
+the test install's `run` folder.
 
 ### Running them
 
@@ -711,7 +715,7 @@ failed, REAPER didn't quit within five minutes (or the seconds
 `JPR_REAPER_CHECK_TIMEOUT` sets), or no tests ran. Each test takes about half
 a second, opening its project. Setting `GTEST_FILTER` runs only the tests it
 names, as for any gtest binary. The
-files from the last run are in the test install's `check` folder: gtest's
+files from the last run are in the test install's `run` folder: gtest's
 output, the result, a log of how far the DLL got (which a failed run prints
 too), and the last project file opened.
 
@@ -735,16 +739,17 @@ runs with `JPRSURF_TRACE` set, and with `APPDATA` set to
 `out/build/x64-Release/src/jpr/plugin/check_load_in_reaper/`, so the log and
 the trace go there rather than over the user's. It fails if the run failed,
 `jprsurf.log` has an error, or the trace isn't there with its header and
-"Trace ended". `check_in_reaper.cmake` removes the plugin from `UserPlugins`
-once REAPER quits, whether or not it passed.
+"Trace ended". `run_in_test_install.cmake` removes the plugin from
+`UserPlugins`, with the check DLL, once REAPER quits, whether or not it
+passed.
 
 The test install has only the recording surface, so the plugin creates no
 surface, which would open the X-Touch's MIDI ports that the user's REAPER may
 hold. It checks loading and unloading, not a surface. It builds the plugin
 without deploying it (the deploy is a target of its own), so it runs while the
-user has REAPER open. If a run is stopped part way, the plugin may be left in
-`UserPlugins`, where the contract tests would load it too, and it would write
-its log over the user's: remove it by hand.
+user has REAPER open. If a run is stopped part way, the DLLs may be left in
+`UserPlugins`, where the next run would load them too, and the plugin would
+write its log over the user's: remove them by hand.
 
 ## Tests
 

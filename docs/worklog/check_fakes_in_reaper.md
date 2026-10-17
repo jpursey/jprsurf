@@ -103,17 +103,18 @@ for the REAPER side.
 ### common/testing: Running them in REAPER (reaper_jpr_check)
 
 - **The DLL** loads the API from REAPER's `GetFunc`, and registers
-  `RecordingSurface`'s type. With `JPR_REAPER_CHECK_RUN_DIR` set, the
+  `RecordingSurface`'s type. With `JPR_REAPER_RUN_DIR` set, the
   surface's first run runs every test (`RUN_ALL_TESTS()`), each finishing
-  within the call, then opens an empty project. The next posts File: Quit REAPER to the main window,
-  as quitting from inside a run destroys the surface while it runs. It writes
+  within the call, then opens an empty project and posts File: Quit REAPER to
+  the main window, which REAPER handles once the run has returned, as
+  quitting from inside a run destroys the surface while it runs. It writes
   `output.txt` (gtest's output), `result.txt`, `log.txt` (how far it got), and
   `project.rpp` (the last project opened).
 - `Main_openProject()`, `GetMainHwnd()`, and `CSurf_FlushUndo()` are loaded by
-  name in `contract_test_reaper.cc`, not put on the API list, as JPRSurf never
-  calls them and the fake must never fake them.
-- **`check_in_reaper`** (`check_in_reaper.cmake`, run with `cmake -P`) builds
-  the DLL, copies it into the test install's `UserPlugins`, writes
+  name in `test_install.cc`, not put on the API list, as JPRSurf never calls
+  them and the fake must never fake them.
+- **`check_in_reaper`** (`run_in_test_install.cmake`, run with `cmake -P`)
+  builds the DLL, copies it into the test install's `UserPlugins`, writes
   `csurf_0=RECORDING null` as its only control surface, runs REAPER with
   `-newinst` and a time limit (`JPR_REAPER_CHECK_TIMEOUT`), prints gtest's
   output, and fails if a test failed, REAPER didn't quit, or there is no

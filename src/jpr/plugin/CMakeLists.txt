@@ -90,7 +90,7 @@ add_custom_target(check_load_in_reaper
   COMMAND ${CMAKE_COMMAND}
       -DPLUGIN_DLL=$<TARGET_FILE:reaper_jprsurf>
       -DCHECK_DLL=$<TARGET_FILE:reaper_jpr_check>
-      "-DCHECK_SCRIPT=${PROJECT_SOURCE_DIR}/src/jpr/common/testing/check_in_reaper.cmake"
+      "-DRUN_SCRIPT=${PROJECT_SOURCE_DIR}/src/jpr/common/testing/run_in_test_install.cmake"
       "-DRUN_DIR=${CMAKE_CURRENT_BINARY_DIR}/check_load_in_reaper"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/check_load_in_reaper.cmake"
   DEPENDS reaper_jprsurf reaper_jpr_check

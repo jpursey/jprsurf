@@ -91,9 +91,28 @@ set(jpr_common_testing_TEST_SOURCE
 
 gb_add_library(jpr_common_testing)
 
-# The DLL that runs the contract tests inside the test install of REAPER, and
-# the target that runs it there (see "Contract tests in REAPER" in
-# docs/testing_and_profiling.md).
+# What a DLL that runs inside the test install of REAPER needs (see "Contract
+# tests in REAPER" in docs/testing_and_profiling.md). Only those DLLs link
+# this, never the plugin or a unit test.
+
+set(jpr_common_test_install_SOURCE
+  test_install.cc test_install.h
+)
+
+set(jpr_common_test_install_DEPS
+  absl::log
+  absl::strings
+  gb_base
+  gb_file
+  jpr_common
+  jpr_common_contract
+  reaper_sdk
+)
+
+gb_add_library(jpr_common_test_install)
+
+# The DLL that runs the contract tests inside the test install, and the target
+# that runs it there.
 
 set(reaper_jpr_check_SOURCE
   contract_test_reaper.cc
@@ -104,12 +123,11 @@ set(reaper_jpr_check_DEPS
   absl::function_ref
   absl::log
   absl::strings
-  gb_base
-  gb_file
   gmock
   gtest
   jpr_common
   jpr_common_contract
+  jpr_common_test_install
   reaper_sdk
 )
 
@@ -117,8 +135,9 @@ gb_add_shared_library(reaper_jpr_check)
 
 add_custom_target(check_in_reaper
   COMMAND ${CMAKE_COMMAND}
-      -DCHECK_DLL=$<TARGET_FILE:reaper_jpr_check>
-      -P "${CMAKE_CURRENT_SOURCE_DIR}/check_in_reaper.cmake"
+      -DRUN_DLL=$<TARGET_FILE:reaper_jpr_check>
+      -DSURFACE_TYPE=RECORDING
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/run_in_test_install.cmake"
   DEPENDS reaper_jpr_check
   USES_TERMINAL
   COMMENT "Running the contract tests in REAPER..."
