@@ -30,8 +30,10 @@ faders. Klinke does the same (`CSurf_MCU::GetTouchState()` in
   track changes while it is touched (banking, or the list scrolling) moves its
   touch to the new track, and a mapping that stops reading (its view
   deactivates, such as switching to Send/Receive mode) releases it.
-- Touch is reported for the track the mapping names. Grouped and ganged tracks
-  that REAPER changes with it follow what To confirm finds.
+- Touch is reported for the track the mapping names, and not for grouped and
+  ganged tracks that REAPER changes with it (see To confirm).
+- Sends and receives aren't reported: REAPER never asks about them (see the
+  backlog's *Report touch for sends and receives*).
 - Width (`isPan` 2, which REAPER only asks a surface that supports extended
   touch) stays unsupported: `CSURF_EXT_SUPPORTS_EXTENDED_TOUCH` still answers
   0.
@@ -46,8 +48,10 @@ into a track's touched property, which holds a touch on the track. REAPER's
 question is answered from the track, in `common`, so the plugin only adds
 mappings.
 
-Nothing new runs per run but a time comparison in controls that already run,
-and nothing walks mappings or tracks when REAPER asks.
+REAPER asks about every track's volume and pan before every run (see To
+confirm), so answering is per-run work: each answer is a hash lookup and a
+read, with nothing walking mappings or tracks. Otherwise nothing new runs per
+run but a time comparison in controls that already run.
 
 ### Names
 
@@ -92,8 +96,11 @@ class Track {
   volume and 1 as the pan. A track TrackCache doesn't have, or any other
   `isPan`, is not touched. `ControlSurfaceListener` doesn't change.
 - Performance: a hash lookup and a read when REAPER asks, with no REAPER
-  calls. A touch changing notifies the track's listeners, which happens about
-  as often as a hand reaches for a control.
+  calls. REAPER asks twice per track before every run, so on a 128-track
+  project this is 258 answers a run, and must stay that cheap (no logging on
+  the path, as the existing `VLOG_REAPER()` would be at that rate). A touch
+  changing notifies the track's listeners, which happens about as often as a
+  hand reaches for a control.
 
 **Brittleness:** none left to callers: a touch is only held through a handle.
 
@@ -170,42 +177,45 @@ Send/Receive mode maps none, so it reports nothing.
 
 ### To confirm
 
-Checked in the user's REAPER with a trace (CL1), as these are calls REAPER
-makes on a surface between runs. `GetTouchState` is one of the trace's quiet
-calls, so the check makes it traced for the run.
+Checked in the user's REAPER with a trace (CL1, 2026-10-17), on a 7-track
+project with tracks in Touch, Latch, a volume group, and Read, and a send with
+volume and pan envelopes. The calls are in "Seen in traces" in
+`docs/testing_and_profiling.md`.
 
-- [ ] How often REAPER calls `GetTouchState()`, and when: only while playing or
-      recording, every run or more, and between runs or inside
-      `CSurf_OnVolumeChangeEx()` and `CSurf_OnPanChangeEx()`.
-- [ ] For which tracks: only those in Touch or Latch (and Latch Preview), only
-      those the surface changed, or every track; and whether the master is
-      asked.
-- [ ] Which `isPan` values it asks with, with extended touch unsupported (0
-      and 1 expected).
-- [ ] For a fader moved on a grouped or ganged track, whether REAPER asks about
-      the other tracks it changes. If it does, whether their envelopes should
-      follow the touch of the track the surface moved is decided before CL4.
+- [x] How often REAPER calls `GetTouchState()`, and when: before every run,
+      never from inside another call, once the surface has changed a track's
+      volume while playing, and from then on whether playing or stopped. When
+      a run's change starts a new write on a track in Touch, REAPER also asks
+      that track right after the run. So answering is per-run work: on a
+      128-track project, 258 questions a run. The design's answer, a hash
+      lookup and a read, stays cheap, and CL5 adds the questions to the
+      benchmark.
+- [x] For which tracks: the master and every track, in order, whatever its
+      automation mode (Trim and Read too).
+- [x] Which `isPan` values it asks with: 0 and 1, and 2 only for a surface
+      that supports extended touch. No other value, so routes have none.
+- [x] For a fader moved on a grouped or ganged track: REAPER asks about every
+      track anyway, so the surface could answer for grouped tracks too. With
+      every answer false, the trace can't show what a grouped track's envelope
+      does when only the moved track is touched. The design reports only the
+      track a mapping names, and the end checks look at the grouped track; if
+      its envelope drops back while the moved one records, reporting grouped
+      tracks is a follow-up.
 - [ ] Whether touching a fader without moving it starts Touch or Latch
-      recording, or only a change does. It only affects what the user sees in
-      the end checks, not the design.
-- [ ] How REAPER knows a send or receive is touched, for its volume and pan
-      envelopes in Touch and Latch. `GetTouchState()` has no route index, but
-      extended touch ("isPan=2 for width, etc" in `reaper_plugin.h`) may ask
-      with other values, so CL1 temporarily answers
-      `CSURF_EXT_SUPPORTS_EXTENDED_TOUCH` with 1 to see every value REAPER
-      uses. The other likely signal is the edit in `SetTrackSendUIVol()` and
-      `SetTrackSendUIPan()`: `isend` 0 while tweaking, and 1 at the end of the
-      edit, which JPRSurf never sends. Also what a send envelope in Touch mode
-      does today when a send fader moves and stops: whether it returns to the
-      envelope, after how long, or keeps writing until playback stops.
-      Reporting route touch, whichever signal it turns out to be, is decided
-      after CL1: added to this plan if it is small, or a backlog item if not.
-      Ending an edit with `isend` 1 adds its own undo point, which
-      `ContinuousUndo` must then not repeat.
+      recording, or only a change does. Every answer was false, so this waits
+      for the end checks. It only affects what the user sees, not the design.
+- [x] How REAPER knows a send or receive is touched: not through
+      `GetTouchState()`, which is never asked about a route, even with
+      extended touch. Moved with `isend` 0, the send's volume and pan
+      envelopes on a track in Touch kept their last value after the change
+      stopped, as in Latch. The likely signal is the end of the edit (`isend`
+      1), which JPRSurf never sends. It needs its own design (when an edit
+      ends, and its undo point beside `ContinuousUndo`), so it is the backlog
+      item *Report touch for sends and receives*.
 
 ## CLs
 
-### CL1 [ ] common: Confirm when REAPER asks for touch
+### CL1 [x] common: Confirm when REAPER asks for touch
 
 Depends on: nothing.
 
@@ -266,7 +276,7 @@ Depends on: nothing.
 
 ### CL4 [ ] scene: Touched properties, and releasing on deactivation
 
-Depends on: CL2, CL3, and To confirm's grouping finding.
+Depends on: CL2 and CL3.
 
 - `ReadConfig::touch`, and the read functions taking it as a press with
   release.
@@ -304,6 +314,9 @@ Depends on: CL4.
   a fader or turning a pot reports nothing.
 - `call_count_test.cc`: touching a fader and `GetTouchState()` make no REAPER
   calls.
+- The benchmark's runs while playing ask every track's volume and pan before
+  each run, as REAPER does, and JPRSurf's time per run doesn't regress against
+  the bar.
 - The load check.
 
 ### Summary [ ] docs: Summarize the feature
@@ -322,16 +335,18 @@ In the user's REAPER, with the extension deployed, while playing:
   again, records one unbroken stretch of envelope, which returns to the
   existing envelope only when the fader is released. The same for the master
   fader.
-- **Latch:** touching a fader starts recording (or the first move does, as To
-  confirm found), and it continues after the release until playback stops.
+- **Latch:** touching a fader starts recording, or the first move does (the
+  open question in To confirm), and it continues after the release until
+  playback stops.
 - **No touch sensing:** the pots, and the extender's third fader, record in
   Touch mode, and return to the envelope about 3 seconds after the last
   move.
-- **Grouped tracks:** moving a fader on a grouped track records the group's
-  envelopes as To confirm found REAPER does.
-- **Send/Receive mode:** moving a send fader records nothing new, as before.
+- **Grouped tracks:** moving a fader on a grouped track in Touch records the
+  other track's envelope for as long as the moved one's. If it drops back to
+  its envelope between changes instead, reporting grouped tracks goes in the
+  backlog.
+- **Send/Receive mode:** moving a send fader records as before (as in Latch).
 - The load check passes, and once REAPER has created the surface,
   `jprsurf.log` has no new errors or "Slow run" warnings.
-
-No per-run work changes beyond a comparison in controls that already run, so
-there is no benchmark or idle profile.
+- An idle profile, after a fader has moved while playing so REAPER asks for
+  touch before every run, doesn't regress against the bar.

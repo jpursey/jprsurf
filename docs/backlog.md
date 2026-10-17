@@ -28,6 +28,31 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
+## Report touch for sends and receives
+
+- **Layers:** common, scene, plugin
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** *Report touch to REAPER for automation*
+- **Background:** [report_touch.md](worklog/report_touch.md) (To confirm)
+
+REAPER never asks a surface whether a send or receive is touched:
+`GetTouchState()` takes only a track, and is never asked about a route, even
+with extended touch. JPRSurf sets a route's volume and pan with
+`SetTrackSendUIVol()` and `SetTrackSendUIPan()` with `isend` 0 ("normal
+tweak"), and never ends the edit, so on a track in Touch, a send's envelopes
+keep their last value after the change stops, as in Latch. The likely signal
+is the end of the edit, `isend` 1, sent when the route's control is released
+(its touch, as the track volume and pan use).
+
+- To confirm first, in REAPER: that ending the edit returns a send's Touch
+  envelope to its old value, and what Latch does with it; and that a send
+  edit's undo point (which `isend` 1 adds after changes) can replace
+  `ContinuousUndo`'s for routes, or how the two combine.
+- After playback stopped, REAPER called `Extended(CSURF_EXT_SETRECVPAN)` for
+  the receive before every run for the rest of the session, which may be the
+  edit left open. Ending it should stop them.
+
 ## Widgets
 
 - **Layers:** device

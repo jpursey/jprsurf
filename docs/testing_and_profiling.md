@@ -498,6 +498,25 @@ REAPER's calls on the surface follow these.
   each followed by every track's state, and `SetRepeatState()` and
   `SetPlayState()`. `GetTypeString()`, `GetDescString()`, and
   `GetConfigString()` weren't called during the session.
+- **Touch is asked of every track, between every run** (2026-10-17, a
+  7-track project with tracks in Touch, Latch, and Read). Once the surface had
+  changed a track's volume while playing, REAPER called, before every run
+  from then on, playing or stopped, for the master and then every track in
+  order, whatever its automation mode: `GetTouchState(track, 0)` and
+  `GetTouchState(track, 1)`, then, for a surface that answers
+  `Extended(CSURF_EXT_SUPPORTS_EXTENDED_TOUCH)` with nonzero (asked each
+  time), `GetTouchState(track, 2)`. No other `isPan` was asked, and never
+  from inside another call. Before the first change, it asked nothing. When
+  a run's change started a new write on a track in Touch, REAPER also asked
+  that track's 0 and 1 right after the run, before the other tracks.
+  Answering false, a Touch track's envelope returned to its old value
+  between every change.
+- **Sends and receives are never asked about.** Their volume and pan
+  envelopes, set with `SetTrackSendUIVol()` and `SetTrackSendUIPan()` with
+  `isend` 0 on a track in Touch, kept their last value after the change
+  stopped, as in Latch. After playback stopped, REAPER called
+  `Extended(CSURF_EXT_SETRECVPAN)` for the receive before every run, for the
+  rest of the session.
 - **Exiting:** REAPER destroys the surface, then unloads the plugin, so the
   profiler's snapshot can be written when the surface is destroyed.
 - **Text:** `mkvolstr` writes `-14.2dB`, `-5.10dB`, `+4.23dB`, and `-inf dB`
