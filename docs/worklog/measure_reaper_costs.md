@@ -77,17 +77,24 @@ timed over many calls in one run, one for each track (or route) in turn, as
 the same track read over and over stays in the cache and reads several times
 faster than the profiles show.
 
-**Conditions**, each measured where it can matter:
-- **Deferred refresh:** a deferrable setter outside one, and inside one, where
-  the call and the end of the outermost deferred refresh after it are timed
-  apart. The route setters too, to find whether they are really not
-  deferrable.
-- **Tracks:** 16, 128 (the large project), and 512 tracks, from a builder that
-  scales the large project.
-- **Selected tracks:** one, and every track, for selection and for setters,
-  which REAPER gangs across the selection.
-- **Routes:** a track with one route, and a bus with 31 receives, for route
-  reads and setters.
+**Conditions**, each measured where it can matter, with the arguments the
+extension calls each function with:
+- **Deferred refresh:** the extension only changes REAPER inside a run, which
+  is a deferred refresh, so every change is measured inside one, where the
+  call and the end of the deferred refresh are timed apart. The route setters
+  too, to find whether they are really not deferrable. A mute and a send's
+  volume are also measured outside one, to compare.
+- **Tracks:** 28, 128 (the large project), and 508 tracks, from
+  `AddLargeProject()` with 2, 12, and 50 folders, for the reads that may scale
+  and a mute, rec arm, selection, and undo point.
+- **Every track in one deferred refresh:** a mute, rec arm, and selection of
+  every track, as a ranged gesture makes them, to show whether the end grows
+  with the setters before it.
+- **Selected tracks:** one, and every track, for the selection reads, and a
+  mute and fader ganged across the selection, as the extension's grouped
+  changes are.
+- **Routes:** a track's send, and a bus's receive (31 receives), for route
+  reads and setters, as an edit in progress (`isend` 0).
 
 What can't be measured in the test install is listed with why, and keeps its
 category: the MIDI port functions (the machine's ports, called only as the
@@ -112,7 +119,7 @@ struct CostMeasurement {
 
   absl::AnyInvocable<int()> read;    // Returns how many calls it made.
   absl::AnyInvocable<void()> call;   // A change: exactly one of these is set.
-  absl::AnyInvocable<void()> undo;   // After a change's window, if needed.
+  absl::AnyInvocable<void()> reset;  // After a change's window, if needed.
 };
 
 // Every measurement, in the order they run (CL4).
@@ -134,7 +141,8 @@ std::vector<CostMeasurement> GetCostMeasurements();
   clocks (CL4); in tests, `FakeMeasuringEnvironment`, over the fake REAPER,
   with clocks the test moves, so its tests never wait. They check the
   sequence: which runs make a call, the alternation, medians, and the output.
-- **Output:** `costs.txt`, plain text with one line for each measurement: the
+- **Output:** `output.txt` in the run directory, plain text with one line for
+  each measurement: the
   call's time and its later work, each as a median and spread, in
   `FormatRunTime()`'s units. Each line is reported as its measurement is
   done, so a run that stops part way keeps what it measured. It is read to set
@@ -150,16 +158,19 @@ std::vector<CostMeasurement> GetCostMeasurements();
   `run_in_test_install.cmake`, which runs either DLL with its own surface
   type.
 - **`measure_in_reaper`** builds `reaper_jpr_measure`, runs it in the test
-  install as it opens, and prints `costs.txt`, which it leaves in the run
+  install as it opens, and prints its `output.txt`, which it leaves in the run
   directory. Like `check_in_reaper`, it runs REAPER, so it runs in the
   main checkout only, never touches the user's REAPER, and, like the
-  benchmark, needs a quiet machine.
-- **Run time:** a full measurement should take under about 15 minutes. Reads
-  take one run each. A measurement with later work takes 20 samples of 13
-  runs, and as many with no call, about 16 seconds, which is what idle noise
-  needs (see To confirm). That allows about 50 of them, so each condition is
-  only applied where it can matter, and if that isn't enough, the windows
-  with no call can be shared between measurements, as they barely drift.
+  benchmark, needs a quiet machine. It allows 40 minutes
+  (`run_in_test_install.cmake`'s `TIMEOUT_SECS`, which
+  `JPR_REAPER_CHECK_TIMEOUT` can only raise).
+- **Run time:** a full measurement should take about 15 minutes, for about
+  110 measurements. Reads take one run a sample. A change takes 12 samples of
+  13 runs, and as many with no call, after 15 runs to settle, about 11
+  seconds. 12 samples rather than the 20 To confirm found idle noise needs
+  put later work within about ±0.4ms rather than ±0.3ms, which still separates
+  the categories. If more precision is needed, the windows with no call can
+  be shared between measurements, as they barely drift.
 - **The machine is left alone** while it runs: REAPER takes the foreground
   as it starts, which keeps it on performance cores (see To confirm).
 
@@ -278,7 +289,7 @@ Depends on: CL2.
   make a call and the ones that don't, alternating values, the medians and
   spreads, settling after opening a project, the filter, and the output.
 
-### CL4 [ ] common/testing: The measurements, and measure_in_reaper
+### CL4 [x] common/testing: The measurements, and measure_in_reaper
 
 Depends on: CL3.
 
@@ -299,7 +310,7 @@ Depends on: CL3.
 Depends on: CL4.
 
 - `call_cost.cc` refined from a full run on an idle machine, and `CallCost`'s
-  comments to match. The run's `costs.txt` goes to the user for review with
+  comments to match. The run's `output.txt` goes to the user for review with
   the CL, and isn't committed.
 - Any call count bounds a changed category moves, in
   `plugin/default_config/call_count_test.cc`.

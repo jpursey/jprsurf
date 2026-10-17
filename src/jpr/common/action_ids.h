@@ -16,9 +16,21 @@ namespace jpr {
 // GetToggleCommandState().
 //==============================================================================
 
-inline constexpr int kRepeatAction = 1068;  // Transport: Toggle repeat
-inline constexpr int kUndoAction = 40029;   // Edit: Undo
-inline constexpr int kRedoAction = 40030;   // Edit: Redo
+inline constexpr int kPlayAction = 1007;          // Transport: Play
+inline constexpr int kRecordAction = 1013;        // Transport: Record
+inline constexpr int kStopAction = 1016;          // Transport: Stop
+inline constexpr int kRepeatAction = 1068;        // Transport: Toggle repeat
+inline constexpr int kInsertClickAction = 40013;  // Insert click source
+inline constexpr int kUndoAction = 40029;         // Edit: Undo
+inline constexpr int kRedoAction = 40030;         // Edit: Redo
+inline constexpr int kInsertItemAction = 40142;   // Insert empty item
+
+// Markers: Go to previous marker/project start, and next marker/project end.
+inline constexpr int kPreviousMarkerAction = 40172;
+inline constexpr int kNextMarkerAction = 40173;
+
+inline constexpr int kInsertMidiItemAction = 40214;  // Insert new MIDI item...
+inline constexpr int kUnsoloAllAction = 40340;       // Track: Unsolo all tracks
 
 //------------------------------------------------------------------------------
 // Automation modes

@@ -79,8 +79,8 @@ class MeasuringSurface final : public IReaperControlSurface {
     int settle_runs = 30;
   };
 
-  // Measures `measurements`, at least one, in order, from the surface's runs.
-  // `environment` must outlive this.
+  // Measures `measurements` in order, from the surface's runs. With none, it
+  // finishes in its first run. `environment` must outlive this.
   MeasuringSurface(MeasuringEnvironment* environment,
                    std::vector<CostMeasurement> measurements,
                    const Options& options);
@@ -101,7 +101,8 @@ class MeasuringSurface final : public IReaperControlSurface {
     kWait,      // Nothing.
     kRead,      // Times a read.
     kCall,      // Makes a change, starting a window.
-    kUndo,      // Undoes the change, starting a window that isn't measured.
+    kReset,     // Resets for the next change, starting a window that isn't
+                // measured.
     kBaseline,  // Starts a window with no call.
   };
 

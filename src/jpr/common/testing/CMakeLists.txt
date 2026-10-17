@@ -99,6 +99,7 @@ gb_add_library(jpr_common_testing)
 
 set(jpr_common_measure_SOURCE
   cost_measurement.cc cost_measurement.h
+  cost_measurements.cc cost_measurements.h
   measuring_surface.cc measuring_surface.h
 )
 
@@ -108,6 +109,7 @@ set(jpr_common_measure_DEPS
   absl::function_ref
   absl::log
   absl::str_format
+  absl::span
   absl::strings
   absl::time
   jpr_common
@@ -117,6 +119,7 @@ set(jpr_common_measure_DEPS
 
 set(jpr_common_measure_TEST_SOURCE
   cost_measurement_test.cc
+  cost_measurements_test.cc
   measuring_surface_test.cc
 )
 
@@ -177,4 +180,38 @@ add_custom_target(check_in_reaper
   DEPENDS reaper_jpr_check
   USES_TERMINAL
   COMMENT "Running the contract tests in REAPER..."
+)
+
+# The DLL that measures what REAPER's calls cost inside the test install, and
+# the target that runs it there (see docs/worklog/measure_reaper_costs.md).
+# Measuring everything takes about 15 minutes, so it may take 40.
+
+set(reaper_jpr_measure_SOURCE
+  measuring_surface_reaper.cc
+)
+
+set(reaper_jpr_measure_DEPS
+  absl::function_ref
+  absl::log
+  absl::strings
+  absl::time
+  gb_thread
+  jpr_common
+  jpr_common_contract
+  jpr_common_measure
+  jpr_common_test_install
+  reaper_sdk
+)
+
+gb_add_shared_library(reaper_jpr_measure)
+
+add_custom_target(measure_in_reaper
+  COMMAND ${CMAKE_COMMAND}
+      -DRUN_DLL=$<TARGET_FILE:reaper_jpr_measure>
+      -DSURFACE_TYPE=MEASURING
+      -DTIMEOUT_SECS=2400
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/run_in_test_install.cmake"
+  DEPENDS reaper_jpr_measure
+  USES_TERMINAL
+  COMMENT "Measuring REAPER's costs..."
 )

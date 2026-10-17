@@ -104,20 +104,14 @@ constexpr NamedCost kCosts[] = {
     {"Undo_OnStateChangeEx2", {.kind = Kind::kUndoPoint}},
 };
 
-constexpr std::string_view kListed[] = {
-#define JPR_LISTED_NAME(name) #name,
-    JPR_REAPER_API(JPR_LISTED_NAME)
-#undef JPR_LISTED_NAME
-};
-
 // Returns true if kCosts has exactly the functions on the API list, in order.
 constexpr bool MatchesTheList() {
   const int count = static_cast<int>(std::size(kCosts));
-  if (count != static_cast<int>(std::size(kListed))) {
+  if (count != static_cast<int>(std::size(kReaperApiNames))) {
     return false;
   }
   for (int i = 0; i < count; ++i) {
-    if (kCosts[i].function != kListed[i]) {
+    if (kCosts[i].function != kReaperApiNames[i]) {
       return false;
     }
   }

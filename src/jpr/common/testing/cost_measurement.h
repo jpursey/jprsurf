@@ -58,9 +58,11 @@ struct CostMeasurement {
   // alternates its value.
   absl::AnyInvocable<void()> call;
 
-  // If set, undoes a change after the runs that measure it, for a change that
-  // can't be made again until it is undone, such as Transport: Play.
-  absl::AnyInvocable<void()> undo;
+  // If set, called after the runs that measure a change, so the next call
+  // changes something too: undoing a change that can't be made again until it
+  // is undone (Transport: Play), or making what the next call acts on (the
+  // change an undo point holds). Its own later work isn't measured.
+  absl::AnyInvocable<void()> reset;
 };
 
 // Returns the measurements `filter` names, in their order: each of its names,

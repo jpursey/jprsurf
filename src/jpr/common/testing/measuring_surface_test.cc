@@ -178,20 +178,20 @@ TEST_F(MeasuringSurfaceTest, TimesAReadPerCallInOneRunASample) {
               EndsWith("\nRead: call 7.0us (7.0us to 7.0us)\n"));
 }
 
-TEST_F(MeasuringSurfaceTest, UndoesAfterTheCallsWindowOutsideTheBaseline) {
-  std::vector<int> undo_runs;
-  CostMeasurement measurement = MakeChange("Undone", 100, 0);
-  measurement.undo = [this, &undo_runs] {
-    undo_runs.push_back(run_);
+TEST_F(MeasuringSurfaceTest, ResetsAfterTheCallsWindowOutsideTheBaseline) {
+  std::vector<int> reset_runs;
+  CostMeasurement measurement = MakeChange("Reset", 100, 0);
+  measurement.reset = [this, &reset_runs] {
+    reset_runs.push_back(run_);
     environment_.Work(absl::Microseconds(300));
     later_ += absl::Microseconds(1000);
   };
 
   EXPECT_EQ(Measure(std::move(measurement)), 1 + 2 + 5 * (3 + 3 + 3) + 1);
   EXPECT_THAT(call_runs_, ElementsAre(3, 12, 21, 30, 39));
-  EXPECT_THAT(undo_runs, ElementsAre(6, 15, 24, 33, 42));
+  EXPECT_THAT(reset_runs, ElementsAre(6, 15, 24, 33, 42));
   EXPECT_THAT(environment_.GetResults(),
-              EndsWith("\nUndone: call 100.0us (100.0us to 100.0us), "
+              EndsWith("\nReset: call 100.0us (100.0us to 100.0us), "
                        "later 0ns (0ns to 0ns)\n"));
 }
 
@@ -248,6 +248,11 @@ TEST_F(MeasuringSurfaceTest, ReportsEachMeasurementOnceItIsDone) {
   EXPECT_THAT(environment_.GetResults(), HasSubstr("\nFirst: call "));
   EXPECT_THAT(environment_.GetResults(), Not(HasSubstr("Second")));
   EXPECT_FALSE(environment_.IsFinished());
+}
+
+TEST_F(MeasuringSurfaceTest, FinishesInItsFirstRunWithNothingToMeasure) {
+  EXPECT_EQ(Measure(std::vector<CostMeasurement>()), 1);
+  EXPECT_TRUE(environment_.IsFinished());
 }
 
 TEST_F(MeasuringSurfaceTest, AMeasurementMustBeAReadOrAChange) {

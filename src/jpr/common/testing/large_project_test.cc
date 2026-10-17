@@ -83,5 +83,16 @@ TEST_F(LargeProjectTest, FoldersSendToEachTrackDirectlyInThem) {
   EXPECT_THAT(project_->GetReceives(Track("T6.1.1")), SizeIs(1));
 }
 
+TEST(LargeProjectScaleTest, ScalesByItsFolders) {
+  EXPECT_EQ(GetLargeProjectTrackCount(12), 128);
+  for (int folders : {2, 50}) {
+    std::unique_ptr<FakeProject> project = FakeProject::Create();
+    AddLargeProject(project.get(), folders);
+    EXPECT_EQ(project->GetTrackCount(), GetLargeProjectTrackCount(folders));
+    EXPECT_THAT(project->GetReceives(project->GetTrack(0)),
+                SizeIs(GetLargeProjectBusReceiveCount(folders)));
+  }
+}
+
 }  // namespace
 }  // namespace jpr

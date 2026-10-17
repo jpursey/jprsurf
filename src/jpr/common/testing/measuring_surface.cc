@@ -47,7 +47,6 @@ MeasuringSurface::MeasuringSurface(MeasuringEnvironment* environment,
       options_(options),
       measurements_(std::move(measurements)),
       samples_(measurements_.size()) {
-  CHECK(!measurements_.empty());
   CHECK_GE(options_.samples, 1);
   CHECK_GE(options_.window_runs, 1);
   for (int i = 0; i < static_cast<int>(measurements_.size()); ++i) {
@@ -81,8 +80,8 @@ void MeasuringSurface::AddSteps(int index) {
       continue;
     }
     AddWindow(index, StepKind::kCall);
-    if (measurement.undo) {
-      AddWindow(index, StepKind::kUndo);
+    if (measurement.reset) {
+      AddWindow(index, StepKind::kReset);
     }
     AddWindow(index, StepKind::kBaseline);
   }
@@ -135,8 +134,8 @@ void MeasuringSurface::Run() {
     case StepKind::kCall:
       TimeCall(step.measurement, run);
       break;
-    case StepKind::kUndo:
-      measurements_[step.measurement].undo();
+    case StepKind::kReset:
+      measurements_[step.measurement].reset();
       break;
     case StepKind::kBaseline:
       samples_[step.measurement].baseline_runs.push_back(run);

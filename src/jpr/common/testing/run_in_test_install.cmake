@@ -9,6 +9,8 @@
 # - RUN_DLL: the DLL that runs there, built on test_install.h, such as
 #   reaper_jpr_check.
 # - SURFACE_TYPE: the type of the control surface RUN_DLL registers.
+# - TIMEOUT_SECS, if set: how many seconds REAPER may take to start, run, and
+#   quit, 300 by default. JPR_REAPER_CHECK_TIMEOUT can raise it.
 # - EXTRA_DLLS, if set: other extensions to load beside it.
 #
 # It copies the DLLs into the test install's UserPlugins, makes SURFACE_TYPE
@@ -24,14 +26,25 @@ foreach(var RUN_DLL SURFACE_TYPE)
 endforeach()
 get_filename_component(run_dll_name "${RUN_DLL}" NAME)
 
-# How long REAPER may take to start, run, and quit, which
-# JPR_REAPER_CHECK_TIMEOUT sets, in seconds.
+# How long REAPER may take to start, run, and quit, in seconds: the larger of
+# TIMEOUT_SECS and JPR_REAPER_CHECK_TIMEOUT, so the environment can give a slow
+# run longer without cutting short a run that needs more.
 set(timeout_secs 300)
-if(NOT "$ENV{JPR_REAPER_CHECK_TIMEOUT}" STREQUAL "")
-  set(timeout_secs "$ENV{JPR_REAPER_CHECK_TIMEOUT}")
-  if(NOT timeout_secs MATCHES "^[0-9]+$")
+if(NOT "${TIMEOUT_SECS}" STREQUAL "")
+  if(NOT TIMEOUT_SECS MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "TIMEOUT_SECS must be a whole number of seconds, not "
+        "\"${TIMEOUT_SECS}\".")
+  endif()
+  set(timeout_secs "${TIMEOUT_SECS}")
+endif()
+set(env_timeout_secs "$ENV{JPR_REAPER_CHECK_TIMEOUT}")
+if(NOT env_timeout_secs STREQUAL "")
+  if(NOT env_timeout_secs MATCHES "^[0-9]+$")
     message(FATAL_ERROR "JPR_REAPER_CHECK_TIMEOUT must be a whole number of "
-        "seconds, not \"${timeout_secs}\".")
+        "seconds, not \"${env_timeout_secs}\".")
+  endif()
+  if(env_timeout_secs GREATER timeout_secs)
+    set(timeout_secs "${env_timeout_secs}")
   endif()
 endif()
 

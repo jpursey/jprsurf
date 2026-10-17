@@ -79,6 +79,8 @@
 #define REAPERAPI_WANT_Undo_OnStateChangeEx
 #define REAPERAPI_WANT_Undo_OnStateChangeEx2
 
+#include <string_view>
+
 #include "gb/base/function_hook.h"
 #include "sdk/reaper_plugin_functions.h"
 
@@ -148,6 +150,13 @@
   X(Undo_OnStateChangeEx2)
 
 namespace jpr {
+
+// The name of every function on the list, in its order.
+inline constexpr std::string_view kReaperApiNames[] = {
+#define JPR_REAPER_API_NAME(name) #name,
+    JPR_REAPER_API(JPR_REAPER_API_NAME)
+#undef JPR_REAPER_API_NAME
+};
 
 // Loads the REAPER API from `get_func`, which is REAPER's GetFunc or a fake's.
 //
