@@ -1,114 +1,74 @@
 # Measure REAPER's costs
 
-What each function on the API list costs in REAPER, measured on its own, under
-the conditions its cost depends on, rather than through the default config's
-gestures: inside a deferred refresh (a `PreventUIRefresh()` scope) or not, and
-as it scales with the project (tracks, selected tracks, and routes). The end of
-a deferred refresh, an undo point, and each action JPRSurf runs are measured
-the same way. No device or config is involved: the measurements call REAPER's
-API directly, on generated projects, in the test install that
-`check_in_reaper` uses.
+What each function on the REAPER API list, and each action JPRSurf runs, costs
+in REAPER on its own, measured in the test install with the arguments JPRSurf
+calls it with: the time in the call, and REAPER's work on its UI thread after
+it. The cost table the call count tests weigh calls by (`GetCallCost()` in
+`jpr/common/testing/call_cost.cc`) is set from the measurements, and is their
+only record.
 
-The result refines the cost table the call count tests weigh calls with
-(`GetCallCost()` in `jpr/common/testing/call_cost.h`), which today comes from
-the profile snapshots, and is conservative where nobody has measured: each
-function's category, which setters are really deferrable, and how each cost
-scales with the project. It is measured again when the API list grows, or
-REAPER updates, rather than with each change.
-
-The goal is to decide whether new code meets the performance requirements
-deterministically, measuring nothing but JPRSurf's own code: a gesture's cost
-in REAPER is its calls, bounded by the call count tests and weighed by the
-table, and JPRSurf's own time comes from the benchmarks under the fake. So the
-smoke test goes entirely, its profile (`profiles/smoke.txt`) and its scenario
-with it. What isolated measurements miss, REAPER's effect on JPRSurf's own
-code, the idle profile and the log's "Slow run" warnings show.
+With it, performance is decided without measuring anything but JPRSurf's own
+code: a gesture's cost in REAPER is its calls, bounded by the call count tests
+and weighed by the table, and JPRSurf's own time comes from the benchmarks
+under the fake. So the smoke test, its scenario, and its profile are gone.
+What isolated measurements miss, REAPER's effect on JPRSurf's own code, the
+idle profile and the log's "Slow run" warnings show.
 
 The figures only need to be rough. JPRSurf isn't responsible for how long
 REAPER takes, and has no control over REAPER's own UI or how a user has
-configured it; what matters is putting each call in the right coarse category,
-so JPRSurf uses REAPER efficiently. So the measurements run in the test install
-as it opens, a controlled environment that is the same each time, and nothing
-tries to match any particular user's setup.
+configured it; what matters is putting each call in the right coarse category.
+So the measurements run in the test install as it opens, the same each time.
 
-There is no change in behavior: the plugin doesn't change.
+## Behavior
 
-## Design
+The plugin is unchanged. The process changed:
+- **The end of a feature** has no smoke test: the load check, no new errors
+  (or "Slow run" warnings) in the log, the feature's own checks and feel on
+  the hardware, and an idle profile for a feature that changed per-run work.
+- **The cost table** follows the measurements. Text and GUIDs are cheap, a
+  track rename is moderate, and a route's setters are deferrable refreshes
+  (see What REAPER costs). 27 call count bounds moved between cheap and
+  moderate, each with the same total.
+- **CLAUDE.md** was reorganized around where each check runs (the fake, the
+  test install, or the user's REAPER), with one table of every check, when it
+  is needed, and what it needs, and a rule for asking the user for a quiet
+  machine. The benchmark is a judgment call, once at the end of a feature
+  whose risk calls for it. The benchmark and the cost measurement are project
+  skills (`.claude/skills/`).
 
-### Names
+## Names
 
-| Name                | What                                                                                          | Might be confused with                                               |
-| ------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `CostMeasurement`   | One thing measured under one condition: its project, the call, and the call that undoes it    | `CallCost`, the category the table gives a function                  |
-| `MeasuringSurface`  | The control surface whose runs step through the measurements in the test install             | `RecordingSurface`, which the contract tests run from                |
-| Later work          | REAPER's time on its UI thread in the runs after a call, beyond what the same runs cost idle  | A deferred refresh, which puts work off to its end, not between runs |
-| `reaper_jpr_measure`| The DLL that runs the measurements in the test install                                        | `reaper_jpr_check`, which runs the contract tests                    |
-| `measure_in_reaper` | The build target that runs it                                                                 | `check_in_reaper`, and the `benchmark` target                        |
+| Name                     | What                                                                                         | Might be confused with                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Later work               | REAPER's time on its UI thread in the runs after a call, beyond what the same runs cost idle | A deferred refresh, which puts work off to its end        |
+| `CostMeasurement`        | One thing measured under one condition: a read or a change, on the project it builds         | `CallCost`, the category the table gives a function       |
+| `MeasuringSurface`       | The control surface whose runs step through the measurements                                 | `RecordingSurface`, which the contract tests run from     |
+| `MeasuringEnvironment`   | What the surface needs from where it runs: projects, clocks, and the results                 | `FakeEnvironment`, the contract tests' fake REAPER        |
+| `test_install.h`         | What any DLL that runs in the test install needs                                             | `run_in_test_install.cmake`, which runs such a DLL        |
+| `reaper_jpr_measure`     | The DLL that measures in the test install                                                    | `reaper_jpr_check`, which runs the contract tests         |
+| `measure_in_reaper`      | The build target that runs it                                                                | `check_in_reaper`, and the `benchmark` target             |
 
-Alternatives considered: `CostProbe` (jargon), `CostSample` (a measurement is
-many samples); `CostRunner` and `CostSession` for the surface (`Runner` is
-`common/runner.h`, and "session" is the user's work in REAPER); "deferred
-time" for later work (collides with a deferred refresh, which is a different
-putting off).
+## Structure
 
-### How a cost is measured
+### common/testing: The test install (test_install.h, run_in_test_install.cmake)
 
-Some of a call's cost comes after it returns, when REAPER redraws its UI from
-its own loop, which no call's time shows. So a measurement times two things:
-- **The call:** the wall time inside the call, in CPU ticks
-  (`gb::ReadCpuTicks()`). A call that waits, on a file or on REAPER's audio
-  thread, holds up the UI thread as much as one that works.
-- **Later work:** the cycles REAPER's UI thread ran for
-  (`gb::GetThisThreadCycles()`) from the start of the run that made the call,
-  through the 12 runs after it (about 0.4 seconds), less the call, against the
-  same span of runs with no call. Thread cycles count only work, not the
-  timer's wait between runs, so later work shows even though the runs come at
-  the same rate. The surface runs on REAPER's UI thread, so it reads that
-  thread's cycles at the start of each run. The span is long enough to catch
-  the undo point REAPER adds for a fader about 250ms after it moves (see To
-  confirm).
+- **`jpr_common_test_install`** holds what a DLL running in the test install
+  needs: `LoadTestInstall()` from its entry point (the log, REAPER's API, the
+  functions off the API list, and registering its surface type), the run
+  directory (`GetRunDir()`, `WriteRunFile()`), `OpenProjectFile()`, which
+  opens a `FakeProject` from a project file, and `FinishRun()`, which writes
+  `result.txt`, opens an empty project, and quits once the run returns.
+- **`run_in_test_install.cmake`** runs any such DLL (`RUN_DLL`) with its
+  surface type (`SURFACE_TYPE`) as the only control surface, and removes every
+  DLL it copied once REAPER quits, so one run's DLL never loads in another.
+  `TIMEOUT_SECS` sets the time limit (300 seconds by default), which
+  `JPR_REAPER_CHECK_TIMEOUT` can only raise. The run directory is the test
+  install's `run` folder (`JPR_REAPER_RUN_DIR`).
+- `check_in_reaper` and `check_load_in_reaper` run through it, as before.
 
-A measurement alternates samples with and without the call, so drift in what
-REAPER does idle cancels out, and reports the median of each, with the spread.
-A setter alternates its value (mute on, then off), so each call changes
-something, and an action is paired with what undoes it where it needs one
-(Play, then Stop). A read changes nothing, so it has no later work: it is
-timed over many calls in one run, one for each track (or route) in turn, as
-the same track read over and over stays in the cache and reads several times
-faster than the profiles show.
-
-**Conditions**, each measured where it can matter, with the arguments the
-extension calls each function with:
-- **Deferred refresh:** the extension only changes REAPER inside a run, which
-  is a deferred refresh, so every change is measured inside one, where the
-  call and the end of the deferred refresh are timed apart. The route setters
-  too, to find whether they are really not deferrable. A mute and a send's
-  volume are also measured outside one, to compare.
-- **Tracks:** 28, 128 (the large project), and 508 tracks, from
-  `AddLargeProject()` with 2, 12, and 50 folders, for the reads that may scale
-  and a mute, rec arm, selection, and undo point.
-- **Every track in one deferred refresh:** a mute, rec arm, and selection of
-  every track, as a ranged gesture makes them, to show whether the end grows
-  with the setters before it.
-- **Selected tracks:** one, and every track, for the selection reads, and a
-  mute and fader ganged across the selection, as the extension's grouped
-  changes are.
-- **Routes:** a track's send, and a bus's receive (31 receives), for route
-  reads and setters, as an edit in progress (`isend` 0).
-
-What can't be measured in the test install is listed with why, and keeps its
-category: the MIDI port functions (the machine's ports, called only as the
-surface starts), `ShowConsoleMsg()` (opens a window), and Transport: Record
-(it records media, and stopping it may ask what to do with the files). Every
-other action runs in the test install, the saves included, which write into
-the run directory, as the project opened from there. A test checks that every
-function on the API list is measured or listed, as the cost table's
-`static_assert` does.
-
-### common/testing: Measurements (cost_measurement.h)
+### common/testing: Measurements (cost_measurement.h, cost_measurements.h)
 
 ```
-// One thing measured under one condition: a read or a change.
 struct CostMeasurement {
   std::string name;                  // "SetTrackUIMute", matched by the filter
   std::string condition;             // The project: "128 tracks", ...
@@ -122,235 +82,174 @@ struct CostMeasurement {
   absl::AnyInvocable<void()> reset;  // After a change's window, if needed.
 };
 
-// Every measurement, in the order they run (CL4).
 std::vector<CostMeasurement> GetCostMeasurements();
+absl::Span<const UnmeasuredFunction> GetUnmeasuredFunctions();
 ```
 
-- They call only REAPER's API, so they run under the fake too: `ctest` runs
-  each one for a single sample, so a measurement that no longer works fails
-  there rather than in the test install.
+`GetCostMeasurements()` (`cost_measurements.cc`) has about 110, each named for
+the function it calls:
+- **Reads**, timed per call across tracks, routes, or 100 repeats (one track
+  read over and over stays in the cache, and reads several times faster than
+  in use): on 28, 128, and 508 tracks where they may scale (`AddLargeProject()`
+  with 2, 12, and 50 folders), and with one or every track selected.
+- **Changes**, inside a deferred refresh, as the extension makes them, with
+  the call and its end timed apart: each setter, a rename, the override, a
+  track's send and a bus's receive (as an edit in progress), every track in
+  one deferred refresh, a mute and fader ganged across the selection, an
+  empty deferred refresh, and undo points, with the mute, rec arm, selection,
+  and undo point also on 28 and 508 tracks. A mute and a send's volume are
+  also measured outside one, to compare. A setter alternates its value, so
+  each call changes something.
+- **Actions**: each one JPRSurf runs, with what it needs first (`prepare`) and
+  what resets it after each sample (`reset`, such as Stop after Play, or
+  making the change an undo point holds), and one ruler mode, restored after
+  each, as REAPER keeps it as a preference.
+
+`GetUnmeasuredFunctions()` lists those that can't be: the MIDI port functions
+(the machine's ports, only used as the surface starts) and `ShowConsoleMsg()`
+(it opens a window). Transport: Record isn't measured either, as it records
+media and stopping it may ask what to do with the files.
+`FilterCostMeasurements()` keeps those `JPR_MEASURE_FILTER` names.
 
 ### common/testing: MeasuringSurface (measuring_surface.h)
 
-- An `IReaperControlSurface`, as `RecordingSurface` is, registered as its own
-  type (`MEASURING`), whose runs step through the measurements: open the
-  project, settle, then the samples, a run at a time.
-- What it needs from where it runs is a `MeasuringEnvironment`: opening a
-  project, the wall clock and the UI thread's time (as `absl::Duration`s), and
-  the results. In the test install that is the test install and Game Bits'
-  clocks (CL4); in tests, `FakeMeasuringEnvironment`, over the fake REAPER,
-  with clocks the test moves, so its tests never wait. They check the
-  sequence: which runs make a call, the alternation, medians, and the output.
-- **Output:** `output.txt` in the run directory, plain text with one line for
-  each measurement: the
-  call's time and its later work, each as a median and spread, in
-  `FormatRunTime()`'s units. Each line is reported as its measurement is
-  done, so a run that stops part way keeps what it measured. It is read to set
-  the cost table, and isn't kept. A filter (`JPR_MEASURE_FILTER`,
-  `FilterCostMeasurements()`) runs only the measurements it names.
+- A control surface (type `MEASURING`) whose runs step through the
+  measurements, a run at a time, from a list of steps built up front: open
+  the project and prepare it, settle (15 runs), then each sample. A read is
+  one run a sample. A change's sample is a window of 13 runs from the call
+  (about 0.4s, which covers the undo point REAPER adds for a fader about
+  250ms after it moves), a window for its reset if it has one, and a window
+  with no call.
+- **The call** is wall time (a call that waits, on a file or on REAPER's audio
+  thread, holds up the UI thread as much as one that works). **Later work** is
+  the UI thread's time in the call's window (`gb::GetThisThreadCycles()`,
+  read at the start of each run), less the call, against the median window
+  with no call. Thread time counts only work, not the wait between runs, so
+  later work shows though the runs come at the same rate.
+- Each measurement's line is reported as it is done, so a run that stops part
+  way keeps what it measured: the call, the end of its deferred refresh, and
+  later work, each as a median with its 10th and 90th percentiles, in
+  `FormatRunTime()`'s units (which now has nanoseconds under 1us).
+- **`MeasuringEnvironment`** is what it needs from where it runs: opening a
+  project, the wall clock and the UI thread's time, and the results. In the
+  test install, `measuring_surface_reaper.cc` implements it on Game Bits'
+  clocks, and writes `output.txt`. In tests, `FakeMeasuringEnvironment`
+  (`jpr_common_testing`) opens projects in the fake REAPER, with clocks the
+  test moves.
+- It is in `jpr_common_measure`, without the fake, so the DLL doesn't link it.
 
-### common/testing: Running in the test install
+### common/testing: measure_in_reaper
 
-- The parts of `contract_test_reaper.cc` that aren't the contract tests (the
-  run directory and its files, the log, opening a `FakeProject`, quitting, and
-  loading the functions that aren't on the API list) move into a library both
-  DLLs use (`test_install.h`), and `check_in_reaper.cmake` becomes
-  `run_in_test_install.cmake`, which runs either DLL with its own surface
-  type.
-- **`measure_in_reaper`** builds `reaper_jpr_measure`, runs it in the test
-  install as it opens, and prints its `output.txt`, which it leaves in the run
-  directory. Like `check_in_reaper`, it runs REAPER, so it runs in the
-  main checkout only, never touches the user's REAPER, and, like the
-  benchmark, needs a quiet machine. It allows 40 minutes
-  (`run_in_test_install.cmake`'s `TIMEOUT_SECS`, which
-  `JPR_REAPER_CHECK_TIMEOUT` can only raise).
-- **Run time:** a full measurement should take about 15 minutes, for about
-  110 measurements. Reads take one run a sample. A change takes 12 samples of
-  13 runs, and as many with no call, after 15 runs to settle, about 11
-  seconds. 12 samples rather than the 20 To confirm found idle noise needs
-  put later work within about ±0.4ms rather than ±0.3ms, which still separates
-  the categories. If more precision is needed, the windows with no call can
-  be shared between measurements, as they barely drift.
-- **The machine is left alone** while it runs: REAPER takes the foreground
-  as it starts, which keeps it on performance cores (see To confirm).
+`reaper_jpr_measure` measures every cost (12 samples each), or those
+`JPR_MEASURE_FILTER` names, and fails at once if the machine can't count a
+thread's cycles, or nothing matched the filter. `measure_in_reaper` runs it
+(about 14 minutes for everything, with a 40 minute limit) and prints its
+results. It needs a quiet machine, and runs from the main session only.
 
-### common/testing: The cost table
+### common/testing: The cost table (call_cost.h)
 
-`call_cost.cc` is refined from a measurement run, at the large project's size,
-as now: each function's category, `deferrable` for the setters whose later
-work moves to the end of a deferred refresh, and a comment on each cost that
-scales. `CallCost` keeps coarse categories, not times, as the bounds compare
-counts; its comments give each category's rough range, as they do today. A
-category that changes moves the call count bounds in the same CL.
+The categories come from a full run, at 128 tracks, with each category's
+measured range in its comment, and a comment beside each cost that grows with
+the project. `kReaperApiNames` in `reaper_api.h` lists the API's names, for the
+table's `static_assert` and the coverage test.
 
-The table is the only record. No snapshot of the measurements is kept, as
-nothing compares against one: JPRSurf isn't looking for regressions in
-REAPER, so a question about a cost is answered by measuring again. That is a
-step for a function added to the API list (see the call count tests' building
-blocks) and for a REAPER update.
+### Along the way
 
-### To confirm
+- `AddLargeProject()` scales by its folders (10 tracks a folder, and 8 more),
+  with `kLargeProjectBusCount` and `GetLargeProjectBusReceiveCount()`.
+- The action IDs JPRSurf runs are named in `action_ids.h`, and the action list
+  uses them.
 
-Checked in the test install (2026-10-16), with temporary code in the check
-DLL's runs after the tests (the contract tests finish within one run, so they
-can't see later work), on the large project, with 20 samples of 13 runs each,
-alternating with 13 runs with no call. Times are medians.
-- **Later work shows in UI thread cycles.** The surface's runs are on the main
-  window's thread. Selecting a track takes 10us in the call, then 2.5ms of
-  later work in the run after it, and a deferred refresh doesn't change that.
-  The undo point a volume change from a surface holds adds 1.4ms of later work
-  about 8 runs (250ms) after the change, inside a deferred refresh or not.
-  Otherwise, later work all lands before the next run.
-- **Noise:** idle, REAPER's UI thread works about 0.7ms in two runs of every
-  three, and 0.1ms in the third (its own redraw timer, beside the surface's
-  31.5ms runs). A 13-run window is 6.8ms, varying by about ±0.6ms (p10 to
-  p90), so 20 samples put later work within a few hundred microseconds, which
-  is plenty for coarse categories.
-- **Cores:** on an otherwise idle machine, REAPER takes the foreground as it
-  starts, and 99% of runs were on performance cores, so nothing needs to
-  steer it. With other programs running, 12% weren't.
-- **Wall time and cycles agree** for every call except those that write a file
-  or insert an item (Save project, 6.1ms wall against 3.0ms of cycles; Insert
-  click source, 20.5ms against 13.1ms), which wait. So the call is timed by
-  wall time.
-- **Actions:** every action JPRSurf runs ran without a dialog, but Transport:
-  Record, which wasn't tried. The saves wrote into the run directory, where
-  the project was opened from.
+## What REAPER costs
 
-What the setters cost, to start CL5 from (call, then the end of the deferred
-refresh where there is one, then later work):
+Measured in the test install (2026-10-16), at 128 tracks unless it says, as
+medians. A change's figures are the call, the end of its deferred refresh, and
+later work; later work under about 0.5ms is within the noise.
 
-| Call                                  | Outside a deferred refresh | Inside one           |
-| ------------------------------------- | -------------------------- | -------------------- |
-| `SetTrackUIMute`                      | 0.76ms, none               | 0.09ms, 0.69ms, none |
-| `SetTrackUIRecArm`                    | 4.6ms, none                | 0.28ms, 4.9ms, none  |
-| `SetTrackSelected`                    | 10us, 2.5ms                | 1us, 11us, 2.5ms     |
-| `CSurf_OnVolumeChangeEx`              | 12us, 1.4ms (undo point)   | 7us, 13us, 1.4ms     |
-| `SetTrackSendUIVol` (an instant edit) | 1.5ms, none                | 0.29ms, 1.25ms, none |
-| `Undo_OnStateChangeEx`                | 1.3ms, 1.0ms               |                      |
-| An empty deferred refresh             |                            | 0.1us                |
+- **Reads:** 3-100ns: most track, route, and project reads. Text: 68ns
+  (`mkpanstr`) to 261ns (`format_timestr_pos`), and `stringToGuid()` 1.4us.
+  `AnyTrackSolo()` and `CountSelectedMediaItems()` grow with the project: 86ns
+  and 98ns at 128 tracks, 315ns and 399ns at 508. `GetTrackState()` and
+  `GetTrack()` don't.
+- **Track setters:** a mute or solo 91us, 0.8ms (flat from 28 to 508
+  tracks); a rec arm 0.29ms, 4.9ms (4.5ms on 28, 6.6ms on 508); a selection
+  1.6us, 6us, then 2.7ms of later work; selecting only a track 5us, 0.66ms,
+  4.3ms; a fader or pan 2.7us, 10us, then about 1.6ms of later work, most of
+  it the undo point REAPER holds and adds after; the override 0.1ms, 0.4ms,
+  3.1ms; a rename 4us, and nothing after.
+- **Routes:** a volume or pan 2us, 0.19ms, so a deferred refresh puts their
+  refresh off too, though their calls back come during the call; a mute
+  toggle 0.36ms, 2.1ms, with the undo point REAPER adds for it.
+- **Many at once:** muting every track (128) in one deferred refresh costs
+  3.9ms in its calls and 1.7ms at its end, against 0.8ms for one; arming
+  every track 13.6ms and 6.2ms; selecting every track 98us, then 5.7ms. A mute
+  ganged across every selected track ends in 1.9ms, and a ganged fader in
+  0.35ms, then 3.1ms.
+- **Outside a deferred refresh:** a mute's refresh is in its call (0.9ms), and
+  a send's volume 0.2ms.
+- **Undo points:** 0.28ms, then 1.1ms at the end of the deferred refresh
+  they're added in: 1.2ms in all on 28 tracks, and 2.4ms on 508. An empty
+  deferred refresh costs 0.4us.
+- **Actions:** from 5us (unselecting items) and 32us (repeat), through about
+  1ms (moving the cursor, Stop, Play, which then has 1.6ms of later work) and
+  1.8ms (the automation modes, then 3.3ms), to 10ms (Undo and Redo, then
+  2.5ms), 11-14ms (inserting an item), and 21ms (saving a new version).
 
-So a deferred refresh moves a mute's, rec arm's, and send volume's refresh to
-its end, the route setters included, while a selection's cost is later work
-either way. The actions ranged from 11us (Item: Unselect all items) to about
-1ms to move the cursor, 2.5ms to play, 7.5ms for Undo and Redo (with 2.5-3ms
-of later work), and 12-20ms to insert an item. Reads of one track over and
-over were 7ns (`GetTrackUIVolPan`) and 28ns (`GetTrackState`), against 70ns
-and 166ns in the smoke profile, so reads are timed across tracks.
+**The environment:**
+- REAPER's UI thread works about 0.7ms in two runs of every three when idle
+  (its own redraw timer, beside the surface's 31.5ms runs), so a 13-run window
+  varies by about ±0.6ms, and 12 samples put later work within about ±0.4ms.
+- On an otherwise idle machine, REAPER takes the foreground as it starts, and
+  99% of runs are on performance cores. With other programs busy, 12% weren't.
+- Every action runs without a dialog in the test install, the saves included,
+  which write into the run directory the project was opened from.
 
-### Depends on
+## Tests
 
-Game Bits *Thread cycles*: the cycles the calling thread has run for,
-`QueryThreadCycleTime()` on Windows. It is generic, so it belongs in Game
-Bits, and is done before this feature starts.
+| File                         | What                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `measuring_surface_test.cc`  | The runs that make a call, alternating windows, waits not in later work, percentiles, deferred refresh ends, reads, resets, preparing, reporting as it goes, and nothing after finishing |
+| `cost_measurement_test.cc`   | The filter                                                                                                                             |
+| `cost_measurements_test.cc`  | Every function on the API list is measured or says why not, and every measurement runs a sample under the fake                         |
+| `large_project_test.cc`      | The large project scales by its folders                                                                                                |
+| `reaper_profiler_test.cc`    | `FormatRunTime()` in nanoseconds, and negative times                                                                                   |
+| `call_cost_test.cc`          | Route setters are deferrable, text is cheap, and a rename moderate                                                                     |
 
-## CLs
+## Building blocks
 
-### CL1 [x] common/testing: Confirm how REAPER's later work can be measured
+- **A function added to the API list** gets a measurement in
+  `cost_measurements.cc` (or a reason in `kUnmeasured`), and its cost is set
+  from a run filtered to it: the `measure-reaper-costs` skill has the steps.
+- **A DLL that runs in the test install** is built on `test_install.h` and run
+  by `run_in_test_install.cmake` with its surface type.
+- **Measuring something new** is a `CostMeasurement`: a `read` returning its
+  call count, or a `call` that changes something each time, with `prepare`
+  and `reset` for what it needs around it.
+- **Exploring REAPER across runs**, which contract tests can't (they finish
+  within one run): temporary code in a DLL's runs, as CL1 did, timing with
+  `gb::ReadCpuTicks()` and `gb::GetThisThreadCycles()`.
 
-Depends on: Game Bits *Thread cycles*.
+## Decisions
 
-- Temporary code in `reaper_jpr_check`, run after the tests, for each item of
-  To confirm, written to its output. It is removed again.
-- Commits only the findings, in To confirm, and any changes they make to the
-  later CLs.
+- **Rough and coarse, in a fixed environment**: the test install as it opens,
+  not any user's layout, as JPRSurf only needs each call's category.
+- **No snapshot of the measurements**: nothing compares against one, so the
+  table is the record, and a question about a cost is answered by measuring
+  again. A function already measured that moves category points at the
+  environment first.
+- **Measured inside a deferred refresh**, as the extension only changes REAPER
+  inside a run; outside one only to compare.
+- **12 samples**, not the 20 idle noise suggested, to keep a full run near 15
+  minutes. Sharing the windows with no call between measurements would buy
+  precision back if it is ever needed.
+- **`CountSelectedMediaItems()` stays moderate**, though it measured cheap: it
+  scans items too, and the measured project had one.
+- **The smoke test is gone entirely**, rather than kept by hand: the surface
+  tests cover existing behavior, and each feature's own checks cover what it
+  touches.
+- **Thread cycles came from Game Bits** (*Thread cycles*), as generic code.
 
-**Verify**
-- `check_in_reaper` passes, with the temporary code removed.
+## Performance
 
-### CL2 [x] common/testing: Share the test install between DLLs
-
-Depends on: CL1.
-
-- The test install's host code moves out of `contract_test_reaper.cc` into
-  `test_install.h/.cc` (`jpr_common_test_install`), with `FinishRun()` writing
-  the result, opening an empty project, and quitting in one call.
-- `check_in_reaper.cmake` becomes `run_in_test_install.cmake`, which runs a
-  given DLL and surface type, and removes every DLL it copied once REAPER
-  quits. The run directory is the test install's `run` folder
-  (`JPR_REAPER_RUN_DIR`).
-- `check_in_reaper` and `check_load_in_reaper` behave as before.
-
-**Verify**
-- Standard checks (Release build, clang-format, ctest).
-- `check_in_reaper` and `check_load_in_reaper` pass.
-
-### CL3 [x] common/testing: MeasuringSurface
-
-Depends on: CL2.
-
-- `measuring_surface.h/.cc` and `cost_measurement.h`, with the output and the
-  filter.
-- Unused outside its tests, so no visible change.
-
-**Verify**
-- Standard checks.
-- `measuring_surface_test.cc`, under the fake with fake clocks: the runs that
-  make a call and the ones that don't, alternating values, the medians and
-  spreads, settling after opening a project, the filter, and the output.
-
-### CL4 [x] common/testing: The measurements, and measure_in_reaper
-
-Depends on: CL3.
-
-- `cost_measurements.cc`: every measurement in Design, and the scaled project
-  builder beside `AddLargeProject()`.
-- `reaper_jpr_measure` and the `measure_in_reaper` target, with a time limit
-  parameter for `run_in_test_install.cmake`, as a full run takes longer than
-  its 300 second default.
-
-**Verify**
-- Standard checks.
-- `cost_measurements_test.cc`: every function on the API list is measured or
-  listed with why, and each measurement runs a sample under the fake.
-- `measure_in_reaper` runs to the end, within the time target.
-
-### CL5 [x] common/testing: Measured costs in the cost table
-
-Depends on: CL4.
-
-- `call_cost.cc` refined from a full run on an idle machine, and `CallCost`'s
-  comments to match. The run's `output.txt` goes to the user for review with
-  the CL, and isn't committed.
-- Any call count bounds a changed category moves, in
-  `plugin/default_config/call_count_test.cc`.
-
-**Verify**
-- Standard checks.
-- The bounds that move, each with why.
-
-### CL6 [x] docs: Remove the smoke test
-
-Depends on: CL5.
-
-- `profiles/smoke.txt` and the smoke scenario in `profiles/README.md` go.
-- CLAUDE.md:
-  - Commands gains "Measure REAPER's costs": when to run it (a function added
-    to the API list, or a REAPER update) and what to do with the result.
-  - Checking in REAPER: the end of a feature drops the smoke test. It is
-    `check_load_in_reaper`, no new errors in the log once REAPER creates the
-    surface, and the feature's own checks and feel on the hardware.
-  - Performance: "In REAPER" is the idle profile alone, and a gesture's cost
-    in REAPER is its call count bounds, weighed by the cost table.
-- `profiles/README.md`, `testing_and_profiling.md`, and the benchmark's
-  description (whose actions were the smoke scenario's) to match, and the
-  worklog template's Checks in REAPER.
-
-**Verify**
-- The docs read correctly.
-
-### Summary [ ] docs: Summarize the feature
-
-Depends on: every CL above, and the user saying the feature is done.
-
-- When the last CL lands, ask the user whether the feature is done. Once they
-  say so, replace this plan with a summary of the final implementation
-  (behavior, structure, and reusable building blocks), and move anything left
-  undone into the backlog, in the same change (see the workflow).
-
-## Checks in REAPER
-
-None in the user's REAPER: the plugin doesn't change, and every measurement
-runs in the test install. The end of the feature is a full
-`measure_in_reaper` run on an idle machine, whose results the user reviews
-with CL5.
+Nothing on the realtime path changed. The measurements run only in the test
+install, and the cost table only weighs counts in tests.

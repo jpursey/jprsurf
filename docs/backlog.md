@@ -504,6 +504,23 @@ order:
    It is the second choice because whether a selection change bumps the count
    depends on the user's undo preferences.
 
+## Measure counting selected items on a project with many items
+
+- **Layers:** common
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [measure_reaper_costs.md](worklog/measure_reaper_costs.md)
+
+Only worth doing if the Cancel light's poll shows up in the `Run()` average.
+`CountSelectedMediaItems()` is polled every run, and scans the project: it
+measured 98ns on 128 tracks and 399ns on 508, but the measured projects had
+one media item, and a real session has thousands. It stays moderate in the
+cost table on the profiles' word (about 0.5us on 81 tracks). A measurement on
+a project with many items (`FakeProject::SetSelectedItemCount()` writes them
+as empty items) would settle its category, and whether *Cheaper polling for
+the polled toggles* should throttle it too.
+
 ## Poll only the routes a routes list shows
 
 - **Layers:** common, scene
