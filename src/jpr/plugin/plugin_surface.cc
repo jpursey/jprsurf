@@ -108,12 +108,24 @@ constexpr TransportStep kTransportSteps[] = {
     {"marker", DeviceXTouch::kMarker, kCmdGoPrevMarker, kCmdGoNextMarker},
 };
 
+// Maps the control's touch to the touched property (such as
+// TrackProperties::kVolumeTouched), so REAPER records Touch and Latch
+// automation while a hand is on the control.
+void AddTouchMapping(View* view, std::string_view property,
+                     std::string_view control) {
+  view->AddMapping(ViewMapping::kReadControl, property, control,
+                   {.read = {.press_release = true, .touch = true}});
+}
+
 // Adds the mappings for the channel strip controls that show a track the same
 // way in every mode: mute, solo, record arm, pan, volume, name, color, and
-// meter. The select button and the bottom scribble line are left to the caller,
-// as their meaning depends on the mode.
+// meter, and the touch of the pot and fader. The select button and the bottom
+// scribble line are left to the caller, as their meaning depends on the mode.
 void AddTrackStripMappings(View* view, std::string_view device_prefix,
                            int strip) {
+  const std::string pot = absl::StrCat(device_prefix, DeviceXTouch::Pot(strip));
+  const std::string fader =
+      absl::StrCat(device_prefix, DeviceXTouch::Fader(strip));
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiMute,
                    absl::StrCat(device_prefix, DeviceXTouch::Mute(strip)));
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiSolo,
@@ -121,8 +133,7 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiRecArm,
                    absl::StrCat(device_prefix, DeviceXTouch::Rec(strip)));
   view->AddMapping(
-      ViewMapping::kReadWriteControl, TrackProperties::kUiPan,
-      absl::StrCat(device_prefix, DeviceXTouch::Pot(strip)),
+      ViewMapping::kReadWriteControl, TrackProperties::kUiPan, pot,
       {.write = {
            .mode = 1,
            .mode_overrides = {
@@ -131,8 +142,10 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
   view->AddMapping(ViewMapping::kReadControl, TrackProperties::kUiPan,
                    absl::StrCat(device_prefix, DeviceXTouch::PotButton(strip)),
                    {.read = {.property_min = 0.0, .property_max = 0.0}});
+  AddTouchMapping(view, TrackProperties::kPanTouched, pot);
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiVolume,
-                   absl::StrCat(device_prefix, DeviceXTouch::Fader(strip)));
+                   fader);
+  AddTouchMapping(view, TrackProperties::kVolumeTouched, fader);
   view->AddMapping(
       ViewMapping::kWriteControl, TrackProperties::kName,
       absl::StrCat(device_prefix, DeviceXTouch::Scribble(strip, 0)));
@@ -268,9 +281,12 @@ void PluginSurface::InitViews() {
         "MasterFader", {.subject = View::ReferenceSubject{
                             .name = std::string(Scene::kMasterTrack)}});
     CHECK(master_track_view != nullptr);
-    master_track_view->AddMapping(
-        ViewMapping::kReadWriteControl, TrackProperties::kVolume,
-        absl::StrCat("XTouch/", DeviceXTouch::kMasterFader));
+    const std::string master_fader =
+        absl::StrCat("XTouch/", DeviceXTouch::kMasterFader);
+    master_track_view->AddMapping(ViewMapping::kReadWriteControl,
+                                  TrackProperties::kVolume, master_fader);
+    AddTouchMapping(master_track_view, TrackProperties::kVolumeTouched,
+                    master_fader);
     master_track_view->Enable();
 
     // Modifiers

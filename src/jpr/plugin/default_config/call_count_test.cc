@@ -78,14 +78,11 @@ TEST_F(CallCountTest, TrackModeInAFolder) {
 // The timecode shows the play position, which moves on each run, as it does
 // in REAPER.
 TEST_F(CallCountTest, TrackModeWhilePlaying) {
-  FakeProject& project = reaper_.GetProject();
-  project.SetPlayState(1);
+  reaper_.GetProject().SetPlayState(1);
   RunUntilShown();
   calls_.TakeCounts();
   for (int i = 0; i < FakeReaper::kRunsPerSecond; ++i) {
-    project.SetPlayPosition(project.GetPlayPosition() +
-                            absl::ToDoubleSeconds(FakeReaper::GetRunTime()));
-    surface_->Run();
+    RunPlaying();
   }
   EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 3586, .moderate = 30}));
 }
@@ -172,6 +169,16 @@ TEST_F(CallCountTest, MovingAFader) {
   MoveFader(xtouch_, 0, 0);
   EXPECT_EQ(calls_.TakeCounts(),
             (CallCounts{.cheap = 327, .moderate = 4, .refreshes = 1}));
+}
+
+// REAPER asks about every track's volume and pan before every run, while
+// automation may record, so answering must make no calls.
+TEST_F(CallCountTest, AnsweringTouch) {
+  xtouch_.TouchFader(0);
+  RunUntilShown();
+  calls_.TakeCounts();
+  AskEveryTouch();
+  EXPECT_EQ(calls_.TakeCounts(), CallCounts{});
 }
 
 TEST_F(CallCountTest, TurningAPot) {

@@ -9,6 +9,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/default_config/default_config_test.h"
 
@@ -219,6 +220,37 @@ TEST_F(SendModeTest, RoutePotButtonCentersThePan) {
   Tap(*xtouch_ext_, StripButton::kPotButton, 0);
   EXPECT_EQ(source_to_bus_->pan, 0.0);
   EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kCenterRing}));
+}
+
+// REAPER only asks whether a track's volume or pan is touched, so the route
+// strips touch nothing, and the Info strip touches its track.
+TEST_F(SendModeTest, RouteStripsTouchNoTrack) {
+  EnterSendMode(kSource);
+  xtouch_ext_->TouchFader(0);
+  xtouch_ext_->TurnPot(0, 1);
+  RunUntilShown();
+  for (FakeTrack* track : tracks_) {
+    EXPECT_FALSE(IsTouched(track, TrackTouchType::kVolume)) << track->name;
+    EXPECT_FALSE(IsTouched(track, TrackTouchType::kPan)) << track->name;
+  }
+}
+
+TEST_F(SendModeTest, InfoStripFaderTouchesTheTrack) {
+  EnterSendMode(kSource);
+  xtouch_.TouchFader(GetXTouchStrip(kInfoStrip));
+  RunUntilShown();
+  EXPECT_TRUE(IsTouched(tracks_[kSource], TrackTouchType::kVolume));
+}
+
+// Holding T1's fader in Track mode, while going to its routes, whose first is
+// on the same strip.
+TEST_F(SendModeTest, EnteringTheModeReleasesAHeldFadersTouch) {
+  xtouch_ext_->TouchFader(0);
+  RunUntilShown();
+  ASSERT_TRUE(IsTouched(tracks_[kSource], TrackTouchType::kVolume));
+
+  EnterSendMode(kSource);
+  EXPECT_FALSE(IsTouched(tracks_[kSource], TrackTouchType::kVolume));
 }
 
 TEST_F(SendModeTest, RouteMuteTogglesTheMute) {

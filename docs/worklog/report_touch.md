@@ -24,7 +24,8 @@ faders. Klinke does the same (`CSurf_MCU::GetTouchState()` in
 | Strip fader without touch       | Its track's volume, for 3 seconds after its last move      |
 | Master fader                    | The master track's volume, while it is touched             |
 | Strip pot (Track mode, pan)     | Its track's pan, for 3 seconds after its last turn         |
-| Faders and pots in Send/Receive | Nothing: REAPER asks only about a track's volume and pan   |
+| Route faders and pots           | Nothing: REAPER asks only about a track's volume and pan   |
+| Info strip in Send/Receive      | Its track's volume and pan, as a strip in Track mode       |
 
 - A control reports touch only while its mapping is active. A strip whose
   track changes while it is touched (banking, or the list scrolling) moves its
@@ -181,12 +182,14 @@ read function applies it as it applies a release.
 ### plugin: touch mappings
 
 Mappings only, through the scene's config:
-- Each strip fader in Track mode: `{.read = {.touch = true, .press_release =
-  true}}` to `track:volume_touched`.
-- Each strip pot where it maps pan: the same to `track:pan_touched`.
-- The master fader: the same to `state:master_track.volume_touched`.
+- Each strip that shows a track (`AddTrackStripMappings()`: every strip in
+  Track mode, and the Info strip in Send/Receive mode): its fader `{.read =
+  {.press_release = true, .touch = true}}` to `track:volume_touched`, and its
+  pot the same to `track:pan_touched`.
+- The master fader: the same to `track:volume_touched` of its view's subject,
+  the master track.
 
-Send/Receive mode maps none, so it reports nothing.
+The route strips in Send/Receive mode map none, so they report nothing.
 
 ### To confirm
 
@@ -317,7 +320,7 @@ Depends on: CL2 and CL3.
   and destroying a mapping release it through the same path
   (`RefreshActive()`), which tests can't reach directly.
 
-### CL5 [ ] plugin: Report touch to REAPER
+### CL5 [x] plugin: Report touch to REAPER
 
 Depends on: CL4.
 
@@ -335,9 +338,11 @@ Depends on: CL4.
   a fader or turning a pot reports nothing.
 - `call_count_test.cc`: touching a fader and `GetTouchState()` make no REAPER
   calls.
-- The benchmark's runs while playing ask every track's volume and pan before
-  each run, as REAPER does, and JPRSurf's time per run doesn't regress against
-  the bar.
+- A new benchmark, `IdleWhileAutomating`, asks every track's volume and pan
+  before each run while playing, as REAPER does, with their answers in a
+  `ControlSurface::GetTouchState` point. JPRSurf's time per run doesn't
+  regress against the bar, and the new benchmark's is compared against
+  `IdleWhilePlaying`'s.
 - The load check.
 
 ### Summary [ ] docs: Summarize the feature

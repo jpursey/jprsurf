@@ -10,7 +10,10 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_project.h"
+#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/track.h"
+#include "jpr/device/control.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/default_config/default_config_test.h"
 
@@ -36,6 +39,11 @@ constexpr int kFolderRing = 5;
 // Long enough for a meter to fall from the top, a level a run, unless it is
 // sent again.
 constexpr absl::Duration kMeterFallTime = absl::Milliseconds(500);
+
+// How long a pot, or a fader without touch, stays touched after a move, and a
+// run.
+const absl::Duration kTouchHoldTime = absl::Seconds(Control::kTouchHoldSecs);
+const absl::Duration kRunTime = FakeReaper::GetRunTime();
 
 // Ten tracks: eight on the extender, and two on the X-Touch, whose other six
 // strips are empty. T3 is a folder, with a track in it.
@@ -150,6 +158,61 @@ TEST_F(TrackStripTest, PotButtonCentersThePan) {
   Tap(*xtouch_ext_, StripButton::kPotButton, 0);
   EXPECT_EQ(tracks_[0]->pan, 0.0);
   EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kCenterRing}));
+}
+
+//------------------------------------------------------------------------------
+// Touch
+//
+// REAPER asks whether each track's volume and pan are touched, for Touch and
+// Latch automation. A fader with touch is touched while a hand is on it, and
+// the pots, and the extender's third fader, for a hold after each move.
+//------------------------------------------------------------------------------
+
+TEST_F(TrackStripTest, TouchingAFaderTouchesItsTracksVolume) {
+  xtouch_ext_->TouchFader(0);
+  RunUntilShown();
+  EXPECT_TRUE(IsTouched(tracks_[0], TrackTouchType::kVolume));
+  EXPECT_FALSE(IsTouched(tracks_[0], TrackTouchType::kPan));
+  EXPECT_FALSE(IsTouched(tracks_[1], TrackTouchType::kVolume));
+
+  // Holding the fader still keeps it touched.
+  surface_->RunFor(kTouchHoldTime * 2);
+  EXPECT_TRUE(IsTouched(tracks_[0], TrackTouchType::kVolume));
+
+  xtouch_ext_->ReleaseFader(0);
+  RunUntilShown();
+  EXPECT_FALSE(IsTouched(tracks_[0], TrackTouchType::kVolume));
+}
+
+TEST_F(TrackStripTest, MovingAFaderWithoutTouchTouchesItForAHold) {
+  xtouch_ext_->MoveFader(2, kFader0dB);
+  RunUntilShown();
+  EXPECT_TRUE(IsTouched(tracks_[kFolder], TrackTouchType::kVolume));
+
+  surface_->RunFor(kTouchHoldTime + kRunTime * 2);
+  EXPECT_FALSE(IsTouched(tracks_[kFolder], TrackTouchType::kVolume));
+}
+
+TEST_F(TrackStripTest, TurningAPotTouchesItsTracksPanForAHold) {
+  xtouch_.TurnPot(1, 1);
+  RunUntilShown();
+  EXPECT_TRUE(IsTouched(tracks_[9], TrackTouchType::kPan));
+  EXPECT_FALSE(IsTouched(tracks_[9], TrackTouchType::kVolume));
+
+  surface_->RunFor(kTouchHoldTime - kRunTime * 4);
+  EXPECT_TRUE(IsTouched(tracks_[9], TrackTouchType::kPan));
+  surface_->RunFor(kRunTime * 6);
+  EXPECT_FALSE(IsTouched(tracks_[9], TrackTouchType::kPan));
+}
+
+TEST_F(TrackStripTest, TouchingTheMasterFaderTouchesTheMasterVolume) {
+  xtouch_.TouchFader(FakeXTouch::kMasterFader);
+  RunUntilShown();
+  EXPECT_TRUE(IsTouched(GetMaster(), TrackTouchType::kVolume));
+
+  xtouch_.ReleaseFader(FakeXTouch::kMasterFader);
+  RunUntilShown();
+  EXPECT_FALSE(IsTouched(GetMaster(), TrackTouchType::kVolume));
 }
 
 //------------------------------------------------------------------------------

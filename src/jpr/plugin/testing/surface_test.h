@@ -16,6 +16,7 @@
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/surface_notifier.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
 
 namespace jpr {
@@ -62,6 +63,11 @@ class SurfaceTest : public ::testing::Test {
   // is sent when its device next runs.
   void RunUntilShown();
 
+  // Moves the play position on by a run, as playing does in REAPER, then runs
+  // the surface once. The project must be playing (see
+  // FakeProject::SetPlayState()).
+  void RunPlaying();
+
   //----------------------------------------------------------------------------
   // The project
   //----------------------------------------------------------------------------
@@ -102,6 +108,18 @@ class SurfaceTest : public ::testing::Test {
   // running the surface after the move, and until it is shown after letting
   // go.
   void MoveFader(FakeXTouch& xtouch, int fader, int position);
+
+  //----------------------------------------------------------------------------
+  // Touch
+  //----------------------------------------------------------------------------
+
+  // Asks the surface whether the track's volume or pan is touched, as REAPER
+  // does of every track before each run while automation may record.
+  bool IsTouched(FakeTrack* track, TrackTouchType type);
+
+  // Asks the surface whether each track's volume and pan are touched, the
+  // master first, as REAPER does before each run while automation may record.
+  void AskEveryTouch();
 
   gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
   FakeReaper reaper_;

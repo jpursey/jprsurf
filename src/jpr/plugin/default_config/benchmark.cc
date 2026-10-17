@@ -28,6 +28,7 @@
 #include "gb/base/init_logging.h"
 #include "gb/base/local_time.h"
 #include "gb/file/local_file_protocol.h"
+#include "gb/profile/profile_point.h"
 #include "gtest/gtest.h"
 #include "jpr/common/file_system.h"
 #include "jpr/common/reaper_profiler.h"
@@ -241,13 +242,24 @@ TEST_F(Benchmark, IdleInAFolder) {
 // The timecode shows the play position, which moves on each run, as it does
 // in REAPER.
 TEST_F(Benchmark, IdleWhilePlaying) {
-  FakeProject& project = reaper_.GetProject();
-  project.SetPlayState(1);
+  reaper_.GetProject().SetPlayState(1);
+  RunUntilShown();
+  TimeRuns([&] { RunPlaying(); });
+}
+
+// While playing, once automation may record, REAPER asks about every track's
+// volume and pan before each run. JPRSurf's answers are outside the run, so
+// their time is in a point of their own, with a fader touched.
+TEST_F(Benchmark, IdleWhileAutomating) {
+  reaper_.GetProject().SetPlayState(1);
+  xtouch_.TouchFader(0);
   RunUntilShown();
   TimeRuns([&] {
-    project.SetPlayPosition(project.GetPlayPosition() +
-                            absl::ToDoubleSeconds(FakeReaper::GetRunTime()));
-    surface_->Run();
+    {
+      gb::ProfileScope<"ControlSurface::GetTouchState"> scope;
+      AskEveryTouch();
+    }
+    RunPlaying();
   });
 }
 

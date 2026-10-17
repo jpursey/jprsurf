@@ -10,6 +10,7 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/default_config/default_config_test.h"
 
@@ -187,6 +188,17 @@ TEST_F(TrackListTest, BankMovesEightTracksUntilAnEndIsShown) {
   EXPECT_EQ(GetName(0), "T1");
   Tap(xtouch_, Button::kBankLeft);
   EXPECT_EQ(GetName(0), "T1");
+}
+
+// A fader held through a bank touches the track it shows next.
+TEST_F(TrackListTest, BankMovesAHeldFadersTouch) {
+  xtouch_ext_->TouchFader(0);
+  RunUntilShown();
+  ASSERT_TRUE(IsTouched(top_[0], TrackTouchType::kVolume));
+
+  Tap(xtouch_, Button::kBankRight);
+  EXPECT_FALSE(IsTouched(top_[0], TrackTouchType::kVolume));
+  EXPECT_TRUE(IsTouched(top_[8], TrackTouchType::kVolume));
 }
 
 TEST_F(TrackListTest, ChannelMovesOneTrackUntilAnEndIsShown) {

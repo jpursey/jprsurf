@@ -106,4 +106,30 @@ void SurfaceTest::MoveFader(FakeXTouch& xtouch, int fader, int position) {
   RunUntilShown();
 }
 
+bool SurfaceTest::IsTouched(FakeTrack* track, TrackTouchType type) {
+  return surface_->GetTouchState(ToMediaTrack(track),
+                                 type == TrackTouchType::kPan ? 1 : 0);
+}
+
+void SurfaceTest::RunPlaying() {
+  FakeProject& project = reaper_.GetProject();
+  project.SetPlayPosition(project.GetPlayPosition() +
+                          absl::ToDoubleSeconds(FakeReaper::GetRunTime()));
+  surface_->Run();
+}
+
+void SurfaceTest::AskEveryTouch() {
+  // The questions go to the surface itself, rather than through surface_,
+  // which would end an entry point after each, so a benchmark times only the
+  // answers. A question changes nothing, so it has no entry point to check.
+  IReaperControlSurface* surface = surface_->GetWrapped();
+  FakeProject& project = reaper_.GetProject();
+  surface->GetTouchState(ToMediaTrack(project.GetMasterTrack()), 0);
+  surface->GetTouchState(ToMediaTrack(project.GetMasterTrack()), 1);
+  for (int i = 0; i < project.GetTrackCount(); ++i) {
+    surface->GetTouchState(ToMediaTrack(project.GetTrack(i)), 0);
+    surface->GetTouchState(ToMediaTrack(project.GetTrack(i)), 1);
+  }
+}
+
 }  // namespace jpr
