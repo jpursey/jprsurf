@@ -766,18 +766,21 @@ Existing tests that need no REAPER stay as they are.
 and what they found are in
 [reaper_call_count_tests.md](worklog/reaper_call_count_tests.md).
 - **Costs:** every function on the API list has a cost (`GetCallCost()` in
-  `jpr/common/testing/call_cost.h`): cheap (a read), moderate (text, a scan of
-  the project, or a deferrable setter's own work), a refresh of REAPER's UI, an
-  undo point, or a command. A `static_assert` keeps the table in line with the
-  list.
+  `jpr/common/testing/call_cost.h`): cheap (a read, text included), moderate
+  (a scan of the project, a rename, or a deferrable setter's own work), a
+  refresh of REAPER's UI, an undo point, or a command. Each is what the
+  function costs in REAPER on its own, measured in the test install (see
+  [measure_reaper_costs.md](worklog/measure_reaper_costs.md)). A
+  `static_assert` keeps the table in line with the list.
 - **Rules in every surface test:** `SurfaceTest` holds a `CallCounter`
   (`calls_`), which fails any of the fake's entry points (a run, another call
   on the surface, or the test's own calls between them) that refreshes
   REAPER's UI twice, adds two undo points, or repeats a refresh or a command
   on the same track, route, or action. A setter whose refresh REAPER puts off
-  in a deferred refresh (mute, solo, rec arm, selection, volume, pan, and the
-  automation override) isn't a refresh there; the deferred refresh's end is,
-  if one was made in it.
+  in a deferred refresh (every setter the extension calls: a track's mute,
+  solo, rec arm, selection, volume, and pan, a route's, and the automation
+  override) isn't a refresh there; the deferred refresh's end is, if one was
+  made in it.
 - **Bounds:** `CallCountTest` (`plugin/default_config/call_count_test.cc`)
   runs JPRSurf's own surface on the large project (`AddLargeProject()`, 128
   tracks in folders, with buses and sends), and bounds the calls of starting

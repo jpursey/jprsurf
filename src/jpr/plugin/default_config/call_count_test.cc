@@ -55,7 +55,7 @@ class CallCountTest : public DefaultConfigTest {
 };
 
 TEST_F(CallCountTest, StartingUp) {
-  EXPECT_EQ(startup_, (CallCounts{.cheap = 3112, .moderate = 188}));
+  EXPECT_EQ(startup_, (CallCounts{.cheap = 3286, .moderate = 14}));
 }
 
 //------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ TEST_F(CallCountTest, TrackModeWhilePlaying) {
                             absl::ToDoubleSeconds(FakeReaper::GetRunTime()));
     surface_->Run();
   }
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 3556, .moderate = 60}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 3586, .moderate = 30}));
 }
 
 TEST_F(CallCountTest, SendReceiveModeOnABus) {
@@ -102,7 +102,7 @@ TEST_F(CallCountTest, SendReceiveModeOnABus) {
 TEST_F(CallCountTest, TrackListRefresh) {
   surface_->SetTrackListChange();
   RunUntilShown();
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 2664, .moderate = 131}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 2793, .moderate = 2}));
 }
 
 TEST_F(CallCountTest, BankChange) {
@@ -114,14 +114,14 @@ TEST_F(CallCountTest, EnteringSendReceiveMode) {
   TapSelect(kBus);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kAssignSend);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1047, .moderate = 23}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1062, .moderate = 8}));
 }
 
 TEST_F(CallCountTest, ReturningToTrackMode) {
   EnterSendMode(kBus);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kAssignTrack);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 915, .moderate = 24}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 931, .moderate = 8}));
 }
 
 //==============================================================================
@@ -140,7 +140,7 @@ TEST_F(CallCountTest, TappingMute) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 866, .moderate = 10, .refreshes = 1, .undo_points = 1}));
+          .cheap = 867, .moderate = 9, .refreshes = 1, .undo_points = 1}));
 }
 
 TEST_F(CallCountTest, TappingSolo) {
@@ -148,7 +148,7 @@ TEST_F(CallCountTest, TappingSolo) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 866, .moderate = 10, .refreshes = 1, .undo_points = 1}));
+          .cheap = 867, .moderate = 9, .refreshes = 1, .undo_points = 1}));
 }
 
 TEST_F(CallCountTest, TappingRecordArm) {
@@ -156,7 +156,7 @@ TEST_F(CallCountTest, TappingRecordArm) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 3314, .moderate = 139, .refreshes = 1, .undo_points = 1}));
+          .cheap = 3444, .moderate = 9, .refreshes = 1, .undo_points = 1}));
 }
 
 // Holding mute on T7, on the extender, and tapping it on T10, on the X-Touch.
@@ -165,20 +165,20 @@ TEST_F(CallCountTest, MutingARange) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 1090, .moderate = 18, .refreshes = 2, .undo_points = 2}));
+          .cheap = 1094, .moderate = 14, .refreshes = 2, .undo_points = 2}));
 }
 
 TEST_F(CallCountTest, MovingAFader) {
   MoveFader(xtouch_, 0, 0);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 326, .moderate = 5, .refreshes = 1}));
+            (CallCounts{.cheap = 327, .moderate = 4, .refreshes = 1}));
 }
 
 TEST_F(CallCountTest, TurningAPot) {
   xtouch_.TurnPot(0, 21);
   RunUntilShown();
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 216, .moderate = 4, .refreshes = 1}));
+            (CallCounts{.cheap = 217, .moderate = 3, .refreshes = 1}));
 }
 
 TEST_F(CallCountTest, MovingTheMasterFader) {
@@ -194,24 +194,24 @@ TEST_F(CallCountTest, PressingAPot) {
   calls_.TakeCounts();
   Tap(xtouch_, StripButton::kPotButton, 0);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 865, .moderate = 10, .refreshes = 1}));
+            (CallCounts{.cheap = 866, .moderate = 9, .refreshes = 1}));
 }
 
 TEST_F(CallCountTest, TappingSelect) {
   TapSelect(8);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 873, .moderate = 10, .refreshes = 1}));
+            (CallCounts{.cheap = 874, .moderate = 9, .refreshes = 1}));
 }
 
 TEST_F(CallCountTest, SelectingARange) {
   SelectRange(0, 11);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 2432, .moderate = 45, .refreshes = 2}));
+            (CallCounts{.cheap = 2444, .moderate = 33, .refreshes = 2}));
 }
 
 TEST_F(CallCountTest, GoingIntoAFolder) {
   DoublePressSelect(kFolder);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 804, .moderate = 19}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 813, .moderate = 10}));
 }
 
 //------------------------------------------------------------------------------
@@ -227,21 +227,21 @@ TEST_F(CallCountTest, GlobalGoesUpALevel) {
   DoublePressSelect(kFolder);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kGlobal);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 831, .moderate = 24}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 847, .moderate = 8}));
 }
 
 TEST_F(CallCountTest, HoldingGlobalGoesToTheTop) {
   DoublePressSelect(kFolder);
   calls_.TakeCounts();
   LongPress(xtouch_, Button::kGlobal);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1669, .moderate = 35}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1685, .moderate = 19}));
 }
 
 // A track in a folder the surface isn't showing, which it goes to.
 TEST_F(CallCountTest, ClickingATrackInReaper) {
   notifier_.ClickTrack(reaper_.GetProject().FindTrackByName("T12.5"));
   RunUntilShown();
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 157, .moderate = 11}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 166, .moderate = 2}));
 }
 
 //------------------------------------------------------------------------------
@@ -252,7 +252,7 @@ TEST_F(CallCountTest, ClickingATrackInReaper) {
 
 TEST_F(CallCountTest, PickingWithSendHeld) {
   PickWithSendHeld(kFolder);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 938, .moderate = 21}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 948, .moderate = 11}));
 }
 
 // Includes the undo point added once the route stops moving.
@@ -264,7 +264,7 @@ TEST_F(CallCountTest, MovingARouteFader) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 2864, .moderate = 34, .refreshes = 1, .undo_points = 1}));
+          .cheap = 2878, .moderate = 20, .refreshes = 1, .undo_points = 1}));
 }
 
 // Includes the undo point added once the route stops moving.
@@ -277,7 +277,7 @@ TEST_F(CallCountTest, TurningARoutePot) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 2725, .moderate = 33, .refreshes = 1, .undo_points = 1}));
+          .cheap = 2739, .moderate = 19, .refreshes = 1, .undo_points = 1}));
 }
 
 // Centers a pan, so it has one to change.
@@ -292,7 +292,7 @@ TEST_F(CallCountTest, PressingARoutePot) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 3548, .moderate = 39, .refreshes = 1, .undo_points = 1}));
+          .cheap = 3562, .moderate = 25, .refreshes = 1, .undo_points = 1}));
 }
 
 TEST_F(CallCountTest, TappingARouteMute) {
@@ -300,7 +300,7 @@ TEST_F(CallCountTest, TappingARouteMute) {
   calls_.TakeCounts();
   Tap(*xtouch_ext_, StripButton::kMute, 0);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 1100, .moderate = 23, .refreshes = 1}));
+            (CallCounts{.cheap = 1114, .moderate = 9, .refreshes = 1}));
 }
 
 // Goes across the route, to the track at its other end.
@@ -308,14 +308,14 @@ TEST_F(CallCountTest, SelectingARoute) {
   EnterSendMode(kBus);
   calls_.TakeCounts();
   TapSelect(0);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 684, .moderate = 18}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 694, .moderate = 8}));
 }
 
 TEST_F(CallCountTest, PagingRoutes) {
   EnterSendMode(kBus);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1098, .moderate = 23}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1113, .moderate = 8}));
 }
 
 // From a track with both: T5.1 receives from T5, and sends to a bus.
@@ -324,7 +324,7 @@ TEST_F(CallCountTest, SwitchingBetweenSendsAndReceives) {
   EnterSendMode(0);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kAssignSend);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 554, .moderate = 9}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 555, .moderate = 8}));
 }
 
 //------------------------------------------------------------------------------
@@ -386,8 +386,8 @@ TEST_F(CallCountTest, Redo) {
 TEST_F(CallCountTest, SteppingTheTimecodeMode) {
   Tap(xtouch_, Button::kShowTimeBeats);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 934,
-                        .moderate = 9,
+            (CallCounts{.cheap = 935,
+                        .moderate = 8,
                         .commands = {kRulerMinutesSecondsMinimal}}));
 }
 

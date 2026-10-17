@@ -24,10 +24,11 @@ constexpr CallCost Refresh(int repeat_key_args) {
   return {.kind = Kind::kRefresh, .repeat_key_args = repeat_key_args};
 }
 
-// A refresh a deferred refresh puts off: mute, solo, rec arm, selection,
-// volume, pan, and the automation override, whose calls back to the surface
-// come at the end of the deferred refresh (see "Seen in traces" in
-// docs/testing_and_profiling.md).
+// A refresh a deferred refresh puts off: every setter the extension calls. A
+// track's mute, solo, rec arm, selection, volume, pan, and the automation
+// override also call back to the surface at the end of the deferred refresh
+// (see "Seen in traces" in docs/testing_and_profiling.md). A route's setters
+// call back during the call, but their refresh still waits for the end.
 constexpr CallCost DeferrableRefresh(int repeat_key_args) {
   return {.kind = Kind::kRefresh,
           .deferrable = true,
@@ -39,9 +40,13 @@ struct NamedCost {
   CallCost cost;
 };
 
-// Every function on the API list, in its order.
+// Every function on the API list, in its order. A cost that grows with the
+// project says how.
 constexpr NamedCost kCosts[] = {
+    // 86ns on 128 tracks, and 315ns on 508.
     {"AnyTrackSolo", kCheap},
+    // A scan of the project's tracks and items: 98ns on 128 tracks with one
+    // item, 399ns on 508, and about 0.5us on a real project of 81 tracks.
     {"CountSelectedMediaItems", kModerate},
     {"CountSelectedTracks", kCheap},
     {"CountSelectedTracks2", kCheap},
@@ -51,7 +56,7 @@ constexpr NamedCost kCosts[] = {
     {"CSurf_OnPanChangeEx", DeferrableRefresh(1)},
     {"CSurf_OnVolumeChangeEx", DeferrableRefresh(1)},
     {"EnumProjects", kCheap},
-    {"format_timestr_pos", kModerate},
+    {"format_timestr_pos", kCheap},
     {"GetCursorPosition", kCheap},
     {"GetGlobalAutomationOverride", kCheap},
     {"GetMasterTrack", kCheap},
@@ -65,7 +70,8 @@ constexpr NamedCost kCosts[] = {
     {"GetPlayState", kCheap},
     {"GetSelectedTrack", kCheap},
     {"GetSelectedTrack2", kCheap},
-    {"GetSetMediaTrackInfo_String", kCheap},
+    // The extension only sets the name, which takes 4us, and refreshes nothing.
+    {"GetSetMediaTrackInfo_String", kModerate},
     {"GetSetTrackSendInfo", kCheap},
     {"GetToggleCommandState", kCheap},
     {"GetTrack", kCheap},
@@ -78,26 +84,29 @@ constexpr NamedCost kCosts[] = {
     {"GetTrackSendUIVolPan", kCheap},
     {"GetTrackState", kCheap},
     {"GetTrackUIVolPan", kCheap},
-    {"guidToString", kModerate},
+    {"guidToString", kCheap},
     {"IsProjectDirty", kCheap},
-    {"kbd_getTextFromCmd", kModerate},
+    {"kbd_getTextFromCmd", kCheap},
     {"Main_OnCommand", {.kind = Kind::kCommand, .repeat_key_args = 1}},
-    {"mkpanstr", kModerate},
-    {"mkvolstr", kModerate},
-    {"NamedCommandLookup", kModerate},
+    {"mkpanstr", kCheap},
+    {"mkvolstr", kCheap},
+    {"NamedCommandLookup", kCheap},
     {"PreventUIRefresh", kCheap},
     {"SetGlobalAutomationOverride", DeferrableRefresh(0)},
     {"SetOnlyTrackSelected", DeferrableRefresh(0)},
     {"SetTrackSelected", DeferrableRefresh(1)},
-    {"SetTrackSendUIPan", Refresh(2)},
-    {"SetTrackSendUIVol", Refresh(2)},
+    {"SetTrackSendUIPan", DeferrableRefresh(2)},
+    {"SetTrackSendUIVol", DeferrableRefresh(2)},
     {"SetTrackUIMute", DeferrableRefresh(1)},
+    // Its refresh at the end of a deferred refresh: 4.5ms on 28 tracks, 4.9ms
+    // on 128, and 6.6ms on 508.
     {"SetTrackUIRecArm", DeferrableRefresh(1)},
     {"SetTrackUISolo", DeferrableRefresh(1)},
     {"ShowConsoleMsg", Refresh(0)},
     {"stringToGuid", kModerate},
     {"time_precise", kCheap},
-    {"ToggleTrackSendUIMute", Refresh(2)},
+    // With the undo point REAPER adds for it.
+    {"ToggleTrackSendUIMute", DeferrableRefresh(2)},
     {"Track_GetPeakInfo", kCheap},
     {"Undo_CanRedo2", kCheap},
     {"Undo_OnStateChangeEx", {.kind = Kind::kUndoPoint}},

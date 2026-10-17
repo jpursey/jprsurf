@@ -15,34 +15,41 @@ namespace jpr {
 // What a call to a function on the REAPER API list (see reaper_api.h) costs,
 // in coarse categories, for bounding the calls the extension makes.
 //
-// The categories come from the per-call self times in the profile snapshots in
-// profiles/, of an 81-track project. A call whose cost grows with the project
-// is weighed at the size of the large project the tests use. What a function
-// costs on its own isn't measured yet, so the categories are conservative
-// where the snapshots can't tell (see kRefresh).
+// The categories come from what each function costs in REAPER on its own, with
+// the arguments the extension calls it with, as measure_in_reaper measures it
+// (see docs/worklog/measure_reaper_costs.md): the time in the call, and
+// REAPER's work on its UI thread after it. A call whose cost grows with the
+// project is weighed at the size of the large project the tests use (128
+// tracks), and says how it grows. They are measured again when the API list
+// grows, or REAPER updates.
 //==============================================================================
 
 struct CallCost {
   enum class Kind {
-    // A read, under about 0.4us.
+    // A read, under about 0.4us: most are 5-100ns, and text about 70-260ns.
     kCheap,
 
-    // Work that refreshes nothing, but is more than a read: text (about
-    // 0.5-3us), reads that scan the project (counting selected items),
-    // functions only called as the extension starts (opening MIDI ports), and
-    // a deferrable refresh's own work inside a deferred refresh (about
-    // 20-200us).
+    // Work that refreshes nothing, but is more than a read, up to about
+    // 0.3ms: parsing a GUID (1.4us), renaming a track (4us), reads that scan
+    // the project (counting selected items), functions only called as the
+    // extension starts (opening MIDI ports), and a deferrable refresh's own
+    // work inside a deferred refresh (2-300us).
     kModerate,
 
-    // A change REAPER's UI shows, which refreshes it: about 2-17ms, much of
-    // it in a redraw REAPER puts off to its own loop, which no call's time
-    // shows. Every function that changes what REAPER's UI shows is one.
+    // A change REAPER's UI shows, which refreshes it: about 0.2ms (a route's
+    // volume) to 5ms (a rec arm) at the end of a deferred refresh, and as much
+    // again in a redraw REAPER puts off to its own loop after the run (a
+    // selection's 2.7ms), which no call's time shows.
     kRefresh,
 
-    // An undo point the extension adds: about 1.5ms.
+    // An undo point the extension adds: about 1.4ms, most of it at the end of
+    // the deferred refresh it is added in. It grows with the project: 1.2ms on
+    // 28 tracks, and 2.4ms on 508.
     kUndoPoint,
 
-    // Main_OnCommand(), whose cost is the action's.
+    // Main_OnCommand(), whose cost is the action's: from 5us (unselecting
+    // items) to 20ms (saving a new version of the project). Most of the
+    // extension's take 1-3ms, and the automation modes as much again after.
     kCommand,
   };
 
@@ -52,7 +59,9 @@ struct CallCost {
   // puts the refresh off to the end of the outermost one, and the call itself
   // is then moderate. The call that ends the outermost deferred refresh is the
   // refresh, whatever its own cost, which a caller finds from the deferred
-  // refresh rather than from this table.
+  // refresh rather than from this table. Deferrable setters share that
+  // refresh: muting 128 tracks in one ends it in 1.7ms, against 0.8ms for one
+  // track.
   bool deferrable = false;
 
   // For a refresh or a command: how many of its leading arguments, with the

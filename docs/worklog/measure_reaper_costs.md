@@ -305,7 +305,7 @@ Depends on: CL3.
   listed with why, and each measurement runs a sample under the fake.
 - `measure_in_reaper` runs to the end, within the time target.
 
-### CL5 [ ] common/testing: Measured costs in the cost table
+### CL5 [x] common/testing: Measured costs in the cost table
 
 Depends on: CL4.
 

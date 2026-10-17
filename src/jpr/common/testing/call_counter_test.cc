@@ -54,29 +54,28 @@ class CallCounterTest : public ::testing::Test {
 // Counting
 //------------------------------------------------------------------------------
 
-TEST_F(CallCounterTest, CountsReadsAsCheapAndTextAsModerate) {
+TEST_F(CallCounterTest, CountsReadsAsCheapAndScansAsModerate) {
   RunWith([] {
     CountTracks(nullptr);
-    char text[64];
-    mkvolstr(text, 1.0);
+    CountSelectedMediaItems(nullptr);
   });
   const CallCounts counts = counter_.TakeCounts();
   EXPECT_EQ(counts, (CallCounts{.cheap = 1, .moderate = 1}));
-  EXPECT_THAT(counts.calls, UnorderedElementsAre(Pair("CountTracks", 1),
-                                                 Pair("mkvolstr", 1)));
+  EXPECT_THAT(counts.calls,
+              UnorderedElementsAre(Pair("CountTracks", 1),
+                                   Pair("CountSelectedMediaItems", 1)));
 }
 
 TEST_F(CallCounterTest, TextListsEachFunctionsCountByName) {
   RunWith([] {
-    char text[64];
-    mkvolstr(text, 1.0);
+    CountSelectedMediaItems(nullptr);
     CountTracks(nullptr);
   });
   EXPECT_EQ(counter_.TakeCounts().ToString(),
             "{cheap: 1, moderate: 1, refreshes: 0, undo_points: 0, "
             "commands: []}\n"
-            "  CountTracks: 1\n"
-            "  mkvolstr: 1");
+            "  CountSelectedMediaItems: 1\n"
+            "  CountTracks: 1");
 }
 
 TEST_F(CallCounterTest, SetterOutsideADeferredRefreshIsARefresh) {
@@ -118,7 +117,7 @@ TEST_F(CallCounterTest, EmptyDeferredRefreshIsNoRefresh) {
 TEST_F(CallCounterTest, RefreshThatIsntDeferrableIsOnlyItsOwn) {
   RunWith([this] {
     PreventUIRefresh(1);
-    SetTrackSendUIVol(a_, 0, 0.5, 0);
+    ShowConsoleMsg("Refreshed");
     PreventUIRefresh(-1);
   });
   EXPECT_EQ(counter_.TakeCounts(), (CallCounts{.cheap = 2, .refreshes = 1}));
@@ -196,14 +195,13 @@ TEST_F(CallCounterTest,
        RefreshThatIsntDeferrableIsASecondBesideADeferrableOne) {
   auto calls = [this] {
     PreventUIRefresh(1);
-    SetTrackSendUIVol(a_, 0, 0.5, 0);
+    ShowConsoleMsg("Refreshed");
     SetTrackUIMute(b_, 1, 0);
     PreventUIRefresh(-1);
   };
-  EXPECT_NONFATAL_FAILURE(
-      RunWith(std::move(calls)),
-      "refreshed REAPER's UI 2 times, with SetTrackSendUIVol, "
-      "PreventUIRefresh");
+  EXPECT_NONFATAL_FAILURE(RunWith(std::move(calls)),
+                          "refreshed REAPER's UI 2 times, with ShowConsoleMsg, "
+                          "PreventUIRefresh");
 }
 
 // The tests that pass a rule also count the calls, so they show the counter

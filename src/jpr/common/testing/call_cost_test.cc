@@ -33,9 +33,20 @@ TEST(CallCostTest, FadersPansAndTheOverrideAreDeferrable) {
   EXPECT_TRUE(GetCallCost("SetGlobalAutomationOverride").deferrable);
 }
 
-TEST(CallCostTest, RouteSettersArentDeferrable) {
-  EXPECT_FALSE(GetCallCost("SetTrackSendUIVol").deferrable);
-  EXPECT_FALSE(GetCallCost("ToggleTrackSendUIMute").deferrable);
+TEST(CallCostTest, RouteSettersAreDeferrableRefreshesOfTheRoute) {
+  for (const char* function :
+       {"SetTrackSendUIVol", "SetTrackSendUIPan", "ToggleTrackSendUIMute"}) {
+    const CallCost cost = GetCallCost(function);
+    EXPECT_EQ(cost.kind, Kind::kRefresh) << function;
+    EXPECT_TRUE(cost.deferrable) << function;
+    EXPECT_EQ(cost.repeat_key_args, 2) << function;
+  }
+}
+
+TEST(CallCostTest, TextIsCheapButRenamingATrackIsModerate) {
+  EXPECT_EQ(GetCallCost("mkvolstr").kind, Kind::kCheap);
+  EXPECT_EQ(GetCallCost("format_timestr_pos").kind, Kind::kCheap);
+  EXPECT_EQ(GetCallCost("GetSetMediaTrackInfo_String").kind, Kind::kModerate);
 }
 
 }  // namespace
