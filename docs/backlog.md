@@ -496,6 +496,25 @@ polled one is watched, as `IsMeterWatched()` already gates the meter.
 `TrackProperties::OnTrackChanged()` could also skip `has_routes`, which it
 notifies on every change to the track.
 
+## Measure inlining and link-time optimization for the Release build
+
+- **Layers:** build (all libraries)
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [report_touch.md](worklog/report_touch.md) (CL6)
+
+The Release build is CMake's default `RelWithDebInfo` for MSVC, `/O2 /Ob1`,
+with no link-time optimization: the compiler only inlines functions marked
+`inline` or defined in a class body, and never across files (so
+`TrackCache::Get()`, in its `.cc`, is a call from every other file). Measure
+`/Ob2`, and link-time optimization (CMake's `INTERPROCEDURAL_OPTIMIZATION`,
+`/GL` and `/LTCG`), each on its own, with the whole benchmark back to back on
+a quiet machine, and keep what helps JPRSurf's time per run and per action
+beyond the noise. Weigh the build time each adds, and check that profiles and
+the debugger still show useful names. Inlining `TrackCache::Get()` by hand
+measured no different, so a gain, if any, will be spread thin.
+
 ## Cheaper polling for the polled toggles
 
 - **Layers:** scene
