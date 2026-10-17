@@ -249,6 +249,77 @@ TEST_F(TrackPropertiesTest, SettingTheTrackMovesEveryProperty) {
   name->UnregisterFlag(&changed_);
 }
 
+//------------------------------------------------------------------------------
+// Touch
+//------------------------------------------------------------------------------
+
+TEST_F(TrackPropertiesTest, TouchedPropertiesTouchTheirTrack) {
+  Track* track = GetCachedTrack(tracks_[0]);
+  TrackProperties properties(&actions_, track);
+  ViewProperty* volume =
+      properties.GetProperty(TrackProperties::kVolumeTouched);
+  ViewProperty* pan = properties.GetProperty(TrackProperties::kPanTouched);
+  ASSERT_NE(volume, nullptr);
+  ASSERT_NE(pan, nullptr);
+  EXPECT_FALSE(volume->GetBool());
+
+  volume->SetBool(true);
+  EXPECT_TRUE(track->IsTouched(TrackTouchType::kVolume));
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kPan));
+  EXPECT_TRUE(volume->GetBool());
+  EXPECT_FALSE(pan->GetBool());
+
+  pan->SetBool(true);
+  volume->SetBool(false);
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
+  EXPECT_TRUE(track->IsTouched(TrackTouchType::kPan));
+}
+
+TEST_F(TrackPropertiesTest, TouchesOfTheSameTrackAreHeldApart) {
+  Track* track = GetCachedTrack(tracks_[0]);
+  TrackProperties first(&actions_, track);
+  TrackProperties second(&actions_, track);
+  ViewProperty* first_volume =
+      first.GetProperty(TrackProperties::kVolumeTouched);
+  ViewProperty* second_volume =
+      second.GetProperty(TrackProperties::kVolumeTouched);
+  second_volume->RegisterFlag(&changed_);
+
+  // Another's touch is read, and notified.
+  first_volume->SetBool(true);
+  EXPECT_TRUE(second_volume->GetBool());
+  EXPECT_TRUE(changed_);
+
+  // Writing true twice, then false once, releases the touch.
+  second_volume->SetBool(true);
+  second_volume->SetBool(true);
+  second_volume->SetBool(false);
+  first_volume->SetBool(false);
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
+  second_volume->UnregisterFlag(&changed_);
+}
+
+TEST_F(TrackPropertiesTest, TouchMovesWithTheTrack) {
+  Track* drums = GetCachedTrack(tracks_[0]);
+  Track* bass = GetCachedTrack(tracks_[1]);
+  TrackProperties properties(&actions_, drums);
+  properties.GetProperty(TrackProperties::kPanTouched)->SetBool(true);
+
+  properties.SetTrack(bass);
+  EXPECT_FALSE(drums->IsTouched(TrackTouchType::kPan));
+  EXPECT_TRUE(bass->IsTouched(TrackTouchType::kPan));
+}
+
+TEST_F(TrackPropertiesTest, DestroyingTheTouchedPropertyReleasesItsTouch) {
+  Track* track = GetCachedTrack(tracks_[0]);
+  {
+    TrackProperties properties(&actions_, track);
+    properties.GetProperty(TrackProperties::kVolumeTouched)->SetBool(true);
+    ASSERT_TRUE(track->IsTouched(TrackTouchType::kVolume));
+  }
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
+}
+
 TEST_F(TrackPropertiesTest, IsWatchedWhileAnyPropertyIs) {
   TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
   ViewProperty* mute = properties.GetProperty(TrackProperties::kMute);

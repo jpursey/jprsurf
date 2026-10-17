@@ -90,8 +90,8 @@ class Track {
 
 class TrackListener {
   ...
-  // Called whenever the track becomes touched or untouched.
-  virtual void OnTrackTouchChanged(Track* track) {}
+  // Called whenever the track becomes touched or untouched for the type.
+  virtual void OnTrackTouchChanged(Track* track, TrackTouchType type) {}
 };
 ```
 
@@ -169,10 +169,14 @@ class Control {
 - Performance: nothing per run. A touch or release is one write.
 
 **Brittleness:** writing the release from `ViewMapping::RefreshActive()` runs
-during view activation. A release that changes a view condition (a modifier)
-must not activate or deactivate views from inside it. CL4 checks how
-`Scene::ApplyViewConditions()` handles it, and defers the release to the next
-`Sync()` if it can't.
+while views are being refreshed. A release that changes a view condition (a
+modifier) only sets the condition's flag, and the scene applies it on its next
+run. A property's write may never change views directly (documented on
+`ViewProperty`), and the scene enforces it: `View::Enable()`, `Disable()`, and
+`RefreshActive()` log an error and do nothing while a refresh is in progress.
+Deferring such a change instead is a backlog item. The release reads the
+unregistered input, which `Control::IsPressed()` reads as released, so each
+read function applies it as it applies a release.
 
 ### plugin: touch mappings
 
@@ -284,7 +288,7 @@ Depends on: nothing.
   fader are touched from `TouchFader()` until the release, and a pot and the
   extender's third fader for kTouchHoldSecs after a turn or a move.
 
-### CL4 [ ] scene: Touched properties, and releasing on deactivation
+### CL4 [x] scene: Touched properties, and releasing on deactivation
 
 Depends on: CL2 and CL3.
 
@@ -292,19 +296,26 @@ Depends on: CL2 and CL3.
   release.
 - `track:volume_touched` and `track:pan_touched`, as in the design.
 - `ViewMapping` writes a held `press_release` release when it stops reading.
+- `View` refuses, with an error, being enabled, disabled, or refreshed while
+  the scene's views are being refreshed, and `ViewProperty` documents that a
+  write may never change views.
 
 **Verify**
 - Standard checks.
 - `track_properties_test.cc`: writing a touched property touches its track,
-  false releases it, changing the track moves the touch, and destroying the
-  properties releases it.
-- `view_mapping_test.cc`: a touch mapping on a `FakeDevice` sets and clears
-  its property; a `press_release` mapping holding a press releases it when its
-  view deactivates, when it is disabled, and when it is destroyed, and a
-  modifier released while its view is inactive doesn't stay on.
-- `scene_test.cc`: a reference field (`state:master_track.volume_touched`)
-  touches its track, and a release that changes a view condition activates
-  and deactivates views correctly.
+  false releases it, two properties on the same track hold their own touches
+  and read each other's, changing the track moves the touch, and destroying
+  the properties releases it.
+- `view_mapping_test.cc`: a touch mapping on a `FakeDevice` reads a button's
+  press with release, and a fader's and a pot's input for the hold, ignoring
+  the input type, and a control with no input reads none; a `press_release`
+  mapping holding a press, or a touch, releases it when its view
+  deactivates, and its release, read while the view is inactive, changes
+  nothing; and a release that changes a view's condition changes which views
+  are active on the next run; a release whose write enables a view is refused
+  with an error, and the same write outside a refresh enables it. Disabling
+  and destroying a mapping release it through the same path
+  (`RefreshActive()`), which tests can't reach directly.
 
 ### CL5 [ ] plugin: Report touch to REAPER
 

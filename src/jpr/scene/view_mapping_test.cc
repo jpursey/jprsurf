@@ -16,6 +16,8 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
 #include "jpr/common/modifiers.h"
@@ -35,6 +37,8 @@
 
 namespace jpr {
 namespace {
+
+using ::testing::SizeIs;
 
 using Type = ViewProperty::Type;
 using Value = ViewProperty::Value;
@@ -1422,6 +1426,177 @@ TEST_F(ViewMappingTest, PressReleaseNeedsARelease) {
   AddSurface();
   Tap(pedal);
   EXPECT_FALSE(property->GetBool());
+}
+
+//==============================================================================
+// Reading touch
+//==============================================================================
+
+TEST_F(ViewMappingTest, TouchIsReadAsAPressWithRelease) {
+  // A press with release is the touch. A fader and a pot have none, so input
+  // touches them for Control::kTouchHoldSecs.
+  TestProperty* button = AddProperty(Type::kToggle, false, "user:button");
+  TestProperty* fader = AddProperty(Type::kToggle, false, "user:fader");
+  TestProperty* pot = AddProperty(Type::kToggle, false, "user:pot");
+  const ViewMapping::Config touch = {
+      .read = {.press_release = true, .touch = true}};
+  Read("user:button", {"Button"}, touch);
+  Read("user:fader", {"Fader"}, touch);
+  Read("user:pot", {"Pot"}, touch);
+  AddSurface();
+
+  Press(button_);
+  Move(fader_, 0.5);
+  Turn(pot_, 0.5);
+  surface_->Run();
+  EXPECT_TRUE(button->GetBool());
+  EXPECT_TRUE(fader->GetBool());
+  EXPECT_TRUE(pot->GetBool());
+
+  Release(button_);
+  surface_->Run();
+  EXPECT_FALSE(button->GetBool());
+  EXPECT_TRUE(fader->GetBool());
+
+  reaper_.AdvanceTime(absl::Seconds(Control::kTouchHoldSecs));
+  surface_->Run();
+  surface_->Run();
+  EXPECT_FALSE(fader->GetBool());
+  EXPECT_FALSE(pot->GetBool());
+}
+
+TEST_F(ViewMappingTest, TouchIgnoresTheInputType) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  Read(
+      "user:value", {"Fader"},
+      {.read = {
+           .input_type = Input::kDelta, .press_release = true, .touch = true}});
+  AddSurface();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+}
+
+TEST_F(ViewMappingTest, AControlWithoutInputReadsNoTouch) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  EXPECT_TRUE(view_->AddMapping(
+      ViewMapping::kReadControl, "user:value", GetControlName("CValue"),
+      {.read = {.press_release = true, .touch = true}}));
+  AddSurface();
+  RunUntilShown();
+  EXPECT_FALSE(property->GetBool());
+}
+
+//==============================================================================
+// Releasing when reading stops
+//==============================================================================
+
+TEST_F(ViewMappingTest, PressReleaseReleasesWhenItsViewDeactivates) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  Read("user:value", {"Button"}, {.read = {.press_release = true}});
+  AddSurface();
+  Press(button_);
+  surface_->Run();
+  ASSERT_TRUE(property->GetBool());
+
+  view_->Disable();
+  EXPECT_FALSE(property->GetBool());
+
+  // The release, read while the view is inactive, changes nothing, and a
+  // press when it is active again is held again.
+  property->SetBool(true);
+  Release(button_);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+  property->SetBool(false);
+  view_->Enable();
+  Press(button_);
+  surface_->Run();
+  EXPECT_TRUE(property->GetBool());
+}
+
+TEST_F(ViewMappingTest, TouchReleasesWhenItsViewDeactivates) {
+  TestProperty* property = AddProperty(Type::kToggle, false);
+  Read("user:value", {"Fader"},
+       {.read = {.press_release = true, .touch = true}});
+  AddSurface();
+  Move(fader_, 0.5);
+  surface_->Run();
+  ASSERT_TRUE(property->GetBool());
+
+  view_->Disable();
+  EXPECT_FALSE(property->GetBool());
+}
+
+// A toggle whose write of false enables a view, which no property may do, as
+// views may be being refreshed.
+class ViewEnablingProperty final : public ViewProperty {
+ public:
+  ViewEnablingProperty(std::string_view name, View* view)
+      : ViewProperty(name, Type::kToggle), view_(view) {}
+
+ protected:
+  void WriteBool(bool value) override {
+    if (!value) {
+      view_->Enable();
+    }
+  }
+
+ private:
+  View* const view_;
+};
+
+TEST_F(ViewMappingTest, AViewChangeWhileViewsAreRefreshedIsRefused) {
+  View* other = scene_.GetRootView()->AddChildView("Other");
+  scene_.AddUserProperty(
+      std::make_unique<ViewEnablingProperty>("user:enabler", other));
+  Read("user:enabler", {"Button"}, {.read = {.press_release = true}});
+  AddSurface();
+  Press(button_);
+  surface_->Run();
+  ASSERT_FALSE(other->IsEnabled());
+
+  // The release is written as the view deactivates.
+  view_->Disable();
+  EXPECT_FALSE(other->IsEnabled());
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(1));
+
+  // Outside a refresh, the release's write enables the view.
+  Release(button_);
+  surface_->Run();
+  view_->Enable();
+  Press(button_);
+  surface_->Run();
+  Release(button_);
+  surface_->Run();
+  EXPECT_TRUE(other->IsEnabled());
+}
+
+// A release that changes a view's condition, as a modifier does, changes which
+// views are active on the next run, as any change to the condition does.
+TEST_F(ViewMappingTest, AReleaseThatChangesAConditionIsAppliedOnTheNextRun) {
+  ToggleValueProperty* flag = AddFlag();
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  Read("user:flag", {"Button"}, {.read = {.press_release = true}});
+  View* shifted = scene_.GetRootView()->AddChildView(
+      "Shifted", {.condition = ViewCondition::Config{.property = "user:flag"}});
+  shifted->Enable();
+  EXPECT_TRUE(shifted->AddMapping(ViewMapping::kReadControl, "user:value",
+                                  GetControlName("Fader")));
+  AddSurface();
+  Press(button_);
+  surface_->Run();
+  surface_->Run();
+  ASSERT_TRUE(flag->GetBool());
+  ASSERT_TRUE(shifted->IsActive());
+
+  view_->Disable();
+  EXPECT_FALSE(flag->GetBool());
+  surface_->Run();
+  EXPECT_FALSE(shifted->IsActive());
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
 }
 
 //==============================================================================

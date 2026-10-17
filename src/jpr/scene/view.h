@@ -192,6 +192,10 @@ class View final {
   // is running (for instance, from a property a mapping triggers). A view that
   // changes while the scene runs needs a condition instead (see
   // Config::condition), which may change at any time.
+  //
+  // Views are refreshed with their mappings, which may write properties (see
+  // ViewMapping::ReadConfig::press_release), so a call while any view is being
+  // refreshed logs an error and does nothing, as does RefreshActive().
   bool IsEnabled() const { return enabled_; }
   void Enable();
   void Disable();
@@ -323,6 +327,13 @@ class View final {
 
   // Releases the view's anchor, whatever it is held on.
   void ClearAnchor() { anchor_hold_.Reset(); }
+
+  // Returns true, logging that the view couldn't `what`, if the scene's views
+  // are being refreshed (see Enable()).
+  bool IsRefreshing(std::string_view what) const;
+
+  // Implements RefreshActive(), for this view and its children.
+  void DoRefreshActive();
 
   // Implements AddUserProperty() for any property type.
   ViewProperty* DoAddUserProperty(std::unique_ptr<ViewProperty> property);

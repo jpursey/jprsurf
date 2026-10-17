@@ -5,6 +5,7 @@
 
 #include "jpr/scene/view.h"
 
+#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -84,7 +85,7 @@ View::~View() {
 }
 
 void View::Enable() {
-  if (enabled_) {
+  if (enabled_ || IsRefreshing("enable")) {
     return;
   }
   enabled_ = true;
@@ -92,7 +93,7 @@ void View::Enable() {
 }
 
 void View::Disable() {
-  if (!enabled_) {
+  if (!enabled_ || IsRefreshing("disable")) {
     return;
   }
   enabled_ = false;
@@ -100,6 +101,29 @@ void View::Disable() {
 }
 
 void View::RefreshActive() {
+  if (scene_ == nullptr) {
+    DoRefreshActive();
+    return;
+  }
+  if (IsRefreshing("refresh")) {
+    return;
+  }
+  scene_->refreshing_views_ = true;
+  DoRefreshActive();
+  scene_->refreshing_views_ = false;
+}
+
+bool View::IsRefreshing(std::string_view what) const {
+  if (scene_ == nullptr || !scene_->refreshing_views_) {
+    return false;
+  }
+  LOG(ERROR) << "Failed to " << what << " view '" << name_
+             << "': views are being refreshed, so a property's write may not "
+                "change them";
+  return true;
+}
+
+void View::DoRefreshActive() {
   bool parent_active = false;
   if (parent_view_ != nullptr) {
     parent_active = parent_view_->IsActive();
@@ -132,7 +156,7 @@ void View::RefreshActive() {
     mapping->RefreshActive(active_);
   }
   for (auto& child_view : child_views_) {
-    child_view->RefreshActive();
+    child_view->DoRefreshActive();
   }
 }
 

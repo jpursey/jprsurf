@@ -34,8 +34,13 @@ class TrackProperty : public ViewProperty {
 
   void SetTrack(Track* track) {
     track_ = track;
+    OnTrackSet();
     NotifyChanged();
   }
+
+  // Called when the property is moved to another track, before it notifies
+  // that it changed. Does nothing by default.
+  virtual void OnTrackSet() {}
 
  private:
   friend class TrackProperties;
@@ -99,6 +104,16 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kTrackExists = kTrackName<"exists">;
   static constexpr std::string_view kTrackHasRoutes = kTrackName<"has_routes">;
 
+  // Whether the track's volume or pan is touched, for REAPER's Touch and Latch
+  // automation (see Track::RegisterTouch()). Writing true touches the track
+  // until false is written, or the property is destroyed, and the touch moves
+  // with the property to another track. Reading is whether anything touches
+  // the track. Each TrackProperties has its own, so two of them on the same
+  // track each hold their own touch.
+  static constexpr std::string_view kVolumeTouched =
+      kTrackName<"volume_touched">;
+  static constexpr std::string_view kPanTouched = kTrackName<"pan_touched">;
+
   // The track that these properties are tied to, and the track actions they
   // use, which must not be null.
   //
@@ -137,6 +152,7 @@ class TrackProperties final : public TrackListener {
   void OnTrackMeterChanged(Track* track, double peak) override;
   void OnTrackHierarchyChanged(Track* track) override;
   void OnTrackRoutesChanged(Track* track) override;
+  void OnTrackTouchChanged(Track* track, TrackTouchType type) override;
 
  private:
   // State
@@ -150,6 +166,10 @@ class TrackProperties final : public TrackListener {
   // Route values change often (for instance, while a send fader is moving), so
   // only it is notified when the routes change.
   mutable TrackProperty* has_routes_property_ = nullptr;
+
+  // The touched properties, by TrackTouchType, if they were created. Each is
+  // the only one notified when the track's touch of its type changes.
+  mutable TrackProperty* touched_properties_[kTrackTouchTypeCount] = {};
 };
 
 }  // namespace jpr

@@ -91,6 +91,12 @@ inline constexpr std::string_view kViewName =
 //
 // Anything that needs to know when the property changes, such as an active
 // mapping, registers a flag with it (see RegisterFlag()).
+//
+// A write never changes which views are active. It may only change what a
+// view's condition reads, which the scene applies on its next run. Mappings
+// write properties while views are being refreshed (a press_release mapping
+// applies its release when its view deactivates), so the scene refuses, with
+// an error, a view change made then (see View::Enable()).
 class ViewProperty {
  public:
   // The type of the property, which defines what values it can hold.

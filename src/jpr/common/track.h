@@ -154,9 +154,9 @@ class TrackListener {
   // with Track::RefreshRoutes()).
   virtual void OnTrackRoutesChanged(Track* track) {}
 
-  // This will be called whenever the track becomes touched or untouched, for
-  // either TrackTouchType (see Track::IsTouched()).
-  virtual void OnTrackTouchChanged(Track* track) {}
+  // This will be called whenever the track becomes touched or untouched for
+  // the type (see Track::IsTouched()).
+  virtual void OnTrackTouchChanged(Track* track, TrackTouchType type) {}
 };
 
 //==============================================================================
@@ -457,8 +457,8 @@ class Track final {
   void NotifyRoutesChanged();
 
   // Notifies all listeners subscribed to this track that it became touched or
-  // untouched.
-  void NotifyTouchChanged();
+  // untouched for the type.
+  void NotifyTouchChanged(TrackTouchType type);
 
   // Everything about one TrackBoolProperty: how REAPER reports and sets it,
   // where it is cached, and its undo point. Defined in track.cc.

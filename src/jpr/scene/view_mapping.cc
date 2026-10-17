@@ -143,21 +143,29 @@ void ViewMapping::InitReadControl() {
   if (!type_.IsSet(kReadControl)) {
     return;
   }
-  // A configured input type leaves only that input to read from, if the control
-  // has it.
+  // Touch reads as a press with release on any control with input. Otherwise,
+  // a configured input type leaves only that input to read from, if the
+  // control has it.
+  const bool touch = config_.read.touch;
   Control::Inputs inputs = control_->GetInputs();
-  if (config_.read.input_type.has_value()) {
+  bool has_press_release = control_->HasPressRelease();
+  if (touch) {
+    has_press_release = !inputs.IsEmpty();
+    if (has_press_release) {
+      inputs = ControlInput::Type::kPress;
+    }
+  } else if (config_.read.input_type.has_value()) {
     inputs = gb::Intersect(inputs, *config_.read.input_type);
   }
   if (config_.read.press_release &&
-      (!control_->HasPressRelease() ||
-       !inputs.IsSet(ControlInput::Type::kPress))) {
+      (!has_press_release || !inputs.IsSet(ControlInput::Type::kPress))) {
     type_.Clear(kReadControl);
     config_.read.press_release = false;
     return;
   }
   input_config_.required_modifiers = config_.read.required_modifiers;
   input_config_.press_behavior = config_.read.press_behavior;
+  input_config_.touch = touch;
   switch (property_->GetType()) {
     case ViewProperty::Type::kAction:
       InitReadActionSyncFunction(inputs);
@@ -1177,8 +1185,14 @@ void ViewMapping::RefreshActive(bool parent_active) {
     if (should_read) {
       input_handle_ = control_->RegisterInput(input_config_, &control_changed_);
     } else {
+      const InputId id = input_handle_.GetId();
       input_handle_ = {};
-      holding_ = false;
+      if (holding_) {
+        // With the input gone, the control reads it as released, so this
+        // applies the release.
+        holding_ = false;
+        read_control_(*property_, *control_, id);
+      }
     }
   }
 

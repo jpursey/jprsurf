@@ -104,8 +104,23 @@ class ViewMapping final {
     // underlying control does not have press/release capability
     // (HasPressRelease() returns false), or input_type is set to anything but a
     // press, then this will never update the property value (effectively
-    // disabling kReadControl capability).
+    // disabling kReadControl capability). This doesn't apply with touch, which
+    // every control with input has.
+    //
+    // A mapping that stops reading while it holds a press (its view
+    // deactivates, or it is disabled or destroyed) applies the release then,
+    // so what it holds can't stick on. That is while views are being
+    // refreshed, which is why a property's write may not change views (see
+    // ViewProperty). A press that deactivates its own mapping is released at
+    // once, so that is a configuration error.
     bool press_release = false;
+
+    // If true, the mapping reads whether a hand is on the control (see
+    // InputConfig::touch) as a press with release, whatever inputs the control
+    // has, and input_type is ignored. With press_release, the property is
+    // property_max while the control is touched, and property_min otherwise:
+    // a track's volume_touched while its fader is held, for instance.
+    bool touch = false;
   };
 
   // A mode override maps a property's value to an output mode. When the
@@ -246,7 +261,7 @@ class ViewMapping final {
   bool property_changed_ = false;
 
   // Whether a press_release mapping applied a press, and so must apply its
-  // release.
+  // release, when the control is released or the mapping stops reading.
   bool holding_ = false;
 };
 

@@ -444,6 +444,21 @@ lower and higher ends, keeping the value input inverted, which is useful for a
 fader that reads backwards), or reject it when the mapping is added, logging
 why.
 
+## Defer view changes made while views are refreshed
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** *Report touch to REAPER for automation*
+- **Background:** [report_touch.md](worklog/report_touch.md) (CL4)
+
+Mappings write properties while views are refreshed (a `press_release`
+mapping applies its release when its view deactivates), so a property's write
+may not enable, disable, or refresh a view: the scene refuses one with an
+error (see `View::Enable()`). If a property ever needs to change views from a
+write, the views could instead queue the change, and apply it as soon as the
+refresh in progress completes.
+
 ## Read-only toggle mappings register for changes they ignore
 
 - **Layers:** scene

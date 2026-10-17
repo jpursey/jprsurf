@@ -239,9 +239,9 @@ void Track::NotifyRoutesChanged() {
   }
 }
 
-void Track::NotifyTouchChanged() {
+void Track::NotifyTouchChanged(TrackTouchType type) {
   for (TrackListener* listener : listeners_) {
-    listener->OnTrackTouchChanged(this);
+    listener->OnTrackTouchChanged(this, type);
   }
 }
 
@@ -464,14 +464,14 @@ void Track::SetRouteMute(TrackRouteType type, int index, bool mute) {
 
 TrackTouchHandle Track::RegisterTouch(TrackTouchType type) {
   if (++touch_counts_[static_cast<int>(type)] == 1) {
-    NotifyTouchChanged();
+    NotifyTouchChanged(type);
   }
   return TrackTouchHandle(this, type);
 }
 
 void Track::UnregisterTouch(TrackTouchType type) {
   if (--touch_counts_[static_cast<int>(type)] == 0) {
-    NotifyTouchChanged();
+    NotifyTouchChanged(type);
   }
 }
 

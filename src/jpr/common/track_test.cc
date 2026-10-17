@@ -42,11 +42,13 @@ class TestListener final : public TrackListener {
     peaks.push_back(peak);
   }
   void OnTrackRoutesChanged(Track* track) override { ++routes_change_count; }
-  void OnTrackTouchChanged(Track* track) override { ++touch_change_count; }
+  void OnTrackTouchChanged(Track* track, TrackTouchType type) override {
+    touch_changes.push_back(type);
+  }
 
   int change_count = 0;
   int routes_change_count = 0;
-  int touch_change_count = 0;
+  std::vector<TrackTouchType> touch_changes;
   std::vector<double> peaks;
 
  private:
@@ -210,12 +212,13 @@ TEST_F(TrackTest, TouchLastsUntilItsHandleIsGone) {
   EXPECT_TRUE(handle.IsRegistered());
   EXPECT_TRUE(track->IsTouched(TrackTouchType::kVolume));
   EXPECT_FALSE(track->IsTouched(TrackTouchType::kPan));
-  EXPECT_EQ(listener.touch_change_count, 1);
+  EXPECT_THAT(listener.touch_changes, ElementsAre(TrackTouchType::kVolume));
 
   handle = {};
   EXPECT_FALSE(handle.IsRegistered());
   EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
-  EXPECT_EQ(listener.touch_change_count, 2);
+  EXPECT_THAT(listener.touch_changes,
+              ElementsAre(TrackTouchType::kVolume, TrackTouchType::kVolume));
 
   // A touch is only reported as a touch, not as a change to the track.
   EXPECT_EQ(listener.change_count, 0);
@@ -227,15 +230,16 @@ TEST_F(TrackTest, TrackIsTouchedUntilEveryTouchIsGone) {
 
   TrackTouchHandle first = track->RegisterTouch(TrackTouchType::kPan);
   TrackTouchHandle second = track->RegisterTouch(TrackTouchType::kPan);
-  EXPECT_EQ(listener.touch_change_count, 1);
+  EXPECT_EQ(listener.touch_changes.size(), 1);
 
   first = {};
   EXPECT_TRUE(track->IsTouched(TrackTouchType::kPan));
-  EXPECT_EQ(listener.touch_change_count, 1);
+  EXPECT_EQ(listener.touch_changes.size(), 1);
 
   second = {};
   EXPECT_FALSE(track->IsTouched(TrackTouchType::kPan));
-  EXPECT_EQ(listener.touch_change_count, 2);
+  EXPECT_THAT(listener.touch_changes,
+              ElementsAre(TrackTouchType::kPan, TrackTouchType::kPan));
 }
 
 TEST_F(TrackTest, MovingATouchKeepsIt) {

@@ -124,6 +124,32 @@ constexpr BoolViewPropertyNames kBoolViewPropertyNames[] = {
      TrackBoolProperty::kRecArm},
 };
 
+// A property for whether the track's volume or pan is touched. Writing true
+// holds a touch on the track, which moves with the property to another track.
+class TrackTouchedProperty : public TrackProperty {
+ public:
+  TrackTouchedProperty(std::string_view name, TrackTouchType type, Track* track)
+      : TrackProperty(name, Type::kToggle, track), type_(type) {}
+
+ protected:
+  bool ReadBool() const override { return GetTrack()->IsTouched(type_); }
+  void WriteBool(bool value) override {
+    if (value == touch_.IsRegistered()) {
+      return;
+    }
+    touch_ = value ? GetTrack()->RegisterTouch(type_) : TrackTouchHandle();
+  }
+  void OnTrackSet() override {
+    if (touch_.IsRegistered()) {
+      touch_ = GetTrack()->RegisterTouch(type_);
+    }
+  }
+
+ private:
+  const TrackTouchType type_;
+  TrackTouchHandle touch_;
+};
+
 class TrackIsFolderProperty : public TrackProperty {
  public:
   TrackIsFolderProperty(Track* track, TrackFilter filter)
@@ -212,6 +238,13 @@ void TrackProperties::OnTrackRoutesChanged(Track* track) {
   }
 }
 
+void TrackProperties::OnTrackTouchChanged(Track* track, TrackTouchType type) {
+  if (TrackProperty* property = touched_properties_[static_cast<int>(type)];
+      property != nullptr) {
+    property->NotifyChanged();
+  }
+}
+
 void TrackProperties::OnTrackMeterChanged(Track* track, double peak) {
   if (meter_property_ != nullptr) {
     if (meter_property_->peak_ == 0.0 && peak <= 0.0) {
@@ -259,6 +292,14 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
   if (name == kVolume || name == kUiVolume) {
     auto& property = properties_[name] = std::make_unique<TrackVolumeProperty>(
         name, track_, name == kUiVolume ? actions_ : nullptr);
+    return property.get();
+  }
+  if (name == kVolumeTouched || name == kPanTouched) {
+    const TrackTouchType type =
+        name == kVolumeTouched ? TrackTouchType::kVolume : TrackTouchType::kPan;
+    auto& property = properties_[name] =
+        std::make_unique<TrackTouchedProperty>(name, type, track_);
+    touched_properties_[static_cast<int>(type)] = property.get();
     return property.get();
   }
   if (name == kTrackIsFolder) {

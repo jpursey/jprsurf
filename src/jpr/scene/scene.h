@@ -221,6 +221,10 @@ class Scene final {
 
   std::unique_ptr<View> root_view_;
   std::vector<View*> conditional_views_;
+
+  // Set while views are being refreshed (see View::RefreshActive()), when no
+  // view may be enabled, disabled, or refreshed again.
+  bool refreshing_views_ = false;
   RunHandle run_handle_;
   Modifiers next_modifier_flag_ = kModUserStart;
 };
