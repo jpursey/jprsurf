@@ -28,32 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Report touch to REAPER for automation
-
-- **Layers:** common, scene, plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [automation_modes.md](worklog/automation_modes.md),
-  [fake_xtouch.md](worklog/fake_xtouch.md)
-
-REAPER asks a control surface whether a track's volume or pan is touched
-(`IReaperControlSurface::GetTouchState(track, isPan)`), to know when Touch and
-Latch automation should record. JPRSurf never answers, so REAPER takes each
-move as a brief touch: a fader recording in Touch mode keeps dropping back to
-the envelope between moves, as the user found at the end of *Fake X-Touch and
-device tests*. Klinke answers it (`CSurf_MCU::GetTouchState()` in
-`csurf_mcu.cpp`), with the faders' touch, and for the pans, which have none,
-touched for 3 seconds after the last turn.
-
-- `ControlSurfaceListener` answers `GetTouchState()`.
-- A mapping that writes a track's volume or pan reports its control's touch:
-  its press input for a fader with touch, and for one without, a short time
-  after its last input. The scene answers for each track from the mappings
-  active on it.
-- To confirm first, in REAPER: how often it asks, for which tracks, and what it
-  does with the answer in each automation mode.
-
 ## Widgets
 
 - **Layers:** device
