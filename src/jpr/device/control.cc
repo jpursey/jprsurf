@@ -30,6 +30,10 @@ double GetBindingDelaySecs(Control::Binding binding) {
   return 0.0;
 }
 
+constexpr ControlInput::Type kInputTypes[] = {ControlInput::Type::kValue,
+                                              ControlInput::Type::kDelta,
+                                              ControlInput::Type::kPress};
+
 }  // namespace
 
 Control::Control(RunRegistry& run_registry, Options options)
@@ -89,6 +93,9 @@ double Control::GetDelta(InputId id) const {
 }
 
 int Control::GetPressCount(InputId id) const {
+  if (touch_flags_.contains(id)) {
+    return touch_count_;
+  }
   auto it = registrations_.find(id);
   if (it == registrations_.end() ||
       it->second.config.input_type != ControlInput::Type::kPress) {
@@ -98,6 +105,9 @@ int Control::GetPressCount(InputId id) const {
 }
 
 bool Control::IsPressed(InputId id) const {
+  if (touch_flags_.contains(id)) {
+    return touched_;
+  }
   auto it = registrations_.find(id);
   if (it == registrations_.end() ||
       it->second.config.input_type != ControlInput::Type::kPress) {
@@ -245,6 +255,9 @@ void Control::ClearOutputs() {
 
 ControlInputHandle Control::RegisterInput(const InputConfig& config,
                                           bool* flag) {
+  if (config.touch) {
+    return RegisterTouch(flag);
+  }
   InputId id = next_input_id_++;
   auto& reg = registrations_[id];
   reg.config = config;
@@ -260,31 +273,18 @@ ControlInputHandle Control::RegisterInput(const InputConfig& config,
   if (config.input_type == ControlInput::Type::kPress) {
     RebuildPressGroups();
   }
-
-  // Ensure we have a listener for this input type.
-  switch (config.input_type) {
-    case ControlInput::Type::kValue:
-      if (value_input_ != nullptr && !value_input_->HasListener()) {
-        SetInputListener(ControlInput::Type::kValue);
-      }
-      break;
-    case ControlInput::Type::kDelta:
-      if (delta_input_ != nullptr && !delta_input_->HasListener()) {
-        SetInputListener(ControlInput::Type::kDelta);
-      }
-      break;
-    case ControlInput::Type::kPress:
-      if (press_input_ != nullptr && !press_input_->HasListener()) {
-        SetInputListener(ControlInput::Type::kPress);
-      }
-      break;
-  }
-
+  UpdateInputListeners();
   UpdateRunHandle();
   return ControlInputHandle(this, id);
 }
 
 void Control::UnregisterInput(InputId id) {
+  if (touch_flags_.erase(id) > 0) {
+    UpdateInputListeners();
+    UpdateRunHandle();
+    return;
+  }
+
   auto it = registrations_.find(id);
   if (it == registrations_.end()) {
     return;
@@ -293,67 +293,77 @@ void Control::UnregisterInput(InputId id) {
   registrations_.erase(it);
 
   RecomputeModifierMasks(input_type);
-
-  // Check if there are still registrations for this input type.
-  bool has_type = false;
-  for (const auto& [reg_id, reg] : registrations_) {
-    if (reg.config.input_type == input_type) {
-      has_type = true;
-      break;
-    }
-  }
-
-  if (!has_type) {
-    ClearInputListener(input_type);
-  }
-
   if (input_type == ControlInput::Type::kPress) {
     RebuildPressGroups();
   }
-
+  UpdateInputListeners();
   UpdateRunHandle();
 }
 
-void Control::SetInputListener(ControlInput::Type input_type) {
-  switch (input_type) {
-    case ControlInput::Type::kValue:
-      if (value_input_ != nullptr) {
-        value_input_->SetListener(
-            [this](ControlValueInput*) { OnValueInputChanged(); });
-      }
-      break;
-    case ControlInput::Type::kDelta:
-      if (delta_input_ != nullptr) {
-        delta_input_->SetListener(
-            [this](ControlDeltaInput*) { OnDeltaInputChanged(); });
-      }
-      break;
-    case ControlInput::Type::kPress:
-      if (press_input_ != nullptr) {
-        press_input_->SetListener(
-            [this](ControlPressInput*) { OnPressInputChanged(); });
-      }
-      break;
+ControlInputHandle Control::RegisterTouch(bool* flag) {
+  // Touch is only followed while there is a touch registration, so the first
+  // one starts it from the press input's state.
+  if (touch_flags_.empty()) {
+    touched_ = HasPressRelease() && press_input_->IsPressed();
+    touch_count_ = 0;
+    touch_hold_pending_ = false;
   }
+  InputId id = next_input_id_++;
+  touch_flags_[id] = flag;
+  if (touched_) {
+    *flag = true;
+  }
+  UpdateInputListeners();
+  UpdateRunHandle();
+  return ControlInputHandle(this, id);
 }
 
-void Control::ClearInputListener(ControlInput::Type input_type) {
-  switch (input_type) {
-    case ControlInput::Type::kValue:
-      if (value_input_ != nullptr) {
-        value_input_->SetListener(nullptr);
-      }
-      break;
-    case ControlInput::Type::kDelta:
-      if (delta_input_ != nullptr) {
-        delta_input_->SetListener(nullptr);
-      }
-      break;
-    case ControlInput::Type::kPress:
-      if (press_input_ != nullptr) {
-        press_input_->SetListener(nullptr);
-      }
-      break;
+bool Control::IsInputRead(ControlInput::Type input_type) const {
+  // A control with press and release follows touch on its press input alone.
+  if (!touch_flags_.empty() &&
+      (!HasPressRelease() || input_type == ControlInput::Type::kPress)) {
+    return true;
+  }
+  for (const auto& [id, reg] : registrations_) {
+    if (reg.config.input_type == input_type) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Control::UpdateInputListeners() {
+  for (ControlInput::Type input_type : kInputTypes) {
+    if (!input_types_.IsSet(input_type)) {
+      continue;
+    }
+    const bool read = IsInputRead(input_type);
+    switch (input_type) {
+      case ControlInput::Type::kValue:
+        if (read != value_input_->HasListener()) {
+          value_input_->SetListener(
+              read ? ControlValueInput::Listener(
+                         [this](ControlValueInput*) { OnValueInputChanged(); })
+                   : nullptr);
+        }
+        break;
+      case ControlInput::Type::kDelta:
+        if (read != delta_input_->HasListener()) {
+          delta_input_->SetListener(
+              read ? ControlDeltaInput::Listener(
+                         [this](ControlDeltaInput*) { OnDeltaInputChanged(); })
+                   : nullptr);
+        }
+        break;
+      case ControlInput::Type::kPress:
+        if (read != press_input_->HasListener()) {
+          press_input_->SetListener(
+              read ? ControlPressInput::Listener(
+                         [this](ControlPressInput*) { OnPressInputChanged(); })
+                   : nullptr);
+        }
+        break;
+    }
   }
 }
 
@@ -435,7 +445,7 @@ void Control::OnValueInputChanged() {
     return;
   }
   gb::ProfileCount<"control inputs">(1);
-  last_input_time_secs_ = last_run_time_secs_;
+  OnInput();
   double physical_value = value_input_->GetValue();
 
   for (auto& [id, reg] : registrations_) {
@@ -455,7 +465,7 @@ void Control::OnDeltaInputChanged() {
     return;
   }
   gb::ProfileCount<"control inputs">(1);
-  last_input_time_secs_ = last_run_time_secs_;
+  OnInput();
   double physical_delta = delta_input_->ReadDelta();
 
   for (auto& [id, reg] : registrations_) {
@@ -475,7 +485,7 @@ void Control::OnPressInputChanged() {
     return;
   }
   gb::ProfileCount<"control inputs">(1);
-  last_input_time_secs_ = last_run_time_secs_;
+  OnInput();
 
   if (press_input_->HasRelease()) {
     OnPressInputChangedWithRelease();
@@ -622,6 +632,47 @@ void Control::ReleasePressed(const std::vector<InputId>& ids) {
   }
 }
 
+void Control::OnInput() {
+  last_input_time_secs_ = last_run_time_secs_;
+  if (touch_flags_.empty()) {
+    return;
+  }
+  if (HasPressRelease()) {
+    SetTouched(press_input_->IsPressed());
+  } else {
+    SetTouched(true);
+    touch_hold_pending_ = true;
+  }
+}
+
+void Control::UpdateTouchHold() {
+  if (!touched_ || HasPressRelease()) {
+    return;
+  }
+
+  // The hold starts on the run after the input, as the input arrived between
+  // runs, and last_run_time_secs_ may be from before the control last ran.
+  if (touch_hold_pending_) {
+    touch_hold_pending_ = false;
+    touch_hold_start_secs_ = last_run_time_secs_;
+  } else if (last_run_time_secs_ - touch_hold_start_secs_ >= kTouchHoldSecs) {
+    SetTouched(false);
+  }
+}
+
+void Control::SetTouched(bool touched) {
+  if (touched_ == touched) {
+    return;
+  }
+  touched_ = touched;
+  if (touched) {
+    ++touch_count_;
+  }
+  for (const auto& [id, flag] : touch_flags_) {
+    *flag = true;
+  }
+}
+
 void Control::UpdateRunHandle() {
   bool need_run =
       HasRegistrations() || pending_output_.has_value() || clear_check_pending_;
@@ -637,6 +688,7 @@ void Control::OnRun(const RunTime& time) {
   last_run_time_secs_ = time.precise_secs;
   ResetVirtualInputs();
   UpdatePressTimers(time.precise_secs);
+  UpdateTouchHold();
   if (clear_check_pending_) {
     clear_check_pending_ = false;
     if (output_writer_count_ == 0) {
@@ -690,6 +742,7 @@ void Control::ResetVirtualInputs() {
   if (press_input_ != nullptr) {
     press_input_->ResetCounts();
   }
+  touch_count_ = 0;
   for (auto& [id, reg] : registrations_) {
     if (reg.config.input_type == ControlInput::Type::kDelta) {
       reg.delta = 0.0;

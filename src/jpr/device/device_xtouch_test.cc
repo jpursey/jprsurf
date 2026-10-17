@@ -206,6 +206,11 @@ class DeviceXTouchTest : public ::testing::Test {
     return control->RegisterInput({.input_type = type}, &input_changed_);
   }
 
+  // Registers for the touch on `control` (see InputConfig::touch).
+  ControlInputHandle ReadTouch(Control* control) {
+    return control->RegisterInput({.touch = true}, &input_changed_);
+  }
+
   // Returns how many faders this model has: the strips', and the master
   // fader on the X-Touch.
   int GetFaderCount() const {
@@ -473,6 +478,45 @@ TEST_F(DeviceXTouchExtenderTest, ExtendersThirdFaderHasNoTouch) {
   EXPECT_EQ(xtouch_.GetFader(2), FakeXTouch::kFaderMax);
 }
 
+TEST_F(DeviceXTouchTest, FadersAreTouchedWhileTouched) {
+  for (int fader : {0, FakeXTouch::kMasterFader}) {
+    SCOPED_TRACE(GetFaderName(fader));
+    Control* control = device_.GetControl(GetFaderName(fader));
+    ASSERT_NE(control, nullptr);
+    ControlInputHandle touch = ReadTouch(control);
+    xtouch_.TouchFader(fader);
+    Run();
+    EXPECT_TRUE(control->IsPressed(touch.GetId()));
+
+    // Holding the fader still keeps it touched.
+    reaper_.AdvanceTime(absl::Seconds(Control::kTouchHoldSecs));
+    Run();
+    EXPECT_TRUE(control->IsPressed(touch.GetId()));
+
+    xtouch_.ReleaseFader(fader);
+    Run();
+    EXPECT_FALSE(control->IsPressed(touch.GetId()));
+  }
+}
+
+// Without its touch, the extender's third fader is touched from a move until
+// the touch's hold after it.
+TEST_F(DeviceXTouchExtenderTest, ExtendersThirdFaderIsTouchedAfterAMove) {
+  Control* control = device_.GetControl(DeviceXTouch::kFader3);
+  ASSERT_NE(control, nullptr);
+  ControlInputHandle touch = ReadTouch(control);
+  xtouch_.MoveFader(2, 1000);
+  Run();
+  EXPECT_TRUE(control->IsPressed(touch.GetId()));
+
+  // The move is read after the device runs, so the hold starts on the next
+  // run.
+  Run();
+  reaper_.AdvanceTime(absl::Seconds(Control::kTouchHoldSecs));
+  Run();
+  EXPECT_FALSE(control->IsPressed(touch.GetId()));
+}
+
 //==============================================================================
 // Pots
 //==============================================================================
@@ -500,6 +544,31 @@ TEST_P(DeviceXTouchModelTest, PotTurnsAreDeltas) {
           << DeviceXTouch::Pot(strip);
     }
   }
+}
+
+// Pots have no touch, so each is touched from a turn until the touch's hold
+// after it.
+TEST_P(DeviceXTouchModelTest, PotsAreTouchedAfterATurn) {
+  std::vector<Control*> controls;
+  std::vector<ControlInputHandle> touches;
+  for (int strip = 0; strip < kStripCount; ++strip) {
+    controls.push_back(device_.GetControl(DeviceXTouch::Pot(strip)));
+    ASSERT_NE(controls.back(), nullptr) << DeviceXTouch::Pot(strip);
+    touches.push_back(ReadTouch(controls.back()));
+  }
+  xtouch_.TurnPot(1, 1);
+  Run();
+  for (int strip = 0; strip < kStripCount; ++strip) {
+    EXPECT_EQ(controls[strip]->IsPressed(touches[strip].GetId()), strip == 1)
+        << DeviceXTouch::Pot(strip);
+  }
+
+  // The turn is read after the device runs, so the hold starts on the next
+  // run.
+  Run();
+  reaper_.AdvanceTime(absl::Seconds(Control::kTouchHoldSecs));
+  Run();
+  EXPECT_FALSE(controls[1]->IsPressed(touches[1].GetId()));
 }
 
 TEST_P(DeviceXTouchModelTest, PotRingsShowEachMode) {

@@ -121,6 +121,23 @@ class ControlTest : public ::testing::Test {
                                   &input_changed_);
   }
 
+  // Registers for the touch on `control` (see InputConfig::touch). Each change
+  // of touch sets touch_changed_.
+  ControlInputHandle ReadTouch(Control* control) {
+    return control->RegisterInput({.touch = true}, &touch_changed_);
+  }
+
+  // Expects the touch read by `id`, which input just started, to last until
+  // Control::kTouchHoldSecs after that input, and no longer.
+  void ExpectTouchHolds(Control* control, InputId id) {
+    const absl::Duration hold = absl::Seconds(Control::kTouchHoldSecs);
+    EXPECT_TRUE(control->IsPressed(id));
+    RunFor(hold - kRunTime * 2);
+    EXPECT_TRUE(control->IsPressed(id));
+    RunFor(kRunTime * 4);
+    EXPECT_FALSE(control->IsPressed(id));
+  }
+
   //----------------------------------------------------------------------------
   // Running
   //----------------------------------------------------------------------------
@@ -182,6 +199,9 @@ class ControlTest : public ::testing::Test {
     }
     return pressed;
   }
+
+  // Set on each change of touch, for ReadTouch().
+  bool touch_changed_ = false;
 
  private:
   // The clock's time before the first run. Any will do, but REAPER's doesn't
@@ -926,6 +946,186 @@ TEST_F(ControlTest, LeavingWritersHeldOutputIsDropped) {
   Run();
   EXPECT_EQ(output->GetSetCount(), 1);
   EXPECT_EQ(output->GetValue(), 0.0);
+}
+
+//==============================================================================
+// Touch
+//==============================================================================
+
+const absl::Duration kTouchHoldTime = absl::Seconds(Control::kTouchHoldSecs);
+
+TEST_F(ControlTest, TouchFollowsAPressWithRelease) {
+  FakeValueInput* fader = AddValueInput();
+  FakePressInput* touch = AddPressInput();
+  Control* control = Create(Binding::kMotorized);
+  ControlInputHandle handle = ReadTouch(control);
+  const InputId id = handle.GetId();
+
+  Press(touch);
+  Run();
+  EXPECT_TRUE(touch_changed_);
+  EXPECT_TRUE(control->IsPressed(id));
+  EXPECT_EQ(control->GetPressCount(id), 1);
+
+  // Moving and holding still change nothing.
+  touch_changed_ = false;
+  Move(fader, 0.5);
+  RunFor(kTouchHoldTime * 2);
+  EXPECT_FALSE(touch_changed_);
+  EXPECT_TRUE(control->IsPressed(id));
+  EXPECT_EQ(control->GetPressCount(id), 0);
+
+  Release(touch);
+  Run();
+  EXPECT_TRUE(touch_changed_);
+  EXPECT_FALSE(control->IsPressed(id));
+  EXPECT_EQ(control->GetPressCount(id), 0);
+
+  // Without the press, a move isn't a touch.
+  Move(fader, 0.25);
+  Run();
+  EXPECT_FALSE(control->IsPressed(id));
+}
+
+TEST_F(ControlTest, TouchWithoutReleaseHoldsAfterTheLastValue) {
+  FakeValueInput* fader = AddValueInput();
+  Control* control = Create(Binding::kMotorized);
+  ControlInputHandle handle = ReadTouch(control);
+  const InputId id = handle.GetId();
+
+  Move(fader, 0.5);
+  Run();
+  EXPECT_TRUE(control->IsPressed(id));
+  EXPECT_EQ(control->GetPressCount(id), 1);
+
+  // Another move holds the touch for longer.
+  RunFor(kTouchHoldTime / 2);
+  Move(fader, 0.25);
+  Run();
+  EXPECT_EQ(control->GetPressCount(id), 0);
+  touch_changed_ = false;
+  ExpectTouchHolds(control, id);
+  EXPECT_TRUE(touch_changed_);
+}
+
+TEST_F(ControlTest, TouchWithoutReleaseHoldsAfterTheLastDelta) {
+  FakeDeltaInput* pot = AddDeltaInput();
+  Control* control = Create();
+  ControlInputHandle handle = ReadTouch(control);
+  const InputId id = handle.GetId();
+
+  Turn(pot, 1.0);
+  Run();
+  ExpectTouchHolds(control, id);
+}
+
+TEST_F(ControlTest, TouchWithoutReleaseHoldsAfterTheLastPress) {
+  FakePressInput* button = AddPressInput(/*has_release=*/false);
+  Control* control = Create();
+  ControlInputHandle handle = ReadTouch(control);
+  const InputId id = handle.GetId();
+
+  Press(button);
+  Run();
+  ExpectTouchHolds(control, id);
+}
+
+TEST_F(ControlTest, ControlWithoutInputIsNeverTouched) {
+  AddCValueOutput();
+  Control* control = Create();
+  ControlInputHandle handle = ReadTouch(control);
+
+  RunFor(absl::Seconds(1));
+  EXPECT_FALSE(control->IsPressed(handle.GetId()));
+  EXPECT_FALSE(touch_changed_);
+}
+
+// Touch is delivered at once, whatever the modifiers and the press behaviors
+// of press registrations, which are delivered as they would be without it.
+TEST_F(ControlTest, TouchIsOutsideModifiersAndPressGroups) {
+  FakePressInput* touch = AddPressInput();
+  Control* control = Create();
+  AddPress(control, PressBehavior::kLongPress);
+  AddPress(control, PressBehavior::kNormal, kModShift);
+  ControlInputHandle handle = ReadTouch(control);
+
+  Press(touch);
+  EXPECT_THAT(RunFor(kRunTime), ElementsAre(0, 0));
+  EXPECT_TRUE(control->IsPressed(handle.GetId()));
+  EXPECT_THAT(RunFor(absl::Milliseconds(400)), ElementsAre(1, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(true, false));
+  Release(touch);
+  RunFor(kRunTime);
+  EXPECT_FALSE(control->IsPressed(handle.GetId()));
+
+  SetModifiers(kModShift, true);
+  Press(touch);
+  EXPECT_THAT(RunFor(kRunTime), ElementsAre(0, 1));
+  EXPECT_TRUE(control->IsPressed(handle.GetId()));
+}
+
+TEST_F(ControlTest, TouchRegisteredWhileTouchedStartsPressed) {
+  AddValueInput();
+  FakePressInput* touch = AddPressInput();
+  Control* control = Create(Binding::kMotorized);
+  Press(touch);
+  Run();
+
+  ControlInputHandle handle = ReadTouch(control);
+  EXPECT_TRUE(touch_changed_);
+  EXPECT_TRUE(control->IsPressed(handle.GetId()));
+}
+
+// A control that wasn't running last ran long ago, so the hold of an input that
+// reaches it before it runs again starts on that run, not at its last run.
+TEST_F(ControlTest, TouchHoldStartsOnTheRunAfterTheInput) {
+  FakeDeltaInput* pot = AddDeltaInput();
+  Control* control = Create();
+  RunFor(kTouchHoldTime * 2);
+
+  ControlInputHandle handle = ReadTouch(control);
+  pot->AddDelta(1.0);
+  Run();
+  ExpectTouchHolds(control, handle.GetId());
+}
+
+TEST_F(ControlTest, TouchIsSharedByEveryTouchRegistration) {
+  FakeValueInput* fader = AddValueInput();
+  Control* control = Create();
+  ControlInputHandle first = ReadTouch(control);
+  ControlInputHandle second = ReadTouch(control);
+  Move(fader, 0.5);
+  Run();
+  EXPECT_TRUE(control->IsPressed(first.GetId()));
+  EXPECT_TRUE(control->IsPressed(second.GetId()));
+
+  // The touch carries on for the registration that stays.
+  first = ControlInputHandle();
+  Move(fader, 0.25);
+  Run();
+  ExpectTouchHolds(control, second.GetId());
+}
+
+// A control only follows its touch while it has a touch registration, so a
+// hold that was running doesn't carry over to the next registration.
+TEST_F(ControlTest, TouchStartsAgainWithTheNextRegistration) {
+  FakeDeltaInput* pot = AddDeltaInput();
+  Control* control = Create();
+  ControlInputHandle handle = ReadTouch(control);
+  Turn(pot, 1.0);
+  Run();
+  ASSERT_TRUE(control->IsPressed(handle.GetId()));
+
+  handle = ControlInputHandle();
+  handle = ReadTouch(control);
+  EXPECT_FALSE(control->IsPressed(handle.GetId()));
+
+  // Turning without a touch registration isn't followed.
+  handle = ControlInputHandle();
+  Turn(pot, 1.0);
+  Run();
+  handle = ReadTouch(control);
+  EXPECT_FALSE(control->IsPressed(handle.GetId()));
 }
 
 }  // namespace

@@ -60,6 +60,10 @@ class Control final {
   static constexpr double kLongPressDurationSecs = 0.35;
   static constexpr double kDoublePressWindowSecs = 0.15;
 
+  // How long a control without touch sensing stays touched after its last
+  // input, in seconds (see InputConfig::touch).
+  static constexpr double kTouchHoldSecs = 3.0;
+
   // The binding for a control defines how the output(s) of the control behave
   // relative to the inputs. This is important for controls that have outputs
   // that directly affect the physical control and/or the hardware input state.
@@ -221,7 +225,8 @@ class Control final {
 
   // Returns the press count of the Press input for the given registered input,
   // or 0 if the input ID is not valid or not a Press input, or it has not been
-  // pressed since the last sync.
+  // pressed since the last sync. A touch registration (see InputConfig::touch)
+  // counts each time the control becomes touched.
   int GetPressCount(InputId id) const;
 
   // Returns true if the Press input for the given registered input is currently
@@ -231,7 +236,8 @@ class Control final {
   // A long press input is pressed from when its long press is delivered until
   // the button is released. A normal press input only reports pressed if no
   // long press or double press input shares its modifiers, as otherwise its
-  // press is deferred. A tap input is never pressed.
+  // press is deferred. A tap input is never pressed. A touch registration (see
+  // InputConfig::touch) is pressed while the control is touched.
   bool IsPressed(InputId id) const;
 
   //----------------------------------------------------------------------------
@@ -360,8 +366,6 @@ class Control final {
   void SendPendingOutput();
   void UnregisterOutputWriter();
   void ClearOutputs();
-  void SetInputListener(ControlInput::Type input_type);
-  void ClearInputListener(ControlInput::Type input_type);
   void OnValueInputChanged();
   void OnDeltaInputChanged();
   void OnPressInputChanged();
@@ -373,7 +377,31 @@ class Control final {
   PressGroup* FindPressGroup(Modifiers on_mask, Modifiers off_mask);
   void DeliverPress(const std::vector<InputId>& ids, bool hold = false);
   void ReleasePressed(const std::vector<InputId>& ids);
-  bool HasRegistrations() const { return !registrations_.empty(); }
+  bool HasRegistrations() const {
+    return !registrations_.empty() || !touch_flags_.empty();
+  }
+
+  // Touch (see InputConfig::touch). A control whose press input has release
+  // is touched while it is pressed. Any other control is touched from an input
+  // until kTouchHoldSecs after its last input.
+  ControlInputHandle RegisterTouch(bool* flag);
+
+  // Returns true if the input of the type must be listened to: a registration
+  // reads it, or a touch registration needs it to follow the touch.
+  bool IsInputRead(ControlInput::Type input_type) const;
+
+  // Sets or clears each input's listener, as IsInputRead() says.
+  void UpdateInputListeners();
+
+  // Called on any input: notes its time, and follows the touch.
+  void OnInput();
+
+  // For a control without press release, starts the hold on the run after an
+  // input, and ends the touch once the hold is over.
+  void UpdateTouchHold();
+
+  // Sets the touch, notifying the touch registrations if it changed.
+  void SetTouched(bool touched);
 
   // Constructed state.
   RunRegistry& run_registry_;
@@ -407,6 +435,17 @@ class Control final {
 
   // Press timing groups (rebuilt when press registrations change).
   std::vector<PressGroup> press_groups_;
+
+  // Touch registrations, by ID, with the flag each sets when the touch
+  // changes. Touch is only followed while there is one.
+  absl::flat_hash_map<InputId, bool*> touch_flags_;
+  bool touched_ = false;
+  int touch_count_ = 0;  // Times touched since the last run.
+
+  // For a control without press release: whether an input since the last run
+  // starts the hold again on the next run, and when the hold last started.
+  bool touch_hold_pending_ = false;
+  double touch_hold_start_secs_ = 0.0;
 };
 
 }  // namespace jpr

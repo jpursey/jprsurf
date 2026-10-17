@@ -265,7 +265,7 @@ Depends on: CL1.
   their type, and an untouched track, a track TrackCache doesn't have, or an
   `isPan` of 2 answer false.
 
-### CL3 [ ] device: Touch registrations
+### CL3 [x] device: Touch registrations
 
 Depends on: nothing.
 

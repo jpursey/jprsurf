@@ -59,6 +59,19 @@ struct InputConfig {
     kTap,
   };
   PressBehavior press_behavior = PressBehavior::kNormal;
+
+  // If true, the registration reads whether a hand is on the control, as a
+  // press with release, whatever inputs the control has, and input_type,
+  // required_modifiers, and press_behavior are ignored:
+  // - A control whose Press input has release (see Control::HasPressRelease())
+  //   is touched while it is pressed, as a touch sensitive fader is.
+  // - Any other control is touched from an input until
+  //   Control::kTouchHoldSecs after its last input.
+  //
+  // A registration made while the control is touched starts pressed, with its
+  // flag set. Touch is outside modifiers and press groups, so it doesn't
+  // change how press registrations on the same control are delivered.
+  bool touch = false;
 };
 
 // RAII handle for a registered input on a Control.
