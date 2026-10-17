@@ -42,9 +42,11 @@ class TestListener final : public TrackListener {
     peaks.push_back(peak);
   }
   void OnTrackRoutesChanged(Track* track) override { ++routes_change_count; }
+  void OnTrackTouchChanged(Track* track) override { ++touch_change_count; }
 
   int change_count = 0;
   int routes_change_count = 0;
+  int touch_change_count = 0;
   std::vector<double> peaks;
 
  private:
@@ -193,6 +195,80 @@ TEST_F(TrackTest, RefreshMeterReportsTheLouderChannel) {
   fake->peak = {0.75, 0.5};
   track->RefreshMeter();
   EXPECT_THAT(listener.peaks, ElementsAre(0.5, 0.75));
+}
+
+//------------------------------------------------------------------------------
+// Touch
+//------------------------------------------------------------------------------
+
+TEST_F(TrackTest, TouchLastsUntilItsHandleIsGone) {
+  Track* track = Refresh(project_.AddTrack("Drums"));
+  TestListener listener(track);
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
+
+  TrackTouchHandle handle = track->RegisterTouch(TrackTouchType::kVolume);
+  EXPECT_TRUE(handle.IsRegistered());
+  EXPECT_TRUE(track->IsTouched(TrackTouchType::kVolume));
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kPan));
+  EXPECT_EQ(listener.touch_change_count, 1);
+
+  handle = {};
+  EXPECT_FALSE(handle.IsRegistered());
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
+  EXPECT_EQ(listener.touch_change_count, 2);
+
+  // A touch is only reported as a touch, not as a change to the track.
+  EXPECT_EQ(listener.change_count, 0);
+}
+
+TEST_F(TrackTest, TrackIsTouchedUntilEveryTouchIsGone) {
+  Track* track = Refresh(project_.AddTrack("Drums"));
+  TestListener listener(track);
+
+  TrackTouchHandle first = track->RegisterTouch(TrackTouchType::kPan);
+  TrackTouchHandle second = track->RegisterTouch(TrackTouchType::kPan);
+  EXPECT_EQ(listener.touch_change_count, 1);
+
+  first = {};
+  EXPECT_TRUE(track->IsTouched(TrackTouchType::kPan));
+  EXPECT_EQ(listener.touch_change_count, 1);
+
+  second = {};
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kPan));
+  EXPECT_EQ(listener.touch_change_count, 2);
+}
+
+TEST_F(TrackTest, MovingATouchKeepsIt) {
+  Track* drums = Refresh(project_.AddTrack("Drums"));
+  Track* bass = Refresh(project_.AddTrack("Bass"));
+  TrackTouchHandle handle = drums->RegisterTouch(TrackTouchType::kVolume);
+
+  TrackTouchHandle moved = std::move(handle);
+  EXPECT_FALSE(handle.IsRegistered());
+  EXPECT_TRUE(moved.IsRegistered());
+  EXPECT_TRUE(drums->IsTouched(TrackTouchType::kVolume));
+
+  // Destroying the moved-from handle leaves the touch.
+  handle = {};
+  EXPECT_TRUE(drums->IsTouched(TrackTouchType::kVolume));
+
+  // Assigning over a touch removes it.
+  moved = bass->RegisterTouch(TrackTouchType::kVolume);
+  EXPECT_FALSE(drums->IsTouched(TrackTouchType::kVolume));
+  EXPECT_TRUE(bass->IsTouched(TrackTouchType::kVolume));
+}
+
+TEST_F(TrackTest, DeletedTrackKeepsItsTouch) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Track* track = Refresh(fake);
+  TrackTouchHandle handle = track->RegisterTouch(TrackTouchType::kVolume);
+
+  project_.DeleteTrack(fake);
+  TrackCache::Get().Refresh();
+  EXPECT_TRUE(track->IsTouched(TrackTouchType::kVolume));
+
+  handle = {};
+  EXPECT_FALSE(track->IsTouched(TrackTouchType::kVolume));
 }
 
 //------------------------------------------------------------------------------

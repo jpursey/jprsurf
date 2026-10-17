@@ -18,9 +18,12 @@
 #include "jpr/common/file_system.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/surface_notifier.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
 
 namespace jpr {
@@ -182,6 +185,47 @@ TEST_F(ControlSurfaceTest, KeepsTracksAcrossProjectTabs) {
   surface->Run();
   EXPECT_EQ(TrackCache::Get().GetMasterTrack(), first_master);
   EXPECT_TRUE(first_master->Exists());
+}
+
+TEST_F(ControlSurfaceTest, AnswersTouchFromTheTrack) {
+  FakeTrack* drums = reaper_.GetProject().AddTrack("Drums");
+  FakeTrack* master = reaper_.GetProject().GetMasterTrack();
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  surface->SetTrackListChange();
+  surface->Run();
+  Track* drums_track = TrackCache::Get().GetTrack(ToMediaTrack(drums));
+  Track* master_track = TrackCache::Get().GetMasterTrack();
+  ASSERT_NE(drums_track, nullptr);
+  ASSERT_NE(master_track, nullptr);
+  EXPECT_FALSE(surface->GetTouchState(ToMediaTrack(drums), 0));
+  EXPECT_FALSE(surface->GetTouchState(ToMediaTrack(drums), 1));
+
+  TrackTouchHandle volume = drums_track->RegisterTouch(TrackTouchType::kVolume);
+  TrackTouchHandle pan = master_track->RegisterTouch(TrackTouchType::kPan);
+  EXPECT_TRUE(surface->GetTouchState(ToMediaTrack(drums), 0));
+  EXPECT_FALSE(surface->GetTouchState(ToMediaTrack(drums), 1));
+  EXPECT_FALSE(surface->GetTouchState(ToMediaTrack(master), 0));
+  EXPECT_TRUE(surface->GetTouchState(ToMediaTrack(master), 1));
+
+  // Width (isPan 2), which REAPER only asks a surface with extended touch, is
+  // never touched.
+  TrackTouchHandle drums_pan = drums_track->RegisterTouch(TrackTouchType::kPan);
+  EXPECT_FALSE(surface->GetTouchState(ToMediaTrack(drums), 2));
+}
+
+TEST_F(ControlSurfaceTest, TrackNotInTheCacheIsNotTouched) {
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  surface->SetTrackListChange();
+  surface->Run();
+
+  // Added after the last refresh.
+  FakeTrack* drums = reaper_.GetProject().AddTrack("Drums");
+  EXPECT_FALSE(surface->GetTouchState(ToMediaTrack(drums), 0));
+
+  // The stub track stands for no track, and is never asked about.
+  TrackTouchHandle stub =
+      TrackCache::Get().GetStubTrack()->RegisterTouch(TrackTouchType::kVolume);
+  EXPECT_FALSE(surface->GetTouchState(nullptr, 0));
 }
 
 TEST_F(ControlSurfaceTest, WritesItsProfileWhenTheTypeHasAPath) {

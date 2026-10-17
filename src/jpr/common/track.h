@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -74,6 +75,53 @@ enum class TrackGrouping {
 };
 
 //==============================================================================
+// Track touch
+//
+// REAPER asks a control surface whether each track's volume and pan are
+// touched, to know when Touch and Latch automation should record them. A track
+// is touched while anything holds a touch on it (see Track::RegisterTouch()).
+//==============================================================================
+
+// What a touch on a track touches.
+enum class TrackTouchType {
+  kVolume,
+  kPan,
+};
+
+// The number of TrackTouchType values, which are contiguous starting at zero.
+inline constexpr int kTrackTouchTypeCount = 2;
+
+// RAII handle for a touch on a track (see Track::RegisterTouch()). Destroying
+// it, or assigning another to it, removes the touch. The track must outlive the
+// handle, as every track in TrackCache does.
+//
+// TrackTouchHandle is move-only.
+class TrackTouchHandle final {
+ public:
+  TrackTouchHandle() = default;
+  TrackTouchHandle(const TrackTouchHandle&) = delete;
+  TrackTouchHandle& operator=(const TrackTouchHandle&) = delete;
+  TrackTouchHandle(TrackTouchHandle&& other) noexcept;
+  TrackTouchHandle& operator=(TrackTouchHandle&& other) noexcept;
+  ~TrackTouchHandle();
+
+  // Returns true if this handle holds a touch.
+  bool IsRegistered() const { return track_ != nullptr; }
+
+ private:
+  friend class Track;
+
+  TrackTouchHandle(Track* track, TrackTouchType type)
+      : track_(track), type_(type) {}
+
+  // Removes the touch, if the handle holds one.
+  void Release();
+
+  Track* track_ = nullptr;
+  TrackTouchType type_ = TrackTouchType::kVolume;
+};
+
+//==============================================================================
 // Track listener
 //==============================================================================
 
@@ -106,6 +154,10 @@ class TrackListener {
   // and their volume, pan, or mute changing (when they are set, or refreshed
   // with Track::RefreshRoutes()).
   virtual void OnTrackRoutesChanged(Track* track) {}
+
+  // This will be called whenever the track becomes touched or untouched, for
+  // either TrackTouchType (see Track::IsTouched()).
+  virtual void OnTrackTouchChanged(Track* track) {}
 };
 
 //==============================================================================
@@ -221,6 +273,18 @@ class Track final : public std::enable_shared_from_this<Track> {
   // track.
   void SelectOnly();
 
+  // Returns true if anything holds a touch of the type on this track.
+  bool IsTouched(TrackTouchType type) const {
+    return touch_counts_[static_cast<int>(type)] > 0;
+  }
+
+  // Touches this track until the returned handle is destroyed. Several handles
+  // may touch the same track at once, and it stays touched until all of them
+  // are gone. Listeners are notified when the track becomes touched or
+  // untouched (see TrackListener::OnTrackTouchChanged()). This works whether or
+  // not the track exists.
+  TrackTouchHandle RegisterTouch(TrackTouchType type);
+
   // Parent track of this track.
   //
   // Top-level tracks return the master track. The master track, the stub
@@ -304,6 +368,7 @@ class Track final : public std::enable_shared_from_this<Track> {
  private:
   friend class TrackBatch;
   friend class TrackCache;
+  friend class TrackTouchHandle;
 
   // Private construction parameters for a track. This is used to construct
   // tracks from the TrackCache.
@@ -379,6 +444,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   // route.
   TrackRoute* GetMutableRoute(TrackRouteType type, int index);
 
+  // Removes a touch held by a TrackTouchHandle.
+  void UnregisterTouch(TrackTouchType type);
+
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
 
@@ -388,6 +456,10 @@ class Track final : public std::enable_shared_from_this<Track> {
 
   // Notifies all listeners subscribed to this track that its routes changed.
   void NotifyRoutesChanged();
+
+  // Notifies all listeners subscribed to this track that it became touched or
+  // untouched.
+  void NotifyTouchChanged();
 
   // Everything about one TrackBoolProperty: how REAPER reports and sets it,
   // where it is cached, and its undo point. Defined in track.cc.
@@ -423,6 +495,9 @@ class Track final : public std::enable_shared_from_this<Track> {
   int hardware_output_count_ = 0;
   std::vector<TrackRoute> sends_;
   std::vector<TrackRoute> receives_;
+
+  // The number of touches held on this track, by TrackTouchType.
+  int touch_counts_[kTrackTouchTypeCount] = {};
 
   // Listeners subscribed to this track for changes.
   absl::flat_hash_set<TrackListener*> listeners_;

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <utility>
 
 #include "absl/log/log.h"
 #include "jpr/common/reaper_api.h"
@@ -238,6 +239,12 @@ void Track::NotifyRoutesChanged() {
   }
 }
 
+void Track::NotifyTouchChanged() {
+  for (TrackListener* listener : listeners_) {
+    listener->OnTrackTouchChanged(this);
+  }
+}
+
 //------------------------------------------------------------------------------
 // Name
 //------------------------------------------------------------------------------
@@ -452,12 +459,54 @@ void Track::SetRouteMute(TrackRouteType type, int index, bool mute) {
 }
 
 //------------------------------------------------------------------------------
+// Touch
+//------------------------------------------------------------------------------
+
+TrackTouchHandle Track::RegisterTouch(TrackTouchType type) {
+  if (++touch_counts_[static_cast<int>(type)] == 1) {
+    NotifyTouchChanged();
+  }
+  return TrackTouchHandle(this, type);
+}
+
+void Track::UnregisterTouch(TrackTouchType type) {
+  if (--touch_counts_[static_cast<int>(type)] == 0) {
+    NotifyTouchChanged();
+  }
+}
+
+//------------------------------------------------------------------------------
 // Listeners
 //------------------------------------------------------------------------------
 
 void Track::Subscribe(TrackListener* listener) { listeners_.insert(listener); }
 
 void Track::Unsubscribe(TrackListener* listener) { listeners_.erase(listener); }
+
+//==============================================================================
+// TrackTouchHandle
+//==============================================================================
+
+TrackTouchHandle::TrackTouchHandle(TrackTouchHandle&& other) noexcept
+    : track_(std::exchange(other.track_, nullptr)), type_(other.type_) {}
+
+TrackTouchHandle& TrackTouchHandle::operator=(
+    TrackTouchHandle&& other) noexcept {
+  if (this != &other) {
+    Release();
+    track_ = std::exchange(other.track_, nullptr);
+    type_ = other.type_;
+  }
+  return *this;
+}
+
+TrackTouchHandle::~TrackTouchHandle() { Release(); }
+
+void TrackTouchHandle::Release() {
+  if (track_ != nullptr) {
+    std::exchange(track_, nullptr)->UnregisterTouch(type_);
+  }
+}
 
 //==============================================================================
 // TrackBatch

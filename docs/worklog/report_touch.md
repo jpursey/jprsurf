@@ -84,13 +84,19 @@ class Track {
 
   // Touches the track until the handle is destroyed. Several handles may
   // touch the same track at once. Listeners are notified when the track
-  // becomes touched or untouched.
+  // becomes touched or untouched (see TrackListener::OnTrackTouchChanged()).
   TrackTouchHandle RegisterTouch(TrackTouchType type);
+};
+
+class TrackListener {
+  ...
+  // Called whenever the track becomes touched or untouched.
+  virtual void OnTrackTouchChanged(Track* track) {}
 };
 ```
 
-- A touch count per type on `Track`. The handle holds a `shared_ptr` to the
-  track, so a touch can't outlive it.
+- A touch count per type on `Track`. The handle holds a `Track*`, as TrackCache
+  never destroys a track.
 - `ControlSurface::GetTouchState()` finds the `Track` with
   `TrackCache::GetTrack()`, and answers `IsTouched()`, with `isPan` 0 as the
   volume and 1 as the pan. A track TrackCache doesn't have, or any other
@@ -99,8 +105,9 @@ class Track {
   calls. REAPER asks twice per track before every run, so on a 128-track
   project this is 258 answers a run, and must stay that cheap (no logging on
   the path, as the existing `VLOG_REAPER()` would be at that rate). A touch
-  changing notifies the track's listeners, which happens about as often as a
-  hand reaches for a control.
+  changing notifies the track's listeners with their own callback, rather
+  than `OnTrackChanged()`, which would notify every one of the track's
+  properties. It happens about as often as a hand reaches for a control.
 
 **Brittleness:** none left to callers: a touch is only held through a handle.
 
@@ -147,7 +154,9 @@ class Control {
   drops it. When the property's track changes, a held touch moves to the new
   track (through a no-op protected virtual on `TrackProperty`, called by
   `SetTrack()`), and destroying the property drops it. Reading returns
-  `Track::IsTouched()`, whoever holds the touch.
+  `Track::IsTouched()`, whoever holds the touch, and
+  `TrackProperties::OnTrackTouchChanged()` notifies only the touched
+  properties.
 - Each `TrackProperties` (one per reference) has its own touched properties,
   so two strips on the same track each hold a touch. Two mappings writing the
   same reference's touched property share one handle, so the first release
@@ -236,12 +245,12 @@ Depends on: nothing.
 - The trace has `GetTouchState` calls, and the findings are recorded.
 - `git diff` shows only docs.
 
-### CL2 [ ] common: Track touch answers GetTouchState()
+### CL2 [x] common: Track touch answers GetTouchState()
 
 Depends on: CL1.
 
-- `TrackTouchType`, `TrackTouchHandle`, and `Track::RegisterTouch()` and
-  `IsTouched()`.
+- `TrackTouchType`, `TrackTouchHandle`, `Track::RegisterTouch()` and
+  `IsTouched()`, and `TrackListener::OnTrackTouchChanged()`.
 - `ControlSurface::GetTouchState()` answers from the track.
 - Nothing touches a track yet, so no visible change.
 
@@ -249,8 +258,9 @@ Depends on: CL1.
 - Standard checks (Release build, clang-format, ctest).
 - `track_test.cc`: a handle touches its type and not the other, two handles
   keep the track touched until both are gone, moving and resetting a handle
-  move and drop its touch, and listeners are notified only when the track
-  becomes touched or untouched.
+  move and drop its touch, a deleted track keeps its touch, and listeners
+  hear `OnTrackTouchChanged()` only when the track becomes touched or
+  untouched, and never `OnTrackChanged()`.
 - `control_surface_test.cc`: a touched track and the master answer true for
   their type, and an untouched track, a track TrackCache doesn't have, or an
   `isPan` of 2 answer false.

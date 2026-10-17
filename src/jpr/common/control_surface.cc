@@ -22,6 +22,7 @@
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/reaper_trace.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
 
@@ -225,9 +226,26 @@ void ControlSurface::SetTrackTitle(MediaTrack* track_id, const char* title) {
 }
 
 bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
-  VLOG_REAPER() << "GetTouchState(track_id=" << track_id
-                << ", is_pan=" << is_pan << ")";
-  return false;
+  // REAPER asks about every track's volume and pan before every run, so this
+  // isn't logged.
+  TrackTouchType type;
+  switch (is_pan) {
+    case 0:
+      type = TrackTouchType::kVolume;
+      break;
+    case 1:
+      type = TrackTouchType::kPan;
+      break;
+    default:
+      return false;
+  }
+  // A null track would be TrackCache's stub track, which a mapping to nothing
+  // may touch.
+  if (track_id == nullptr) {
+    return false;
+  }
+  const Track* track = TrackCache::Get().GetTrack(track_id);
+  return track != nullptr && track->IsTouched(type);
 }
 
 void ControlSurface::SetAutoMode(int mode) {

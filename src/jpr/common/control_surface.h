@@ -65,6 +65,9 @@ class ControlSurfaceListener {
 //   refreshes REAPER's UI once, as it ends, and REAPER calls back for a
 //   deferrable change (such as a mute) then, after the listener's OnRun().
 //   Actions run outside it (see RunAction()).
+// - REAPER's question whether a track's volume or pan is touched, which it
+//   asks of every track before every run once automation may record, is
+//   answered from the track's touches (see Track::RegisterTouch()).
 // - If its type has a profile path, a ReaperProfiler profiles its runs, from
 //   once the listener is created until the surface is destroyed.
 //
