@@ -96,5 +96,4 @@ Depends on: every CL above, and the user saying the feature is done.
 *What the user checks in REAPER at the end of the feature (see Checking in
 REAPER in CLAUDE.md): each feature specific check, with what should happen, and
 what to watch for on the hardware. Then the extension loads with no new errors
-in the log, the smoke test passes, and the idle and smoke profiles are compared
-against the bar.*
+in the log, and the idle profile is compared against the bar.*

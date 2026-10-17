@@ -249,8 +249,9 @@ it isn't a ctest test: the `benchmark` target runs it on demand (see CLAUDE.md),
 and its summary is compared against a snapshot (see `profiles/README.md`).
 - **What it times:** each steady state the call count tests count (at the top,
   in a folder, while playing, and Send/Receive mode on a bus), for 3000 runs;
-  and each kind of action in the smoke scenario, and a few other gestures, 100
-  times, as the surface tests make them. An action is repeated with what undoes
+  and each kind of gesture in a session at the surface (ranges, taps, folders,
+  routes, modes, automation, transport, and undo), 100 times, as the surface
+  tests make them. An action is repeated with what undoes
   it (mute on and off, into a folder and back out), so each repeat does the
   same work.
 - **What it reports:** a profile of each benchmark's runs alone, without
@@ -641,7 +642,7 @@ in [surface_tests.md](worklog/surface_tests.md).
   `CtrlClickTrack()`, and `ClickMute()`). A change no trace has shown fails the
   test.
 
-A test reads like the smoke test:
+A test reads like a step of a session at the surface:
 
 ```
 TEST_F(TrackStripTest, MovingAFaderSetsTheVolume) {
@@ -795,8 +796,10 @@ Weighting the counts by what each call costs in REAPER, measured on its own
 **What still needs REAPER:** `dll_main.cc`, whether tests make the calls on the
 surface that REAPER does (settled by traces), whether the fake X-Touch agrees
 with the hardware, what REAPER's own UI shows, the undo points REAPER adds
-between runs, and REAPER's times, with its effect on JPRSurf's (the benchmarks
-time JPRSurf's own code alone). The smoke test in CLAUDE.md checks those by hand.
+between runs, what each call costs in REAPER (measured on its own in the test
+install), and REAPER's effect on JPRSurf's own code (the idle profile, as the
+benchmarks time JPRSurf's code alone). A feature's own checks at its end cover
+what it touches; there is no smoke test of everything else.
 
 ## Getting there
 
@@ -818,7 +821,7 @@ JPRSurf's backlog items build the rest in order:
    `SurfaceNotifier`, run against both.
 9. *REAPER call count tests*.
 10. *Measure REAPER's costs*: what each function costs in REAPER, which the
-    call count tests weigh calls by. The smoke profile then goes.
+    call count tests weigh calls by, and the smoke test and its profile go.
 
 One more waits until it is needed: *Profile snapshots on demand*, if a whole
 session mixes too much together.

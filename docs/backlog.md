@@ -110,7 +110,7 @@ optional (so the extender alone no longer loads, deliberately). It defines
 JPRSurf's widgets in C++, and the scene maps through widget paths and output
 mode names rather than `"XTouch/..."` control names and mode numbers. That
 removes the device prefixes and the device checks in the strip loops. Apart
-from the extender alone, behavior doesn't change, so the smoke test verifies
+from the extender alone, behavior doesn't change, so the surface tests verify
 it.
 
 ## Build the scene from a SurfaceSpec
@@ -125,8 +125,8 @@ The plugin builds its scene from a C++ data structure, the `SurfaceSpec`,
 instead of imperative calls: devices (by type, required or optional), widgets,
 views, templates, mappings, declared components, and settings (the track
 filter). JPRSurf's own surface becomes a spec defined in code. Behavior doesn't
-change, so the smoke test verifies it, and later reading a config file is just
-filling in the same struct.
+change, so the surface tests verify it, and later reading a config file is
+just filling in the same struct.
 
 Checking a spec and building a scene from it are separate:
 - **Checking** has no REAPER dependency, so it is unit tested. It checks
@@ -523,7 +523,7 @@ where at most 2 per strip are needed. A
 `Track::RefreshRoutes(type, first, count)` would bound it to what the strips
 show. `CallCountTest.SendReceiveModeOnABus` shows it: on the large project's
 bus, with 31 receives and 15 route strips, 62 reads a run where 30 would do
-(about 2us a run, by the smoke profile's per-call times).
+(about 1.3us a run, at the 40ns a route read costs in REAPER).
 
 JPRSurf polls routes on the belief that REAPER doesn't report their changes,
 but the contract tests showed it does report volume and pan, from inside the

@@ -319,7 +319,7 @@ Depends on: CL4.
 - Standard checks.
 - The bounds that move, each with why.
 
-### CL6 [ ] docs: Remove the smoke test
+### CL6 [x] docs: Remove the smoke test
 
 Depends on: CL5.
 

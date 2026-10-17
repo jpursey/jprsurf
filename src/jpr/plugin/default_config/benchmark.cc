@@ -4,7 +4,7 @@
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 // JPRSurf's own time, under the fake REAPER, for the default config's steady
-// states and the smoke scenario's actions (see "Benchmarks" in
+// states and the gestures of a session at the surface (see "Benchmarks" in
 // docs/testing_and_profiling.md). The benchmark target runs this, which isn't
 // a ctest test, as its times depend on the machine and its load.
 //
@@ -259,8 +259,8 @@ TEST_F(Benchmark, IdleInSendReceiveModeOnABus) {
 //------------------------------------------------------------------------------
 // Actions
 //
-// The smoke scenario's (see profiles/README.md), in its order. A gesture on a
-// strip is on the X-Touch's first strip (strip 8, T9) unless it needs another.
+// Each kind of gesture in a session at the surface. A gesture on a strip is on
+// the X-Touch's first strip (strip 8, T9) unless it needs another.
 //------------------------------------------------------------------------------
 
 // Holding the button on T7, on the extender, and tapping it on T10, on the
