@@ -31,7 +31,7 @@ Libraries depend strictly in the order `common` → `device` → `scene` → `pl
 - `scene`: Defines how device controls may be mapped to REAPER actions and properties. It knows REAPER properties and abstractions, but does not hard code mappings; they must be configured. Primary classes: `Scene` (the top level mapping between one or more devices and REAPER state) and `View` (a hierarchical set of mappings that may be enabled or disabled independently by configuration or explicit application control).
 - `plugin`: The entry point for the REAPER extension, which configures the Control Surface Integration (CSI) for the connected devices. Primary class: `PluginSurface`, the `ControlSurfaceListener` (see `common/control_surface.h`) that defines the actual mappings and business logic.
 
-## Commands
+## Building
 
 Everything is driven directly by CMake using the Ninja generator, which is exactly what Visual Studio's "open a local folder" CMake integration does (see CMakeSettings.json). Command line builds, IDE builds, and CI all use the same build.
 
@@ -67,92 +67,7 @@ The build also will copy the binary to the REAPER plugin directory so it can be 
 
 A running REAPER locks the extension DLL, so the final copy into the REAPER plugin directory fails if REAPER is open. Assume REAPER is closed and build without asking. Treat a copy or permission failure at the end of a build as "REAPER is open": ask the user to close it and build again, rather than debugging the build.
 
-Only a change to code the plugin links rebuilds and copies the DLL. While the user has REAPER open, such a change can still be checked by building only the targets the checks need, which don't deploy: each library's tests (`--target <library>_test`, such as `jpr_common_test`) and `check_in_reaper` and `check_load_in_reaper`, whose test install runs beside the user's REAPER. The full build, which deploys, then waits until REAPER is closed, before the commit.
-
-### Test
-
-```
-ctest --test-dir out/build/x64-Release
-```
-
-Runs every library's unit tests, after a build.
-
-### Check in REAPER
-
-```
-cmake --build out/build/x64-Release --target check_in_reaper
-```
-
-Runs the contract tests (tests on `ContractTest`, which act only through REAPER's API, so they run under the fake in `ctest` too) in a test install of REAPER: a portable REAPER of their own, which never touches the user's, so it runs while the user has REAPER open. It prints what gtest printed, and fails if a test failed. Setting `GTEST_FILTER` runs only the tests it names. Run it for a change to the fake REAPER, `SurfaceNotifier`, or their contract tests; any other change is verified under the fake alone. It runs REAPER, so it runs in the main session only (see Parallel sessions). Setting up the test install, and the files a run leaves, are in "Contract tests in REAPER" in `docs/testing_and_profiling.md`.
-
-### Check that REAPER loads the plugin
-
-```
-cmake --build out/build/x64-Release --target check_load_in_reaper
-```
-
-Loads and unloads the plugin in the test install of REAPER (see Check in REAPER), which runs `dll_main.cc`, the only code no unit test runs. It fails if `jprsurf.log` has an error or the trace wasn't written whole. It creates no surface, and doesn't deploy, so it runs while the user has REAPER open. Run it for a change to `dll_main.cc` or to what the plugin does as it loads and unloads, and at the end of a feature. It runs REAPER, so it runs in the main session only (see Parallel sessions). How it works, and where it leaves the log and trace, are in "Loading the plugin" in `docs/testing_and_profiling.md`.
-
-### Benchmark
-
-```
-cmake --build out/build/x64-Release --target benchmark
-```
-
-Runs the benchmarks: JPRSurf's own time under the fake, for the default config's steady states and the gestures of a session at the surface (see Performance). It prints the summary, and writes it and each benchmark's profile to `out/build/x64-Release/benchmark/`. Setting `GTEST_FILTER` runs only the benchmarks it names. It needs no REAPER, so it runs in any session, but its times depend on what else the machine is doing: run it while nothing else is busy, such as another session's build.
-
-### Measure REAPER's costs
-
-```
-cmake --build out/build/x64-Release --target measure_in_reaper
-```
-
-Measures what each function on the REAPER API list, and each action JPRSurf runs, costs in REAPER on its own, in the test install (see Check in REAPER), with the arguments JPRSurf calls it with, and prints the results: the time in each call, and REAPER's later work on its UI thread. The cost table the call count tests weigh calls by (`GetCallCost()` in `src/jpr/common/testing/call_cost.cc`) is set from them, and is their only record. Run it when a function is added to the API list, when REAPER updates, or when a call's cost is in question. A new function gets a measurement in `src/jpr/common/testing/cost_measurements.cc`, or is listed there as unmeasured, with why, which a test enforces. Setting `JPR_MEASURE_FILTER` (function names, separated by `:`) runs only those. It takes about 15 minutes, and like the benchmark needs the machine left alone. It runs REAPER, so it runs in the main session only (see Parallel sessions). How it measures is in `docs/worklog/measure_reaper_costs.md`.
-
-### Testing and Logging
-
-Code is unit tested (see Build system), including code that depends on REAPER, which is tested against `FakeReaper` (see `src/jpr/common/testing/fake_reaper.h`): REAPER's state in memory, loaded as the REAPER API. A change is verified by its tests, not in REAPER, so most work can be done in a side session (see Parallel sessions). The user runs REAPER only for the reasons in Checking in REAPER below.
-
-Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events may be retained as is helpful for persistent understanding of code flow (continuous controller and UI events generally do *not* fall into this category).
-
-To see exactly what REAPER does, set the `JPRSURF_TRACE` environment variable (to anything but 0) for REAPER's process. Every call between JPRSurf and REAPER, in both directions, is then written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_trace.txt", replaced on each load, except runs that only read state (see `ReaperTrace` in `src/jpr/common/reaper_trace.h`). It is far too slow to leave on.
-
-Every change is checked as follows:
-- It builds cleanly in Release (`out/build/x64-Release`).
-- Touched files pass `clang-format --dry-run -Werror`.
-- `ctest` passes, with tests of what the change does.
-- `check_in_reaper` passes, for a change to the fake REAPER, `SurfaceNotifier`, or their contract tests (see Check in REAPER).
-- `check_load_in_reaper` passes, for a change to `dll_main.cc` or to what the plugin does as it loads and unloads (see Check that REAPER loads the plugin).
-- The benchmark doesn't regress, for a change to per-run work or an infrequent event (see Performance).
-- Any feature specific checks for the change (see Feature workflow below).
-
-#### Checking in REAPER
-
-The user runs REAPER, with the extension deployed to it, only for these:
-1. **Behavior nobody has checked.** What REAPER or the hardware does, where code will rely on it, is checked before that code is written. As much as possible, this is a step at the start of a feature, from its plan's To confirm (see Feature workflow). A fact that turns up partway through stops the work until it is checked. Each finding is recorded in the plan's To confirm, and goes into the fake as a tested fact, so it is never checked twice. When REAPER shows the fake is wrong, fix the fake first, with a test, then the code.
-   - **What REAPER's API does**, to REAPER's state and in what REAPER calls on a surface from inside a function, is checked with a contract test where it can be, which Claude runs in the test install (see Check in REAPER under Commands), rather than in the user's REAPER. A temporary test writes out what REAPER returns, and the finding stays as a contract test the fake passes.
-   - **The rest**, such as the hardware, REAPER's own UI, and what REAPER calls on a surface between runs, is checked in the user's REAPER, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. The calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`.
-2. **Performance**, for the changes Performance below names.
-3. **The end of a feature.** Before a feature is done, the user tests it in REAPER:
-   - REAPER loads the extension: `check_load_in_reaper` passes, before the user runs REAPER (see Check that REAPER loads the plugin under Commands), and once REAPER has created the surface, `jprsurf.log` has no new errors.
-   - The feature's own checks, and how it feels on the hardware.
-
-   Existing behavior is covered by the surface tests in `src/jpr/plugin/default_config`, and each feature adds surface tests of its own behavior, with the call count bounds of each gesture it adds (see Call counts in Performance), so there is no smoke test of everything else. A bug found then is fixed in a follow-up CL, after fixing the gap in the fake that let it through.
-
-#### Performance
-
-REAPER is realtime and the extension runs on its UI thread, so performance is decided without measuring anything but JPRSurf's own code: the REAPER calls each run and gesture makes, counted in `ctest` and weighed by what each costs in REAPER (see Measure REAPER's costs under Commands); and JPRSurf's own time, in the benchmark under the fake. The one thing these miss, REAPER's effect on JPRSurf's own code, shows in the profile REAPER writes on exit, "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_profile.txt" (see `ReaperProfiler` in `src/jpr/common/reaper_profiler.h`), and in the log's "Slow run" warnings. A profile times every run, every REAPER call, and the scopes and counters JPRSurf defines with Game Bits' `gb/profile`, and is replaced each time REAPER exits or the surface is removed. `profiles/` holds the snapshots each is compared against (see `profiles/README.md` for the idle scenario, and when the snapshots are replaced).
-- **JPRSurf's own time:** a CL that changes per-run work (`Run()`, what is polled, or cached reads) runs the benchmark (see Benchmark under Commands), and compares its summary against the feature's last snapshot and the bar: JPRSurf's time per run, and per action, doesn't regress. A test-only or docs CL, or one away from the realtime path, runs none. Times agree within about 3% between runs on a quiet machine, so a back to back run (without the change, then with it) is only needed when one moves by more than that, or when the change is meant to make something faster. An action's time is beyond the idle time of its runs, so one under about 2us is noise.
-- **In REAPER:** the p50 and p99 run times, and the counts and times of the points the change touches, don't regress, against a profile of REAPER idle. The benchmark misses REAPER's effect on JPRSurf's own code (an idle run takes several times as long in REAPER), so it is recorded at the end of a feature, and in between only for a change the benchmark can't show. A gesture's cost in REAPER isn't profiled: it is its calls, bounded by the call count tests. With REAPER in the foreground, run times vary by about 10% between sessions on the same machine (frames on efficiency cores run slower; see `profiles/README.md`), so a back to back run is only needed when a time moves by more than that. Counts compare directly.
-- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. A run over 8ms logs a "Slow run" warning with its breakdown by point. A CL that changes one checks JPRSurf's time for it in the benchmark, which runs on a large project (128 tracks, with sends and receives), adding a benchmark of the event if there isn't one, and its REAPER calls in the call count tests, which are REAPER's cost for it.
-- **Call counts** are checked in `ctest`, without REAPER. Every surface test fails a run, or any other call on the surface, that refreshes REAPER's UI twice, adds two undo points, or repeats a setter or action (see `CallCounter` in `src/jpr/common/testing/call_counter.h`). `src/jpr/plugin/default_config/call_count_test.cc` bounds the REAPER calls, by cost (`GetCallCost()`, from what each call costs in REAPER on its own), of the steady state, each gesture, and the infrequent events on a large project, as exact counts. A change that moves a bound updates it in the same CL, and says why when one rises.
-- **The profiler's own cost** stays within its budget, the larger of 3us a run (about twice what it costs) and 1% of the run. The "Profile:" line logged on exit shows it, and is a warning if it is over.
-
-New work whose cost matters gets a scope (`gb::ProfileScope`), and work that scales gets a counter (`gb::ProfileCount`), named for the function it times (see Names in `docs/worklog/profiler.md`).
-
-Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
-
-REAPER's setters each pay a UI refresh, from ~0.2ms (a route's volume) to ~5ms (a rec arm), and REAPER's redraw after the run can cost as much again, per call, unless they are made in a deferred refresh (a `PreventUIRefresh()` scope, which puts REAPER's UI refresh off until the outermost one ends). Each run is one (see `ControlSurface` and `DeferredRefresh` in `src/jpr/common/`), so everything a run changes pays the refresh once, and actions run outside it, with `RunAction()`, as an action may open REAPER's UI. Code that changes several tracks outside a run holds a `DeferredRefresh`, and a change to several tracks is made in one `TrackBatch`, for one undo point.
+Only a change to code the plugin links rebuilds and copies the DLL. While the user has REAPER open, such a change can still be checked by building only the targets the checks need, which don't deploy: each library's tests (`--target <library>_test`, such as `jpr_common_test`), and the checks in the test install (see Checking a change). The full build, which deploys, then waits until REAPER is closed, before the commit.
 
 ### Format
 
@@ -162,6 +77,72 @@ clang-format --dry-run -Werror <files>   # check only
 ```
 
 Style comes from `src/.clang-format` (Google style); clang-format finds it automatically for any file under `src/`. Only format files you actually touch.
+
+## Checking a change
+
+Code is unit tested (see Build system), including code that depends on REAPER, which is tested against `FakeReaper` (see `src/jpr/common/testing/fake_reaper.h`): REAPER's state in memory, loaded as the REAPER API. A change is verified by its tests, not in REAPER, so most work can be done in a side session (see Parallel sessions).
+
+Checks run in one of three places: under the fake, in **the test install** (a portable REAPER of its own, which Claude runs, and which never touches the user's), or in **the user's REAPER**, which only the user runs. "In REAPER" alone is ambiguous, so say which.
+
+| Check | Command | When | Needs |
+| --- | --- | --- | --- |
+| Release build | `cmake --build out/build/x64-Release` | Every change | |
+| Format | `clang-format --dry-run -Werror <files>` | Every change, on the files it touches | |
+| Unit tests | `ctest --test-dir out/build/x64-Release` | Every change, with tests of what it does | |
+| Contract tests | `cmake --build out/build/x64-Release --target check_in_reaper` | A change to the fake REAPER, `SurfaceNotifier`, or their contract tests | The test install |
+| Load check | `cmake --build out/build/x64-Release --target check_load_in_reaper` | A change to `dll_main.cc` or to what the plugin does as it loads and unloads, and the end of a feature | The test install |
+| Benchmark | The `benchmark` skill | When a change risks JPRSurf's own time (see Performance), not every change | A quiet machine |
+| Cost measurement | The `measure-reaper-costs` skill | A function added to the API list | The test install, and a quiet machine |
+| The user's REAPER | See Testing in the user's REAPER | Behavior nobody has checked, and the end of a feature | The user |
+
+A feature adds checks of its own (see Feature workflow).
+
+### The test install
+
+A portable REAPER, in the folder `JPR_REAPER_CHECK_DIR` names, which runs beside the user's REAPER, so its checks run while the user has REAPER open. Each check copies the DLL it runs into the test install, runs REAPER until the DLL quits it, and removes the DLL again (`src/jpr/common/testing/run_in_test_install.cmake`). There is one test install, so its checks run one at a time, in the main session only (see Parallel sessions). Setting it up, and the files a run leaves in its `run` folder, are in "Contract tests in REAPER" in `docs/testing_and_profiling.md`.
+- **Contract tests** (`check_in_reaper`): the tests on `ContractTest`, which act only through REAPER's API, so they run under the fake in `ctest` too. It prints what gtest printed, and fails if a test failed. Setting `GTEST_FILTER` runs only the tests it names. Any change but those the table names is verified under the fake alone.
+- **Load check** (`check_load_in_reaper`): loads and unloads the plugin, which runs `dll_main.cc`, the only code no unit test runs. It fails if `jprsurf.log` has an error or the trace wasn't written whole. It creates no surface, and doesn't deploy. How it works, and where it leaves the log and trace, are in "Loading the plugin" in `docs/testing_and_profiling.md`.
+
+### A quiet machine
+
+The benchmark and the cost measurement time the machine, so they need it otherwise idle: no other session building, and no other busy programs. The user often uses the machine while Claude works, so:
+- Run them only when they are needed (see the table), and batch any that are due into one quiet window.
+- Ask the user for the window in one line: what it is for, and how long it takes. Keep working on whatever doesn't depend on the result meanwhile, rather than waiting.
+- Never block a CL's review on one. Its result comes before the commit, or at the end of the feature, as agreed with the user.
+
+## Testing in the user's REAPER
+
+The user runs REAPER, with the extension deployed to it, only for these:
+1. **Behavior nobody has checked.** What REAPER or the hardware does, where code will rely on it, is checked before that code is written. As much as possible, this is a step at the start of a feature, from its plan's To confirm (see Feature workflow). A fact that turns up partway through stops the work until it is checked. Each finding is recorded in the plan's To confirm, and goes into the fake as a tested fact, so it is never checked twice. When REAPER shows the fake is wrong, fix the fake first, with a test, then the code.
+   - **What REAPER's API does**, to REAPER's state and in what REAPER calls on a surface from inside a function, is checked with a contract test where it can be, which Claude runs in the test install, rather than in the user's REAPER. A temporary test writes out what REAPER returns, and the finding stays as a contract test the fake passes.
+   - **The rest**, such as the hardware, REAPER's own UI, and what REAPER calls on a surface between runs, is checked in the user's REAPER, with temporary code that is removed afterwards: extra logging, a test mapping on a spare button, or a trace. The calls REAPER makes go in "Seen in traces" in `docs/testing_and_profiling.md`.
+2. **The end of a feature.** Before a feature is done, the user tests it:
+   - REAPER loads the extension: the load check passes, before the user runs REAPER, and once REAPER has created the surface, `jprsurf.log` has no new errors, "Slow run" warnings included.
+   - The feature's own checks, and how it feels on the hardware.
+   - An idle profile, for a feature that changed per-run work (see Performance).
+
+   Existing behavior is covered by the surface tests in `src/jpr/plugin/default_config`, and each feature adds surface tests of its own behavior, with the call count bounds of each gesture it adds (see Call counts in Performance), so there is no smoke test of everything else. A bug found then is fixed in a follow-up CL, after fixing the gap in the fake that let it through.
+
+## Diagnostics
+
+Logs from LOG statements are written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf.log" and are cleared and rewritten each time REAPER is run and/or loads the extension. Additional debugging information can be added there to debug what is going on. However, LOGs should be minimized outside of debugging use cases as they affect performance and diskspace. LOGs for particular infrequent events may be retained as is helpful for persistent understanding of code flow (continuous controller and UI events generally do *not* fall into this category).
+
+To see exactly what REAPER does, set the `JPRSURF_TRACE` environment variable (to anything but 0) for REAPER's process. Every call between JPRSurf and REAPER, in both directions, is then written to "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_trace.txt", replaced on each load, except runs that only read state (see `ReaperTrace` in `src/jpr/common/reaper_trace.h`). It is far too slow to leave on.
+
+## Performance
+
+REAPER is realtime and the extension runs on its UI thread, so performance is decided without measuring anything but JPRSurf's own code: the REAPER calls each run and gesture makes, counted in `ctest` and weighed by what each costs in REAPER (the cost table, which the cost measurement sets); and JPRSurf's own time, in the benchmark under the fake. The one thing these miss, REAPER's effect on JPRSurf's own code, shows in the profile REAPER writes on exit, "C:\\Users\\johnp\\AppData\\Roaming\\jprsurf_profile.txt" (see `ReaperProfiler` in `src/jpr/common/reaper_profiler.h`), and in the log's "Slow run" warnings. A profile times every run, every REAPER call, and the scopes and counters JPRSurf defines with Game Bits' `gb/profile`, and is replaced each time REAPER exits or the surface is removed. `profiles/` holds the snapshots each is compared against (see `profiles/README.md`).
+- **Call counts** are checked in `ctest`, without REAPER, on every change. Every surface test fails a run, or any other call on the surface, that refreshes REAPER's UI twice, adds two undo points, or repeats a setter or action (see `CallCounter` in `src/jpr/common/testing/call_counter.h`). `src/jpr/plugin/default_config/call_count_test.cc` bounds the REAPER calls, by cost (`GetCallCost()`), of the steady state, each gesture, and the infrequent events on a large project, as exact counts. A change that moves a bound updates it in the same CL, and says why when one rises. A function's cost only changes when it is measured again, which is rare (see the `measure-reaper-costs` skill).
+- **JPRSurf's own time** is a judgment call. A feature that changes per-run work (`Run()`, what is polled, or cached reads) or an infrequent event runs the benchmark once, at its end, as does a CL meant to make something faster: JPRSurf's time per run, and per action, doesn't regress against the bar. A feature whose risk of a regression is low runs none, as the "Slow run" warnings in the user's test at its end catch an egregious one. The `benchmark` skill has how to run and compare it.
+- **In the user's REAPER:** at the end of a feature that changed per-run work, the p50 and p99 run times, and the counts and times of the points it touches, don't regress against a profile of REAPER idle. The benchmark misses REAPER's effect on JPRSurf's own code (an idle run takes several times as long in REAPER), which only this shows. A gesture's cost in REAPER isn't profiled: it is its calls, bounded by the call count tests. With REAPER in the foreground, run times vary by about 10% between sessions on the same machine (frames on efficiency cores run slower; see `profiles/README.md`), so a back to back run is only needed when a time moves by more than that. Counts compare directly.
+- **Infrequent events** (track list refresh, mode changes, and the like): no single event exceeds the low milliseconds. A frame is ~33ms, shared with REAPER's own UI work. A run over 8ms logs a "Slow run" warning with its breakdown by point. A feature that changes one has a benchmark of it (adding one if there isn't one), which runs on a large project (128 tracks, with sends and receives), and its REAPER calls are bounded in the call count tests, which are REAPER's cost for it.
+- **The profiler's own cost** stays within its budget, the larger of 3us a run (about twice what it costs) and 1% of the run. The "Profile:" line logged on exit shows it, and is a warning if it is over.
+
+New work whose cost matters gets a scope (`gb::ProfileScope`), and work that scales gets a counter (`gb::ProfileCount`), named for the function it times (see Names in `docs/worklog/profiler.md`).
+
+Keep per-run work to cheap cached reads, and push expensive REAPER queries to the events that can change their results (for example `SetTrackListChange()`).
+
+REAPER's setters each pay a UI refresh, from ~0.2ms (a route's volume) to ~5ms (a rec arm), and REAPER's redraw after the run can cost as much again, per call, unless they are made in a deferred refresh (a `PreventUIRefresh()` scope, which puts REAPER's UI refresh off until the outermost one ends). Each run is one (see `ControlSurface` and `DeferredRefresh` in `src/jpr/common/`), so everything a run changes pays the refresh once, and actions run outside it, with `RunAction()`, as an action may open REAPER's UI. Code that changes several tracks outside a run holds a `DeferredRefresh`, and a change to several tracks is made in one `TrackBatch`, for one undo point.
 
 ## Build system
 
@@ -188,13 +169,13 @@ JPRSurf is moving toward a surface that is entirely driven by a config file, des
 
 The `scene` layer aims to be flexible and composable, not just simple: few concepts, each as small as it can be, so that a new feature in a new config comes from composing existing pieces rather than adding new ones. Before adding a runtime concept or option, check whether existing pieces already combine to do the job. If they do, use the combination and document it, and leave any friendlier shorthand to the config file (or SurfaceSpec), which can expand it to the runtime form. Performance is the trade-off: when a composition would put the realtime budget at risk (see Performance), a dedicated piece is justified.
 
-A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `plugin`. Its plan starts with what it relies on that nobody has checked (its To confirm), which is checked in REAPER before the CLs that rely on it (see Checking in REAPER). The CLs' **Verify** steps start from the checks in Testing and Logging, and the user reviews each CL, but tests the feature in REAPER only at its end.
+A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `plugin`. Its plan starts with what it relies on that nobody has checked (its To confirm), which is checked before the CLs that rely on it (see Testing in the user's REAPER). The CLs' **Verify** steps start from the checks in Checking a change, and the user reviews each CL, but tests the feature in their REAPER only at its end.
 
 ## Parallel sessions
 
-These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs REAPER (see Checking in REAPER) happens one change at a time in the main session, in the main checkout. So do `check_in_reaper` and `check_load_in_reaper`, which run the single test install, one run at a time: a change in a side session that needs it is checked by the main session, after it cherry-picks the change.
+These add to Parallel sessions in the workflow. REAPER loads a single copy of the plugin, and the user is the only one who can test it, so work that needs the user's REAPER (see Testing in the user's REAPER) happens one change at a time in the main session, in the main checkout. So do the checks in the test install (the contract tests, the load check, and the cost measurement), which has one copy too, one run at a time: a change in a side session that needs one is checked by the main session, after it cherry-picks the change.
 
-Side sessions run in their own git worktree, for work that can be verified without REAPER: most CLs, which their unit tests verify (and the benchmark, for per-run work), documentation and comment cleanup, research, and reviews.
+Side sessions run in their own git worktree, for work that can be verified without REAPER: most CLs, which their unit tests verify (and the benchmark, where one is needed, on a quiet machine), documentation and comment cleanup, research, and reviews.
 - A worktree build does not deploy the plugin (`JPR_DEPLOY_TO_REAPER` defaults to OFF there), so it never replaces what the user is testing. Don't turn it on.
 - A side session never merges or pushes to `main`. The main session cherry-picks its commit onto `main`, builds, and hands anything that needs a REAPER check to the user.
 - If a change turns out to need REAPER (behavior nobody has checked, a profile, or a `check_in_reaper` run), say so and hand it back to the main session rather than deploying it.
@@ -211,6 +192,6 @@ REAPER is notoriously underdocumented. The best resources are as follows:
   - DrivenByMOSS: https://github.com/git-moss/DrivenByMoss4Reaper This was feature rich, but quite flaky in practice, and also was written in Java.
 
 ## Don't
-- Don't add or modify code outside `src/` without asking. Game Bits code is changed only in Game Bits sessions (see the workflow).
+- Don't change Game Bits code from a JPRSurf session: it is changed only in Game Bits sessions (see the workflow).
 - Don't generate or build Visual Studio solutions (`-G "Visual Studio 17 2022"`); build with Ninja as described above.
 - Don't add entries to the README's "Development log", or plan steps for it. The user writes those.

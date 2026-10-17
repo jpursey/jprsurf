@@ -20,8 +20,8 @@ namespace jpr {
 // (see docs/worklog/measure_reaper_costs.md): the time in the call, and
 // REAPER's work on its UI thread after it. A call whose cost grows with the
 // project is weighed at the size of the large project the tests use (128
-// tracks), and says how it grows. They are measured again when the API list
-// grows, or REAPER updates.
+// tracks), and says how it grows. A function added to the list is measured
+// (see the measure-reaper-costs skill in .claude/skills/).
 //==============================================================================
 
 struct CallCost {

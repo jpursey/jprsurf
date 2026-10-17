@@ -4,22 +4,18 @@ Snapshots of `jprsurf_profile.txt`, and of the benchmark (see CLAUDE.md,
 Performance), kept so a change can be compared against them without
 rebuilding an older version.
 
-- **The bar:** `idle.txt`, a profile in REAPER of the scenario below, and
-  `benchmark/`, everything the benchmark writes (see Benchmark below). They
-  change only on purpose: after an optimization, or when a new cost is
-  accepted.
-- **A feature's snapshots:** `<feature>/benchmark.txt`, the benchmark's
-  summary, committed with each CL of a feature that changes per-run work or
-  an infrequent event (see Performance in CLAUDE.md). Each CL compares against
-  the feature's last snapshot, which catches a regression in the CL that
-  caused it, and against the bar.
-- **The end of a feature:** an idle snapshot in REAPER of the finished
-  feature, and its benchmark, compared against the bar. The user decides
-  whether they replace it, and the feature's directory is deleted either way.
+- **The bar:** `idle.txt`, a profile in the user's REAPER of the scenario
+  below, and `benchmark/`, everything the benchmark writes (see Benchmark
+  below). They change only on purpose: after an optimization, or when a new
+  cost is accepted.
+- **The end of a feature** that changed per-run work or an infrequent event:
+  its benchmark (see the `benchmark` skill), and an idle profile in the
+  user's REAPER, compared against the bar. The user decides whether they
+  replace it. Nothing is kept between a feature's CLs.
 
 A gesture's cost in REAPER isn't profiled: it is its calls, which the call
-count tests bound, weighed by what each costs in REAPER on its own (see
-Measure REAPER's costs in CLAUDE.md).
+count tests bound, weighed by what each costs in REAPER on its own (see the
+`measure-reaper-costs` skill).
 
 ## Benchmark
 
