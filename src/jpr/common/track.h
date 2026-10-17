@@ -446,6 +446,9 @@ class Track final {
   // Removes a touch held by a TrackTouchHandle.
   void UnregisterTouch(TrackTouchType type);
 
+  // Returns true if anything holds a touch of any type on this track.
+  bool HasTouch() const;
+
   // Notifies all listeners subscribed to this track of a change.
   void NotifyListeners();
 

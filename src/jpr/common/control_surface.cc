@@ -239,13 +239,20 @@ bool ControlSurface::GetTouchState(MediaTrack* track_id, int is_pan) {
     default:
       return false;
   }
-  // A null track would be TrackCache's stub track, which a mapping to nothing
-  // may touch.
+  // A null track would match TrackCache's stub track, which a mapping to
+  // nothing may touch, or a deleted track.
   if (track_id == nullptr) {
     return false;
   }
-  const Track* track = TrackCache::Get().GetTrack(track_id);
-  return track != nullptr && track->IsTouched(type);
+
+  // Few tracks are ever touched at once, and usually none are, so comparing
+  // with each is cheaper than a lookup.
+  for (const Track* track : TrackCache::Get().GetTouchedTracks()) {
+    if (track->GetTrackId() == track_id) {
+      return track->IsTouched(type);
+    }
+  }
+  return false;
 }
 
 void ControlSurface::SetAutoMode(int mode) {

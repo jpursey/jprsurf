@@ -22,6 +22,7 @@ namespace {
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
+using ::testing::UnorderedElementsAre;
 
 class TrackCacheTest : public ::testing::Test {
  protected:
@@ -109,6 +110,35 @@ TEST_F(TrackCacheTest, ForgetsTheLastTouchedTrackWhenItIsDeleted) {
   project_.DeleteTrack(drums);
   Cache().Refresh();
   EXPECT_EQ(Cache().GetLastTouchedTrack(), nullptr);
+}
+
+TEST_F(TrackCacheTest, TouchedTracksAreThoseWithATouch) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  Cache().Refresh();
+  Track* drums_track = GetCachedTrack(drums);
+  Track* bass_track = GetCachedTrack(bass);
+  EXPECT_THAT(Cache().GetTouchedTracks(), IsEmpty());
+
+  // A track is listed once, whichever of its types are touched.
+  TrackTouchHandle volume = drums_track->RegisterTouch(TrackTouchType::kVolume);
+  TrackTouchHandle pan = drums_track->RegisterTouch(TrackTouchType::kPan);
+  TrackTouchHandle bass_pan = bass_track->RegisterTouch(TrackTouchType::kPan);
+  EXPECT_THAT(Cache().GetTouchedTracks(),
+              UnorderedElementsAre(drums_track, bass_track));
+
+  volume = {};
+  EXPECT_THAT(Cache().GetTouchedTracks(),
+              UnorderedElementsAre(drums_track, bass_track));
+  pan = {};
+  EXPECT_THAT(Cache().GetTouchedTracks(), ElementsAre(bass_track));
+
+  // A deleted track stays touched, and listed, until its touch goes.
+  project_.DeleteTrack(bass);
+  Cache().Refresh();
+  EXPECT_THAT(Cache().GetTouchedTracks(), ElementsAre(bass_track));
+  bass_pan = {};
+  EXPECT_THAT(Cache().GetTouchedTracks(), IsEmpty());
 }
 
 TEST_F(TrackCacheTest, Selection) {

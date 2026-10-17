@@ -345,6 +345,30 @@ Depends on: CL4.
   `IdleWhilePlaying`'s.
 - The load check.
 
+### CL6 [x] common: Answer touch from the touched tracks
+
+Depends on: CL5.
+
+CL5's benchmark showed REAPER's questions cost 4.8us a run on the 128-track
+project while automating (about 19ns each, mostly `TrackCache`'s hash lookup),
+on top of 6.9us for the run itself.
+- Each `Track` tells `TrackCache` (through `Get()`, as it does the last
+  touched track) when it becomes touched (either type) and when its last touch
+  goes.
+- `TrackCache::GetTouchedTracks()` returns those tracks: almost always none,
+  and at most one per touch mapping.
+- `ControlSurface::GetTouchState()` compares REAPER's track ID with each
+  touched track's, rather than looking the track up, so with nothing touched
+  it compares nothing.
+
+**Verify**
+- Standard checks.
+- `track_cache_test.cc`: a track is in the touched tracks from its first touch
+  of either type until its last is gone, and stays while deleted.
+- `control_surface_test.cc` (unchanged) still passes.
+- The benchmark: `IdleWhileAutomating`'s `ControlSurface::GetTouchState`
+  point drops well below CL5's 4.8us a run, and nothing else moves.
+
 ### Summary [ ] docs: Summarize the feature
 
 Depends on: every CL above, and the user saying the feature is done.

@@ -5,6 +5,8 @@
 
 #include "jpr/common/track_cache.h"
 
+#include "absl/algorithm/container.h"
+#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
@@ -284,6 +286,20 @@ Track* TrackCache::GetTrack(const Guid& guid) const {
 Track* TrackCache::GetTrack(MediaTrack* track_id) const {
   auto it = track_id_map_.find(track_id);
   return it != track_id_map_.end() ? it->second : nullptr;
+}
+
+void TrackCache::AddTouchedTrack(Track* track) {
+  touched_tracks_.push_back(track);
+}
+
+void TrackCache::RemoveTouchedTrack(Track* track) {
+  auto it = absl::c_find(touched_tracks_, track);
+  if (it == touched_tracks_.end()) {
+    DCHECK(false) << "A track that isn't touched was untouched";
+    return;
+  }
+  *it = touched_tracks_.back();
+  touched_tracks_.pop_back();
 }
 
 Track* TrackCache::GetOnlySelectedTrack() const {

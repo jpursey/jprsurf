@@ -9,6 +9,7 @@
 #include <optional>
 #include <utility>
 
+#include "absl/algorithm/container.h"
 #include "absl/log/log.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/track_cache.h"
@@ -463,6 +464,9 @@ void Track::SetRouteMute(TrackRouteType type, int index, bool mute) {
 //------------------------------------------------------------------------------
 
 TrackTouchHandle Track::RegisterTouch(TrackTouchType type) {
+  if (!HasTouch()) {
+    TrackCache::Get().AddTouchedTrack(this);
+  }
   if (++touch_counts_[static_cast<int>(type)] == 1) {
     NotifyTouchChanged(type);
   }
@@ -473,6 +477,13 @@ void Track::UnregisterTouch(TrackTouchType type) {
   if (--touch_counts_[static_cast<int>(type)] == 0) {
     NotifyTouchChanged(type);
   }
+  if (!HasTouch()) {
+    TrackCache::Get().RemoveTouchedTrack(this);
+  }
+}
+
+bool Track::HasTouch() const {
+  return absl::c_any_of(touch_counts_, [](int count) { return count > 0; });
 }
 
 //------------------------------------------------------------------------------

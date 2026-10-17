@@ -8,9 +8,11 @@
 #include <bit>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/types/span.h"
 #include "jpr/common/automation.h"
 #include "jpr/common/guid.h"
 #include "jpr/common/test_reset.h"
@@ -73,6 +75,11 @@ class TrackCache final {
   // exists.
   Track* GetTrack(MediaTrack* track_id) const;
 
+  // Returns the tracks anything touches (see Track::RegisterTouch()), in no
+  // particular order. This is almost always empty, and is meant for answering
+  // REAPER's question whether a track is touched without a lookup.
+  absl::Span<Track* const> GetTouchedTracks() const { return touched_tracks_; }
+
   // Returns all tracks in the project, in order, not including the master
   // track, regardless of filter. Callers that want only the tracks included by
   // a filter should iterate these and use Track::GetGlobalIndex(filter), which
@@ -132,9 +139,11 @@ class TrackCache final {
   using TrackMap = absl::flat_hash_map<Guid, std::unique_ptr<Track>>;
   using TrackIdMap = absl::flat_hash_map<MediaTrack*, Track*>;
 
+  friend class Track;
+
   // The instance, created by the first Get(). It is never destroyed, apart from
-  // by a test's reset, so the next Get() creates a new one. Tracks held outside
-  // the cache (by shared pointer) outlive it.
+  // by a test's reset, so the next Get() creates a new one, and every track it
+  // created is destroyed with it.
   static TrackCache* s_instance_;
   static const TestReset s_test_reset_;
 
@@ -157,6 +166,11 @@ class TrackCache final {
   // Returns the automation modes of the selected tracks, re-reading them from
   // REAPER first if they are stale.
   AutoModes GetSelectedAutoModes();
+
+  // Called by a track when it becomes touched, and when its last touch goes
+  // (see GetTouchedTracks()).
+  void AddTouchedTrack(Track* track);
+  void RemoveTouchedTrack(Track* track);
 
   // Maps for all Tracks that have ever existed in this REAPER session. This is
   // never cleared, with deleted tracks remaining in a "non-existing" state,
@@ -191,6 +205,9 @@ class TrackCache final {
   // Single stub track used to represent no track at all. It will never exist,
   // but can be used as a placeholder for track mapping.
   std::unique_ptr<Track> stub_track_;
+
+  // See GetTouchedTracks().
+  std::vector<Track*> touched_tracks_;
 };
 
 }  // namespace jpr
