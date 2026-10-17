@@ -129,7 +129,7 @@ class TrackCache final {
   int64_t GetSelectionVersion() const { return selection_version_; }
 
  private:
-  using TrackMap = absl::flat_hash_map<Guid, std::shared_ptr<Track>>;
+  using TrackMap = absl::flat_hash_map<Guid, std::unique_ptr<Track>>;
   using TrackIdMap = absl::flat_hash_map<MediaTrack*, Track*>;
 
   // The instance, created by the first Get(). It is never destroyed, apart from
@@ -190,7 +190,7 @@ class TrackCache final {
 
   // Single stub track used to represent no track at all. It will never exist,
   // but can be used as a placeholder for track mapping.
-  std::shared_ptr<Track> stub_track_;
+  std::unique_ptr<Track> stub_track_;
 };
 
 }  // namespace jpr

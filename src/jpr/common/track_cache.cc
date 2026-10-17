@@ -31,7 +31,7 @@ TrackCache::TrackCache() {
   // an empty GUID and a null track ID, and it holds all default values. This is
   // used as a placeholder for tracks that have been deleted in REAPER, but may
   // still be referenced by listeners or through undo actions.
-  stub_track_ = std::make_shared<Track>(Track::Private(), Guid(), nullptr);
+  stub_track_ = std::make_unique<Track>(Track::Private(), Guid(), nullptr);
   track_id_map_[nullptr] = stub_track_.get();
 }
 
@@ -70,13 +70,13 @@ void TrackCache::Refresh() {
     master_track_ = stub_track_.get();
   } else {
     Guid master_guid(GetTrackGUID(master_track_id));
-    std::shared_ptr<Track>& new_master_track = track_map_[master_guid];
+    std::unique_ptr<Track>& new_master_track = track_map_[master_guid];
 
     auto it = old_track_map.find(master_guid);
     if (it == old_track_map.end()) {
       // Master track is new and doesn't exist in the old cache, so just
       // initialize it.
-      new_master_track = std::make_shared<Track>(Track::Private(), master_guid,
+      new_master_track = std::make_unique<Track>(Track::Private(), master_guid,
                                                  master_track_id);
     } else {
       // Move the old master track to the new cache.
@@ -103,12 +103,12 @@ void TrackCache::Refresh() {
       continue;
     }
     Guid guid(GetTrackGUID(track_id));
-    std::shared_ptr<Track>& new_track = track_map_[guid];
+    std::unique_ptr<Track>& new_track = track_map_[guid];
 
     auto it = old_track_map.find(guid);
     if (it == old_track_map.end()) {
       // Track is new and doesn't exist in the old cache, so just initialize it.
-      new_track = std::make_shared<Track>(Track::Private(), guid, track_id);
+      new_track = std::make_unique<Track>(Track::Private(), guid, track_id);
       track_id_map_[track_id] = new_track.get();
       AddTrack(new_track.get());
       continue;
@@ -137,7 +137,7 @@ void TrackCache::Refresh() {
   // through an undo action or project load, and we want to retain the cached
   // state and listeners for that track.
   for (auto& [guid, old_track] : old_track_map) {
-    std::shared_ptr<Track>& new_track = track_map_[guid];
+    std::unique_ptr<Track>& new_track = track_map_[guid];
     new_track = std::move(old_track);
     if (new_track->OnRemoved()) {
       routes_changed.push_back(new_track.get());

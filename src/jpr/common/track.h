@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -196,15 +195,15 @@ struct TrackRoute {
 // longer exist (but may come back, for instance through an undo action or
 // project load). In the latter case, all properties will return to default
 // values and setting new values will have no effect.
-class Track final : public std::enable_shared_from_this<Track> {
+//
+// TrackCache owns every Track, and keeps each one for as long as the cache
+// exists, so a Track* stays valid for as long as the extension is loaded (in
+// tests, until the fake REAPER resets TrackCache).
+class Track final {
  public:
   Track(const Track&) = delete;
   Track& operator=(const Track&) = delete;
   ~Track() = default;
-
-  // Strong and weak pointer references to the track.
-  std::shared_ptr<Track> GetShared() { return shared_from_this(); }
-  std::weak_ptr<Track> GetWeak() { return shared_from_this(); }
 
   // Attributes
   Guid GetGuid() const { return guid_; }
@@ -377,7 +376,7 @@ class Track final : public std::enable_shared_from_this<Track> {
   };
 
  public:
-  // Must be public to allow construction with std::make_shared.
+  // Must be public to allow construction with std::make_unique.
   Track(Private, const Guid& guid, MediaTrack* track_id);
 
  private:

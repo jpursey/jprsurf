@@ -80,7 +80,7 @@ class RouteExistsProperty final : public RouteProperty {
 
 RouteProperties::RouteProperties(TrackActions* actions, Track* track,
                                  TrackRouteType type, int index)
-    : track_(track->GetShared()),
+    : track_(track),
       type_(type),
       index_(index),
       other_track_(kOtherTrack, actions) {
@@ -99,12 +99,12 @@ const TrackRoute* RouteProperties::GetRoute() const {
 }
 
 void RouteProperties::SetRoute(Track* track, TrackRouteType type, int index) {
-  if (track == track_.get() && type == type_ && index == index_) {
+  if (track == track_ && type == type_ && index == index_) {
     return;
   }
-  if (track != track_.get()) {
+  if (track != track_) {
     track_->Unsubscribe(this);
-    track_ = track->GetShared();
+    track_ = track;
     track_->Subscribe(this);
   }
   type_ = type;

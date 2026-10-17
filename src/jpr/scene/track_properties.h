@@ -111,7 +111,7 @@ class TrackProperties final : public TrackListener {
   ~TrackProperties() override;
 
   // Returns the track that these properties are tied to.
-  Track* GetTrack() const { return track_.get(); }
+  Track* GetTrack() const { return track_; }
 
   // Sets the track that these properties are tied to.
   //
@@ -141,7 +141,7 @@ class TrackProperties final : public TrackListener {
  private:
   // State
   TrackActions* const actions_;
-  std::shared_ptr<Track> track_;
+  Track* track_;
   mutable absl::flat_hash_map<std::string, std::unique_ptr<TrackProperty>>
       properties_;
   mutable TrackMeterProperty* meter_property_ = nullptr;

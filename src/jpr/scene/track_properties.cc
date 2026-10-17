@@ -176,18 +176,18 @@ class TrackHasRoutesProperty : public TrackProperty {
 }  // namespace
 
 TrackProperties::TrackProperties(TrackActions* actions, Track* track)
-    : actions_(actions), track_(track->GetShared()) {
+    : actions_(actions), track_(track) {
   track_->Subscribe(this);
 }
 
 TrackProperties::~TrackProperties() { track_->Unsubscribe(this); }
 
 void TrackProperties::SetTrack(Track* track) {
-  if (track == track_.get()) {
+  if (track == track_) {
     return;
   }
   track_->Unsubscribe(this);
-  track_ = track->GetShared();
+  track_ = track;
   track_->Subscribe(this);
   for (auto& [name, property] : properties_) {
     property->SetTrack(track);
@@ -227,59 +227,59 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
     return it->second.get();
   }
   if (name == kMeter) {
-    auto meter_property = std::make_unique<TrackMeterProperty>(track_.get());
+    auto meter_property = std::make_unique<TrackMeterProperty>(track_);
     meter_property_ = meter_property.get();
     properties_[name] = std::move(meter_property);
     return meter_property_;
   }
   if (name == kName) {
     auto& property = properties_[name] =
-        std::make_unique<TrackNameProperty>(track_.get());
+        std::make_unique<TrackNameProperty>(track_);
     return property.get();
   }
   if (name == kColor) {
     auto& property = properties_[name] =
-        std::make_unique<TrackColorProperty>(track_.get());
+        std::make_unique<TrackColorProperty>(track_);
     return property.get();
   }
   for (const BoolViewPropertyNames& names : kBoolViewPropertyNames) {
     if (name == names.name || name == names.ui_name) {
       auto& property = properties_[name] =
           std::make_unique<TrackBoolViewProperty>(
-              name, names.property, track_.get(),
+              name, names.property, track_,
               name == names.ui_name ? actions_ : nullptr);
       return property.get();
     }
   }
   if (name == kPan || name == kUiPan) {
     auto& property = properties_[name] = std::make_unique<TrackPanProperty>(
-        name, track_.get(), name == kUiPan ? actions_ : nullptr);
+        name, track_, name == kUiPan ? actions_ : nullptr);
     return property.get();
   }
   if (name == kVolume || name == kUiVolume) {
     auto& property = properties_[name] = std::make_unique<TrackVolumeProperty>(
-        name, track_.get(), name == kUiVolume ? actions_ : nullptr);
+        name, track_, name == kUiVolume ? actions_ : nullptr);
     return property.get();
   }
   if (name == kTrackIsFolder) {
     auto& property = properties_[name] =
-        std::make_unique<TrackIsFolderProperty>(track_.get(),
+        std::make_unique<TrackIsFolderProperty>(track_,
                                                 actions_->GetTrackFilter());
     return property.get();
   }
   if (name == kTrackHasParent) {
     auto& property = properties_[name] =
-        std::make_unique<TrackHasParentProperty>(track_.get());
+        std::make_unique<TrackHasParentProperty>(track_);
     return property.get();
   }
   if (name == kTrackExists) {
     auto& property = properties_[name] =
-        std::make_unique<TrackExistsProperty>(track_.get());
+        std::make_unique<TrackExistsProperty>(track_);
     return property.get();
   }
   if (name == kTrackHasRoutes) {
     auto& property = properties_[name] =
-        std::make_unique<TrackHasRoutesProperty>(track_.get());
+        std::make_unique<TrackHasRoutesProperty>(track_);
     has_routes_property_ = property.get();
     return property.get();
   }

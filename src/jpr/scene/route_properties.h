@@ -80,7 +80,7 @@ class RouteProperties final : public TrackListener {
   ~RouteProperties() override;
 
   // The route that these properties are tied to.
-  Track* GetTrack() const { return track_.get(); }
+  Track* GetTrack() const { return track_; }
   TrackRouteType GetType() const { return type_; }
   int GetIndex() const { return index_; }
 
@@ -109,7 +109,7 @@ class RouteProperties final : public TrackListener {
   // Points the other track at the route's, and notifies every property.
   void OnRouteChanged();
 
-  std::shared_ptr<Track> track_;
+  Track* track_;
   TrackRouteType type_;
   int index_;
   mutable absl::flat_hash_map<std::string, std::unique_ptr<RouteProperty>>
