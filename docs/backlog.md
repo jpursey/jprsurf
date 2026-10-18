@@ -28,39 +28,14 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Widgets
-
-- **Layers:** device
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Widgets)
-
-The names mappings use for hardware, independent of which device a control is
-on. A widget is a control, a struct of named widgets, or an array of widgets
-of the same shape:
-- **Shapes:** a control's shape is its inputs, outputs, and output mode names,
-  and struct and array shapes follow from their fields and elements. Device
-  catalogs (*Device types and catalogs*) are struct shapes too.
-- **Definitions:** a path to a device control or struct, a new struct (with
-  includes and exclusions), and joined arrays. Checking catches unknown paths,
-  fields defined twice, and array elements whose shapes don't match.
-- **Resolving:** paths such as `strip[3].fader` resolve to the `Control`s of
-  the devices that are present. A joined array drops the elements of an absent
-  device.
-
-Zipped arrays are part of the design, but nothing needs them yet, so they wait
-for a device that does. It is pure `device` code with no REAPER dependency, so
-all of it is unit tested against hand-built shapes, before any real device
-publishes one.
-
 ## Device types and catalogs
 
 - **Layers:** device, scene, plugin
 - **Size:** medium
 - **Feature workflow:** yes
 - **Depends on:** *Widgets*
-- **Background:** [config_model.md](config_model.md) (Devices)
+- **Background:** [config_model.md](config_model.md) (Devices),
+  [widgets.md](worklog/widgets.md)
 
 A registry of device types by name, each with:
 - A **catalog**: its controls as a struct widget, with arrays of structs for
