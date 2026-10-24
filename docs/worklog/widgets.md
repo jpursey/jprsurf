@@ -163,11 +163,12 @@ struct WidgetFieldDefinition {
       widget;
 };
 
-// A device that paths can start at.
+// A device that paths can start at: one unit, named by the config.
 struct WidgetDevice {
   std::string name;  // As paths start with it, such as "xtouch".
 
   // The device type's catalog: a struct shape, which must outlive the call.
+  // Devices of the same type share it.
   const WidgetShape* catalog = nullptr;
 };
 
@@ -179,6 +180,10 @@ std::optional<WidgetShape> CheckWidgets(
     absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
 ```
 
+- **A device's name is its name in the config**, not its type's, so several
+  devices of one type are several names sharing one catalog: three extenders
+  are `ext_1`, `ext_2`, and `ext_3`, and `strip` joins all their strips and
+  the X-Touch's.
 - **Every path in a definition starts at a device**: `xtouch.play`, or
   `xtouch.strip[7]`, which is JPRSurf's `info_strip`. A path can name any
   widget, so a path to a device's array is an array.
@@ -340,6 +345,8 @@ Depends on: CL1.
   - The shapes of path, struct, and join definitions: includes with
     exclusions, nested structs, a join sized by all its slices, and a slice
     with no count taking the rest of its array.
+  - Two devices sharing one catalog, under different names, joined into one
+    array.
   - Each error in Definitions and checking, with the field it names, and
     several errors reported by one check.
 
@@ -360,6 +367,9 @@ Depends on: CL2.
   - With a device absent: its controls are null, its structs keep their
     fields, its arrays are empty, and joins keep the other devices' elements
     in order. `Find()` past the elements present is null.
+  - Two devices sharing one catalog resolve to their own controls, and a join
+    of their arrays and a third device's keeps the others' elements in order
+    with either one absent.
   - A present device without a catalog control gives a null control.
   - A definition that doesn't check returns nullopt with its errors.
 

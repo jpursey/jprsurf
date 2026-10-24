@@ -47,15 +47,24 @@ A registry of device types by name, each with:
   `Device` drops them before creating each `Control`, so the extender's fader
   without touch sensing stops being hard coded.
 
-`DeviceXTouch` takes its control names from its catalog, and `Device` checks
-once, when it is created, that the controls it built match the catalog,
-logging an error if they don't. A unit test checks it too, for each device
-type, creating the device on the fake hardware's ports (as
+`DeviceXTouch` names its controls by their catalog paths (`strip[0].fader`),
+and `Device` checks once, when it is created, that the controls it built match
+the catalog, logging an error if they don't. A unit test checks it too, for
+each device type, creating the device on the fake hardware's ports (as
 `device_xtouch_test.cc` does).
 
+The surface's devices are an explicit list, each with its name (which widget
+paths start with), its device type, its exact MIDI input and output port names,
+whether it is required, and its control overrides. Nothing is inferred from a
+type or from the ports that exist, so several units of one type (the user has
+more than one extender) are several entries, each with its own ports. The list
+is C++ until the config fills in the same list. To confirm first, with the
+user's extenders: what REAPER lists the ports of identical units as. Explicit
+names only work if they differ.
+
 The last CL moves the plugin onto device types and widgets. It creates its
-devices through the registry, with the X-Touch required and the extender
-optional (so the extender alone no longer loads, deliberately). It defines
+devices from the list, with the X-Touch required and the extender optional
+(so the extender alone no longer loads, deliberately). It defines
 JPRSurf's widgets in C++, and the scene maps through widget paths and output
 mode names rather than `"XTouch/..."` control names and mode numbers. That
 removes the device prefixes and the device checks in the strip loops. Apart
