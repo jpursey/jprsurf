@@ -109,17 +109,6 @@ TEST(WidgetPathTest, MalformedPathGivesTheParserError) {
   EXPECT_FALSE(error_message.empty());
 }
 
-TEST(WidgetPathTest, SubpathHasTheStepsFromFirstOn) {
-  std::optional<WidgetPath> path = WidgetPath::Parse("xtouch.strip[0].fader");
-  ASSERT_TRUE(path.has_value());
-  EXPECT_EQ(path->GetSubpath(0).ToString(), "xtouch.strip[0].fader");
-  EXPECT_EQ(path->GetSubpath(1).ToString(), "strip[0].fader");
-  EXPECT_EQ(path->GetSubpath(2).ToString(), "[0].fader");
-  EXPECT_THAT(path->GetSubpath(4).GetSteps(), IsEmpty());
-  EXPECT_THAT(path->GetSubpath(5).GetSteps(), IsEmpty());
-  EXPECT_EQ(path->GetSubpath(-1).ToString(), "xtouch.strip[0].fader");
-}
-
 // A language that includes widget paths, with a superset of their lexer config
 // and rules: a mapping from a path to a string.
 TEST(WidgetPathTest, GrammarWorksInALanguageThatIncludesIt) {

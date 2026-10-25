@@ -67,10 +67,6 @@ class WidgetPath {
 
   absl::Span<const Step> GetSteps() const;
 
-  // The path of the steps from `first` on, such as `strip[0].fader` from
-  // `xtouch.strip[0].fader` for 1.
-  WidgetPath GetSubpath(int first) const;
-
   // The path's text, which Parse() reads as the same path.
   std::string ToString() const;
 };
@@ -234,10 +230,10 @@ std::optional<WidgetShape> CheckWidgets(
 - Checking finds every problem rather than stopping at the first, and each
   error names the field being defined (`strip`, or `transport.play`):
   - A device name, or a field name, that isn't a widget name, or a device
-    named twice.
+    named twice, or without a struct catalog.
   - In a device's catalog, at any depth: a field or mode name that isn't a
     widget name, or is repeated in its struct or control (naming the device
-    and the path, such as `xtouch: strip[0].fadr`).
+    and the path, such as `xtouch: strip[0]: field "fadr"`).
   - A path that isn't one, starts at no device, or names nothing in its
     device's catalog.
   - A field defined twice in one struct, directly or by an include.
@@ -366,7 +362,7 @@ Depends on: nothing.
   `For*` functions keeping names as given, with `GetField()` taking the first
   of a repeated name.
 
-### CL2 [ ] device: Define widgets, and check them against catalogs
+### CL2 [x] device: Define widgets, and check them against catalogs
 
 Depends on: CL1.
 

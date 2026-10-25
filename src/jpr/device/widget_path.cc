@@ -5,7 +5,6 @@
 
 #include "jpr/device/widget_path.h"
 
-#include <algorithm>
 #include <memory>
 
 #include "absl/algorithm/container.h"
@@ -80,12 +79,6 @@ WidgetPath WidgetPath::FromParsedItem(const gb::ParsedItem& item) {
     }
   }
   return WidgetPath(std::move(steps));
-}
-
-WidgetPath WidgetPath::GetSubpath(int first) const {
-  const int count = static_cast<int>(steps_.size());
-  first = std::clamp(first, 0, count);
-  return WidgetPath(std::vector<Step>(steps_.begin() + first, steps_.end()));
 }
 
 std::string WidgetPath::ToString() const {

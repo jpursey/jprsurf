@@ -86,11 +86,6 @@ class WidgetPath {
 
   absl::Span<const Step> GetSteps() const { return steps_; }
 
-  // Returns the path of the steps from `first` on, such as `strip[0].fader`
-  // from `xtouch.strip[0].fader` for 1. It is empty if `first` is past the
-  // last step.
-  WidgetPath GetSubpath(int first) const;
-
   // Returns the path's text, which Parse() reads as the same path. Paths with
   // the same steps have the same text.
   std::string ToString() const;
