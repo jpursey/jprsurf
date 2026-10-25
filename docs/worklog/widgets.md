@@ -67,6 +67,10 @@ class WidgetPath {
 
   absl::Span<const Step> GetSteps() const;
 
+  // The path of the steps from `first` on, such as `strip[0].fader` from
+  // `xtouch.strip[0].fader` for 1.
+  WidgetPath GetSubpath(int first) const;
+
   // The path's text, which Parse() reads as the same path.
   std::string ToString() const;
 };
@@ -257,29 +261,47 @@ struct WidgetDevice {
 };
 
 // A widget on the devices that are present. The devices must outlive it.
+// Widgets never change once built, so they can't be copied or moved, and are
+// held by std::unique_ptr: every widget in a tree keeps its address.
 class Widget {
  public:
+  struct Field;  // { std::string name; std::unique_ptr<const Widget> widget; }
+  using Fields = absl::Span<const Field>;
+  using Elements = absl::Span<const std::unique_ptr<const Widget>>;
+
+  // As WidgetShape's: tests, and later the scene's, can build one by hand.
+  // Struct and array widgets take a vector, or the fields or elements as
+  // arguments (ForStruct(Field{"play", ForControl(play)}, ...)).
+  static std::unique_ptr<const Widget> ForControl(Control* control);
+  static std::unique_ptr<const Widget> ForStruct(std::vector<Field> fields);
+  static std::unique_ptr<const Widget> ForArray(
+      std::vector<std::unique_ptr<const Widget>> elements);
+
   WidgetKind GetKind() const;
 
   // For a control, the device's control, or null if it is absent.
   Control* GetControl() const;
 
-  // For a struct, the field with a name, or null if it has none. A struct
-  // keeps every field it is defined with, whatever is absent.
+  // For a struct, its fields in order, and the field with a name, or null if
+  // it has none. A struct keeps every field it is defined with, whatever is
+  // absent.
+  Fields GetFields() const;
   const Widget* GetField(std::string_view name) const;
 
-  // For an array, the elements that are present.
-  absl::Span<const Widget> GetElements() const;
+  // For an array, the elements that are present, and the element at an
+  // index, or null if there is none.
+  Elements GetElements() const;
+  const Widget* GetElement(int index) const;
 
   // Returns the widget at the path from this one, or null if there is none:
   // a field its struct doesn't have, or an index past the elements present.
   const Widget* Find(const WidgetPath& path) const;
 };
 
-// Checks the widgets as CheckWidgets() does, and resolves them on the devices
-// that are present. Returns the top-level struct, or nullopt with the errors
-// checking found.
-std::optional<Widget> ResolveWidgets(
+// In widget_definition.h, beside CheckWidgets(): checks the widgets as it
+// does, and resolves them on the devices that are present. Returns the
+// top-level struct, or null with the errors checking found.
+std::unique_ptr<const Widget> ResolveWidgets(
     const WidgetStructDefinition& widgets,
     absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
 ```
@@ -297,8 +319,11 @@ std::optional<Widget> ResolveWidgets(
     its equality has to ignore, and the 88 strip controls each need one
     written out.
   - Or each device could build its own widget as it creates its controls, but
-    then its structure is written twice, in its catalog and in its code, and
-    `Widget` needs a public way to build one by hand.
+    then its structure is written twice, in its catalog and in its code.
+- **Checking and resolving are one walk** over the definitions, which builds
+  each definition's shape and widget together, so the rules of paths,
+  includes, and slices are written once. `CheckWidgets()` resolves as if every
+  device were absent, and returns only the shape.
 - **Absent devices.** A catalog describes a device type, and never changes.
   Resolving makes each device's instance, and an absent device's instance has
   every field at its default: its controls are absent, its arrays are empty,
@@ -383,17 +408,22 @@ Depends on: CL1.
   - Each error in Definitions and checking, with the field it names, and
     several errors reported by one check.
 
-### CL3 [ ] device: Resolve widgets on the devices present
+### CL3 [x] device: Resolve widgets on the devices present
 
 Depends on: CL2.
 
-- `widget.h`: `Widget` and `ResolveWidgets()`, and `WidgetDevice::device`.
+- `widget.h`: `Widget`.
+- `widget_definition.h`: `ResolveWidgets()`, and `WidgetDevice::device`.
+  `WidgetPath::GetSubpath()` returns, for a device's catalog paths.
 - Unused, so no visible change.
 
 **Verify**
 - Standard checks.
-- `widget_test.cc`, with `FakeDevice`s whose controls are named by their
-  catalog paths:
+- `widget_test.cc`: each kind's accessors, built from vectors or arguments,
+  and `Find()` through structs and arrays, with null for an unknown field, an
+  index past the elements, or a step into a control.
+- `widget_definition_test.cc`, with `FakeDevice`s whose controls are named by
+  their catalog paths:
   - Controls resolve to the device's controls, through path, struct, include,
     and join definitions, and `Find()` reaches them from the top and from an
     element.
@@ -404,7 +434,7 @@ Depends on: CL2.
     of their arrays and a third device's keeps the others' elements in order
     with either one absent.
   - A present device without a catalog control gives a null control.
-  - A definition that doesn't check returns nullopt with its errors.
+  - A definition that doesn't check returns null with its errors.
 
 ### Summary [ ] docs: Summarize the feature
 

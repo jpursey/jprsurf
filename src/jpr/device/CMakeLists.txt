@@ -13,15 +13,18 @@ set(jpr_device_SOURCE
   control_output_midi.cc control_output_midi.h
   device.cc device.h
   device_xtouch.cc device_xtouch.h
+  widget.cc widget.h
   widget_definition.cc widget_definition.h
   widget_path.cc widget_path.h
   widget_shape.cc widget_shape.h
 )
 
 set(jpr_device_DEPS
+  absl::flat_hash_map
   absl::flat_hash_set
   absl::log
   absl::log_initialize
+  absl::memory
   absl::span
   absl::strings
   gb_config
@@ -44,6 +47,7 @@ set(jpr_device_TEST_SOURCE
   widget_definition_test.cc
   widget_path_test.cc
   widget_shape_test.cc
+  widget_test.cc
 )
 
 set(jpr_device_TEST_DEPS

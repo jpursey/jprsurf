@@ -5,12 +5,15 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "absl/types/span.h"
+#include "jpr/device/device.h"
+#include "jpr/device/widget.h"
 #include "jpr/device/widget_shape.h"
 
 namespace jpr {
@@ -70,10 +73,14 @@ struct WidgetDevice {
 
   // The device type's catalog, a struct shape, which must outlive the call.
   const WidgetShape* catalog = nullptr;
+
+  // The device, or null if it is absent. Its controls are named by their paths
+  // in its catalog, such as "strip[0].fader". CheckWidgets() ignores it.
+  Device* device = nullptr;
 };
 
 //==============================================================================
-// Checking
+// Checking and resolving
 //==============================================================================
 
 // Checks the config's widgets, the fields of its top-level struct, against the
@@ -91,5 +98,19 @@ struct WidgetDevice {
 std::optional<WidgetShape> CheckWidgets(const WidgetStructDefinition& widgets,
                                         absl::Span<const WidgetDevice> devices,
                                         std::vector<std::string>* errors);
+
+// Checks the widgets as CheckWidgets() does, and resolves them on the devices
+// that are present. Returns the top-level struct, or null with the errors
+// checking found. The devices must outlive the widgets.
+//
+// Each device's instance of its catalog has the device's controls, or null for
+// a control it doesn't have. An absent device's instance has every field at
+// its default: its controls are null, its arrays are empty, and its structs
+// keep their fields. So a join has the elements of the devices present, in
+// order, and a path in a definition, such as "xtouch.strip[7]", addresses the
+// catalog: it is a struct with null controls when the X-Touch is absent.
+std::unique_ptr<const Widget> ResolveWidgets(
+    const WidgetStructDefinition& widgets,
+    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
 
 }  // namespace jpr

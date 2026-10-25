@@ -5,15 +5,24 @@
 
 #include "jpr/device/widget_definition.h"
 
+#include <iterator>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/runner.h"
+#include "jpr/device/control.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
+#include "jpr/device/testing/fake_device.h"
+#include "jpr/device/widget.h"
+#include "jpr/device/widget_path.h"
 #include "jpr/device/widget_shape.h"
 
 namespace jpr {
@@ -384,6 +393,183 @@ TEST_F(WidgetDefinitionTest, ErrorsAreOptional) {
   EXPECT_TRUE(
       CheckWidgets({.fields = {{"play", "xtouch.play"}}}, devices_, nullptr)
           .has_value());
+}
+
+// The fixture's catalogs on fake devices, whose controls are named by their
+// catalog paths.
+class ResolveWidgetsTest : public WidgetDefinitionTest {
+ protected:
+  ResolveWidgetsTest() {
+    xtouch_device_.AddButton("play");
+    xtouch_device_.AddButton("stop");
+    xtouch_device_.AddPot("jog");
+    AddStrips(xtouch_device_);
+    AddStrips(ext_1_device_);
+    AddStrips(ext_2_device_);
+    devices_ = {{"ext_1", &ext_, &ext_1_device_},
+                {"ext_2", &ext_, &ext_2_device_},
+                {"xtouch", &xtouch_, &xtouch_device_}};
+  }
+
+  static void AddStrips(FakeDevice& device) {
+    for (int i = 0; i < 8; ++i) {
+      device.AddFader(absl::StrCat("strip[", i, "].fader"));
+      device.AddButton(absl::StrCat("strip[", i, "].select"));
+    }
+  }
+
+  std::unique_ptr<const Widget> Resolve(const WidgetStructDefinition& widgets) {
+    errors_.clear();
+    return ResolveWidgets(widgets, devices_, &errors_);
+  }
+
+  // Returns the path, failing the test if the text isn't one.
+  static WidgetPath Path(std::string_view text) {
+    std::optional<WidgetPath> path = WidgetPath::Parse(text);
+    EXPECT_TRUE(path.has_value()) << text;
+    return path.value_or(WidgetPath());
+  }
+
+  // Returns the control of the widget at the path, failing the test if there
+  // is no widget there.
+  static Control* GetControlAt(const Widget& widget, std::string_view text) {
+    const Widget* found = widget.Find(Path(text));
+    EXPECT_NE(found, nullptr) << text;
+    return found != nullptr ? found->GetControl() : nullptr;
+  }
+
+  // Returns the number of elements of the array widget at the path, failing
+  // the test if there is no widget there.
+  static int GetSizeAt(const Widget& widget, std::string_view text) {
+    const Widget* found = widget.Find(Path(text));
+    EXPECT_NE(found, nullptr) << text;
+    return found != nullptr ? static_cast<int>(std::ssize(found->GetElements()))
+                            : -1;
+  }
+
+  // The definitions of JPRSurf's own widgets, on two extenders.
+  const WidgetStructDefinition widgets_ = {
+      .includes = {{"xtouch", {"strip"}}},
+      .fields = {
+          {"strip",
+           WidgetJoinDefinition{
+               {{"ext_1.strip"}, {"ext_2.strip"}, {"xtouch.strip"}}}},
+          {"route_strip",
+           WidgetJoinDefinition{{{"ext_1.strip", 2}, {"xtouch.strip", 0, 7}}}},
+          {"info_strip", "xtouch.strip[7]"},
+          {"transport",
+           WidgetStructDefinition{.includes = {{"ext_2.strip[0]", {"select"}}},
+                                  .fields = {{"stop", "xtouch.stop"}}}},
+      }};
+
+  Runner runner_{"Controls"};
+  FakeDevice xtouch_device_{runner_};
+  FakeDevice ext_1_device_{runner_};
+  FakeDevice ext_2_device_{runner_};
+};
+
+TEST_F(ResolveWidgetsTest, ControlsAreTheDevicesControls) {
+  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  ASSERT_NE(widgets, nullptr);
+  EXPECT_THAT(errors_, IsEmpty());
+
+  EXPECT_EQ(GetControlAt(*widgets, "play"), xtouch_device_.GetControl("play"));
+  EXPECT_EQ(GetControlAt(*widgets, "jog"), xtouch_device_.GetControl("jog"));
+  EXPECT_EQ(GetControlAt(*widgets, "info_strip.select"),
+            xtouch_device_.GetControl("strip[7].select"));
+  EXPECT_EQ(GetControlAt(*widgets, "transport.stop"),
+            xtouch_device_.GetControl("stop"));
+  EXPECT_EQ(GetControlAt(*widgets, "transport.fader"),
+            ext_2_device_.GetControl("strip[0].fader"));
+  EXPECT_EQ(widgets->Find(Path("strip[0].fader")),
+            widgets->GetField("strip")->GetElement(0)->GetField("fader"));
+}
+
+TEST_F(ResolveWidgetsTest, JoinsHaveTheirSlicesElementsInOrder) {
+  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  ASSERT_NE(widgets, nullptr);
+
+  EXPECT_EQ(GetSizeAt(*widgets, "strip"), 24);
+  EXPECT_EQ(GetControlAt(*widgets, "strip[0].fader"),
+            ext_1_device_.GetControl("strip[0].fader"));
+  EXPECT_EQ(GetControlAt(*widgets, "strip[8].fader"),
+            ext_2_device_.GetControl("strip[0].fader"));
+  EXPECT_EQ(GetControlAt(*widgets, "strip[23].select"),
+            xtouch_device_.GetControl("strip[7].select"));
+
+  EXPECT_EQ(GetSizeAt(*widgets, "route_strip"), 13);
+  EXPECT_EQ(GetControlAt(*widgets, "route_strip[0].fader"),
+            ext_1_device_.GetControl("strip[2].fader"));
+  EXPECT_EQ(GetControlAt(*widgets, "route_strip[12].fader"),
+            xtouch_device_.GetControl("strip[6].fader"));
+
+  // From an element.
+  const Widget* element = widgets->GetField("strip")->GetElement(16);
+  ASSERT_NE(element, nullptr);
+  EXPECT_EQ(GetControlAt(*element, "fader"),
+            xtouch_device_.GetControl("strip[0].fader"));
+}
+
+TEST_F(ResolveWidgetsTest, AbsentDeviceHasNullControlsAndEmptyArrays) {
+  devices_[2].device = nullptr;  // xtouch
+  std::unique_ptr<const Widget> widgets =
+      Resolve({.includes = widgets_.includes,
+               .fields = {widgets_.fields[0],
+                          widgets_.fields[2],
+                          {"xtouch_strip", "xtouch.strip"},
+                          {"xtouch_strip_2", "xtouch.strip[2]"}}});
+  ASSERT_NE(widgets, nullptr);
+
+  EXPECT_EQ(GetControlAt(*widgets, "play"), nullptr);
+  EXPECT_EQ(GetControlAt(*widgets, "info_strip.fader"), nullptr);
+  EXPECT_EQ(GetControlAt(*widgets, "xtouch_strip_2.select"), nullptr);
+  EXPECT_EQ(GetSizeAt(*widgets, "xtouch_strip"), 0);
+
+  EXPECT_EQ(GetSizeAt(*widgets, "strip"), 16);
+  EXPECT_EQ(GetControlAt(*widgets, "strip[15].fader"),
+            ext_2_device_.GetControl("strip[7].fader"));
+  EXPECT_EQ(widgets->Find(Path("strip[16]")), nullptr);
+}
+
+TEST_F(ResolveWidgetsTest, DevicesSharingACatalogHaveTheirOwnControls) {
+  devices_[0].device = nullptr;  // ext_1
+  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  ASSERT_NE(widgets, nullptr);
+  EXPECT_EQ(GetSizeAt(*widgets, "strip"), 16);
+  EXPECT_EQ(GetControlAt(*widgets, "strip[0].fader"),
+            ext_2_device_.GetControl("strip[0].fader"));
+  EXPECT_EQ(GetControlAt(*widgets, "strip[8].fader"),
+            xtouch_device_.GetControl("strip[0].fader"));
+  EXPECT_EQ(GetSizeAt(*widgets, "route_strip"), 7);
+
+  devices_[0].device = &ext_1_device_;
+  devices_[1].device = nullptr;  // ext_2
+  widgets = Resolve(widgets_);
+  ASSERT_NE(widgets, nullptr);
+  EXPECT_EQ(GetSizeAt(*widgets, "strip"), 16);
+  EXPECT_EQ(GetControlAt(*widgets, "strip[7].fader"),
+            ext_1_device_.GetControl("strip[7].fader"));
+  EXPECT_EQ(GetControlAt(*widgets, "strip[8].fader"),
+            xtouch_device_.GetControl("strip[0].fader"));
+  EXPECT_EQ(GetControlAt(*widgets, "transport.fader"), nullptr);
+}
+
+TEST_F(ResolveWidgetsTest, PresentDeviceWithoutACatalogControlHasNull) {
+  FakeDevice device(runner_);
+  device.AddButton("play");
+  devices_[2].device = &device;
+  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  ASSERT_NE(widgets, nullptr);
+  EXPECT_EQ(GetControlAt(*widgets, "play"), device.GetControl("play"));
+  EXPECT_EQ(GetControlAt(*widgets, "stop"), nullptr);
+  // A present device has every element of its arrays.
+  EXPECT_EQ(GetSizeAt(*widgets, "strip"), 24);
+  EXPECT_EQ(GetControlAt(*widgets, "strip[16].fader"), nullptr);
+}
+
+TEST_F(ResolveWidgetsTest, DefinitionThatDoesntCheckHasItsErrors) {
+  EXPECT_EQ(Resolve({.fields = {{"play", "xtouch.paly"}}}), nullptr);
+  EXPECT_THAT(errors_, ElementsAre("play: path \"xtouch.paly\" names nothing"));
 }
 
 }  // namespace
