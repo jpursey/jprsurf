@@ -8,451 +8,157 @@ devices' catalogs, and they resolve to the `Control`s of the devices that are
 present, so `strip[3].fader` is the fourth fader on the surface whether or not
 the extender is connected.
 
-This feature adds widgets to `device` as plain data, unit tested against
-hand-built shapes. Nothing uses them yet: device catalogs, and the plugin
-mapping through widgets, are *Device types and catalogs*. There is no change in
-behavior.
+This feature added widgets to `device` as plain data, unit tested against
+hand-built catalogs and fake devices. Nothing uses them yet: device catalogs,
+and the plugin mapping through widgets, are *Device types and catalogs*. There
+is no change in behavior.
 
-## Design
+## Behavior
 
-Everything is in `device`, with no REAPER dependency, in four parts: paths,
-shapes, definitions (checked against shapes), and widgets resolved on devices.
-Checking needs no devices, so a config can be checked without hardware, and
-resolving checks first, so nothing resolves a definition that doesn't check.
+### Names and paths
 
-Everything here runs once, when the widgets are resolved, and nothing per run.
+- A **widget name** is any C identifier: devices, struct fields, and output
+  modes all have one. The config model's lower case convention is JPRSurf's
+  style for its own names, not a rule that checking enforces.
+- A **path** is field names and array indices from a widget, such as
+  `strip[3].fader`. Each field but the first follows a `.`, so `[3].fader` is a
+  path, but `strip.[3]` isn't. Indices start from 0, and fit an int. Spaces
+  between steps are allowed, as paths are parsed with `gb_parse`, and the empty
+  path is the widget itself.
 
-### Names
+### Definitions
 
-| New name                                                                  | Alternatives     | Existing names it might be confused with                         |
-| ------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
-| `Widget`                                                                  | `ResolvedWidget` | Game Bits' `gb/imgui` widgets, which JPRSurf doesn't use         |
-| `WidgetShape`, `WidgetKind`                                               | `WidgetType`     | Device types, and `ControlInput::Type` and `ControlOutput::Type` |
-| `WidgetPath`                                                              | `WidgetAddress`  | Property names, which have a namespace, so never look like paths |
-| `WidgetFieldDefinition`, `WidgetStructDefinition`, `WidgetJoinDefinition` | `WidgetSpec`     | `SurfaceSpec`, which will hold the definitions                   |
-| `WidgetSlice`, `WidgetInclude`                                            | `WidgetRange`    | Read ranges (`ReadConfig::property_min` and `property_max`)      |
-| `WidgetDevice`                                                            | `NamedDevice`    | `Device`, which it refers to                                     |
-| `CheckWidgets()`, `ResolveWidgets()`                                      | `BuildWidgets()` | The spec's checking and building, which will call them           |
+A config's widgets are the fields of a top-level struct. A field is defined as:
+- A **path through a device**, such as `xtouch.play` or `xtouch.strip[7]`. A
+  path can name any widget, so a path to a device's array is an array.
+- A **struct**: the fields of its **includes** (structs at paths, apart from
+  the fields each excludes), in order, then its own fields.
+- A **join**: slices of arrays, one after another. A slice is `count` elements
+  from `first`, or the rest of its array.
 
-"Shape", "slice", "include", and "joined" are the config model's own words.
+Every path in a definition starts at a device. Paths into the config's own
+arrays, and zipped arrays, wait in the backlog.
 
-### Paths
+A **device** in a definition is one unit, named by the config, with its type's
+catalog. Several devices of one type share a catalog under different names, so
+three extenders are `ext_1`, `ext_2`, and `ext_3`, and one join can take all
+their strips.
 
-```
-// The lexer config and parser rules that widget paths are parsed with
-// (gb_parse). A language that includes widget paths parses them with a
-// superset of both, matching a path with the "WidgetPath" rule.
-inline constexpr gb::LexerConfig kWidgetPathLexerConfig = ...;
-inline constexpr std::string_view kWidgetPathRules = ...;
+### Checking
 
-// Returns true if the name is a widget name: a C identifier, as
-// kWidgetPathLexerConfig reads them.
-bool IsWidgetName(std::string_view name);
+`CheckWidgets()` checks definitions against the catalogs without any devices,
+and returns the top-level struct's shape. It finds every problem rather than
+stopping at the first. Each error starts with what it is about: a device and a
+path in its catalog (`xtouch: strip[0]: field "fader" is repeated`), or the
+struct or field being defined (`transport.play: path "xtouch.paly" names
+nothing`). It reports:
+- Device names that aren't widget names or are repeated, and devices without a
+  struct catalog. A path from such a device isn't reported again.
+- In each catalog, at any depth, field and mode names that aren't widget names
+  or are repeated in their struct or control. A catalog shared by several
+  devices is checked once, and every element of an array once, as `[0]`.
+- Field names that aren't widget names, or are defined twice in a struct,
+  directly or through an include.
+- Paths that aren't paths (with the parser's error), don't start at a device,
+  or name nothing.
+- Includes of something that isn't a struct, and exclusions of a field the
+  struct doesn't have.
+- Joins with no slices, slices of something that isn't an array, slices that
+  are empty or run past their array, slices whose elements' shapes differ from
+  the first slice's, and joins of more than an int's worth of elements.
 
-// A path to a widget from another widget: field names and array indices,
-// such as `strip[3].fader`. Indices start from 0. An empty path is the widget
-// itself.
-class WidgetPath {
- public:
-  // A field name or an array index.
-  using Step = std::variant<std::string, int>;
-
-  // Returns the path, or nullopt if the text isn't one, with the parser's
-  // error.
-  static std::optional<WidgetPath> Parse(std::string_view text,
-                                         std::string* error_message = nullptr);
-
-  // Returns the path that a match of the "WidgetPath" rule parsed.
-  static WidgetPath FromParsedItem(const gb::ParsedItem& item);
-
-  absl::Span<const Step> GetSteps() const;
-
-  // The path of the steps from `first` on, such as `strip[0].fader` from
-  // `xtouch.strip[0].fader` for 1.
-  WidgetPath GetSubpath(int first) const;
-
-  // The path's text, which Parse() reads as the same path.
-  std::string ToString() const;
-};
-```
-
-- Paths are parsed with Game Bits' `gb_parse`, with a lexer config and rules
-  that a config language extends rather than repeats: its own lexer config is
-  a superset of `kWidgetPathLexerConfig`, and its rules include
-  `kWidgetPathRules`. So there is one definition of a path, in `device`.
-- The lexer skips spaces between tokens, so `strip [3]` is `strip[3]`. That is
-  harmless, as a control is looked up by `ToString()` of the parsed steps,
-  never by the text as written.
-- A widget name is any C identifier, the identifiers the lexer reads.
-  Checking reports a name that isn't one, in a config or in a device's catalog
-  (see Definitions and checking). The config model's lower case convention is
-  JPRSurf's style for its own names, not a rule that checking enforces.
-
-### Shapes
-
-```
-enum class WidgetKind { kControl, kStruct, kArray };
-
-// The shape of a widget: what a mapping can use a control for, a struct's
-// fields and their shapes, or an array's size and the shape of every element.
-class WidgetShape {
- public:
-  // A field of a struct shape: { std::string name; WidgetShape shape; },
-  // defined after the class.
-  struct Field;
-
-  // These never fail: names are kept as given, and a negative size is 0.
-  static WidgetShape ForControl(Control::Inputs inputs,
-                                Control::Outputs outputs,
-                                std::vector<std::string> mode_names = {});
-  static WidgetShape ForStruct(std::vector<Field> fields);
-  static WidgetShape ForArray(WidgetShape element, int size);
-
-  WidgetKind GetKind() const;
-
-  // For a control, its inputs, its outputs, and the names of its output
-  // modes, by mode number. Empty for any other kind.
-  Control::Inputs GetInputs() const;
-  Control::Outputs GetOutputs() const;
-  absl::Span<const std::string> GetModeNames() const;
-
-  // For a struct, its fields in order, and the field with a name, or null if
-  // it has none.
-  absl::Span<const Field> GetFields() const;
-  const WidgetShape* GetField(std::string_view name) const;
-
-  // For an array, its size, and the shape of its elements.
-  int GetSize() const;
-  const WidgetShape* GetElement() const;
-
-  // Returns the shape at the path from this one, or null if there is no
-  // widget there.
-  const WidgetShape* Find(const WidgetPath& path) const;
-
-  // Equal shapes are the same kind, and: controls with the same inputs,
-  // outputs, and mode names; structs with the same field names, each of an
-  // equal shape, in any order; or arrays of the same size with equal element
-  // shapes.
-  friend bool operator==(const WidgetShape& a, const WidgetShape& b);
-};
-```
-
-- A device catalog (*Device types and catalogs*) is a struct shape, built in
-  C++ with these.
-- Building a shape never fails, so a catalog is one nested expression, with no
-  results to unwrap. A bad or repeated name in a catalog is a programmer error,
-  which `CheckWidgets()` reports with the device and path, where errors already
-  have somewhere to go. *Device types and catalogs* tests each device type's
-  catalog with it, so a catalog bug fails a test rather than going to a log.
-  Until a shape is checked, `GetField()` takes the first of a repeated name.
-- A control's inputs, outputs, and mode names are on `WidgetShape` itself,
-  with no type of their own, and no kind has one: each is two or three values
-  of distinct types. A shape from `ForControl()` is already the value a
-  catalog reuses for every control of a kind, such as a button with a light.
-- Shapes match exactly, as the model says, apart from the order of a struct's
-  fields, which a mapping never sees. Field order is kept, for errors and
-  listings.
-
-### Definitions and checking
-
-```
-// A slice of an array: `count` elements from `first`, or the rest of the
-// array if `count` isn't set.
-struct WidgetSlice {
-  std::string path;  // Through a device, such as "xtouch.strip".
-  int first = 0;
-  std::optional<int> count;
-};
-
-// The fields of the struct at a path through a device, apart from the ones
-// it names.
-struct WidgetInclude {
-  std::string path;
-  std::vector<std::string> excluded;
-};
-
-struct WidgetFieldDefinition;
-
-// A struct: the fields of its includes, in order, then its own.
-struct WidgetStructDefinition {
-  std::vector<WidgetInclude> includes;
-  std::vector<WidgetFieldDefinition> fields;
-};
-
-// A joined array: the slices' elements, one after another.
-struct WidgetJoinDefinition {
-  std::vector<WidgetSlice> slices;
-};
-
-// A field of a struct, and how it is defined: the widget at a path through a
-// device (a control, a struct, or an array), a new struct, or a joined array.
-struct WidgetFieldDefinition {
-  std::string name;
-  std::variant<std::string, WidgetStructDefinition, WidgetJoinDefinition>
-      widget;
-};
-
-// A device that paths can start at: one unit, named by the config.
-struct WidgetDevice {
-  std::string name;  // As paths start with it, such as "xtouch".
-
-  // The device type's catalog: a struct shape, which must outlive the call.
-  // Devices of the same type share it.
-  const WidgetShape* catalog = nullptr;
-};
-
-// Checks the config's widgets, the fields of its top-level struct, against
-// the devices' catalogs. Returns the struct's shape, or nullopt, with an
-// error added for each problem found.
-std::optional<WidgetShape> CheckWidgets(
-    const WidgetStructDefinition& widgets,
-    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
-```
-
-- **A device's name is its name in the config**, not its type's, so several
-  devices of one type are several names sharing one catalog: three extenders
-  are `ext_1`, `ext_2`, and `ext_3`, and `strip` joins all their strips and
-  the X-Touch's.
-- **Every path in a definition starts at a device**: `xtouch.play`, or
-  `xtouch.strip[7]`, which is JPRSurf's `info_strip`. A path can name any
-  widget, so a path to a device's array is an array.
-  - The config model also lets a join slice the config's own arrays. Leaving
-    that out keeps each definition independent of the others: there is no
-    order between fields, no cycle to find, and no clash between a device's
-    name and a field's. A slice of a catalog's array also means the same
-    strips whatever is connected, where a slice of the config's own would have
-    to say whether it counts the strips defined or the strips present.
-  - The cost is repetition. `route_strip` repeats `strip`'s slices, with the
-    X-Touch's shortened to 0-6, and a second extender is added to both. That
-    edit is needed either way, as "all but the last strip" is a different
-    slice of the config's own `strip` once it has 24 strips.
-  - JPRSurf's last strip is `xtouch.strip[7]`, as the X-Touch is required and
-    on the right. The last strip of whatever is connected, for a config whose
-    rightmost unit is optional, needs paths into the config's own arrays,
-    counted from the end after absent strips are dropped. It waits for a
-    config that needs it (see Summary).
-- Checking finds every problem rather than stopping at the first, and each
-  error names the field being defined (`strip`, or `transport.play`):
-  - A device name, or a field name, that isn't a widget name, or a device
-    named twice, or without a struct catalog.
-  - In a device's catalog, at any depth: a field or mode name that isn't a
-    widget name, or is repeated in its struct or control (naming the device
-    and the path, such as `xtouch: strip[0]: field "fadr"`).
-  - A path that isn't one, starts at no device, or names nothing in its
-    device's catalog.
-  - A field defined twice in one struct, directly or by an include.
-  - An include of something that isn't a struct, or that excludes a field the
-    struct doesn't have.
-  - A join with no slices, a slice of something that isn't an array, a slice
-    that is empty or runs past the array's end, and slices whose elements'
-    shapes differ (naming both slices).
-- The shape of a path definition is the catalog's shape there, of a struct
-  definition its fields in order, and of a join an array of the first slice's
-  element shape, sized by all the slices together.
-- **Zipped arrays** wait for a device that needs one (see Summary).
+Shapes match exactly, apart from the order of a struct's fields.
 
 ### Resolving
 
-```
-struct WidgetDevice {
-  ...
-  // The device, or null if it is absent. Checking ignores it.
-  Device* device = nullptr;
-};
-
-// A widget on the devices that are present. The devices must outlive it.
-// Widgets never change once built, so they can't be copied or moved, and are
-// held by std::unique_ptr: every widget in a tree keeps its address.
-class Widget {
- public:
-  struct Field;  // { std::string name; std::unique_ptr<const Widget> widget; }
-  using Fields = absl::Span<const Field>;
-  using Elements = absl::Span<const std::unique_ptr<const Widget>>;
-
-  // As WidgetShape's: tests, and later the scene's, can build one by hand.
-  // Struct and array widgets take a vector, or the fields or elements as
-  // arguments (ForStruct(Field{"play", ForControl(play)}, ...)).
-  static std::unique_ptr<const Widget> ForControl(Control* control);
-  static std::unique_ptr<const Widget> ForStruct(std::vector<Field> fields);
-  static std::unique_ptr<const Widget> ForArray(
-      std::vector<std::unique_ptr<const Widget>> elements);
-
-  WidgetKind GetKind() const;
-
-  // For a control, the device's control, or null if it is absent.
-  Control* GetControl() const;
-
-  // For a struct, its fields in order, and the field with a name, or null if
-  // it has none. A struct keeps every field it is defined with, whatever is
-  // absent.
-  Fields GetFields() const;
-  const Widget* GetField(std::string_view name) const;
-
-  // For an array, the elements that are present, and the element at an
-  // index, or null if there is none.
-  Elements GetElements() const;
-  const Widget* GetElement(int index) const;
-
-  // Returns the widget at the path from this one, or null if there is none:
-  // a field its struct doesn't have, or an index past the elements present.
-  const Widget* Find(const WidgetPath& path) const;
-};
-
-// In widget_definition.h, beside CheckWidgets(): checks the widgets as it
-// does, and resolves them on the devices that are present. Returns the
-// top-level struct, or null with the errors checking found.
-std::unique_ptr<const Widget> ResolveWidgets(
-    const WidgetStructDefinition& widgets,
-    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
-```
-
+`ResolveWidgets()` checks as `CheckWidgets()` does, and resolves the widgets on
+the devices that are present, returning the top-level struct, or null with the
+errors.
 - **A device's controls are named by their catalog paths**, such as
-  `strip[0].fader` or `play`, so a control in a catalog resolves to
-  `Device::GetControl()` of its path's text. A device that is present but has
-  no control of that name gives an absent control. *Device types and catalogs*
-  renames `DeviceXTouch`'s controls to match, and checks each device against
-  its catalog when it is created.
-  - Each control then has one name, in logs, errors, traces, and tests, and a
-    catalog stays only a shape.
-  - The catalog could instead give each control's device name (`Fader1`), but
-    then every control has two names to keep in sync, a shape holds a name
-    its equality has to ignore, and the 88 strip controls each need one
-    written out.
-  - Or each device could build its own widget as it creates its controls, but
-    then its structure is written twice, in its catalog and in its code.
-- **Checking and resolving are one walk** over the definitions, which builds
-  each definition's shape and widget together, so the rules of paths,
-  includes, and slices are written once. `CheckWidgets()` resolves as if every
-  device were absent, and returns only the shape.
-- **Absent devices.** A catalog describes a device type, and never changes.
-  Resolving makes each device's instance, and an absent device's instance has
-  every field at its default: its controls are absent, its arrays are empty,
-  and its structs keep their fields.
-  - So a joined array has the elements of the devices present, in order, with
-    no rule of its own.
-  - An array reached any other way, by a path or an include, is empty the
-    same way. The config model only says so for joined arrays. If such an
-    array kept its 8 strips with nothing on them, a view repeated over it
-    would put tracks on strips that aren't there, and banking would skip past
-    them.
+  `strip[0].fader` or `play`, so a catalog control resolves to
+  `Device::GetControl()` of its path's text. A present device without that
+  control gives a null control. *Device types and catalogs* renames
+  `DeviceXTouch`'s controls to match.
+- **An absent device's instance** has every field at its default: its controls
+  are null, its arrays are empty, and its structs keep their fields. So a join
+  has the elements of the devices present, in order, and an array reached by a
+  path or include is empty the same way.
 - **Paths address two different things.** A path in a definition addresses a
-  catalog, so `xtouch.strip[7]` is the same strip whatever else is connected.
-  A path into the resolved widgets (a mapping's) addresses what is present, so
-  `strip[3]` is the fourth strip on the surface, and `strip[15]` is none
-  without the extender, though checking accepts it. That is the model's rule
-  that a mapping to an absent widget does nothing.
-- A widget doesn't hold its shape: `WidgetShape::Find()` of the same path
-  gives it, as every element of an array has the same shape.
+  catalog, so `xtouch.strip[7]` is a struct with null controls when the X-Touch
+  is absent. A path into the resolved widgets (a mapping's) addresses what is
+  present, so `strip[15]` is nothing without the extender, though checking
+  accepts it. That is the model's rule that a mapping to an absent widget does
+  nothing.
 
-**Brittleness:**
-- Nothing can resolve a definition that doesn't check, as resolving checks
-  first.
-- A widget holds its devices' controls by pointer, so the devices must outlive
-  it, as they already must outlive the views' mappings. The scene will own
-  both.
-- Until *Device types and catalogs* checks each device against its catalog, a
-  control whose name doesn't match its catalog path is silently absent. Only
-  the tests' fake devices are resolved until then.
+## Structure
 
-### To confirm
+All of it is in `device`, with no REAPER dependency.
 
-Nothing: widgets touch neither REAPER nor the hardware.
+### widget_path.h
 
-## CLs
+- `kWidgetPathLexerConfig`, `kWidgetPathSymbols`, and `kWidgetPathRules`: the
+  path grammar. A language that includes paths (the config language) uses a
+  superset of the lexer config and includes the rules, matching a path with the
+  `WidgetPath` rule. It may add symbols, comments, and other kinds of token,
+  but must read identifiers and integers exactly as paths do: no other
+  identifier or integer flags, no keywords, and no affixes.
+- `IsWidgetName()`: a C identifier, which is exactly what a path reads as one
+  field.
+- `WidgetPath`: steps (`std::variant<std::string, int>`), `Parse()` (with the
+  parser's error), `FromParsedItem()` for a match in another language,
+  `GetSubpath()`, and `ToString()`, which `Parse()` reads back as the same
+  path.
 
-### CL1 [x] device: Widget paths and shapes
+### widget_shape.h
 
-Depends on: nothing.
+`WidgetKind` (`kControl`, `kStruct`, `kArray`), and `WidgetShape`: a
+control's inputs, outputs, and mode names, a struct's fields (`Field {name,
+shape}`, in order), or an array's size and element shape, with `Find()` by
+path and equality. Shapes are immutable values that share their contents, so a
+catalog reuses one shape for every control of a kind. The `For*` factories
+never fail: names are kept as given, and `CheckWidgets()` reports bad or
+repeated ones, so a catalog is one nested expression.
 
-- `widget_path.h`: the path grammar (`kWidgetPathLexerConfig` and
-  `kWidgetPathRules`), `IsWidgetName()`, and `WidgetPath`, parsed with
-  `gb_parse`, which `device` now depends on.
-- `widget_shape.h`: `WidgetKind` and `WidgetShape`.
-- Unused, so no visible change.
+### widget_definition.h
 
-**Verify**
-- Standard checks (Release build, clang-format, ctest).
-- `widget_path_test.cc`: paths of fields and indices parse, and `ToString()`
-  gives back the text; the empty path has no steps; spaces between steps are
-  allowed; malformed paths are rejected (an empty step, a leading or trailing
-  `.`, an unclosed or empty `[]`, a negative or non-numeric index, a leading
-  digit); `IsWidgetName()` accepts C identifiers, and agrees with what a path
-  reads as one field; and the grammar parses paths inside a language that
-  extends its lexer config and rules, through `FromParsedItem()`.
-- `widget_shape_test.cc`: each kind's accessors, with null and 0 from the
-  other kinds' accessors; `Find()` through structs and arrays, and null for an
-  unknown field, an index out of range, or a step into a control; equality,
-  where a control's inputs, outputs, and mode names each matter, a struct's
-  field order doesn't, and an array's size and element shape do; and the
-  `For*` functions keeping names as given, with `GetField()` taking the first
-  of a repeated name.
+- The definitions: `WidgetSlice`, `WidgetInclude`, `WidgetStructDefinition`,
+  `WidgetJoinDefinition`, and `WidgetFieldDefinition` (a path, a struct, or a
+  join).
+- `WidgetDevice`: a name, a catalog, and the `Device`, or null if it is absent.
+- `CheckWidgets()` and `ResolveWidgets()`, which share one walk (see Building
+  blocks).
 
-### CL2 [x] device: Define widgets, and check them against catalogs
+### widget.h
 
-Depends on: CL1.
+`Widget`: a control (a `Control*`, null if absent), a struct (`Field {name,
+widget}`, in order), or an array of the elements present, with `GetElement()`
+and `Find()` by path. Widgets never change once built, so they can't be copied
+or moved, and are held by `std::unique_ptr<const Widget>`: every widget in a
+tree keeps its address. `ForStruct()` and `ForArray()` take a vector, or the
+fields or elements as arguments, and `Widget::Fields` and `Widget::Elements`
+name the spans the accessors return.
 
-- `widget_definition.h`: `WidgetSlice`, `WidgetInclude`, the definitions,
-  `WidgetDevice` (without its device), and `CheckWidgets()`.
-- Unused, so no visible change.
+## Building blocks
 
-**Verify**
-- Standard checks.
-- `widget_definition_test.cc`, against two hand-built catalogs: a device with
-  buttons and an array of strip structs, and a second whose strips have the
-  same shape (and a third whose strips don't):
-  - The shapes of path, struct, and join definitions: includes with
-    exclusions, nested structs, a join sized by all its slices, and a slice
-    with no count taking the rest of its array.
-  - Two devices sharing one catalog, under different names, joined into one
-    array.
-  - Each error in Definitions and checking, with the field it names, and
-    several errors reported by one check.
+- **One walk for checking and resolving:** `WidgetChecker` builds each
+  definition's shape and widget together (`Checked`), so the rules of paths,
+  includes, exclusions, and slices are written once. `Find()` returns where a
+  path leads (`Found`: its shape, device, and catalog path), and each caller
+  instantiates only what it keeps. `CheckWidgets()` resolves as if every device
+  were absent.
+- **Extending the path grammar:** a config language includes
+  `kWidgetPathRules`, and reads a matched path with
+  `WidgetPath::FromParsedItem()` (`GrammarWorksInALanguageThatIncludesIt` in
+  `widget_path_test.cc` is the example).
+- **Errors with subjects:** a check that keeps going collects `"subject:
+  message"` errors, with the name checks shared (`CheckWidgetName()`,
+  `AddName()`), so every kind of name is reported in the same words.
+- **Widgets by hand in tests:** `Widget::ForStruct(Field{"play",
+  Widget::ForControl(play)}, ...)`, with `using Field = Widget::Field;`, and
+  fake devices whose controls are named by their catalog paths
+  (`ResolveWidgetsTest` in `widget_definition_test.cc`).
 
-### CL3 [x] device: Resolve widgets on the devices present
+## Left for later
 
-Depends on: CL2.
-
-- `widget.h`: `Widget`.
-- `widget_definition.h`: `ResolveWidgets()`, and `WidgetDevice::device`.
-  `WidgetPath::GetSubpath()` returns, for a device's catalog paths.
-- Unused, so no visible change.
-
-**Verify**
-- Standard checks.
-- `widget_test.cc`: each kind's accessors, built from vectors or arguments,
-  and `Find()` through structs and arrays, with null for an unknown field, an
-  index past the elements, or a step into a control.
-- `widget_definition_test.cc`, with `FakeDevice`s whose controls are named by
-  their catalog paths:
-  - Controls resolve to the device's controls, through path, struct, include,
-    and join definitions, and `Find()` reaches them from the top and from an
-    element.
-  - With a device absent: its controls are null, its structs keep their
-    fields, its arrays are empty, and joins keep the other devices' elements
-    in order. `Find()` past the elements present is null.
-  - Two devices sharing one catalog resolve to their own controls, and a join
-    of their arrays and a third device's keeps the others' elements in order
-    with either one absent.
-  - A present device without a catalog control gives a null control.
-  - A definition that doesn't check returns null with its errors.
-
-### Summary [ ] docs: Summarize the feature
-
-Depends on: every CL above, and the user saying the feature is done.
-
-- When the last CL lands, ask the user whether the feature is done. Once they
-  say so, replace this plan with a summary of the final implementation, and
-  update the config model's Widgets section to match (paths in definitions
-  start at a device, an absent device's arrays are empty however they are
-  reached, a device's controls are named by their catalog paths, and widget
-  names are C identifiers, with the lower case convention as JPRSurf's style
-  rather than a rule). Move
-  into the backlog, in the same change (see the workflow): zipped arrays;
-  paths into the config's own arrays, counted from the end, for the last strip
-  of whatever is connected; and anything else left undone.
-
-## Checks in REAPER
-
-None by the user, as nothing the plugin runs changes until *Device types and
-catalogs*. At the end of the feature, the load check passes
-(`check_load_in_reaper`), as the plugin links the new code.
+In the backlog: *Zipped widget arrays*, and *Paths into the config's own
+widget arrays* (for the last strip of whatever is connected).

@@ -97,7 +97,9 @@ have, or an input or output that control doesn't have.
 
 The catalog and the device's constructor must agree. As a device can't be
 created in a unit test (it needs MIDI ports), the constructor takes its control
-names from the catalog rather than its own constants, and `Device` checks once,
+names from the catalog rather than its own constants, naming each control by
+its path in the catalog (such as `strip[0].fader`), which is how widgets find
+it. `Device` checks once,
 when it is created, that the controls it built match the catalog exactly,
 logging an error if they don't.
 
@@ -147,18 +149,26 @@ control's catalog entry allows, and several mappings can share one widget.
   catalog names without naming each one. A field defined twice, directly or by
   an include, is an error.
 - **Array**, in one of two ways:
-  - **Joined**: slices of other arrays, one after another. The source arrays can
-    be device arrays or the config's own. JPRSurf's `strip` is the extender's
-    strips 0-7 then the X-Touch's strips 0-7, their physical order from left to
-    right. Each element is the source array's element.
-  - **Zipped**: a struct whose fields are array slices of the same length,
-    turned into an array of structs. Element *i* gets element *i* of each
-    slice, so each field's index comes from its position in its slice. This
-    builds strips from controls that no device groups together, such as faders
-    on one device and displays on another.
+  - **Joined**: slices of other arrays, one after another. The source arrays are
+    device arrays. JPRSurf's `strip` is the extender's strips 0-7 then the
+    X-Touch's strips 0-7, their physical order from left to right. Each element
+    is the source array's element.
+  - **Zipped** (not built yet, see the backlog): a struct whose fields are
+    array slices of the same length, turned into an array of structs. Element
+    *i* gets element *i* of each slice, so each field's index comes from its
+    position in its slice. This builds strips from controls that no device
+    groups together, such as faders on one device and displays on another.
 
 Every widget is defined this way, by paths and slices, so there are no index
-expressions.
+expressions. Every path in a definition starts at a device, so each definition
+stands alone: there is no order between the config's fields, and no clash
+between a device's name and a field's. Paths into the config's own arrays,
+counted from the end, would give the last strip of whatever is connected, and
+wait for a config that needs them (see the backlog).
+
+A widget name is any C identifier. The lower case convention (see
+[Conventions](#conventions)) is JPRSurf's style, not a rule that checking
+enforces.
 
 ### Shape
 
@@ -176,10 +186,19 @@ looser.
 
 ### Absent devices
 
+A catalog describes a device type, and never changes. An absent device's
+widgets have every field at its default: its controls are absent, its arrays
+are empty, and its structs keep their fields.
 - A control widget on an absent device is absent, and mappings to it do
   nothing.
 - A joined array drops the elements that come from an absent device's arrays,
-  so its size depends on what is connected.
+  so its size depends on what is connected. An array reached any other way, by
+  a path or an include, is empty the same way, so a view repeated over it never
+  puts tracks on strips that aren't there.
+- A path in a definition addresses the catalog, so `xtouch.strip[7]` is the
+  same strip whatever is connected, with absent controls when the X-Touch is
+  absent. A mapping's path addresses what is present, so `strip[15]` is nothing
+  without the extender.
 - A zipped array and a struct keep all their elements and fields, and the ones
   on an absent device are absent.
 
@@ -879,8 +898,8 @@ come together:
   5. *Modes from enumerated values and picks* (done,
      [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)):
      the plugin has no surface state or callbacks left.
-- **Devices and widgets**, unit tested: *Widgets*
-  ([widgets.md](worklog/widgets.md)), then *Device types and catalogs*,
+- **Devices and widgets**, unit tested: *Widgets* (done,
+  [widgets.md](worklog/widgets.md)), then *Device types and catalogs*,
   ending with the plugin creating devices by type and mapping through
   widgets.
 - **Independent pieces**: *Named command IDs* (done), *Track actions in scene*

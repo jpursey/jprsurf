@@ -271,6 +271,42 @@ routes, rather than just losing the extender's strips. It needs a definition of
 "best fits" (such as the config with the most devices present whose required
 devices are all present), and a way to say which config was chosen.
 
+## Paths into the config's own widget arrays
+
+- **Layers:** device
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** *Build the scene from a SurfaceSpec*
+- **Background:** [widgets.md](worklog/widgets.md),
+  [config_model.md](config_model.md) (Widgets)
+
+Every path in a widget definition starts at a device, so JPRSurf's
+`info_strip` is `xtouch.strip[7]`, which works because the X-Touch is required
+and on the right. A config whose rightmost unit is optional needs "the last
+strip of whatever is connected": a path into the config's own `strip`, counted
+from the end, after the absent devices' strips are dropped. That adds what
+widgets avoid today: an order between definitions, cycles to find, a device's
+name and a field's that can clash, and a choice between counting the elements
+defined or the elements present. A join of the config's own arrays (which the
+model allows) comes with it. Only worth doing for a config that needs it.
+
+## Zipped widget arrays
+
+- **Layers:** device
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [widgets.md](worklog/widgets.md),
+  [config_model.md](config_model.md) (Defining widgets)
+
+A struct of array slices of the same length, turned into an array of structs
+(element *i* gets element *i* of each slice), to build strips from controls
+that no device groups together, such as faders on one device and displays on
+another. It is a third kind of `WidgetFieldDefinition`, checked and resolved
+in the same walk as joins: the slices' lengths must match, and an absent
+device's slices give absent fields, as the model says. Wait for a device that
+needs it.
+
 ## Modifiers a mapping ignores
 
 - **Layers:** device, scene
