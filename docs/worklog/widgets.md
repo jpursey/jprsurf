@@ -39,6 +39,16 @@ Everything here runs once, when the widgets are resolved, and nothing per run.
 ### Paths
 
 ```
+// The lexer config and parser rules that widget paths are parsed with
+// (gb_parse). A language that includes widget paths parses them with a
+// superset of both, matching a path with the "WidgetPath" rule.
+inline constexpr gb::LexerConfig kWidgetPathLexerConfig = ...;
+inline constexpr std::string_view kWidgetPathRules = ...;
+
+// Returns true if the name is a widget name: a C identifier, as
+// kWidgetPathLexerConfig reads them.
+bool IsWidgetName(std::string_view name);
+
 // A path to a widget from another widget: field names and array indices,
 // such as `strip[3].fader`. Indices start from 0. An empty path is the widget
 // itself.
@@ -47,23 +57,36 @@ class WidgetPath {
   // A field name or an array index.
   using Step = std::variant<std::string, int>;
 
-  // Returns the path, or nullopt if the text isn't one: a step that is empty,
-  // a field that isn't a widget name, or an index that isn't a number.
-  static std::optional<WidgetPath> Parse(std::string_view text);
+  // Returns the path, or nullopt if the text isn't one, with the parser's
+  // error.
+  static std::optional<WidgetPath> Parse(std::string_view text,
+                                         std::string* error_message = nullptr);
+
+  // Returns the path that a match of the "WidgetPath" rule parsed.
+  static WidgetPath FromParsedItem(const gb::ParsedItem& item);
 
   absl::Span<const Step> GetSteps() const;
 
-  // The path's text, as Parse() reads it.
+  // The path of the steps from `first` on, such as `strip[0].fader` from
+  // `xtouch.strip[0].fader` for 1.
+  WidgetPath GetSubpath(int first) const;
+
+  // The path's text, which Parse() reads as the same path.
   std::string ToString() const;
 };
-
-// Returns true if the name is a widget name: lower case words of letters and
-// digits, joined by single underscores, starting with a letter.
-bool IsWidgetName(std::string_view name);
 ```
 
-- Widget names follow the config model's conventions, so a name that would
-  break them can never get into a catalog or a config.
+- Paths are parsed with Game Bits' `gb_parse`, with a lexer config and rules
+  that a config language extends rather than repeats: its own lexer config is
+  a superset of `kWidgetPathLexerConfig`, and its rules include
+  `kWidgetPathRules`. So there is one definition of a path, in `device`.
+- The lexer skips spaces between tokens, so `strip [3]` is `strip[3]`. That is
+  harmless, as a control is looked up by `ToString()` of the parsed steps,
+  never by the text as written.
+- A widget name is any C identifier, the identifiers the lexer reads.
+  Checking reports a name that isn't one, in a config or in a device's catalog
+  (see Definitions and checking). The config model's lower case convention is
+  JPRSurf's style for its own names, not a rule that checking enforces.
 
 ### Shapes
 
@@ -78,10 +101,10 @@ class WidgetShape {
   // defined after the class.
   struct Field;
 
+  // These never fail: names are kept as given, and a negative size is 0.
   static WidgetShape ForControl(Control::Inputs inputs,
                                 Control::Outputs outputs,
                                 std::vector<std::string> mode_names = {});
-  // A field whose name is taken is left out, logging an error.
   static WidgetShape ForStruct(std::vector<Field> fields);
   static WidgetShape ForArray(WidgetShape element, int size);
 
@@ -116,6 +139,12 @@ class WidgetShape {
 
 - A device catalog (*Device types and catalogs*) is a struct shape, built in
   C++ with these.
+- Building a shape never fails, so a catalog is one nested expression, with no
+  results to unwrap. A bad or repeated name in a catalog is a programmer error,
+  which `CheckWidgets()` reports with the device and path, where errors already
+  have somewhere to go. *Device types and catalogs* tests each device type's
+  catalog with it, so a catalog bug fails a test rather than going to a log.
+  Until a shape is checked, `GetField()` takes the first of a repeated name.
 - A control's inputs, outputs, and mode names are on `WidgetShape` itself,
   with no type of their own, and no kind has one: each is two or three values
   of distinct types. A shape from `ForControl()` is already the value a
@@ -206,6 +235,9 @@ std::optional<WidgetShape> CheckWidgets(
   error names the field being defined (`strip`, or `transport.play`):
   - A device name, or a field name, that isn't a widget name, or a device
     named twice.
+  - In a device's catalog, at any depth: a field or mode name that isn't a
+    widget name, or is repeated in its struct or control (naming the device
+    and the path, such as `xtouch: strip[0].fadr`).
   - A path that isn't one, starts at no device, or names nothing in its
     device's catalog.
   - A field defined twice in one struct, directly or by an include.
@@ -307,27 +339,32 @@ Nothing: widgets touch neither REAPER nor the hardware.
 
 ## CLs
 
-### CL1 [ ] device: Widget paths and shapes
+### CL1 [x] device: Widget paths and shapes
 
 Depends on: nothing.
 
-- `widget_path.h`: `WidgetPath` and `IsWidgetName()`.
+- `widget_path.h`: the path grammar (`kWidgetPathLexerConfig` and
+  `kWidgetPathRules`), `IsWidgetName()`, and `WidgetPath`, parsed with
+  `gb_parse`, which `device` now depends on.
 - `widget_shape.h`: `WidgetKind` and `WidgetShape`.
 - Unused, so no visible change.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
 - `widget_path_test.cc`: paths of fields and indices parse, and `ToString()`
-  gives back the text; the empty path has no steps; malformed paths are
-  rejected (an empty step, a leading or trailing `.`, an unclosed or empty
-  `[]`, a negative or non-numeric index, upper case, a leading digit); and
-  `IsWidgetName()` accepts and rejects names by the conventions.
+  gives back the text; the empty path has no steps; spaces between steps are
+  allowed; malformed paths are rejected (an empty step, a leading or trailing
+  `.`, an unclosed or empty `[]`, a negative or non-numeric index, a leading
+  digit); `IsWidgetName()` accepts C identifiers, and agrees with what a path
+  reads as one field; and the grammar parses paths inside a language that
+  extends its lexer config and rules, through `FromParsedItem()`.
 - `widget_shape_test.cc`: each kind's accessors, with null and 0 from the
   other kinds' accessors; `Find()` through structs and arrays, and null for an
   unknown field, an index out of range, or a step into a control; equality,
   where a control's inputs, outputs, and mode names each matter, a struct's
-  field order doesn't, and an array's size and element shape do; and
-  `ForStruct()` leaving out a field whose name is taken.
+  field order doesn't, and an array's size and element shape do; and the
+  `For*` functions keeping names as given, with `GetField()` taking the first
+  of a repeated name.
 
 ### CL2 [ ] device: Define widgets, and check them against catalogs
 
@@ -381,7 +418,9 @@ Depends on: every CL above, and the user saying the feature is done.
   say so, replace this plan with a summary of the final implementation, and
   update the config model's Widgets section to match (paths in definitions
   start at a device, an absent device's arrays are empty however they are
-  reached, and a device's controls are named by their catalog paths). Move
+  reached, a device's controls are named by their catalog paths, and widget
+  names are C identifiers, with the lower case convention as JPRSurf's style
+  rather than a rule). Move
   into the backlog, in the same change (see the workflow): zipped arrays;
   paths into the config's own arrays, counted from the end, for the last strip
   of whatever is connected; and anything else left undone.

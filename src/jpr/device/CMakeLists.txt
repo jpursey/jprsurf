@@ -13,12 +13,17 @@ set(jpr_device_SOURCE
   control_output_midi.cc control_output_midi.h
   device.cc device.h
   device_xtouch.cc device_xtouch.h
+  widget_path.cc widget_path.h
+  widget_shape.cc widget_shape.h
 )
 
 set(jpr_device_DEPS
   absl::log
   absl::log_initialize
+  absl::span
+  absl::strings
   gb_config
+  gb_parse
   gb_profile
   jpr_common
   reaper_sdk
@@ -34,6 +39,8 @@ set(jpr_device_TEST_SOURCE
   control_test.cc
   device_test.cc
   device_xtouch_test.cc
+  widget_path_test.cc
+  widget_shape_test.cc
 )
 
 set(jpr_device_TEST_DEPS

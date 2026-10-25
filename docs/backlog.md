@@ -51,7 +51,9 @@ A registry of device types by name, each with:
 and `Device` checks once, when it is created, that the controls it built match
 the catalog, logging an error if they don't. A unit test checks it too, for
 each device type, creating the device on the fake hardware's ports (as
-`device_xtouch_test.cc` does).
+`device_xtouch_test.cc` does), and checks that `CheckWidgets()` finds no
+errors in its catalog (building a shape never fails, so a bad or repeated name
+in a catalog only shows up there).
 
 The surface's devices are an explicit list, each with its name (which widget
 paths start with), its device type, its exact MIDI input and output port names,
