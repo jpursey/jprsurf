@@ -782,8 +782,14 @@ device control names and output modes wait for *Device types and catalogs*.
 
 ### Conventions
 
+These are JPRSurf's style for the names it defines, and for its own config.
+Nothing enforces the case of a name: a config's names only need to be C
+identifiers.
 - Every word is lower case, with underscores between words: properties,
   controls, struct fields, output modes, components, and parameters.
+- Device types are the exception: each word is capitalized, with nothing
+  between words (`XTouch`, `XTouchExt`), so a type reads differently from the
+  devices a config names, such as `xtouch`.
 - A property name is a namespace and a name, joined by `:`, such as
   `track:mute` or `state:can_redo` (see [Properties](#properties)). Widget paths
   never have a namespace, so a property name never looks like a widget path,

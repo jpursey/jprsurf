@@ -28,51 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Device types and catalogs
-
-- **Layers:** device, scene, plugin
-- **Size:** medium
-- **Feature workflow:** yes
-- **Depends on:** *Widgets*
-- **Background:** [config_model.md](config_model.md) (Devices),
-  [widgets.md](worklog/widgets.md)
-
-A registry of device types by name, each with:
-- A **catalog**: its controls as a struct widget, with arrays of structs for
-  the controls that repeat (the X-Touch's `strip` array), and named output
-  modes (solid and blink for lights, the ring styles and off for encoders). It
-  is plain data, without ports or REAPER, so it is unit tested.
-- A **factory** that creates the `Device` from its ports and **control
-  overrides**: inputs or outputs of particular controls that a unit doesn't use.
-  `Device` drops them before creating each `Control`, so the extender's fader
-  without touch sensing stops being hard coded.
-
-`DeviceXTouch` names its controls by their catalog paths (`strip[0].fader`),
-and `Device` checks once, when it is created, that the controls it built match
-the catalog, logging an error if they don't. A unit test checks it too, for
-each device type, creating the device on the fake hardware's ports (as
-`device_xtouch_test.cc` does), and checks that `CheckWidgets()` finds no
-errors in its catalog (building a shape never fails, so a bad or repeated name
-in a catalog only shows up there).
-
-The surface's devices are an explicit list, each with its name (which widget
-paths start with), its device type, its exact MIDI input and output port names,
-whether it is required, and its control overrides. Nothing is inferred from a
-type or from the ports that exist, so several units of one type (the user has
-more than one extender) are several entries, each with its own ports. The list
-is C++ until the config fills in the same list. To confirm first, with the
-user's extenders: what REAPER lists the ports of identical units as. Explicit
-names only work if they differ.
-
-The last CL moves the plugin onto device types and widgets. It creates its
-devices from the list, with the X-Touch required and the extender optional
-(so the extender alone no longer loads, deliberately). It defines
-JPRSurf's widgets in C++, and the scene maps through widget paths and output
-mode names rather than `"XTouch/..."` control names and mode numbers. That
-removes the device prefixes and the device checks in the strip loops. Apart
-from the extender alone, behavior doesn't change, so the surface tests verify
-it.
-
 ## Build the scene from a SurfaceSpec
 
 - **Layers:** a new spec library, scene, plugin
