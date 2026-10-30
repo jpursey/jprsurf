@@ -5,8 +5,10 @@
 
 #include "jpr/device/device_xtouch.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -29,12 +31,16 @@
 #include "jpr/device/control_output.h"
 #include "jpr/device/control_output_handle.h"
 #include "jpr/device/testing/fake_xtouch.h"
+#include "jpr/device/widget.h"
+#include "jpr/device/widget_definition.h"
+#include "jpr/device/widget_shape.h"
 
 namespace jpr {
 namespace {
 
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 
 using Button = FakeXTouch::Button;
 using Led = FakeXTouch::Led;
@@ -44,6 +50,12 @@ using ScribbleColor = FakeXTouch::ScribbleColor;
 using StripButton = FakeXTouch::StripButton;
 
 constexpr int kStripCount = 8;
+
+// Returns the name of the field's control on the strip, its path in the
+// catalog.
+std::string GetStripControlName(int strip, std::string_view field) {
+  return absl::StrCat("strip[", strip, "].", field);
+}
 
 //==============================================================================
 // The X-Touch's controls, and what each is on the hardware.
@@ -56,82 +68,82 @@ struct NamedButton {
 };
 
 constexpr NamedButton kButtons[] = {
-    {DeviceXTouch::kAssignTrack, Button::kAssignTrack},
-    {DeviceXTouch::kAssignSend, Button::kAssignSend},
-    {DeviceXTouch::kAssignPan, Button::kAssignPan},
-    {DeviceXTouch::kAssignPlugin, Button::kAssignPlugin},
-    {DeviceXTouch::kAssignEQ, Button::kAssignEQ},
-    {DeviceXTouch::kAssignInst, Button::kAssignInst},
-    {DeviceXTouch::kBankLeft, Button::kBankLeft},
-    {DeviceXTouch::kBankRight, Button::kBankRight},
-    {DeviceXTouch::kChannelLeft, Button::kChannelLeft},
-    {DeviceXTouch::kChannelRight, Button::kChannelRight},
-    {DeviceXTouch::kFlip, Button::kFlip},
-    {DeviceXTouch::kGlobal, Button::kGlobal},
-    {DeviceXTouch::kShowNameValue, Button::kShowNameValue},
-    {DeviceXTouch::kShowTimeBeats, Button::kShowTimeBeats},
-    {DeviceXTouch::kF1, Button::kF1},
-    {DeviceXTouch::kF2, Button::kF2},
-    {DeviceXTouch::kF3, Button::kF3},
-    {DeviceXTouch::kF4, Button::kF4},
-    {DeviceXTouch::kF5, Button::kF5},
-    {DeviceXTouch::kF6, Button::kF6},
-    {DeviceXTouch::kF7, Button::kF7},
-    {DeviceXTouch::kF8, Button::kF8},
-    {DeviceXTouch::kViewMIDI, Button::kViewMIDI},
-    {DeviceXTouch::kViewInputs, Button::kViewInputs},
-    {DeviceXTouch::kViewAudio, Button::kViewAudio},
-    {DeviceXTouch::kViewInst, Button::kViewInst},
-    {DeviceXTouch::kViewAux, Button::kViewAux},
-    {DeviceXTouch::kViewBuses, Button::kViewBuses},
-    {DeviceXTouch::kViewOutputs, Button::kViewOutputs},
-    {DeviceXTouch::kViewUser, Button::kViewUser},
-    {DeviceXTouch::kShift, Button::kShift},
-    {DeviceXTouch::kOption, Button::kOption},
-    {DeviceXTouch::kControl, Button::kControl},
-    {DeviceXTouch::kAlt, Button::kAlt},
-    {DeviceXTouch::kAutoRead, Button::kAutoRead},
-    {DeviceXTouch::kAutoWrite, Button::kAutoWrite},
-    {DeviceXTouch::kAutoTrim, Button::kAutoTrim},
-    {DeviceXTouch::kAutoTouch, Button::kAutoTouch},
-    {DeviceXTouch::kAutoLatch, Button::kAutoLatch},
-    {DeviceXTouch::kAutoGroup, Button::kAutoGroup},
-    {DeviceXTouch::kSave, Button::kSave},
-    {DeviceXTouch::kUndo, Button::kUndo},
-    {DeviceXTouch::kCancel, Button::kCancel},
-    {DeviceXTouch::kEnter, Button::kEnter},
-    {DeviceXTouch::kMarker, Button::kMarker},
-    {DeviceXTouch::kNudge, Button::kNudge},
-    {DeviceXTouch::kCycle, Button::kCycle},
-    {DeviceXTouch::kDrop, Button::kDrop},
-    {DeviceXTouch::kReplace, Button::kReplace},
-    {DeviceXTouch::kClick, Button::kClick},
-    {DeviceXTouch::kSolo, Button::kSolo},
-    {DeviceXTouch::kRewind, Button::kRewind},
-    {DeviceXTouch::kForward, Button::kForward},
-    {DeviceXTouch::kStop, Button::kStop},
-    {DeviceXTouch::kPlay, Button::kPlay},
-    {DeviceXTouch::kRecord, Button::kRecord},
-    {DeviceXTouch::kUp, Button::kUp},
-    {DeviceXTouch::kDown, Button::kDown},
-    {DeviceXTouch::kScrub, Button::kScrub},
-    {DeviceXTouch::kZoom, Button::kZoom},
-    {DeviceXTouch::kLeft, Button::kLeft},
-    {DeviceXTouch::kRight, Button::kRight},
+    {"assign_track", Button::kAssignTrack},
+    {"assign_send", Button::kAssignSend},
+    {"assign_pan", Button::kAssignPan},
+    {"assign_plugin", Button::kAssignPlugin},
+    {"assign_eq", Button::kAssignEQ},
+    {"assign_inst", Button::kAssignInst},
+    {"bank_left", Button::kBankLeft},
+    {"bank_right", Button::kBankRight},
+    {"channel_left", Button::kChannelLeft},
+    {"channel_right", Button::kChannelRight},
+    {"flip", Button::kFlip},
+    {"global", Button::kGlobal},
+    {"show_name_value", Button::kShowNameValue},
+    {"show_time_beats", Button::kShowTimeBeats},
+    {"function[0]", Button::kF1},
+    {"function[1]", Button::kF2},
+    {"function[2]", Button::kF3},
+    {"function[3]", Button::kF4},
+    {"function[4]", Button::kF5},
+    {"function[5]", Button::kF6},
+    {"function[6]", Button::kF7},
+    {"function[7]", Button::kF8},
+    {"view_midi", Button::kViewMIDI},
+    {"view_inputs", Button::kViewInputs},
+    {"view_audio", Button::kViewAudio},
+    {"view_inst", Button::kViewInst},
+    {"view_aux", Button::kViewAux},
+    {"view_buses", Button::kViewBuses},
+    {"view_outputs", Button::kViewOutputs},
+    {"view_user", Button::kViewUser},
+    {"shift", Button::kShift},
+    {"option", Button::kOption},
+    {"control", Button::kControl},
+    {"alt", Button::kAlt},
+    {"auto_read", Button::kAutoRead},
+    {"auto_write", Button::kAutoWrite},
+    {"auto_trim", Button::kAutoTrim},
+    {"auto_touch", Button::kAutoTouch},
+    {"auto_latch", Button::kAutoLatch},
+    {"auto_group", Button::kAutoGroup},
+    {"save", Button::kSave},
+    {"undo", Button::kUndo},
+    {"cancel", Button::kCancel},
+    {"enter", Button::kEnter},
+    {"marker", Button::kMarker},
+    {"nudge", Button::kNudge},
+    {"cycle", Button::kCycle},
+    {"drop", Button::kDrop},
+    {"replace", Button::kReplace},
+    {"click", Button::kClick},
+    {"solo", Button::kSolo},
+    {"rewind", Button::kRewind},
+    {"forward", Button::kForward},
+    {"stop", Button::kStop},
+    {"play", Button::kPlay},
+    {"record", Button::kRecord},
+    {"up", Button::kUp},
+    {"down", Button::kDown},
+    {"scrub", Button::kScrub},
+    {"zoom", Button::kZoom},
+    {"left", Button::kLeft},
+    {"right", Button::kRight},
 };
 
-// Each button on a strip, and its control's name on the strip.
+// Each button on a strip, and its control's field on the strip.
 struct NamedStripButton {
-  std::string (*name)(int strip);
+  std::string_view field;
   StripButton button;
 };
 
 constexpr NamedStripButton kStripButtons[] = {
-    {&DeviceXTouch::Rec, StripButton::kRec},
-    {&DeviceXTouch::Solo, StripButton::kSolo},
-    {&DeviceXTouch::Mute, StripButton::kMute},
-    {&DeviceXTouch::Select, StripButton::kSelect},
-    {&DeviceXTouch::PotButton, StripButton::kPotButton},
+    {"rec", StripButton::kRec},
+    {"solo", StripButton::kSolo},
+    {"mute", StripButton::kMute},
+    {"select", StripButton::kSelect},
+    {"pot_button", StripButton::kPotButton},
 };
 
 // Each light with no button, which only the X-Touch has.
@@ -141,14 +153,10 @@ struct NamedLed {
 };
 
 constexpr NamedLed kLeds[] = {
-    {DeviceXTouch::kSmpteLed, Led::kSmpte},
-    {DeviceXTouch::kBeatsLed, Led::kBeats},
-    {DeviceXTouch::kSoloLed, Led::kSolo},
+    {"smpte_light", Led::kSmpte},
+    {"beats_light", Led::kBeats},
+    {"solo_light", Led::kSolo},
 };
-
-// The controls on each strip: the four buttons, the pot and its button, the
-// fader, the meter, and the scribble strip's two lines and color.
-constexpr int kStripControlCount = 11;
 
 // A meter's peak, and the level it shows.
 struct MeterLevel {
@@ -220,8 +228,8 @@ class DeviceXTouchTest : public ::testing::Test {
   // Returns the name of the fader's control.
   static std::string GetFaderName(int fader) {
     return fader == FakeXTouch::kMasterFader
-               ? std::string(DeviceXTouch::kMasterFader)
-               : DeviceXTouch::Fader(fader);
+               ? std::string("master_fader")
+               : GetStripControlName(fader, "fader");
   }
 
   // Presses the control with `press`, then releases it with `release`, and
@@ -289,26 +297,91 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 //==============================================================================
-// Controls
+// Catalogs
 //==============================================================================
 
-TEST_F(DeviceXTouchTest, HasEveryControl) {
-  EXPECT_EQ(std::ssize(device_.GetControls()),
-            kStripCount * kStripControlCount + std::ssize(kButtons) +
-                std::ssize(kLeds) + 2);  // The master fader and timecode.
+// A control in a catalog, as a device resolves it, and its shape there.
+struct CatalogControl {
+  const Control* control;
+  const WidgetShape* shape;
+};
+
+// Adds each control of the widget, which has the shape, to `controls`.
+void AddCatalogControls(const Widget& widget, const WidgetShape& shape,
+                        std::vector<CatalogControl>& controls) {
+  switch (shape.GetKind()) {
+    case WidgetKind::kControl:
+      controls.push_back({widget.GetControl(), &shape});
+      break;
+    case WidgetKind::kStruct:
+      for (const WidgetShape::Field& field : shape.GetFields()) {
+        const Widget* field_widget = widget.GetField(field.name);
+        ASSERT_NE(field_widget, nullptr) << field.name;
+        AddCatalogControls(*field_widget, field.shape, controls);
+      }
+      break;
+    case WidgetKind::kArray:
+      ASSERT_EQ(std::ssize(widget.GetElements()), shape.GetSize());
+      for (const std::unique_ptr<const Widget>& element :
+           widget.GetElements()) {
+        AddCatalogControls(*element, *shape.GetElement(), controls);
+      }
+      break;
+  }
 }
 
-TEST_F(DeviceXTouchExtenderTest, HasOnlyStrips) {
-  EXPECT_EQ(std::ssize(device_.GetControls()),
-            kStripCount * kStripControlCount);
-  for (const NamedButton& entry : kButtons) {
-    EXPECT_EQ(device_.GetControl(entry.name), nullptr) << entry.name;
+TEST_P(DeviceXTouchModelTest, CatalogIsValid) {
+  std::vector<std::string> errors;
+  EXPECT_TRUE(
+      ValidateWidgets(
+          {}, {{.name = "xtouch", .catalog = &DeviceXTouch::GetCatalog(type_)}},
+          &errors)
+          .has_value());
+  EXPECT_THAT(errors, IsEmpty());
+}
+
+TEST_F(DeviceXTouchTest, StripsAreTheSameOnBothModels) {
+  const WidgetShape* strips =
+      DeviceXTouch::GetCatalog(DeviceXTouch::Type::kFull).GetField("strip");
+  ASSERT_NE(strips, nullptr);
+  EXPECT_EQ(strips->GetSize(), kStripCount);
+  const WidgetShape* extender_strips =
+      DeviceXTouch::GetCatalog(DeviceXTouch::Type::kExtender).GetField("strip");
+  ASSERT_NE(extender_strips, nullptr);
+  EXPECT_EQ(*strips, *extender_strips);
+}
+
+// Every control in the catalog resolves to one of the device's, with the
+// catalog's inputs, outputs, and modes, and the device has no others.
+TEST_P(DeviceXTouchModelTest, ControlsMatchTheCatalog) {
+  const WidgetShape& catalog = DeviceXTouch::GetCatalog(type_);
+  std::vector<std::string> errors;
+  std::unique_ptr<const Widget> widget = ResolveWidgets(
+      {.includes = {{"xtouch"}}},
+      {{.name = "xtouch", .catalog = &catalog, .device = &device_}}, &errors);
+  ASSERT_NE(widget, nullptr);
+  EXPECT_THAT(errors, IsEmpty());
+  std::vector<CatalogControl> controls;
+  AddCatalogControls(*widget, catalog, controls);
+  ASSERT_FALSE(HasFatalFailure());
+  EXPECT_EQ(std::ssize(controls), std::ssize(device_.GetControls()));
+  for (int i = 0; i < std::ssize(controls); ++i) {
+    const auto [control, shape] = controls[i];
+    ASSERT_NE(control, nullptr) << "Catalog control " << i;
+    SCOPED_TRACE(control->GetName());
+
+    // The extender's third fader has no touch (see
+    // ExtendersThirdFaderHasNoTouch).
+    Control::Inputs inputs = shape->GetInputs();
+    if (type_ == DeviceXTouch::Type::kExtender &&
+        control->GetName() == "strip[2].fader") {
+      inputs.Clear(ControlInput::Type::kPress);
+    }
+    EXPECT_EQ(control->GetInputs(), inputs);
+    EXPECT_EQ(control->GetOutputs(), shape->GetOutputs());
+    EXPECT_EQ(control->GetModeCount(),
+              std::max(1, static_cast<int>(shape->GetModeNames().size())));
   }
-  for (const NamedLed& entry : kLeds) {
-    EXPECT_EQ(device_.GetControl(entry.name), nullptr) << entry.name;
-  }
-  EXPECT_EQ(device_.GetControl(DeviceXTouch::kMasterFader), nullptr);
-  EXPECT_EQ(device_.GetControl(DeviceXTouch::kTimecode), nullptr);
 }
 
 //==============================================================================
@@ -341,7 +414,7 @@ TEST_F(DeviceXTouchTest, ButtonLightsAreOnOrBlinking) {
 TEST_P(DeviceXTouchModelTest, StripButtonsArePressedAndReleased) {
   for (const NamedStripButton& entry : kStripButtons) {
     for (int strip = 0; strip < kStripCount; ++strip) {
-      const std::string name = entry.name(strip);
+      const std::string name = GetStripControlName(strip, entry.field);
       SCOPED_TRACE(name);
       Control* control = device_.GetControl(name);
       ASSERT_NE(control, nullptr);
@@ -356,7 +429,7 @@ TEST_P(DeviceXTouchModelTest, StripButtonsArePressedAndReleased) {
 TEST_P(DeviceXTouchModelTest, StripButtonLightsAreOnOrBlinking) {
   for (const NamedStripButton& entry : kStripButtons) {
     for (int strip = 0; strip < kStripCount; ++strip) {
-      const std::string name = entry.name(strip);
+      const std::string name = GetStripControlName(strip, entry.field);
       SCOPED_TRACE(name);
       Control* control = device_.GetControl(name);
       ASSERT_NE(control, nullptr);
@@ -462,7 +535,7 @@ TEST_F(DeviceXTouchTest, FadersAreHeldWhileTouched) {
 // The user's extender has lost its third fader's touch, so it has none, and
 // isn't set until the hand has stopped moving it.
 TEST_F(DeviceXTouchExtenderTest, ExtendersThirdFaderHasNoTouch) {
-  Control* control = device_.GetControl(DeviceXTouch::kFader3);
+  Control* control = device_.GetControl("strip[2].fader");
   ASSERT_NE(control, nullptr);
   EXPECT_FALSE(control->GetInputs().IsSet(ControlInput::Type::kPress));
 
@@ -502,7 +575,7 @@ TEST_F(DeviceXTouchTest, FadersAreTouchedWhileTouched) {
 // Without its touch, the extender's third fader is touched from a move until
 // the touch's hold after it.
 TEST_F(DeviceXTouchExtenderTest, ExtendersThirdFaderIsTouchedAfterAMove) {
-  Control* control = device_.GetControl(DeviceXTouch::kFader3);
+  Control* control = device_.GetControl("strip[2].fader");
   ASSERT_NE(control, nullptr);
   ControlInputHandle touch = ReadTouch(control);
   xtouch_.MoveFader(2, 1000);
@@ -525,8 +598,8 @@ TEST_P(DeviceXTouchModelTest, PotTurnsAreDeltas) {
   std::vector<Control*> controls;
   std::vector<ControlInputHandle> deltas;
   for (int strip = 0; strip < kStripCount; ++strip) {
-    controls.push_back(device_.GetControl(DeviceXTouch::Pot(strip)));
-    ASSERT_NE(controls.back(), nullptr) << DeviceXTouch::Pot(strip);
+    controls.push_back(device_.GetControl(GetStripControlName(strip, "pot")));
+    ASSERT_NE(controls.back(), nullptr) << GetStripControlName(strip, "pot");
     deltas.push_back(Read(controls.back(), ControlInput::Type::kDelta));
   }
 
@@ -541,7 +614,7 @@ TEST_P(DeviceXTouchModelTest, PotTurnsAreDeltas) {
     for (int strip = 0; strip < kStripCount; ++strip) {
       EXPECT_DOUBLE_EQ(controls[strip]->GetDelta(deltas[strip].GetId()),
                        (first_clicks + strip) / 63.0)
-          << DeviceXTouch::Pot(strip);
+          << GetStripControlName(strip, "pot");
     }
   }
 }
@@ -552,15 +625,15 @@ TEST_P(DeviceXTouchModelTest, PotsAreTouchedAfterATurn) {
   std::vector<Control*> controls;
   std::vector<ControlInputHandle> touches;
   for (int strip = 0; strip < kStripCount; ++strip) {
-    controls.push_back(device_.GetControl(DeviceXTouch::Pot(strip)));
-    ASSERT_NE(controls.back(), nullptr) << DeviceXTouch::Pot(strip);
+    controls.push_back(device_.GetControl(GetStripControlName(strip, "pot")));
+    ASSERT_NE(controls.back(), nullptr) << GetStripControlName(strip, "pot");
     touches.push_back(ReadTouch(controls.back()));
   }
   xtouch_.TurnPot(1, 1);
   Run();
   for (int strip = 0; strip < kStripCount; ++strip) {
     EXPECT_EQ(controls[strip]->IsPressed(touches[strip].GetId()), strip == 1)
-        << DeviceXTouch::Pot(strip);
+        << GetStripControlName(strip, "pot");
   }
 
   // The turn is read after the device runs, so the hold starts on the next
@@ -573,8 +646,8 @@ TEST_P(DeviceXTouchModelTest, PotsAreTouchedAfterATurn) {
 
 TEST_P(DeviceXTouchModelTest, PotRingsShowEachMode) {
   for (int strip = 0; strip < kStripCount; ++strip) {
-    SCOPED_TRACE(DeviceXTouch::Pot(strip));
-    Control* control = device_.GetControl(DeviceXTouch::Pot(strip));
+    SCOPED_TRACE(GetStripControlName(strip, "pot"));
+    Control* control = device_.GetControl(GetStripControlName(strip, "pot"));
     ASSERT_NE(control, nullptr);
 
     // Modes 0-7 are the ring's own. Spread (3 and 7) has 6 positions, and the
@@ -600,7 +673,7 @@ TEST_P(DeviceXTouchModelTest, PotRingsShowEachMode) {
 }
 
 TEST_F(DeviceXTouchTest, PotRingsAreClearedOff) {
-  Control* control = device_.GetControl(DeviceXTouch::kPot1);
+  Control* control = device_.GetControl("strip[0].pot");
   ASSERT_NE(control, nullptr);
   ControlOutputHandle writer = control->RegisterOutputWriter();
   control->SetDValue(5, /*mode=*/1);
@@ -617,7 +690,7 @@ TEST_F(DeviceXTouchTest, PotRingsAreClearedOff) {
 //==============================================================================
 
 TEST_F(DeviceXTouchTest, MetersShowEachLevel) {
-  Control* control = device_.GetControl(DeviceXTouch::kMeter1);
+  Control* control = device_.GetControl("strip[0].meter");
   ASSERT_NE(control, nullptr);
   for (const MeterLevel& entry : kMeterLevels) {
     SCOPED_TRACE(entry.peak);
@@ -629,21 +702,21 @@ TEST_F(DeviceXTouchTest, MetersShowEachLevel) {
 
 TEST_P(DeviceXTouchModelTest, EachStripHasAMeter) {
   for (int strip = 0; strip < kStripCount; ++strip) {
-    Control* control = device_.GetControl(DeviceXTouch::Meter(strip));
-    ASSERT_NE(control, nullptr) << DeviceXTouch::Meter(strip);
+    Control* control = device_.GetControl(GetStripControlName(strip, "meter"));
+    ASSERT_NE(control, nullptr) << GetStripControlName(strip, "meter");
     control->SetCValue(kMeterLevels[strip + 2].peak);
   }
   Run();
   for (int strip = 0; strip < kStripCount; ++strip) {
     EXPECT_EQ(xtouch_.GetMeter(strip), kMeterLevels[strip + 2].level)
-        << DeviceXTouch::Meter(strip);
+        << GetStripControlName(strip, "meter");
   }
 }
 
 // The hardware's meters fall on their own, so a meter is sent each run, even
 // when it hasn't changed.
 TEST_F(DeviceXTouchTest, MetersHoldWhileTheyAreSentEachRun) {
-  Control* control = device_.GetControl(DeviceXTouch::kMeter1);
+  Control* control = device_.GetControl("strip[0].meter");
   ASSERT_NE(control, nullptr);
   for (int run = 0; run < 10; ++run) {
     control->SetCValue(0.5);
@@ -659,11 +732,12 @@ TEST_F(DeviceXTouchTest, MetersHoldWhileTheyAreSentEachRun) {
 //==============================================================================
 
 TEST_P(DeviceXTouchModelTest, ScribbleStripsShowBothLines) {
+  constexpr std::string_view kLines[] = {"scribble_top", "scribble_bottom"};
   for (int strip = 0; strip < kStripCount; ++strip) {
     for (int line = 0; line < 2; ++line) {
       Control* control =
-          device_.GetControl(DeviceXTouch::Scribble(strip, line));
-      ASSERT_NE(control, nullptr) << DeviceXTouch::Scribble(strip, line);
+          device_.GetControl(GetStripControlName(strip, kLines[line]));
+      ASSERT_NE(control, nullptr) << GetStripControlName(strip, kLines[line]);
       control->SetText(absl::StrCat("S", strip, " L", line));
     }
   }
@@ -672,13 +746,13 @@ TEST_P(DeviceXTouchModelTest, ScribbleStripsShowBothLines) {
     for (int line = 0; line < 2; ++line) {
       EXPECT_EQ(xtouch_.GetScribble(strip, line),
                 absl::StrCat("S", strip, " L", line, "  "))
-          << DeviceXTouch::Scribble(strip, line);
+          << GetStripControlName(strip, kLines[line]);
     }
   }
 }
 
 TEST_F(DeviceXTouchTest, ScribbleTextIsCutToFit) {
-  Control* control = device_.GetControl(DeviceXTouch::kScribble1Line1);
+  Control* control = device_.GetControl("strip[0].scribble_top");
   ASSERT_NE(control, nullptr);
   EXPECT_EQ(control->GetTextWidth(), 7);
   control->SetText("Vocal Bus");
@@ -704,14 +778,15 @@ TEST_P(DeviceXTouchModelTest, EachStripHasAScribbleColor) {
       {{0, 0, 0}, ScribbleColor::kBlack},
   };
   for (int strip = 0; strip < kStripCount; ++strip) {
-    Control* control = device_.GetControl(DeviceXTouch::ScribbleColor(strip));
-    ASSERT_NE(control, nullptr) << DeviceXTouch::ScribbleColor(strip);
+    Control* control =
+        device_.GetControl(GetStripControlName(strip, "scribble_color"));
+    ASSERT_NE(control, nullptr) << GetStripControlName(strip, "scribble_color");
     control->SetColor(kStripColors[strip].color);
   }
   Run();
   for (int strip = 0; strip < kStripCount; ++strip) {
     EXPECT_EQ(xtouch_.GetScribbleColor(strip), kStripColors[strip].shown)
-        << DeviceXTouch::ScribbleColor(strip);
+        << GetStripControlName(strip, "scribble_color");
   }
 }
 
@@ -727,7 +802,7 @@ TEST_F(DeviceXTouchTest, ScribbleColorsAreTheNearestInThePalette) {
       {{40, 40, 200}, ScribbleColor::kBlue},     // Muted blue.
       {{0, 0, 0}, ScribbleColor::kBlack},
   };
-  Control* control = device_.GetControl(DeviceXTouch::kScribble1Color);
+  Control* control = device_.GetControl("strip[0].scribble_color");
   ASSERT_NE(control, nullptr);
   for (const PaletteColor& entry : kPaletteColors) {
     SCOPED_TRACE(FormatColor(entry.color));
@@ -754,7 +829,7 @@ class DeviceXTouchTimecodeTest : public DeviceXTouchTest {
 
   // Shows each of `timecodes` in turn, and checks what the display shows.
   void ExpectTimecodes(absl::Span<const Timecode> timecodes) {
-    Control* control = device_.GetControl(DeviceXTouch::kTimecode);
+    Control* control = device_.GetControl("timecode");
     ASSERT_NE(control, nullptr);
     for (const Timecode& entry : timecodes) {
       SCOPED_TRACE(absl::StrCat("mode ", entry.mode, " at ", entry.position));
@@ -811,7 +886,7 @@ TEST_F(DeviceXTouchTimecodeTest, ShowsDashesForMeasuresAndHoursThatDontFit) {
 }
 
 TEST_F(DeviceXTouchTimecodeTest, ShowsText) {
-  Control* control = device_.GetControl(DeviceXTouch::kTimecode);
+  Control* control = device_.GetControl("timecode");
   ASSERT_NE(control, nullptr);
 
   // Text is right aligned, and a '.' lights the dot of the character before
@@ -840,34 +915,34 @@ TEST_P(DeviceXTouchModelTest, SendsTheProtocolsMessages) {
   FakeMidiOutput* output = xtouch_.GetOutputPort();
   output->SetRecording(true);
 
-  device_.GetControl(DeviceXTouch::kMute2)->SetDValue(1);
+  device_.GetControl("strip[1].mute")->SetDValue(1);
   Run();
   EXPECT_THAT(output->TakeReceived(),
               ElementsAre(ElementsAre(0x90, 0x11, 0x7F)));
 
-  device_.GetControl(DeviceXTouch::kPot2)->SetDValue(5, /*mode=*/1);
+  device_.GetControl("strip[1].pot")->SetDValue(5, /*mode=*/1);
   Run();
   EXPECT_THAT(output->TakeReceived(),
               ElementsAre(ElementsAre(0xB0, 0x31, 0x16)));
 
-  device_.GetControl(DeviceXTouch::kFader2)->SetCValue(1.0);
+  device_.GetControl("strip[1].fader")->SetCValue(1.0);
   Run();
   EXPECT_THAT(output->TakeReceived(),
               ElementsAre(ElementsAre(0xE1, 0x7F, 0x7F)));
 
   // Channel pressure has one data byte. The port records the three it is
   // passed.
-  device_.GetControl(DeviceXTouch::kMeter2)->SetCValue(1.0);
+  device_.GetControl("strip[1].meter")->SetCValue(1.0);
   Run();
   EXPECT_THAT(output->TakeReceived(), ElementsAre(ElementsAre(0xD0, 0x1E, _)));
 
-  device_.GetControl(DeviceXTouch::kScribble2Line2)->SetText("Bass");
+  device_.GetControl("strip[1].scribble_bottom")->SetText("Bass");
   Run();
   EXPECT_THAT(output->TakeReceived(),
               ElementsAre(ElementsAre(0xF0, 0x00, 0x00, 0x66, id, 0x12, 63, 'B',
                                       'a', 's', 's', ' ', ' ', ' ', 0xF7)));
 
-  device_.GetControl(DeviceXTouch::kScribble2Color)->SetColor({255, 0, 0});
+  device_.GetControl("strip[1].scribble_color")->SetColor({255, 0, 0});
   Run();
   EXPECT_THAT(output->TakeReceived(),
               ElementsAre(ElementsAre(0xF0, 0x00, 0x00, 0x66, id, 0x72, 0, 1, 0,

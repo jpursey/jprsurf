@@ -75,33 +75,33 @@ struct WidgetDevice {
   const WidgetShape* catalog = nullptr;
 
   // The device, or null if it is absent. Its controls are named by their paths
-  // in its catalog, such as "strip[0].fader". CheckWidgets() ignores it.
+  // in its catalog, such as "strip[0].fader". ValidateWidgets() ignores it.
   Device* device = nullptr;
 };
 
 //==============================================================================
-// Checking and resolving
+// Validating and resolving
 //==============================================================================
 
-// Checks the config's widgets, the fields of its top-level struct, against the
-// devices' catalogs. Returns the struct's shape, or nullopt with an error added
-// to `errors` (if provided) for each problem found. Checking doesn't stop at
-// the first problem, and each error starts with what it is about: a device and
-// a path in its catalog (such as `xtouch: strip[0]`), or the struct or field
-// being defined (such as `transport.play`). An error about a device, or the
-// top-level struct, names it in its message instead. A device without a struct
-// catalog is reported once, not again for each path from it.
+// Validates the config's widgets, the fields of its top-level struct, against
+// the devices' catalogs. Returns the struct's shape, or nullopt with an error
+// added to `errors` (if provided) for each problem found. Validating doesn't
+// stop at the first problem, and each error starts with what it is about: a
+// device and a path in its catalog (such as `xtouch: strip[0]`), or the struct
+// or field being defined (such as `transport.play`). An error about a device,
+// or the top-level struct, names it in its message instead. A device without a
+// struct catalog is reported once, not again for each path from it.
 //
 // The shape of a path definition is the catalog's shape there, of a struct
 // definition its fields in order, and of a join an array of its slices'
 // element shape, sized by all its slices together.
-std::optional<WidgetShape> CheckWidgets(const WidgetStructDefinition& widgets,
-                                        absl::Span<const WidgetDevice> devices,
-                                        std::vector<std::string>* errors);
+std::optional<WidgetShape> ValidateWidgets(
+    const WidgetStructDefinition& widgets,
+    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
 
-// Checks the widgets as CheckWidgets() does, and resolves them on the devices
-// that are present. Returns the top-level struct, or null with the errors
-// checking found. The devices must outlive the widgets.
+// Validates the widgets as ValidateWidgets() does, and resolves them on the
+// devices that are present. Returns the top-level struct, or null with the
+// errors validating found. The devices must outlive the widgets.
 //
 // Each device's instance of its catalog has the device's controls, or null for
 // a control it doesn't have. An absent device's instance has every field at

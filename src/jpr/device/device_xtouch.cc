@@ -5,7 +5,13 @@
 
 #include "jpr/device/device_xtouch.h"
 
+#include <cstdint>
+#include <iterator>
 #include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
@@ -14,157 +20,222 @@
 #include "jpr/common/midi_sysex.h"
 #include "jpr/device/control_input_midi.h"
 #include "jpr/device/control_output_midi.h"
+#include "jpr/device/widget_shape.h"
 
 namespace jpr {
 
 namespace {
 
 //==============================================================================
-// Buttons
+// Control names
 //==============================================================================
 
-struct Button {
+// The names of the fields in the catalogs that the constructor also names
+// controls by. The buttons and lights are named by their tables below.
+constexpr std::string_view kStrip = "strip";
+constexpr std::string_view kFader = "fader";
+constexpr std::string_view kPot = "pot";
+constexpr std::string_view kMeter = "meter";
+constexpr std::string_view kScribbleLines[] = {"scribble_top",
+                                               "scribble_bottom"};
+constexpr std::string_view kScribbleColor = "scribble_color";
+constexpr std::string_view kMasterFader = "master_fader";
+constexpr std::string_view kTimecode = "timecode";
+
+// The constructor names these controls by DeviceXTouch's constants, which
+// hide these in its scope.
+static_assert(kMasterFader == DeviceXTouch::kMasterFader);
+static_assert(kTimecode == DeviceXTouch::kTimecode);
+
+// Returns the name of the field's control on the strip.
+std::string GetStripControlName(int strip, std::string_view field) {
+  return absl::StrCat(kStrip, "[", strip, "].", field);
+}
+
+//==============================================================================
+// Buttons and lights
+//==============================================================================
+
+// A button on every strip, which sends the note on the first strip, and one
+// more on each strip after it.
+struct StripButton {
   std::string_view name;
   uint8_t note;
   bool has_light;
-  bool on_extender;
 };
 
-const Button kButtons[] = {
-    // Track record arm buttons.
-    {DeviceXTouch::kRec1, 0x00, true, true},
-    {DeviceXTouch::kRec2, 0x01, true, true},
-    {DeviceXTouch::kRec3, 0x02, true, true},
-    {DeviceXTouch::kRec4, 0x03, true, true},
-    {DeviceXTouch::kRec5, 0x04, true, true},
-    {DeviceXTouch::kRec6, 0x05, true, true},
-    {DeviceXTouch::kRec7, 0x06, true, true},
-    {DeviceXTouch::kRec8, 0x07, true, true},
-    // Track solo buttons.
-    {DeviceXTouch::kSolo1, 0x08, true, true},
-    {DeviceXTouch::kSolo2, 0x09, true, true},
-    {DeviceXTouch::kSolo3, 0x0A, true, true},
-    {DeviceXTouch::kSolo4, 0x0B, true, true},
-    {DeviceXTouch::kSolo5, 0x0C, true, true},
-    {DeviceXTouch::kSolo6, 0x0D, true, true},
-    {DeviceXTouch::kSolo7, 0x0E, true, true},
-    {DeviceXTouch::kSolo8, 0x0F, true, true},
-    // Track mute buttons.
-    {DeviceXTouch::kMute1, 0x10, true, true},
-    {DeviceXTouch::kMute2, 0x11, true, true},
-    {DeviceXTouch::kMute3, 0x12, true, true},
-    {DeviceXTouch::kMute4, 0x13, true, true},
-    {DeviceXTouch::kMute5, 0x14, true, true},
-    {DeviceXTouch::kMute6, 0x15, true, true},
-    {DeviceXTouch::kMute7, 0x16, true, true},
-    {DeviceXTouch::kMute8, 0x17, true, true},
-    // Track select buttons.
-    {DeviceXTouch::kSelect1, 0x18, true, true},
-    {DeviceXTouch::kSelect2, 0x19, true, true},
-    {DeviceXTouch::kSelect3, 0x1A, true, true},
-    {DeviceXTouch::kSelect4, 0x1B, true, true},
-    {DeviceXTouch::kSelect5, 0x1C, true, true},
-    {DeviceXTouch::kSelect6, 0x1D, true, true},
-    {DeviceXTouch::kSelect7, 0x1E, true, true},
-    {DeviceXTouch::kSelect8, 0x1F, true, true},
-    // Track pot buttons.
-    {DeviceXTouch::kPotButton1, 0x20, false, true},
-    {DeviceXTouch::kPotButton2, 0x21, false, true},
-    {DeviceXTouch::kPotButton3, 0x22, false, true},
-    {DeviceXTouch::kPotButton4, 0x23, false, true},
-    {DeviceXTouch::kPotButton5, 0x24, false, true},
-    {DeviceXTouch::kPotButton6, 0x25, false, true},
-    {DeviceXTouch::kPotButton7, 0x26, false, true},
-    {DeviceXTouch::kPotButton8, 0x27, false, true},
-    // Assign buttons
-    {DeviceXTouch::kAssignTrack, 0x28, true, false},
-    {DeviceXTouch::kAssignSend, 0x29, true, false},
-    {DeviceXTouch::kAssignPan, 0x2A, true, false},
-    {DeviceXTouch::kAssignPlugin, 0x2B, true, false},
-    {DeviceXTouch::kAssignEQ, 0x2C, true, false},
-    {DeviceXTouch::kAssignInst, 0x2D, true, false},
-    // Channel navigation buttons.
-    {DeviceXTouch::kBankLeft, 0x2E, true, false},
-    {DeviceXTouch::kBankRight, 0x2F, true, false},
-    {DeviceXTouch::kChannelLeft, 0x30, true, false},
-    {DeviceXTouch::kChannelRight, 0x31, true, false},
-    // Master fader buttons.
-    {DeviceXTouch::kFlip, 0x32, true, false},
-    {DeviceXTouch::kGlobal, 0x33, true, false},
-    // Display buttons.
-    {DeviceXTouch::kShowNameValue, 0x34, true, false},
-    {DeviceXTouch::kShowTimeBeats, 0x35, true, false},
-    // Function buttons.
-    {DeviceXTouch::kF1, 0x36, true, false},
-    {DeviceXTouch::kF2, 0x37, true, false},
-    {DeviceXTouch::kF3, 0x38, true, false},
-    {DeviceXTouch::kF4, 0x39, true, false},
-    {DeviceXTouch::kF5, 0x3A, true, false},
-    {DeviceXTouch::kF6, 0x3B, true, false},
-    {DeviceXTouch::kF7, 0x3C, true, false},
-    {DeviceXTouch::kF8, 0x3D, true, false},
-    // View buttons.
-    {DeviceXTouch::kViewMIDI, 0x3E, true, false},
-    {DeviceXTouch::kViewInputs, 0x3F, true, false},
-    {DeviceXTouch::kViewAudio, 0x40, true, false},
-    {DeviceXTouch::kViewInst, 0x41, true, false},
-    {DeviceXTouch::kViewAux, 0x42, true, false},
-    {DeviceXTouch::kViewBuses, 0x43, true, false},
-    {DeviceXTouch::kViewOutputs, 0x44, true, false},
-    {DeviceXTouch::kViewUser, 0x45, true, false},
-    // Modifier buttons.
-    {DeviceXTouch::kShift, 0x46, true, false},
-    {DeviceXTouch::kOption, 0x47, true, false},
-    {DeviceXTouch::kControl, 0x48, true, false},
-    {DeviceXTouch::kAlt, 0x49, true, false},
-    // Automation buttons.
-    {DeviceXTouch::kAutoRead, 0x4A, true, false},
-    {DeviceXTouch::kAutoWrite, 0x4B, true, false},
-    {DeviceXTouch::kAutoTrim, 0x4C, true, false},
-    {DeviceXTouch::kAutoTouch, 0x4D, true, false},
-    {DeviceXTouch::kAutoLatch, 0x4E, true, false},
-    {DeviceXTouch::kAutoGroup, 0x4F, true, false},
-    // Utility buttons.
-    {DeviceXTouch::kSave, 0x50, true, false},
-    {DeviceXTouch::kUndo, 0x51, true, false},
-    {DeviceXTouch::kCancel, 0x52, true, false},
-    {DeviceXTouch::kEnter, 0x53, true, false},
-    // Transport buttons.
-    {DeviceXTouch::kMarker, 0x54, true, false},
-    {DeviceXTouch::kNudge, 0x55, true, false},
-    {DeviceXTouch::kCycle, 0x56, true, false},
-    {DeviceXTouch::kDrop, 0x57, true, false},
-    {DeviceXTouch::kReplace, 0x58, true, false},
-    {DeviceXTouch::kClick, 0x59, true, false},
-    {DeviceXTouch::kSolo, 0x5A, true, false},
-    {DeviceXTouch::kRewind, 0x5B, true, false},
-    {DeviceXTouch::kForward, 0x5C, true, false},
-    {DeviceXTouch::kStop, 0x5D, true, false},
-    {DeviceXTouch::kPlay, 0x5E, true, false},
-    {DeviceXTouch::kRecord, 0x5F, true, false},
-    // Navigation buttons.
-    {DeviceXTouch::kUp, 0x60, true, false},
-    {DeviceXTouch::kDown, 0x61, true, false},
-    {DeviceXTouch::kScrub, 0x62, true, false},
-    {DeviceXTouch::kZoom, 0x63, true, false},
-    {DeviceXTouch::kLeft, 0x64, true, false},
-    {DeviceXTouch::kRight, 0x65, true, false},
+constexpr StripButton kStripButtons[] = {
+    {"rec", 0x00, true},         //
+    {"solo", 0x08, true},        //
+    {"mute", 0x10, true},        //
+    {"select", 0x18, true},      //
+    {"pot_button", 0x20, false}  //
 };
 
-//==============================================================================
-// LEDs
-//==============================================================================
-
-struct Led {
+// A button or light that only the X-Touch has, and the note it sends or shows.
+struct NamedNote {
   std::string_view name;
   uint8_t note;
 };
 
-constexpr Led kLeds[] = {
-    {DeviceXTouch::kSmpteLed, 0x71},
-    {DeviceXTouch::kBeatsLed, 0x72},
-    {DeviceXTouch::kSoloLed, 0x73},
+// The buttons, apart from the function keys. Each one has a light.
+constexpr NamedNote kButtons[] = {
+    // Assign buttons
+    {"assign_track", 0x28},
+    {"assign_send", 0x29},
+    {"assign_pan", 0x2A},
+    {"assign_plugin", 0x2B},
+    {"assign_eq", 0x2C},
+    {"assign_inst", 0x2D},
+    // Channel navigation buttons.
+    {"bank_left", 0x2E},
+    {"bank_right", 0x2F},
+    {"channel_left", 0x30},
+    {"channel_right", 0x31},
+    // Master fader buttons.
+    {"flip", 0x32},
+    {"global", 0x33},
+    // Display buttons.
+    {"show_name_value", 0x34},
+    {"show_time_beats", 0x35},
+    // View buttons.
+    {"view_midi", 0x3E},
+    {"view_inputs", 0x3F},
+    {"view_audio", 0x40},
+    {"view_inst", 0x41},
+    {"view_aux", 0x42},
+    {"view_buses", 0x43},
+    {"view_outputs", 0x44},
+    {"view_user", 0x45},
+    // Modifier buttons.
+    {"shift", 0x46},
+    {"option", 0x47},
+    {"control", 0x48},
+    {"alt", 0x49},
+    // Automation buttons.
+    {"auto_read", 0x4A},
+    {"auto_write", 0x4B},
+    {"auto_trim", 0x4C},
+    {"auto_touch", 0x4D},
+    {"auto_latch", 0x4E},
+    {"auto_group", 0x4F},
+    // Utility buttons.
+    {"save", 0x50},
+    {"undo", 0x51},
+    {"cancel", 0x52},
+    {"enter", 0x53},
+    // Transport buttons.
+    {"marker", 0x54},
+    {"nudge", 0x55},
+    {"cycle", 0x56},
+    {"drop", 0x57},
+    {"replace", 0x58},
+    {"click", 0x59},
+    {"solo", 0x5A},
+    {"rewind", 0x5B},
+    {"forward", 0x5C},
+    {"stop", 0x5D},
+    {"play", 0x5E},
+    {"record", 0x5F},
+    // Navigation buttons.
+    {"up", 0x60},
+    {"down", 0x61},
+    {"scrub", 0x62},
+    {"zoom", 0x63},
+    {"left", 0x64},
+    {"right", 0x65},
 };
+
+// The function keys, F1 to F8, are the array `function`, each with a light,
+// from this note.
+constexpr std::string_view kFunctionKeys = "function";
+constexpr uint8_t kFunctionKeyNote = 0x36;
+constexpr int kFunctionKeyCount = 8;
+
+// The lights with no button.
+constexpr NamedNote kLights[] = {
+    {"smpte_light", 0x71},
+    {"beats_light", 0x72},
+    {"solo_light", 0x73},
+};
+
+//==============================================================================
+// Catalogs
+//==============================================================================
+
+using Input = ControlInput::Type;
+using Output = ControlOutput::Type;
+
+// The modes of a pot's ring, those of ControlDValueOutputMidiCc::McuEncoder():
+// the first four, then the same four with the outermost lights always on, then
+// off.
+constexpr std::string_view kRingModes[] = {
+    "dot",       "center",       "fill",       "spread",        //
+    "dot_edges", "center_edges", "fill_edges", "spread_edges",  //
+    "off"};
+constexpr int kRingOffMode = 8;
+static_assert(kRingModes[kRingOffMode] == "off");
+
+// Returns the shape of a light, whose modes are those of
+// ControlDValueOutputMidiNote::McuLight().
+WidgetShape GetLightShape(Control::Inputs inputs) {
+  return WidgetShape::ForControl(inputs, {Output::kDValue}, {"solid", "blink"});
+}
+
+// Returns the shape of a fader, with touch.
+WidgetShape GetFaderShape() {
+  return WidgetShape::ForControl({Input::kValue, Input::kPress},
+                                 {Output::kCValue});
+}
+
+// Returns the shape of a strip, the same on both models.
+WidgetShape CreateStripShape() {
+  std::vector<WidgetShape::Field> fields;
+  for (const StripButton& button : kStripButtons) {
+    fields.push_back({std::string(button.name),
+                      button.has_light
+                          ? GetLightShape({Input::kPress})
+                          : WidgetShape::ForControl({Input::kPress}, {})});
+  }
+  fields.push_back({std::string(kFader), GetFaderShape()});
+  fields.push_back(
+      {std::string(kPot), WidgetShape::ForControl(
+                              {Input::kDelta}, {Output::kDValue},
+                              {std::begin(kRingModes), std::end(kRingModes)})});
+  fields.push_back(
+      {std::string(kMeter), WidgetShape::ForControl({}, {Output::kCValue})});
+  const WidgetShape text = WidgetShape::ForControl({}, {Output::kText});
+  for (std::string_view line : kScribbleLines) {
+    fields.push_back({std::string(line), text});
+  }
+  fields.push_back({std::string(kScribbleColor),
+                    WidgetShape::ForControl({}, {Output::kColor})});
+  return WidgetShape::ForStruct(std::move(fields));
+}
+
+WidgetShape CreateCatalog(DeviceXTouch::Type type) {
+  WidgetShape strips =
+      WidgetShape::ForArray(CreateStripShape(), DeviceXTouch::kStripCount);
+  if (type == DeviceXTouch::Type::kExtender) {
+    return WidgetShape::ForStruct({{std::string(kStrip), std::move(strips)}});
+  }
+
+  const WidgetShape button = GetLightShape({Input::kPress});
+  std::vector<WidgetShape::Field> fields;
+  for (const NamedNote& entry : kButtons) {
+    fields.push_back({std::string(entry.name), button});
+  }
+  fields.push_back({std::string(kFunctionKeys),
+                    WidgetShape::ForArray(button, kFunctionKeyCount)});
+  fields.push_back({std::string(kMasterFader), GetFaderShape()});
+  fields.push_back(
+      {std::string(kTimecode), WidgetShape::ForControl({}, {Output::kText})});
+  for (const NamedNote& light : kLights) {
+    fields.push_back({std::string(light.name), GetLightShape({})});
+  }
+  fields.push_back({std::string(kStrip), std::move(strips)});
+  return WidgetShape::ForStruct(std::move(fields));
+}
 
 //==============================================================================
 // VU meters
@@ -597,6 +668,7 @@ static constexpr uint8_t kColorSysexPrefix[] = {0x00, 0x00, 0x66, 0x14, 0x72};
 static constexpr uint8_t kColorExtSysexPrefix[] = {0x00, 0x00, 0x66, 0x15,
                                                    0x72};
 static constexpr int kColorChannelCount = 8;
+static_assert(kColorChannelCount == DeviceXTouch::kStripCount);
 
 // Maps a full RGB color to the nearest XTouch scribble strip palette color.
 // The XTouch supports 8 colors corresponding to the corners of the RGB cube:
@@ -806,32 +878,36 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
   RegisterSysex();
 
   // Add all button controls.
-  for (const auto& button : kButtons) {
-    if (!button.on_extender && type == Type::kExtender) {
-      continue;
+  for (const StripButton& button : kStripButtons) {
+    for (int strip = 0; strip < kStripCount; ++strip) {
+      AddButton(GetStripControlName(strip, button.name),
+                static_cast<uint8_t>(button.note + strip), button.has_light,
+                midi_in, midi_out);
     }
-    Control::Options options = {.name = button.name};
-    options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-        midi_in, ControlPressInputMidiMsg::McuButton(button.note));
-    if (button.has_light) {
-      options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
-          midi_out, ControlDValueOutputMidiNote::McuLight(button.note));
-    }
-    AddControl(std::move(options));
   }
-
   if (type != Type::kExtender) {
+    for (const NamedNote& button : kButtons) {
+      AddButton(button.name, button.note, /*has_light=*/true, midi_in,
+                midi_out);
+    }
+    for (int key = 0; key < kFunctionKeyCount; ++key) {
+      AddButton(absl::StrCat(kFunctionKeys, "[", key, "]"),
+                static_cast<uint8_t>(kFunctionKeyNote + key),
+                /*has_light=*/true, midi_in, midi_out);
+    }
+
     // Timecode display.
     Control::Options timecode_options = {.name = kTimecode};
     timecode_options.text_output =
         std::make_unique<XTouchTimecodeDisplay>(midi_out);
     AddControl(std::move(timecode_options));
 
-    for (const auto& led : kLeds) {
-      Control::Options led_options = {.name = led.name};
-      led_options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
-          midi_out, ControlDValueOutputMidiNote::McuLight(led.note));
-      AddControl(std::move(led_options));
+    for (const NamedNote& light : kLights) {
+      Control::Options light_options = {.name = light.name};
+      light_options.dvalue_output =
+          std::make_unique<ControlDValueOutputMidiNote>(
+              midi_out, ControlDValueOutputMidiNote::McuLight(light.note));
+      AddControl(std::move(light_options));
     }
 
     // Master fader.
@@ -850,21 +926,21 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
   }
 
   // Additional per-track controls.
-  for (int track = 0; track < 8; ++track) {
+  for (int track = 0; track < kStripCount; ++track) {
     // Pan pots.
-    std::string name = Pot(track);
+    std::string name = GetStripControlName(track, kPot);
     Control::Options pan_options = {.name = name};
     pan_options.delta_input =
         std::make_unique<ControlDeltaInputMidiCcSignMagnitude>(
             midi_in, ControlDeltaInputMidiCcSignMagnitude::McuEncoder(track));
     pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
         midi_out, ControlDValueOutputMidiCc::McuEncoder(track));
-    // Value 0 still lights an LED in most modes, but mode 8 turns them all off.
-    pan_options.dvalue_output->SetCleared(0, /*mode=*/8);
+    // Value 0 still lights an LED in most modes, but "off" turns them all off.
+    pan_options.dvalue_output->SetCleared(0, kRingOffMode);
     AddControl(std::move(pan_options));
 
     // Faders.
-    name = Fader(track);
+    name = GetStripControlName(track, kFader);
     Control::Options fader_options = {.name = name};
     fader_options.value_input = std::make_unique<ControlValueInputMcuFader>(
         midi_in, ControlValueInputMcuFader::Track(track));
@@ -880,7 +956,7 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     AddControl(std::move(fader_options));
 
     // VU meter.
-    name = Meter(track);
+    name = GetStripControlName(track, kMeter);
     Control::Options meter_options = {.name = name};
     meter_options.cvalue_output =
         std::make_unique<XTouchTrackMeter>(midi_out, track);
@@ -890,8 +966,8 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     SysexPrefix scribble_prefix =
         (type == Type::kFull ? SysexPrefix(kScribbleSysexPrefix)
                              : SysexPrefix(kScribbleExtSysexPrefix));
-    for (int line = 0; line < 2; ++line) {
-      name = Scribble(track, line);
+    for (int line = 0; line < std::ssize(kScribbleLines); ++line) {
+      name = GetStripControlName(track, kScribbleLines[line]);
       Control::Options scribble_options = {.name = name};
       scribble_options.text_output = std::make_unique<XTouchTrackScribbleText>(
           scribble_prefix, midi_out, track, line);
@@ -902,7 +978,7 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     SysexPrefix color_prefix =
         (type == Type::kFull ? SysexPrefix(kColorSysexPrefix)
                              : SysexPrefix(kColorExtSysexPrefix));
-    name = ScribbleColor(track);
+    name = GetStripControlName(track, kScribbleColor);
     Control::Options color_options = {.name = name};
     color_options.color_output = std::make_unique<XTouchTrackScribbleColor>(
         color_prefix, midi_out, track, scribble_colors_);
@@ -911,5 +987,33 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
 }
 
 DeviceXTouch::~DeviceXTouch() = default;
+
+const WidgetShape& DeviceXTouch::GetCatalog(Type type) {
+  if (type == Type::kFull) {
+    static const absl::NoDestructor<WidgetShape> s_full(
+        CreateCatalog(Type::kFull));
+    return *s_full;
+  }
+  static const absl::NoDestructor<WidgetShape> s_extender(
+      CreateCatalog(Type::kExtender));
+  return *s_extender;
+}
+
+std::string DeviceXTouch::GetStripControl(int strip, std::string_view field) {
+  return GetStripControlName(strip, field);
+}
+
+void DeviceXTouch::AddButton(std::string_view name, uint8_t note,
+                             bool has_light, MidiIn* midi_in,
+                             MidiOut* midi_out) {
+  Control::Options options = {.name = name};
+  options.press_input = std::make_unique<ControlPressInputMidiMsg>(
+      midi_in, ControlPressInputMidiMsg::McuButton(note));
+  if (has_light) {
+    options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
+        midi_out, ControlDValueOutputMidiNote::McuLight(note));
+  }
+  AddControl(std::move(options));
+}
 
 }  // namespace jpr

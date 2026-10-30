@@ -51,9 +51,9 @@ std::vector<std::string> GetFieldNames(const WidgetShape& shape) {
 // strips of the same shape, and "other" has 4 strips of another shape.
 class WidgetDefinitionTest : public ::testing::Test {
  protected:
-  std::optional<WidgetShape> Check(const WidgetStructDefinition& widgets) {
+  std::optional<WidgetShape> Validate(const WidgetStructDefinition& widgets) {
     errors_.clear();
-    return CheckWidgets(widgets, devices_, &errors_);
+    return ValidateWidgets(widgets, devices_, &errors_);
   }
 
   const WidgetShape button_ =
@@ -79,7 +79,7 @@ class WidgetDefinitionTest : public ::testing::Test {
 };
 
 TEST_F(WidgetDefinitionTest, NoWidgetsIsAnEmptyStruct) {
-  std::optional<WidgetShape> shape = Check({});
+  std::optional<WidgetShape> shape = Validate({});
   ASSERT_TRUE(shape.has_value());
   EXPECT_EQ(shape->GetKind(), WidgetKind::kStruct);
   EXPECT_THAT(shape->GetFields(), IsEmpty());
@@ -88,12 +88,12 @@ TEST_F(WidgetDefinitionTest, NoWidgetsIsAnEmptyStruct) {
 
 TEST_F(WidgetDefinitionTest, PathHasTheCatalogsShapeThere) {
   std::optional<WidgetShape> shape =
-      Check({.fields = {
-                 {"play", "xtouch.play"},
-                 {"info_strip", "xtouch.strip[7]"},
-                 {"ext_strip", "ext.strip"},
-                 {"ext", "ext"},
-             }});
+      Validate({.fields = {
+                    {"play", "xtouch.play"},
+                    {"info_strip", "xtouch.strip[7]"},
+                    {"ext_strip", "ext.strip"},
+                    {"ext", "ext"},
+                }});
   ASSERT_TRUE(shape.has_value());
   EXPECT_THAT(errors_, IsEmpty());
   EXPECT_THAT(GetFieldNames(*shape),
@@ -106,8 +106,8 @@ TEST_F(WidgetDefinitionTest, PathHasTheCatalogsShapeThere) {
 
 TEST_F(WidgetDefinitionTest, IncludeAddsItsFieldsApartFromTheExcluded) {
   std::optional<WidgetShape> shape =
-      Check({.includes = {{"xtouch", {"strip", "jog"}}},
-             .fields = {{"wheel", "xtouch.jog"}}});
+      Validate({.includes = {{"xtouch", {"strip", "jog"}}},
+                .fields = {{"wheel", "xtouch.jog"}}});
   ASSERT_TRUE(shape.has_value());
   EXPECT_THAT(errors_, IsEmpty());
   EXPECT_THAT(GetFieldNames(*shape), ElementsAre("play", "stop", "wheel"));
@@ -116,7 +116,7 @@ TEST_F(WidgetDefinitionTest, IncludeAddsItsFieldsApartFromTheExcluded) {
 }
 
 TEST_F(WidgetDefinitionTest, StructHasItsIncludesThenItsFields) {
-  std::optional<WidgetShape> shape = Check(
+  std::optional<WidgetShape> shape = Validate(
       {.fields = {
            {"transport",
             WidgetStructDefinition{
@@ -138,7 +138,7 @@ TEST_F(WidgetDefinitionTest, StructHasItsIncludesThenItsFields) {
 }
 
 TEST_F(WidgetDefinitionTest, JoinIsSizedByAllItsSlices) {
-  std::optional<WidgetShape> shape = Check(
+  std::optional<WidgetShape> shape = Validate(
       {.fields = {
            {"strip", WidgetJoinDefinition{{{"ext.strip"}, {"xtouch.strip"}}}},
            {"route_strip",
@@ -155,9 +155,9 @@ TEST_F(WidgetDefinitionTest, JoinIsSizedByAllItsSlices) {
 
 TEST_F(WidgetDefinitionTest, SliceWithNoCountTakesTheRestOfItsArray) {
   std::optional<WidgetShape> shape =
-      Check({.fields = {
-                 {"last", WidgetJoinDefinition{{{"xtouch.strip", 3}}}},
-             }});
+      Validate({.fields = {
+                    {"last", WidgetJoinDefinition{{{"xtouch.strip", 3}}}},
+                }});
   ASSERT_TRUE(shape.has_value());
   EXPECT_THAT(errors_, IsEmpty());
   EXPECT_EQ(*shape->GetField("last"), WidgetShape::ForArray(strip_, 5));
@@ -166,12 +166,12 @@ TEST_F(WidgetDefinitionTest, SliceWithNoCountTakesTheRestOfItsArray) {
 TEST_F(WidgetDefinitionTest, DevicesSharingACatalogHaveTheirOwnNames) {
   devices_ = {{"ext_1", &ext_}, {"ext_2", &ext_}, {"xtouch", &xtouch_}};
   std::optional<WidgetShape> shape =
-      Check({.fields = {
-                 {"strip",
-                  WidgetJoinDefinition{
-                      {{"ext_1.strip"}, {"ext_2.strip"}, {"xtouch.strip"}}}},
-                 {"first_strip", "ext_1.strip[0]"},
-             }});
+      Validate({.fields = {
+                    {"strip",
+                     WidgetJoinDefinition{
+                         {{"ext_1.strip"}, {"ext_2.strip"}, {"xtouch.strip"}}}},
+                    {"first_strip", "ext_1.strip[0]"},
+                }});
   ASSERT_TRUE(shape.has_value());
   EXPECT_THAT(errors_, IsEmpty());
   EXPECT_EQ(*shape->GetField("strip"), WidgetShape::ForArray(strip_, 24));
@@ -184,7 +184,7 @@ TEST_F(WidgetDefinitionTest, ReportsBadDevices) {
               {"xtouch", &ext_},
               {"none", nullptr},
               {"knob", &knob_}};
-  EXPECT_FALSE(Check({}).has_value());
+  EXPECT_FALSE(Validate({}).has_value());
   EXPECT_THAT(errors_,
               ElementsAre("device name \"1x\" isn't a widget name",
                           "device \"xtouch\" is repeated",
@@ -195,21 +195,22 @@ TEST_F(WidgetDefinitionTest, ReportsBadDevices) {
 TEST_F(WidgetDefinitionTest, PathsFromABadDeviceAreNotReportedAgain) {
   devices_.push_back({"none", nullptr});
   devices_.push_back({"knob", &knob_});
-  EXPECT_FALSE(Check({.includes = {{"knob"}},
-                      .fields = {{"gone", "none.play"},
-                                 {"turn", WidgetJoinDefinition{{{"knob"}}}}}})
-                   .has_value());
+  EXPECT_FALSE(
+      Validate({.includes = {{"knob"}},
+                .fields = {{"gone", "none.play"},
+                           {"turn", WidgetJoinDefinition{{{"knob"}}}}}})
+          .has_value());
   EXPECT_THAT(errors_,
               ElementsAre("device \"none\" has no catalog",
                           "catalog of device \"knob\" isn't a struct"));
 }
 
-TEST_F(WidgetDefinitionTest, RepeatedDeviceStillHasItsCatalogChecked) {
+TEST_F(WidgetDefinitionTest, RepeatedDeviceStillHasItsCatalogValidated) {
   const WidgetShape bad =
       WidgetShape::ForStruct({{"play", button_}, {"play", button_}});
   devices_ = {{"xtouch", &xtouch_}, {"xtouch", &bad}};
   // Paths from the name are from the first device.
-  EXPECT_FALSE(Check({.fields = {{"jog", "xtouch.jog"}}}).has_value());
+  EXPECT_FALSE(Validate({.fields = {{"jog", "xtouch.jog"}}}).has_value());
   EXPECT_THAT(errors_, ElementsAre("device \"xtouch\" is repeated",
                                    "xtouch: field \"play\" is repeated"));
 }
@@ -218,7 +219,7 @@ TEST_F(WidgetDefinitionTest, IncludeOfARepeatedCatalogFieldIsOnlyReportedOnce) {
   const WidgetShape bad = WidgetShape::ForStruct(
       {{"play", button_}, {"stop", button_}, {"play", fader_}});
   devices_ = {{"bad", &bad}};
-  EXPECT_FALSE(Check({.includes = {{"bad"}}}).has_value());
+  EXPECT_FALSE(Validate({.includes = {{"bad"}}}).has_value());
   EXPECT_THAT(errors_, ElementsAre("bad: field \"play\" is repeated"));
 }
 
@@ -228,8 +229,8 @@ TEST_F(WidgetDefinitionTest, ReportsAJoinTooLargeForAnArray) {
         WidgetShape::ForArray(strip_, std::numeric_limits<int>::max())}});
   devices_ = {{"huge", &huge}};
   EXPECT_FALSE(
-      Check({.fields = {{"strip", WidgetJoinDefinition{{{"huge.strip"},
-                                                        {"huge.strip"}}}}}})
+      Validate({.fields = {{"strip", WidgetJoinDefinition{{{"huge.strip"},
+                                                           {"huge.strip"}}}}}})
           .has_value());
   EXPECT_THAT(errors_,
               ElementsAre("strip: join has 4294967294 elements, more than "
@@ -249,7 +250,7 @@ TEST_F(WidgetDefinitionTest, ReportsBadNamesInACatalogAtAnyDepth) {
   });
   // A catalog shared by two devices is only reported once.
   devices_ = {{"bad", &bad}, {"bad_too", &bad}};
-  EXPECT_FALSE(Check({}).has_value());
+  EXPECT_FALSE(Validate({}).has_value());
   EXPECT_THAT(errors_,
               ElementsAre("bad: play: mode \"solid\" is repeated",
                           "bad: play: mode name \"a-b\" isn't a widget name",
@@ -260,16 +261,16 @@ TEST_F(WidgetDefinitionTest, ReportsBadNamesInACatalogAtAnyDepth) {
 }
 
 TEST_F(WidgetDefinitionTest, ReportsBadPaths) {
-  EXPECT_FALSE(Check({.fields =
-                          {
-                              {"a", "xtouch.strip."},
-                              {"b", "nowhere.play"},
-                              {"c", "[0].play"},
-                              {"d", ""},
-                              {"e", "xtouch.paly"},
-                              {"f", "xtouch.strip[8]"},
-                              {"g", "xtouch.play.solid"},
-                          }})
+  EXPECT_FALSE(Validate({.fields =
+                             {
+                                 {"a", "xtouch.strip."},
+                                 {"b", "nowhere.play"},
+                                 {"c", "[0].play"},
+                                 {"d", ""},
+                                 {"e", "xtouch.paly"},
+                                 {"f", "xtouch.strip[8]"},
+                                 {"g", "xtouch.play.solid"},
+                             }})
                    .has_value());
   EXPECT_THAT(
       errors_,
@@ -283,18 +284,18 @@ TEST_F(WidgetDefinitionTest, ReportsBadPaths) {
 }
 
 TEST_F(WidgetDefinitionTest, ReportsBadAndRepeatedFieldNames) {
-  EXPECT_FALSE(Check({.includes = {{"xtouch", {"strip"}}},
-                      .fields =
-                          {
-                              {"1st", "xtouch.play"},
-                              {"play", "xtouch.play"},
-                              {"transport",
-                               WidgetStructDefinition{
-                                   .fields = {{"play", "xtouch.play"},
-                                              {"play", "xtouch.stop"}}}},
-                              {"x", "xtouch.nope"},
-                              {"x", "xtouch.play"},
-                          }})
+  EXPECT_FALSE(Validate({.includes = {{"xtouch", {"strip"}}},
+                         .fields =
+                             {
+                                 {"1st", "xtouch.play"},
+                                 {"play", "xtouch.play"},
+                                 {"transport",
+                                  WidgetStructDefinition{
+                                      .fields = {{"play", "xtouch.play"},
+                                                 {"play", "xtouch.stop"}}}},
+                                 {"x", "xtouch.nope"},
+                                 {"x", "xtouch.play"},
+                             }})
                    .has_value());
   EXPECT_THAT(errors_, ElementsAre("field name \"1st\" isn't a widget name",
                                    "field \"play\" is repeated",
@@ -305,12 +306,12 @@ TEST_F(WidgetDefinitionTest, ReportsBadAndRepeatedFieldNames) {
 
 TEST_F(WidgetDefinitionTest, ReportsBadIncludes) {
   EXPECT_FALSE(
-      Check({.includes = {{"xtouch.nope"}},
-             .fields = {{"t",
-                         WidgetStructDefinition{
-                             .includes = {{"xtouch.play"},
-                                          {"xtouch", {"strip", "rewind"}},
-                                          {"xtouch.strip"}}}}}})
+      Validate({.includes = {{"xtouch.nope"}},
+                .fields = {{"t",
+                            WidgetStructDefinition{
+                                .includes = {{"xtouch.play"},
+                                             {"xtouch", {"strip", "rewind"}},
+                                             {"xtouch.strip"}}}}}})
           .has_value());
   EXPECT_THAT(
       errors_,
@@ -323,7 +324,7 @@ TEST_F(WidgetDefinitionTest, ReportsBadIncludes) {
 
 TEST_F(WidgetDefinitionTest, ReportsBadJoins) {
   EXPECT_FALSE(
-      Check(
+      Validate(
           {.fields =
                {
                    {"a", WidgetJoinDefinition{}},
@@ -361,15 +362,15 @@ TEST_F(WidgetDefinitionTest, ReportsBadJoins) {
           "slice \"xtouch.strip\" from 0"));
 }
 
-TEST_F(WidgetDefinitionTest, ReportsEveryProblemInOneCheck) {
+TEST_F(WidgetDefinitionTest, ReportsEveryProblemInOneValidation) {
   devices_.push_back({"none", nullptr});
-  EXPECT_FALSE(Check({.fields =
-                          {
-                              {"play", "xtouch.paly"},
-                              {"strip", WidgetJoinDefinition{}},
-                              {"stop", "xtouch.stop"},
-                              {"gone", "none.play"},
-                          }})
+  EXPECT_FALSE(Validate({.fields =
+                             {
+                                 {"play", "xtouch.paly"},
+                                 {"strip", WidgetJoinDefinition{}},
+                                 {"stop", "xtouch.stop"},
+                                 {"gone", "none.play"},
+                             }})
                    .has_value());
   // A path from a device without a catalog only reports the device.
   EXPECT_THAT(errors_, ElementsAre("device \"none\" has no catalog",
@@ -380,7 +381,7 @@ TEST_F(WidgetDefinitionTest, ReportsEveryProblemInOneCheck) {
 TEST_F(WidgetDefinitionTest, ErrorsAreAddedToThoseAlreadyThere) {
   errors_ = {"earlier"};
   EXPECT_FALSE(
-      CheckWidgets({.fields = {{"play", "xtouch.paly"}}}, devices_, &errors_)
+      ValidateWidgets({.fields = {{"play", "xtouch.paly"}}}, devices_, &errors_)
           .has_value());
   EXPECT_THAT(errors_, ElementsAre("earlier",
                                    "play: path \"xtouch.paly\" names nothing"));
@@ -388,10 +389,10 @@ TEST_F(WidgetDefinitionTest, ErrorsAreAddedToThoseAlreadyThere) {
 
 TEST_F(WidgetDefinitionTest, ErrorsAreOptional) {
   EXPECT_FALSE(
-      CheckWidgets({.fields = {{"play", "xtouch.paly"}}}, devices_, nullptr)
+      ValidateWidgets({.fields = {{"play", "xtouch.paly"}}}, devices_, nullptr)
           .has_value());
   EXPECT_TRUE(
-      CheckWidgets({.fields = {{"play", "xtouch.play"}}}, devices_, nullptr)
+      ValidateWidgets({.fields = {{"play", "xtouch.play"}}}, devices_, nullptr)
           .has_value());
 }
 
@@ -567,7 +568,7 @@ TEST_F(ResolveWidgetsTest, PresentDeviceWithoutACatalogControlHasNull) {
   EXPECT_EQ(GetControlAt(*widgets, "strip[16].fader"), nullptr);
 }
 
-TEST_F(ResolveWidgetsTest, DefinitionThatDoesntCheckHasItsErrors) {
+TEST_F(ResolveWidgetsTest, InvalidDefinitionHasItsErrors) {
   EXPECT_EQ(Resolve({.fields = {{"play", "xtouch.paly"}}}), nullptr);
   EXPECT_THAT(errors_, ElementsAre("play: path \"xtouch.paly\" names nothing"));
 }

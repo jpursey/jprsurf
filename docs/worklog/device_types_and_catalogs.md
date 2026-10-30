@@ -104,11 +104,32 @@ a mapping to it names no mode (mode 0). That is every output but the lights and
 the rings.
 
 `DeviceXTouch` names each control by its path in the catalog, such as
-`strip[2].fader` or `play`, which is how `ResolveWidgets()` finds it. Until the
-plugin maps through widgets, `DeviceXTouch`'s name constants and functions
-(`kPlay`, `Fader()`) stay, returning the new names, so the plugin's
-`"XTouch/..."` names still work. The plugin's last use of them goes in CL4, and
-they go with it.
+`strip[2].fader` or `play`, which is how `ResolveWidgets()` finds it. The names
+are defined once, in the tables the catalog and the constructor are both built
+from. Until the plugin maps through widgets, `DeviceXTouch` keeps the name
+constants and functions the plugin uses (`kPlay`, `Fader()`), returning the new
+names, so the plugin's `"XTouch/..."` names still work. The plugin's last use
+of them goes in CL5, and they go with it. The plugin then names its widgets by
+strings, as a config will, with no constants of its own.
+
+### Catalog documentation
+
+Someone writing a config needs every device type's controls, their inputs and
+outputs, and their mode names, and the catalog code is no place to find them.
+So the documentation is generated from the catalogs:
+- A listing of a catalog, generated from its shape: each control with its
+  inputs, outputs, and modes, and each struct and array.
+- What the shape can't say, such as a sentence on the hardware, or what each
+  ring mode looks like, comes from documentation kept beside the catalog that
+  refers to its paths, so `WidgetShape` and `Widget` hold only what behavior
+  needs. The same could later drive a tool that builds configs for the devices
+  present.
+- A test keeps the published documentation the same as what the catalogs
+  generate, so adding or renaming a control can't leave it behind.
+
+Where it lives is settled in CL2. `docs/` mixes the developer docs (the design
+docs and worklogs) with the one user doc (`user_guide.md`), and the user docs
+should be kept apart from them.
 
 ### Control overrides
 
@@ -297,7 +318,7 @@ Both checked by the user on the hardware, with no code.
 1. **What REAPER lists identical units' ports as.** They differ: the X-Touch is
    `X-Touch`, the first extender `X-Touch-Ext`, and the second
    `2 - X-Touch-Ext`, the same in REAPER and in MIDI-OX, so Windows likely
-   names them. So explicit port names work, and CL3 is unchanged. Which unit
+   names them. So explicit port names work, and CL4 is unchanged. Which unit
    gets which name seems to follow the order they are powered on (unconfirmed),
    and nothing in the ports tells identical units apart, so a surface with two
    of them relies on powering them on in the same order.
@@ -306,27 +327,49 @@ Both checked by the user on the hardware, with no code.
 
 ## CLs
 
-### CL1 [ ] device: The X-Touch's catalogs, and controls named by them
+### CL1 [x] device: The X-Touch's catalogs, and controls named by them
 
 Depends on: nothing.
 
 - `CheckWidgets()` becomes `ValidateWidgets()`, and `WidgetChecker`
   `WidgetValidator`, with the Widgets summary to match.
 - `DeviceXTouch::GetCatalog()` for the X-Touch and the extender.
-- `DeviceXTouch` names its controls by their catalog paths. Its name constants
-  and functions return the new names, so the plugin is unchanged, and
-  `device_xtouch_test.cc` names controls by their paths instead.
-- `device_xtouch_test.cc` validates each catalog with `ValidateWidgets()`, and
-  checks that
-  each type's controls have their catalog entry's inputs, outputs, and mode
-  count (the extender's third fader apart, until CL2).
+- `DeviceXTouch` names its controls by their catalog paths, from the same
+  tables the catalog is built from. It keeps only the name constants and
+  functions the plugin uses, returning the new names, so the plugin is
+  unchanged, and `device_xtouch_test.cc` names controls by their paths
+  instead.
+- `device_xtouch_test.cc` validates each catalog with `ValidateWidgets()`,
+  checks that both models' strips are the same, and resolves the whole catalog
+  on each model to check that every control is there, with its catalog entry's
+  inputs, outputs, and mode count (the extender's third fader apart, until
+  CL3), and that there are no others.
 - No visible change.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
 - The tests above.
 
-### CL2 [ ] device: Control overrides and device types
+### CL2 [ ] device, docs: Documentation generated from the catalogs
+
+Depends on: CL1.
+
+- A listing generated from a catalog's shape, and documentation of each device
+  type beside its catalog for what the shape can't say (see Catalog
+  documentation).
+- The documentation of the X-Touch and its extender, published where the user
+  docs will live, apart from the developer docs.
+- A test that the published documentation matches what the catalogs generate.
+- This CL settles where the user docs live, how the documentation is published
+  (generated into a checked-in file, or by a build step), and how the test
+  finds it.
+
+**Verify**
+- Standard checks.
+- The test above, and that it fails when a catalog changes without the
+  documentation.
+
+### CL3 [ ] device: Control overrides and device types
 
 Depends on: CL1.
 
@@ -347,9 +390,9 @@ Depends on: CL1.
 - The tests above, and `track_strip_test.cc`'s test of the extender's third
   fader still passes.
 
-### CL3 [ ] device: The device list, and the widget root
+### CL4 [ ] device: The device list, and the widget root
 
-Depends on: CL2.
+Depends on: CL3.
 
 - `DeviceSpec` and `CreateDevices()`.
 - `ResolveWidgets()` returns a `WidgetRoot`.
@@ -359,9 +402,9 @@ Depends on: CL2.
 - Standard checks.
 - `CreateDevices()` on the fake REAPER's ports, with the cases above.
 
-### CL4 [ ] scene, plugin: Map through widgets
+### CL5 [ ] scene, plugin: Map through widgets
 
-Depends on: CL3.
+Depends on: CL4.
 
 - The scene takes its devices and widget root when it is created, in place of
   `Scene::AddDevice()`, and `View::AddMapping()` and `Scene::GetControl()` take
@@ -369,7 +412,7 @@ Depends on: CL3.
   first use, from its fake device.
 - The plugin defines JPRSurf's widgets over the devices it creates as it does
   today, and maps through widget paths. Its strip loops run over the widget
-  arrays, still behind the device checks, which CL6 removes.
+  arrays, still behind the device checks, which CL7 removes.
 - `DeviceXTouch`'s name constants and functions go.
 - This crosses into `plugin` because the scene's mapping API changes under it.
 
@@ -378,9 +421,9 @@ Depends on: CL3.
 - Scene tests of mapping to an absent widget, to a path that names nothing, and
   to a struct. The surface tests verify the plugin.
 
-### CL5 [ ] scene, plugin: Output modes by name
+### CL6 [ ] scene, plugin: Output modes by name
 
-Depends on: CL4.
+Depends on: CL5.
 
 - Mode names in `WriteConfig` and `ModeOverride`, looked up in the shape.
 - The plugin names its modes (`blink`, `center`, `center_edges`, `off`).
@@ -391,9 +434,9 @@ Depends on: CL4.
   doesn't have, and a name on an absent control. The surface tests verify the
   plugin.
 
-### CL6 [ ] plugin: Devices from the list
+### CL7 [ ] plugin: Devices from the list
 
-Depends on: CL5.
+Depends on: CL6.
 
 - JPRSurf's device list, created with `CreateDevices()`, with the X-Touch
   required and the extender optional. Without the X-Touch, the plugin logs the

@@ -31,8 +31,8 @@ enum class WidgetKind { kControl, kStruct, kArray };
 // Shapes are immutable values, and cheap to copy, as copies share their
 // contents. Building one never fails: names are kept as given, so a struct's
 // field names, or a control's mode names, may not be widget names (see
-// IsWidgetName()), or may be repeated. Checking a device's catalog reports
-// both. Until a shape is checked, GetField() and Find() take the
+// IsWidgetName()), or may be repeated. Validating a device's catalog reports
+// both. Until a shape is validated, GetField() and Find() take the
 // first field of a repeated name, and equality is only meaningful between
 // shapes without repeated names.
 class WidgetShape {

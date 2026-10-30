@@ -76,9 +76,9 @@ std::unique_ptr<const Widget> Instantiate(Device* device,
   return Widget::ForArray({});
 }
 
-// A widget checked so far: its shape, and the widget it resolves to on the
+// A widget validated so far: its shape, and the widget it resolves to on the
 // devices present.
-struct Checked {
+struct Validated {
   WidgetShape shape;
   std::unique_ptr<const Widget> widget;
 };
@@ -91,43 +91,43 @@ struct Found {
   std::string path;
 };
 
-// Checks and resolves the widgets of one call to CheckWidgets() or
+// Validates and resolves the widgets of one call to ValidateWidgets() or
 // ResolveWidgets(). Each error's subject is what it is about: a device and a
 // path in its catalog, or the path of a struct or field being defined. Both
 // are empty at the top.
-class WidgetChecker {
+class WidgetValidator {
  public:
   // Resolves on the devices present if `resolve` is set, or else as if every
   // device were absent.
-  WidgetChecker(bool resolve, std::vector<std::string>* errors)
+  WidgetValidator(bool resolve, std::vector<std::string>* errors)
       : resolve_(resolve), errors_(errors) {}
 
-  std::optional<Checked> Check(const WidgetStructDefinition& widgets,
-                               absl::Span<const WidgetDevice> devices);
+  std::optional<Validated> Validate(const WidgetStructDefinition& widgets,
+                                    absl::Span<const WidgetDevice> devices);
 
  private:
-  // The fields of a struct being checked, and the name of every field defined,
-  // including those that didn't check, so a name defined twice is reported
-  // either way.
+  // The fields of a struct being validated, and the name of every field
+  // defined, including those that aren't valid, so a name defined twice is
+  // reported either way.
   struct StructFields {
     std::vector<WidgetShape::Field> shape_fields;
     std::vector<Widget::Field> widget_fields;
     absl::flat_hash_set<std::string_view> names;
   };
 
-  void CheckDevices(absl::Span<const WidgetDevice> devices);
-  void CheckCatalog(std::string_view device_name, const WidgetShape& shape,
-                    const std::string& path);
-  Checked CheckStruct(const WidgetStructDefinition& definition,
-                      const std::string& struct_path);
-  void CheckInclude(const WidgetInclude& include,
-                    const std::string& struct_path, StructFields& fields);
+  void ValidateDevices(absl::Span<const WidgetDevice> devices);
+  void ValidateCatalog(std::string_view device_name, const WidgetShape& shape,
+                       const std::string& path);
+  Validated ValidateStruct(const WidgetStructDefinition& definition,
+                           const std::string& struct_path);
+  void ValidateInclude(const WidgetInclude& include,
+                       const std::string& struct_path, StructFields& fields);
   void AddField(std::string_view struct_path, std::string_view name,
-                std::optional<Checked> checked, StructFields& fields);
-  std::optional<Checked> CheckField(const WidgetFieldDefinition& definition,
-                                    const std::string& field_path);
-  std::optional<Checked> CheckJoin(const WidgetJoinDefinition& definition,
-                                   const std::string& field_path);
+                std::optional<Validated> validated, StructFields& fields);
+  std::optional<Validated> ValidateField(
+      const WidgetFieldDefinition& definition, const std::string& field_path);
+  std::optional<Validated> ValidateJoin(const WidgetJoinDefinition& definition,
+                                        const std::string& field_path);
 
   // Returns the widget at the path's text, or nullopt with an error. `what` is
   // what the path is for in errors, such as "include".
@@ -136,8 +136,8 @@ class WidgetChecker {
 
   // Adds an error if the name isn't a widget name. `what` is what it names in
   // errors, such as "field".
-  void CheckWidgetName(std::string_view subject, std::string_view what,
-                       std::string_view name);
+  void ValidateWidgetName(std::string_view subject, std::string_view what,
+                          std::string_view name);
 
   // Adds the name to `names`, or returns false with an error if it is already
   // there.
@@ -151,27 +151,27 @@ class WidgetChecker {
   std::vector<std::string>* errors_;
 
   // The first device of each name, or null if it has no struct catalog, which
-  // CheckDevices() reported, so paths from it aren't reported again.
+  // ValidateDevices() reported, so paths from it aren't reported again.
   absl::flat_hash_map<std::string_view, const WidgetDevice*> devices_;
 
   bool failed_ = false;
 };
 
-std::optional<Checked> WidgetChecker::Check(
+std::optional<Validated> WidgetValidator::Validate(
     const WidgetStructDefinition& widgets,
     absl::Span<const WidgetDevice> devices) {
-  CheckDevices(devices);
-  Checked checked = CheckStruct(widgets, "");
+  ValidateDevices(devices);
+  Validated validated = ValidateStruct(widgets, "");
   if (failed_) {
     return std::nullopt;
   }
-  return checked;
+  return validated;
 }
 
-void WidgetChecker::CheckDevices(absl::Span<const WidgetDevice> devices) {
+void WidgetValidator::ValidateDevices(absl::Span<const WidgetDevice> devices) {
   absl::flat_hash_set<const WidgetShape*> catalogs;
   for (const WidgetDevice& device : devices) {
-    CheckWidgetName("", "device", device.name);
+    ValidateWidgetName("", "device", device.name);
     auto [it, is_new] = devices_.try_emplace(device.name, nullptr);
     if (!is_new) {
       AddError("", absl::StrCat("device \"", device.name, "\" is repeated"));
@@ -190,14 +190,14 @@ void WidgetChecker::CheckDevices(absl::Span<const WidgetDevice> devices) {
     }
     // Devices sharing a catalog would only repeat its errors.
     if (catalogs.insert(device.catalog).second) {
-      CheckCatalog(device.name, *device.catalog, "");
+      ValidateCatalog(device.name, *device.catalog, "");
     }
   }
 }
 
-void WidgetChecker::CheckCatalog(std::string_view device_name,
-                                 const WidgetShape& shape,
-                                 const std::string& path) {
+void WidgetValidator::ValidateCatalog(std::string_view device_name,
+                                      const WidgetShape& shape,
+                                      const std::string& path) {
   const std::string subject = path.empty()
                                   ? std::string(device_name)
                                   : absl::StrCat(device_name, ": ", path);
@@ -205,42 +205,45 @@ void WidgetChecker::CheckCatalog(std::string_view device_name,
   switch (shape.GetKind()) {
     case WidgetKind::kControl:
       for (const std::string& mode_name : shape.GetModeNames()) {
-        CheckWidgetName(subject, "mode", mode_name);
+        ValidateWidgetName(subject, "mode", mode_name);
         AddName(subject, "mode", mode_name, names);
       }
       break;
     case WidgetKind::kStruct:
       for (const WidgetShape::Field& field : shape.GetFields()) {
-        CheckWidgetName(subject, "field", field.name);
+        ValidateWidgetName(subject, "field", field.name);
         AddName(subject, "field", field.name, names);
-        CheckCatalog(device_name, field.shape, GetFieldPath(path, field.name));
+        ValidateCatalog(device_name, field.shape,
+                        GetFieldPath(path, field.name));
       }
       break;
     case WidgetKind::kArray:
       // Every element has the same shape, so the first stands for them all.
-      CheckCatalog(device_name, *shape.GetElement(), absl::StrCat(path, "[0]"));
+      ValidateCatalog(device_name, *shape.GetElement(),
+                      absl::StrCat(path, "[0]"));
       break;
   }
 }
 
-Checked WidgetChecker::CheckStruct(const WidgetStructDefinition& definition,
-                                   const std::string& struct_path) {
+Validated WidgetValidator::ValidateStruct(
+    const WidgetStructDefinition& definition, const std::string& struct_path) {
   StructFields fields;
   for (const WidgetInclude& include : definition.includes) {
-    CheckInclude(include, struct_path, fields);
+    ValidateInclude(include, struct_path, fields);
   }
   for (const WidgetFieldDefinition& field : definition.fields) {
-    CheckWidgetName(struct_path, "field", field.name);
+    ValidateWidgetName(struct_path, "field", field.name);
     AddField(struct_path, field.name,
-             CheckField(field, GetFieldPath(struct_path, field.name)), fields);
+             ValidateField(field, GetFieldPath(struct_path, field.name)),
+             fields);
   }
   return {WidgetShape::ForStruct(std::move(fields.shape_fields)),
           Widget::ForStruct(std::move(fields.widget_fields))};
 }
 
-void WidgetChecker::CheckInclude(const WidgetInclude& include,
-                                 const std::string& struct_path,
-                                 StructFields& fields) {
+void WidgetValidator::ValidateInclude(const WidgetInclude& include,
+                                      const std::string& struct_path,
+                                      StructFields& fields) {
   std::optional<Found> included = Find(include.path, "include", struct_path);
   if (!included.has_value()) {
     return;
@@ -259,54 +262,54 @@ void WidgetChecker::CheckInclude(const WidgetInclude& include,
     }
   }
   for (const WidgetShape::Field& field : shape.GetFields()) {
-    // A field repeated in a catalog is the first of its name, and checking the
-    // catalog reported the rest.
+    // A field repeated in a catalog is the first of its name, and validating
+    // the catalog reported the rest.
     if (shape.GetField(field.name) == &field.shape &&
         !absl::c_linear_search(include.excluded, field.name)) {
       AddField(struct_path, field.name,
-               Checked{field.shape,
-                       Instantiate(included->device, field.shape,
-                                   GetFieldPath(included->path, field.name))},
+               Validated{field.shape,
+                         Instantiate(included->device, field.shape,
+                                     GetFieldPath(included->path, field.name))},
                fields);
     }
   }
 }
 
-void WidgetChecker::AddField(std::string_view struct_path,
-                             std::string_view name,
-                             std::optional<Checked> checked,
-                             StructFields& fields) {
+void WidgetValidator::AddField(std::string_view struct_path,
+                               std::string_view name,
+                               std::optional<Validated> validated,
+                               StructFields& fields) {
   if (AddName(struct_path, "field", name, fields.names) &&
-      checked.has_value()) {
+      validated.has_value()) {
     fields.shape_fields.push_back(
-        {std::string(name), std::move(checked->shape)});
+        {std::string(name), std::move(validated->shape)});
     fields.widget_fields.push_back(
-        {std::string(name), std::move(checked->widget)});
+        {std::string(name), std::move(validated->widget)});
   }
 }
 
-std::optional<Checked> WidgetChecker::CheckField(
+std::optional<Validated> WidgetValidator::ValidateField(
     const WidgetFieldDefinition& definition, const std::string& field_path) {
   if (const std::string* path = std::get_if<std::string>(&definition.widget)) {
     std::optional<Found> found = Find(*path, "path", field_path);
     if (!found.has_value()) {
       return std::nullopt;
     }
-    return Checked{*found->shape,
-                   Instantiate(found->device, *found->shape, found->path)};
+    return Validated{*found->shape,
+                     Instantiate(found->device, *found->shape, found->path)};
   }
   if (const WidgetStructDefinition* struct_definition =
           std::get_if<WidgetStructDefinition>(&definition.widget)) {
-    return CheckStruct(*struct_definition, field_path);
+    return ValidateStruct(*struct_definition, field_path);
   }
   if (const WidgetJoinDefinition* join_definition =
           std::get_if<WidgetJoinDefinition>(&definition.widget)) {
-    return CheckJoin(*join_definition, field_path);
+    return ValidateJoin(*join_definition, field_path);
   }
   return std::nullopt;
 }
 
-std::optional<Checked> WidgetChecker::CheckJoin(
+std::optional<Validated> WidgetValidator::ValidateJoin(
     const WidgetJoinDefinition& definition, const std::string& field_path) {
   if (definition.slices.empty()) {
     AddError(field_path, "join has no slices");
@@ -367,13 +370,13 @@ std::optional<Checked> WidgetChecker::CheckJoin(
                           std::numeric_limits<int>::max()));
     return std::nullopt;
   }
-  return Checked{WidgetShape::ForArray(*element, static_cast<int>(size)),
-                 Widget::ForArray(std::move(elements))};
+  return Validated{WidgetShape::ForArray(*element, static_cast<int>(size)),
+                   Widget::ForArray(std::move(elements))};
 }
 
-std::optional<Found> WidgetChecker::Find(std::string_view text,
-                                         std::string_view what,
-                                         std::string_view subject) {
+std::optional<Found> WidgetValidator::Find(std::string_view text,
+                                           std::string_view what,
+                                           std::string_view subject) {
   std::string error_message;
   std::optional<WidgetPath> path = WidgetPath::Parse(text, &error_message);
   if (!path.has_value()) {
@@ -406,18 +409,18 @@ std::optional<Found> WidgetChecker::Find(std::string_view text,
                catalog_path.ToString()};
 }
 
-void WidgetChecker::CheckWidgetName(std::string_view subject,
-                                    std::string_view what,
-                                    std::string_view name) {
+void WidgetValidator::ValidateWidgetName(std::string_view subject,
+                                         std::string_view what,
+                                         std::string_view name) {
   if (!IsWidgetName(name)) {
     AddError(subject,
              absl::StrCat(what, " name \"", name, "\" isn't a widget name"));
   }
 }
 
-bool WidgetChecker::AddName(std::string_view subject, std::string_view what,
-                            std::string_view name,
-                            absl::flat_hash_set<std::string_view>& names) {
+bool WidgetValidator::AddName(std::string_view subject, std::string_view what,
+                              std::string_view name,
+                              absl::flat_hash_set<std::string_view>& names) {
   if (!names.insert(name).second) {
     AddError(subject, absl::StrCat(what, " \"", name, "\" is repeated"));
     return false;
@@ -425,8 +428,8 @@ bool WidgetChecker::AddName(std::string_view subject, std::string_view what,
   return true;
 }
 
-void WidgetChecker::AddError(std::string_view subject,
-                             std::string_view message) {
+void WidgetValidator::AddError(std::string_view subject,
+                               std::string_view message) {
   failed_ = true;
   if (errors_ != nullptr) {
     errors_->push_back(subject.empty() ? std::string(message)
@@ -436,26 +439,26 @@ void WidgetChecker::AddError(std::string_view subject,
 
 }  // namespace
 
-std::optional<WidgetShape> CheckWidgets(const WidgetStructDefinition& widgets,
-                                        absl::Span<const WidgetDevice> devices,
-                                        std::vector<std::string>* errors) {
-  std::optional<Checked> checked =
-      WidgetChecker(/*resolve=*/false, errors).Check(widgets, devices);
-  if (!checked.has_value()) {
+std::optional<WidgetShape> ValidateWidgets(
+    const WidgetStructDefinition& widgets,
+    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors) {
+  std::optional<Validated> validated =
+      WidgetValidator(/*resolve=*/false, errors).Validate(widgets, devices);
+  if (!validated.has_value()) {
     return std::nullopt;
   }
-  return std::move(checked->shape);
+  return std::move(validated->shape);
 }
 
 std::unique_ptr<const Widget> ResolveWidgets(
     const WidgetStructDefinition& widgets,
     absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors) {
-  std::optional<Checked> checked =
-      WidgetChecker(/*resolve=*/true, errors).Check(widgets, devices);
-  if (!checked.has_value()) {
+  std::optional<Validated> validated =
+      WidgetValidator(/*resolve=*/true, errors).Validate(widgets, devices);
+  if (!validated.has_value()) {
     return nullptr;
   }
-  return std::move(checked->widget);
+  return std::move(validated->widget);
 }
 
 }  // namespace jpr
