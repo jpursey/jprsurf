@@ -43,6 +43,8 @@ there is no benchmark, and the call count bounds don't move.
 | `CreateDevices()`                                         | `OpenDevices()`                             | `CreateDevice()`, which it calls for each device present                |
 | `WidgetRoot`                                              | `ShapedWidget`, `TopLevelWidget`            | `Scene::GetRootView()`, the views' equivalent                           |
 | `ValidateControlOverrides()`, `ValidateDeviceControls()`  | `Check*`, which may not report a problem    | `ValidateWidgets()`, which they match                                   |
+| `WidgetDoc`, `CatalogDoc`, `ValidateCatalogDoc()`         | `*Annotation`, `*Info`                      | `WidgetStructDefinition`, a config's widgets, not a catalog's           |
+| `GenerateDeviceTypePage()`                                | `WriteDeviceTypeDoc()`                      | `CatalogDoc`, the data a page is generated from                         |
 
 "Catalog", "device type", "control override", "required", and "optional" are
 the config model's own words.
@@ -116,20 +118,75 @@ strings, as a config will, with no constants of its own.
 
 Someone writing a config needs every device type's controls, their inputs and
 outputs, and their mode names, and the catalog code is no place to find them.
-So the documentation is generated from the catalogs:
-- A listing of a catalog, generated from its shape: each control with its
-  inputs, outputs, and modes, and each struct and array.
-- What the shape can't say, such as a sentence on the hardware, or what each
-  ring mode looks like, comes from documentation kept beside the catalog that
-  refers to its paths, so `WidgetShape` and `Widget` hold only what behavior
-  needs. The same could later drive a tool that builds configs for the devices
-  present.
-- A test keeps the published documentation the same as what the catalogs
-  generate, so adding or renaming a control can't leave it behind.
+So each device type has a page generated from its catalog, and from
+documentation kept beside the catalog for what the shape can't say, such as a
+sentence on the hardware or what each ring mode looks like. The documentation
+is new classes in `device`, so `WidgetShape` and `Widget` hold only what
+behavior needs, and it is linked into the plugin like the catalogs, so a GUI
+that builds configs for the devices present could use it at runtime.
 
-Where it lives is settled in CL2. `docs/` mixes the developer docs (the design
-docs and worklogs) with the one user doc (`user_guide.md`), and the user docs
-should be kept apart from them.
+```
+// Documentation of one widget in a catalog.
+struct WidgetDoc {
+  struct Mode {
+    std::string_view name;         // One of the control's mode names.
+    std::string_view description;  // Such as "One LED lit at the value."
+  };
+
+  // Its path in the catalog by field names only, such as "strip.pot", as
+  // every element of an array has the same shape, and so the same doc. An
+  // array's own doc is at its path, such as "strip".
+  std::string_view path;
+  std::string_view description;  // Such as "The rotary encoder above the fader."
+  std::vector<Mode> modes;       // Every mode, for a control with modes.
+};
+
+// Documentation of a catalog: the hardware, and each widget.
+struct CatalogDoc {
+  std::string_view description;  // The hardware, and the ports it shows as.
+  std::vector<WidgetDoc> widgets;
+};
+
+// Returns true if the docs document every widget in the catalog, and every
+// mode of each control with modes, adding an error for each widget or mode
+// that isn't documented, and for each doc path or mode that names nothing.
+bool ValidateCatalogDoc(const WidgetShape& catalog, const CatalogDoc& doc,
+                        std::vector<std::string>* errors);
+```
+
+- **In `device`, beside the catalog:** `widget_doc.h` has the classes and
+  `ValidateCatalogDoc()`. `DeviceXTouch::GetCatalogDoc(Type)`, beside
+  `GetCatalog(Type)`, returns each model's, from `device_xtouch_doc.cc`, so its
+  descriptions don't bury the catalog code. `DeviceType` gets a `catalog_doc`
+  beside its `catalog`, so every type has one.
+- **Every widget is documented:** `device_types_test.cc` validates each type's
+  doc beside its controls, so adding a control without documenting it fails
+  `device`'s own tests, and no name is left only in the catalog code.
+- **Pages are generated in `src/jpr/doc/` (`jpr_doc`):** a library that may use
+  any other, and that nothing uses, so it is outside the order of the
+  libraries, as the `testing/` libraries are, and later pages (such as the
+  scene's properties) can go there too. It has `GenerateDeviceTypePage(const
+  DeviceType&)`, which returns the type's page in markdown, the executable the
+  `update_device_docs` target runs to write every type's page, and the test of
+  the pages.
+- **Where the pages live:** the user docs move apart from the developer docs,
+  into `docs/user/`: `user_guide.md` and its screenshots (`docs/user/images/`),
+  with the README's link to match, and a page for each device type in
+  `docs/user/devices/`, named by the type (`XTouch.md`, `XTouchExt.md`). The
+  developer docs stay where they are, as CLAUDE.md, the worklogs, and each
+  other link to them.
+- **A page:** the type's description, then a table of its catalog in order,
+  with each widget's path, inputs, outputs, mode names, and description. An
+  array is listed once, as `strip[0..7]`, with its element's fields below it as
+  `strip[i].fader`. Then a table of each control's modes, with their
+  descriptions.
+- **Published as checked-in markdown,** so the pages read on GitHub without a
+  build. Generating them in every build would either leave them out of the
+  repository or dirty the tree.
+- **The test** compares each type's checked-in page with what
+  `GenerateDeviceTypePage()` returns, ignoring line endings. It finds the pages
+  by a compile definition of `docs/user/devices`, and a page that differs fails
+  with the target to run.
 
 ### Control overrides
 
@@ -166,6 +223,9 @@ struct DeviceType {
 
   // The type's controls: a struct shape, which never changes.
   const WidgetShape* catalog;
+
+  // The catalog's documentation (from CL3), which behavior never reads.
+  const CatalogDoc* catalog_doc;
 
   // Creates the device on its ports, with its controls named by their paths
   // in the catalog, apart from the overrides' inputs and outputs.
@@ -343,33 +403,14 @@ Depends on: nothing.
   checks that both models' strips are the same, and resolves the whole catalog
   on each model to check that every control is there, with its catalog entry's
   inputs, outputs, and mode count (the extender's third fader apart, until
-  CL3), and that there are no others.
+  CL2), and that there are no others.
 - No visible change.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
 - The tests above.
 
-### CL2 [ ] device, docs: Documentation generated from the catalogs
-
-Depends on: CL1.
-
-- A listing generated from a catalog's shape, and documentation of each device
-  type beside its catalog for what the shape can't say (see Catalog
-  documentation).
-- The documentation of the X-Touch and its extender, published where the user
-  docs will live, apart from the developer docs.
-- A test that the published documentation matches what the catalogs generate.
-- This CL settles where the user docs live, how the documentation is published
-  (generated into a checked-in file, or by a build step), and how the test
-  finds it.
-
-**Verify**
-- Standard checks.
-- The test above, and that it fails when a catalog changes without the
-  documentation.
-
-### CL3 [ ] device: Control overrides and device types
+### CL2 [ ] device: Control overrides and device types
 
 Depends on: CL1.
 
@@ -390,9 +431,33 @@ Depends on: CL1.
 - The tests above, and `track_strip_test.cc`'s test of the extender's third
   fader still passes.
 
+### CL3 [ ] device, doc: Documentation of the device types
+
+Depends on: CL2, for the device types it documents.
+
+- `WidgetDoc`, `CatalogDoc`, and `ValidateCatalogDoc()`, in `device`'s
+  `widget_doc.h` (see Catalog documentation). `DeviceXTouch::GetCatalogDoc()`
+  documents both models, and `DeviceType` gets its `catalog_doc`.
+- The `jpr_doc` library in `src/jpr/doc/`, with `GenerateDeviceTypePage()`,
+  the `update_device_docs` target, and the pages it writes,
+  `docs/user/devices/XTouch.md` and `XTouchExt.md`. CLAUDE.md's directory
+  structure and list of libraries gain it, as outside their order.
+- `user_guide.md` and its images move to `docs/user/` together, so its image
+  links still work, and the README's link and CLAUDE.md's directory structure
+  move to match. The guide links to the device pages.
+- `widget_doc_test.cc` tests `ValidateCatalogDoc()` on a hand-built catalog,
+  and `device_types_test.cc` validates each type's doc. `jpr_doc`'s tests check
+  a page of a hand-built type, and compare each type's checked-in page.
+
+**Verify**
+- Standard checks.
+- The tests above, and that they fail when a control is added without a doc,
+  and when a catalog or a doc changes without its page.
+- The pages and the moved guide read correctly, with working links.
+
 ### CL4 [ ] device: The device list, and the widget root
 
-Depends on: CL3.
+Depends on: CL2.
 
 - `DeviceSpec` and `CreateDevices()`.
 - `ResolveWidgets()` returns a `WidgetRoot`.
