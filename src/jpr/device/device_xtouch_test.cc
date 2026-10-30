@@ -5,9 +5,7 @@
 
 #include "jpr/device/device_xtouch.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -30,9 +28,8 @@
 #include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output.h"
 #include "jpr/device/control_output_handle.h"
+#include "jpr/device/control_override.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/device/widget.h"
-#include "jpr/device/widget_definition.h"
 #include "jpr/device/widget_shape.h"
 
 namespace jpr {
@@ -40,7 +37,6 @@ namespace {
 
 using ::testing::_;
 using ::testing::ElementsAre;
-using ::testing::IsEmpty;
 
 using Button = FakeXTouch::Button;
 using Led = FakeXTouch::Led;
@@ -189,14 +185,15 @@ struct PaletteColor {
 
 class DeviceXTouchTest : public ::testing::Test {
  protected:
-  explicit DeviceXTouchTest(DeviceXTouch::Type type = DeviceXTouch::Type::kFull)
+  explicit DeviceXTouchTest(DeviceXTouch::Type type = DeviceXTouch::Type::kFull,
+                            std::vector<ControlOverride> overrides = {})
       : type_(type),
         xtouch_(reaper_,
                 type == DeviceXTouch::Type::kFull ? FakeXTouch::Type::kFull
                                                   : FakeXTouch::Type::kExtender,
                 "X-Touch"),
         device_(type, runner_, ports_.OpenInput("X-Touch"),
-                ports_.OpenOutput("X-Touch")) {}
+                ports_.OpenOutput("X-Touch"), overrides) {}
 
   // Advances the fake's clock by one run, then runs the device, then MIDI input
   // and output, as PluginSurface::OnRun() does (which runs the scene after
@@ -274,10 +271,14 @@ class DeviceXTouchTest : public ::testing::Test {
   bool input_changed_ = false;  // Every input sets it, and no test reads it.
 };
 
-class DeviceXTouchExtenderTest : public DeviceXTouchTest {
+// For the user's extender, which has lost its third fader's touch, so its
+// override drops it.
+class DeviceXTouchOverrideTest : public DeviceXTouchTest {
  protected:
-  DeviceXTouchExtenderTest()
-      : DeviceXTouchTest(DeviceXTouch::Type::kExtender) {}
+  DeviceXTouchOverrideTest()
+      : DeviceXTouchTest(DeviceXTouch::Type::kExtender,
+                         {{.control = "strip[2].fader",
+                           .inputs = ControlInput::Type::kPress}}) {}
 };
 
 // For what both models have, run on each.
@@ -300,46 +301,6 @@ INSTANTIATE_TEST_SUITE_P(
 // Catalogs
 //==============================================================================
 
-// A control in a catalog, as a device resolves it, and its shape there.
-struct CatalogControl {
-  const Control* control;
-  const WidgetShape* shape;
-};
-
-// Adds each control of the widget, which has the shape, to `controls`.
-void AddCatalogControls(const Widget& widget, const WidgetShape& shape,
-                        std::vector<CatalogControl>& controls) {
-  switch (shape.GetKind()) {
-    case WidgetKind::kControl:
-      controls.push_back({widget.GetControl(), &shape});
-      break;
-    case WidgetKind::kStruct:
-      for (const WidgetShape::Field& field : shape.GetFields()) {
-        const Widget* field_widget = widget.GetField(field.name);
-        ASSERT_NE(field_widget, nullptr) << field.name;
-        AddCatalogControls(*field_widget, field.shape, controls);
-      }
-      break;
-    case WidgetKind::kArray:
-      ASSERT_EQ(std::ssize(widget.GetElements()), shape.GetSize());
-      for (const std::unique_ptr<const Widget>& element :
-           widget.GetElements()) {
-        AddCatalogControls(*element, *shape.GetElement(), controls);
-      }
-      break;
-  }
-}
-
-TEST_P(DeviceXTouchModelTest, CatalogIsValid) {
-  std::vector<std::string> errors;
-  EXPECT_TRUE(
-      ValidateWidgets(
-          {}, {{.name = "xtouch", .catalog = &DeviceXTouch::GetCatalog(type_)}},
-          &errors)
-          .has_value());
-  EXPECT_THAT(errors, IsEmpty());
-}
-
 TEST_F(DeviceXTouchTest, StripsAreTheSameOnBothModels) {
   const WidgetShape* strips =
       DeviceXTouch::GetCatalog(DeviceXTouch::Type::kFull).GetField("strip");
@@ -349,39 +310,6 @@ TEST_F(DeviceXTouchTest, StripsAreTheSameOnBothModels) {
       DeviceXTouch::GetCatalog(DeviceXTouch::Type::kExtender).GetField("strip");
   ASSERT_NE(extender_strips, nullptr);
   EXPECT_EQ(*strips, *extender_strips);
-}
-
-// Every control in the catalog resolves to one of the device's, with the
-// catalog's inputs, outputs, and modes, and the device has no others.
-TEST_P(DeviceXTouchModelTest, ControlsMatchTheCatalog) {
-  const WidgetShape& catalog = DeviceXTouch::GetCatalog(type_);
-  std::vector<std::string> errors;
-  std::unique_ptr<const Widget> widget = ResolveWidgets(
-      {.includes = {{"xtouch"}}},
-      {{.name = "xtouch", .catalog = &catalog, .device = &device_}}, &errors);
-  ASSERT_NE(widget, nullptr);
-  EXPECT_THAT(errors, IsEmpty());
-  std::vector<CatalogControl> controls;
-  AddCatalogControls(*widget, catalog, controls);
-  ASSERT_FALSE(HasFatalFailure());
-  EXPECT_EQ(std::ssize(controls), std::ssize(device_.GetControls()));
-  for (int i = 0; i < std::ssize(controls); ++i) {
-    const auto [control, shape] = controls[i];
-    ASSERT_NE(control, nullptr) << "Catalog control " << i;
-    SCOPED_TRACE(control->GetName());
-
-    // The extender's third fader has no touch (see
-    // ExtendersThirdFaderHasNoTouch).
-    Control::Inputs inputs = shape->GetInputs();
-    if (type_ == DeviceXTouch::Type::kExtender &&
-        control->GetName() == "strip[2].fader") {
-      inputs.Clear(ControlInput::Type::kPress);
-    }
-    EXPECT_EQ(control->GetInputs(), inputs);
-    EXPECT_EQ(control->GetOutputs(), shape->GetOutputs());
-    EXPECT_EQ(control->GetModeCount(),
-              std::max(1, static_cast<int>(shape->GetModeNames().size())));
-  }
 }
 
 //==============================================================================
@@ -501,10 +429,6 @@ TEST_P(DeviceXTouchModelTest, FaderTouchesArePresses) {
     SCOPED_TRACE(GetFaderName(fader));
     Control* control = device_.GetControl(GetFaderName(fader));
     ASSERT_NE(control, nullptr);
-    if (type_ == DeviceXTouch::Type::kExtender && fader == 2) {
-      // See ExtendersThirdFaderHasNoTouch.
-      continue;
-    }
     EXPECT_THAT(PressAndRelease(
                     control, [&] { xtouch_.TouchFader(fader); },
                     [&] { xtouch_.ReleaseFader(fader); }),
@@ -532,9 +456,9 @@ TEST_F(DeviceXTouchTest, FadersAreHeldWhileTouched) {
   }
 }
 
-// The user's extender has lost its third fader's touch, so it has none, and
-// isn't set until the hand has stopped moving it.
-TEST_F(DeviceXTouchExtenderTest, ExtendersThirdFaderHasNoTouch) {
+// A fader whose override drops its touch has none, and isn't set until the hand
+// has stopped moving it.
+TEST_F(DeviceXTouchOverrideTest, FaderWithoutItsTouchIsSetOnceItStops) {
   Control* control = device_.GetControl("strip[2].fader");
   ASSERT_NE(control, nullptr);
   EXPECT_FALSE(control->GetInputs().IsSet(ControlInput::Type::kPress));
@@ -572,9 +496,9 @@ TEST_F(DeviceXTouchTest, FadersAreTouchedWhileTouched) {
   }
 }
 
-// Without its touch, the extender's third fader is touched from a move until
-// the touch's hold after it.
-TEST_F(DeviceXTouchExtenderTest, ExtendersThirdFaderIsTouchedAfterAMove) {
+// A fader without its touch is touched from a move until the touch's hold after
+// it.
+TEST_F(DeviceXTouchOverrideTest, FaderWithoutItsTouchIsTouchedAfterAMove) {
   Control* control = device_.GetControl("strip[2].fader");
   ASSERT_NE(control, nullptr);
   ControlInputHandle touch = ReadTouch(control);

@@ -6,11 +6,40 @@
 #include "jpr/device/testing/fake_device.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
+
+#include "jpr/device/control_input.h"
+#include "jpr/device/control_output.h"
 
 namespace jpr {
 
 FakeDevice::FakeControl FakeDevice::AddControl(ControlOptions options) {
+  // A device builds only what the unit uses. Fakes do nothing as they are
+  // built, so the ones it doesn't use are destroyed here instead.
+  const std::string_view name = options.name;
+  if (!IsUsed(name, ControlInput::Type::kValue)) {
+    options.value_input.reset();
+  }
+  if (!IsUsed(name, ControlInput::Type::kDelta)) {
+    options.delta_input.reset();
+  }
+  if (!IsUsed(name, ControlInput::Type::kPress)) {
+    options.press_input.reset();
+  }
+  if (!IsUsed(name, ControlOutput::Type::kCValue)) {
+    options.cvalue_output.reset();
+  }
+  if (!IsUsed(name, ControlOutput::Type::kDValue)) {
+    options.dvalue_output.reset();
+  }
+  if (!IsUsed(name, ControlOutput::Type::kText)) {
+    options.text_output.reset();
+  }
+  if (!IsUsed(name, ControlOutput::Type::kColor)) {
+    options.color_output.reset();
+  }
+
   FakeControl fakes = {
       .value_input = options.value_input.get(),
       .delta_input = options.delta_input.get(),
@@ -34,6 +63,7 @@ FakeDevice::FakeControl FakeDevice::AddControl(ControlOptions options) {
   if (fakes.control == nullptr) {
     return {};
   }
+
   return fakes;
 }
 

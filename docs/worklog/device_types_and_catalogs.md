@@ -206,11 +206,13 @@ bool ValidateControlOverrides(const WidgetShape& catalog,
                            std::vector<std::string>* errors);
 ```
 
-- `Device` takes the overrides when it is constructed, and `AddControl()`
-  drops their inputs and outputs from the options before creating each
-  `Control`, so every device type supports them without doing anything.
-  `DeviceXTouch` passes them through, and stops leaving out the extender's
-  third fader's touch.
+- `Device` takes the overrides when it is constructed, and a derived device
+  asks `Device::IsUsed()` before it builds each input and output, so nothing
+  the unit doesn't use is built (a MIDI input subscribes to its port as it is
+  built). `DeviceXTouch` passes them through, and stops leaving out the
+  extender's third fader's touch. A device type that ignores an override
+  builds a control that doesn't match its catalog less the override, which
+  `CreateDevice()` logs, and its type's test fails.
 - A motorized fader without a press input already falls back to delayed
   feedback, so nothing else changes.
 
@@ -255,13 +257,12 @@ bool ValidateDeviceControls(const Device& device, const WidgetShape& catalog,
 - The registry is a fixed list in `device_types.cc`, which knows every type.
   Nothing else registers types, so there is no registration to get wrong.
 - A catalog can't be validated by a device that is never created, so a unit
-  test for each type creates it on the fake hardware's ports, as
-  `device_xtouch_test.cc` does, checks `ValidateDeviceControls()` finds no
-  errors, and checks `ValidateWidgets()` finds none in its catalog (building a
-  shape never fails, so a bad or repeated name in a catalog only shows up
-  there).
-- An override that drops an output changes that control's mode count, so the
-  mode count isn't checked for a control with an output override.
+  test for each type creates it on ports of the fake REAPER's, with nothing
+  behind them, checks `ValidateDeviceControls()` finds no errors, and checks
+  `ValidateWidgets()` finds none in its catalog (building a shape never fails,
+  so a bad or repeated name in a catalog only shows up there).
+- An override that drops an output can lower that control's mode count, so a
+  control with an output override may have fewer modes than its catalog names.
 
 ### The device list
 
@@ -410,13 +411,14 @@ Depends on: nothing.
 - Standard checks (Release build, clang-format, ctest).
 - The tests above.
 
-### CL2 [ ] device: Control overrides and device types
+### CL2 [x] device: Control overrides and device types
 
 Depends on: CL1.
 
 - `ControlOverride` and `ValidateControlOverrides()`. `Device` takes
-  overrides, and drops them in `AddControl()`. `DeviceXTouch` takes them, and
-  stops leaving out the extender's third fader's touch.
+  overrides, and `IsUsed()` tells a derived device what not to build.
+  `DeviceXTouch` takes them, and stops leaving out the extender's third fader's
+  touch.
 - `DeviceType`, `GetDeviceTypes()`, `FindDeviceType()`, `CreateDevice()`, and
   `ValidateDeviceControls()`, in a new `device_types.h`.
 - The plugin creates its two devices with `CreateDevice()`, passing the

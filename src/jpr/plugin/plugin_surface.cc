@@ -20,6 +20,9 @@
 #include "jpr/common/modifiers.h"
 #include "jpr/common/prefixed_name.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/device/control_input.h"
+#include "jpr/device/control_override.h"
+#include "jpr/device/device_types.h"
 #include "jpr/device/device_xtouch.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
@@ -251,15 +254,22 @@ void PluginSurface::InitViews() {
   bool has_xtouch = (xtouch_in != nullptr && xtouch_out != nullptr);
   bool has_xtouch_ext = (xtouch_ext_in != nullptr && xtouch_ext_out != nullptr);
   if (has_xtouch) {
-    scene_->AddDevice("XTouch", std::make_unique<DeviceXTouch>(
-                                    DeviceXTouch::Type::kFull, device_runner_,
-                                    xtouch_in, xtouch_out));
+    const DeviceType* type = FindDeviceType("XTouch");
+    CHECK(type != nullptr);
+    scene_->AddDevice(
+        "XTouch", CreateDevice(*type, device_runner_, xtouch_in, xtouch_out));
   }
   if (has_xtouch_ext) {
+    // My extender unit's third fader lost touch sensing, so it falls back on
+    // delayed feedback.
+    const ControlOverride overrides[] = {
+        {.control = "strip[2].fader", .inputs = ControlInput::Type::kPress},
+    };
+    const DeviceType* type = FindDeviceType("XTouchExt");
+    CHECK(type != nullptr);
     scene_->AddDevice("XTouchExt",
-                      std::make_unique<DeviceXTouch>(
-                          DeviceXTouch::Type::kExtender, device_runner_,
-                          xtouch_ext_in, xtouch_ext_out));
+                      CreateDevice(*type, device_runner_, xtouch_ext_in,
+                                   xtouch_ext_out, overrides));
   }
 
   const TrackReference* folder = scene_->AddTrackReference(

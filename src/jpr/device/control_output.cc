@@ -10,6 +10,24 @@
 namespace jpr {
 
 //==============================================================================
+// ControlOutput
+//==============================================================================
+
+std::string_view ControlOutput::GetTypeName(Type type) {
+  switch (type) {
+    case Type::kCValue:
+      return "cvalue";
+    case Type::kDValue:
+      return "dvalue";
+    case Type::kText:
+      return "text";
+    case Type::kColor:
+      return "color";
+  }
+  return "unknown";
+}
+
+//==============================================================================
 // ControlCValueOutput
 //==============================================================================
 

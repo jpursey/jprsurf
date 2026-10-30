@@ -30,10 +30,6 @@ double GetBindingDelaySecs(Control::Binding binding) {
   return 0.0;
 }
 
-constexpr ControlInput::Type kInputTypes[] = {ControlInput::Type::kValue,
-                                              ControlInput::Type::kDelta,
-                                              ControlInput::Type::kPress};
-
 }  // namespace
 
 Control::Control(RunRegistry& run_registry, Options options)
@@ -333,36 +329,31 @@ bool Control::IsInputRead(ControlInput::Type input_type) const {
 }
 
 void Control::UpdateInputListeners() {
-  for (ControlInput::Type input_type : kInputTypes) {
-    if (!input_types_.IsSet(input_type)) {
-      continue;
+  if (input_types_.IsSet(ControlInput::Type::kValue)) {
+    const bool read = IsInputRead(ControlInput::Type::kValue);
+    if (read != value_input_->HasListener()) {
+      value_input_->SetListener(
+          read ? ControlValueInput::Listener(
+                     [this](ControlValueInput*) { OnValueInputChanged(); })
+               : nullptr);
     }
-    const bool read = IsInputRead(input_type);
-    switch (input_type) {
-      case ControlInput::Type::kValue:
-        if (read != value_input_->HasListener()) {
-          value_input_->SetListener(
-              read ? ControlValueInput::Listener(
-                         [this](ControlValueInput*) { OnValueInputChanged(); })
-                   : nullptr);
-        }
-        break;
-      case ControlInput::Type::kDelta:
-        if (read != delta_input_->HasListener()) {
-          delta_input_->SetListener(
-              read ? ControlDeltaInput::Listener(
-                         [this](ControlDeltaInput*) { OnDeltaInputChanged(); })
-                   : nullptr);
-        }
-        break;
-      case ControlInput::Type::kPress:
-        if (read != press_input_->HasListener()) {
-          press_input_->SetListener(
-              read ? ControlPressInput::Listener(
-                         [this](ControlPressInput*) { OnPressInputChanged(); })
-                   : nullptr);
-        }
-        break;
+  }
+  if (input_types_.IsSet(ControlInput::Type::kDelta)) {
+    const bool read = IsInputRead(ControlInput::Type::kDelta);
+    if (read != delta_input_->HasListener()) {
+      delta_input_->SetListener(
+          read ? ControlDeltaInput::Listener(
+                     [this](ControlDeltaInput*) { OnDeltaInputChanged(); })
+               : nullptr);
+    }
+  }
+  if (input_types_.IsSet(ControlInput::Type::kPress)) {
+    const bool read = IsInputRead(ControlInput::Type::kPress);
+    if (read != press_input_->HasListener()) {
+      press_input_->SetListener(
+          read ? ControlPressInput::Listener(
+                     [this](ControlPressInput*) { OnPressInputChanged(); })
+               : nullptr);
     }
   }
 }

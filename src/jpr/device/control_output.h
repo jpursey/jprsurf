@@ -38,6 +38,14 @@ class ControlOutput {
     kColor,
   };
 
+  // Every type, in order.
+  static constexpr Type kTypes[] = {Type::kCValue, Type::kDValue, Type::kText,
+                                    Type::kColor};
+
+  // Returns the type's name, as errors and configs name it: "cvalue",
+  // "dvalue", "text", or "color".
+  static std::string_view GetTypeName(Type type);
+
   ControlOutput(const ControlOutput&) = delete;
   ControlOutput& operator=(const ControlOutput&) = delete;
   virtual ~ControlOutput() = default;

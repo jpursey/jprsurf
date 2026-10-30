@@ -9,8 +9,10 @@
 #include <string>
 #include <string_view>
 
+#include "absl/types/span.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/runner.h"
+#include "jpr/device/control_override.h"
 #include "jpr/device/device.h"
 #include "jpr/device/widget_shape.h"
 
@@ -78,8 +80,11 @@ class DeviceXTouch final : public Device {
   // Construction / Destruction
   //----------------------------------------------------------------------------
 
+  // `overrides` name the inputs and outputs of controls the unit doesn't use
+  // (see Device).
   DeviceXTouch(Type type, RunRegistry& run_registry, MidiIn* midi_in,
-               MidiOut* midi_out);
+               MidiOut* midi_out,
+               absl::Span<const ControlOverride> overrides = {});
   ~DeviceXTouch() override;
 
   //----------------------------------------------------------------------------

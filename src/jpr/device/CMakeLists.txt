@@ -11,8 +11,10 @@ set(jpr_device_SOURCE
   control_output.cc control_output.h
   control_output_handle.cc control_output_handle.h
   control_output_midi.cc control_output_midi.h
+  control_override.cc control_override.h
   device.cc device.h
   device_xtouch.cc device_xtouch.h
+  device_types.cc device_types.h
   widget.cc widget.h
   widget_definition.cc widget_definition.h
   widget_path.cc widget_path.h
@@ -41,8 +43,10 @@ set(jpr_device_TEST_SOURCE
   control_output_handle_test.cc
   control_output_midi_test.cc
   control_output_test.cc
+  control_override_test.cc
   control_test.cc
   device_test.cc
+  device_types_test.cc
   device_xtouch_test.cc
   widget_definition_test.cc
   widget_path_test.cc

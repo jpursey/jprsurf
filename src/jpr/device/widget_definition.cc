@@ -21,14 +21,6 @@ namespace jpr {
 
 namespace {
 
-// Returns the path of a field of the struct at `struct_path`, which is empty
-// for the top-level struct.
-std::string GetFieldPath(std::string_view struct_path,
-                         std::string_view field_name) {
-  return struct_path.empty() ? std::string(field_name)
-                             : absl::StrCat(struct_path, ".", field_name);
-}
-
 // Returns the slice as errors describe it, such as `slice "xtouch.strip" from
 // 6 for 2`.
 std::string GetSliceText(const WidgetSlice& slice) {
@@ -57,7 +49,7 @@ std::unique_ptr<const Widget> Instantiate(Device* device,
         fields.push_back(
             {field.name,
              Instantiate(device, field.shape,
-                         device != nullptr ? GetFieldPath(path, field.name)
+                         device != nullptr ? GetFieldPathText(path, field.name)
                                            : std::string())});
       }
       return Widget::ForStruct(std::move(fields));
@@ -67,7 +59,7 @@ std::unique_ptr<const Widget> Instantiate(Device* device,
       if (device != nullptr) {
         for (int i = 0; i < shape.GetSize(); ++i) {
           elements.push_back(Instantiate(device, *shape.GetElement(),
-                                         absl::StrCat(path, "[", i, "]")));
+                                         GetElementPathText(path, i)));
         }
       }
       return Widget::ForArray(std::move(elements));
@@ -214,7 +206,7 @@ void WidgetValidator::ValidateCatalog(std::string_view device_name,
         ValidateWidgetName(subject, "field", field.name);
         AddName(subject, "field", field.name, names);
         ValidateCatalog(device_name, field.shape,
-                        GetFieldPath(path, field.name));
+                        GetFieldPathText(path, field.name));
       }
       break;
     case WidgetKind::kArray:
@@ -234,7 +226,7 @@ Validated WidgetValidator::ValidateStruct(
   for (const WidgetFieldDefinition& field : definition.fields) {
     ValidateWidgetName(struct_path, "field", field.name);
     AddField(struct_path, field.name,
-             ValidateField(field, GetFieldPath(struct_path, field.name)),
+             ValidateField(field, GetFieldPathText(struct_path, field.name)),
              fields);
   }
   return {WidgetShape::ForStruct(std::move(fields.shape_fields)),
@@ -266,11 +258,12 @@ void WidgetValidator::ValidateInclude(const WidgetInclude& include,
     // the catalog reported the rest.
     if (shape.GetField(field.name) == &field.shape &&
         !absl::c_linear_search(include.excluded, field.name)) {
-      AddField(struct_path, field.name,
-               Validated{field.shape,
-                         Instantiate(included->device, field.shape,
-                                     GetFieldPath(included->path, field.name))},
-               fields);
+      AddField(
+          struct_path, field.name,
+          Validated{field.shape,
+                    Instantiate(included->device, field.shape,
+                                GetFieldPathText(included->path, field.name))},
+          fields);
     }
   }
 }
@@ -357,7 +350,7 @@ std::optional<Validated> WidgetValidator::ValidateJoin(
     if (found->device != nullptr) {
       for (int i = slice.first; i < slice.first + count; ++i) {
         elements.push_back(Instantiate(found->device, *array.GetElement(),
-                                       absl::StrCat(found->path, "[", i, "]")));
+                                       GetElementPathText(found->path, i)));
       }
     }
   }

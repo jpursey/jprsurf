@@ -39,12 +39,36 @@ std::shared_ptr<const gb::ParserProgram> CreateParserProgram() {
   return program;
 }
 
+// Appends a step to the text of a path, as ToString() writes it.
+void AppendField(std::string& text, std::string_view field) {
+  if (!text.empty()) {
+    text += '.';
+  }
+  text += field;
+}
+
+void AppendElement(std::string& text, int index) {
+  absl::StrAppend(&text, "[", index, "]");
+}
+
 }  // namespace
 
 bool IsWidgetName(std::string_view name) {
   return !name.empty() && !absl::ascii_isdigit(name.front()) &&
          absl::c_all_of(
              name, [](char c) { return absl::ascii_isalnum(c) || c == '_'; });
+}
+
+std::string GetFieldPathText(std::string_view path, std::string_view field) {
+  std::string text(path);
+  AppendField(text, field);
+  return text;
+}
+
+std::string GetElementPathText(std::string_view path, int index) {
+  std::string text(path);
+  AppendElement(text, index);
+  return text;
 }
 
 std::optional<WidgetPath> WidgetPath::Parse(std::string_view text,
@@ -92,12 +116,9 @@ std::string WidgetPath::ToString() const {
   std::string text;
   for (const Step& step : steps_) {
     if (const std::string* name = std::get_if<std::string>(&step)) {
-      if (!text.empty()) {
-        text += '.';
-      }
-      text += *name;
+      AppendField(text, *name);
     } else if (const int* index = std::get_if<int>(&step)) {
-      absl::StrAppend(&text, "[", *index, "]");
+      AppendElement(text, *index);
     }
   }
   return text;

@@ -57,6 +57,12 @@ inline constexpr std::string_view kWidgetPathRules = R"---(
 // in a path. Fields, devices, and output modes all have widget names.
 bool IsWidgetName(std::string_view name);
 
+// Returns the text of the path to a field of the widget at `path`, or to an
+// element of the array at `path`, as WidgetPath::ToString() writes it, such as
+// "strip[2].fader" or "strip[2]". `path` is empty for the widget itself.
+std::string GetFieldPathText(std::string_view path, std::string_view field);
+std::string GetElementPathText(std::string_view path, int index);
+
 //==============================================================================
 // WidgetPath
 //==============================================================================

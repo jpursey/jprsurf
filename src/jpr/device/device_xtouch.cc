@@ -18,7 +18,9 @@
 #include "absl/strings/str_cat.h"
 #include "jpr/common/midi_port.h"
 #include "jpr/common/midi_sysex.h"
+#include "jpr/device/control_input.h"
 #include "jpr/device/control_input_midi.h"
+#include "jpr/device/control_output.h"
 #include "jpr/device/control_output_midi.h"
 #include "jpr/device/widget_shape.h"
 
@@ -865,6 +867,16 @@ void RegisterSysex() {
   }
 }
 
+// The inputs and outputs a control may have, which the constructor builds only
+// if the unit uses them (see Device::IsUsed()).
+constexpr ControlInput::Type kValueInput = ControlInput::Type::kValue;
+constexpr ControlInput::Type kDeltaInput = ControlInput::Type::kDelta;
+constexpr ControlInput::Type kPressInput = ControlInput::Type::kPress;
+constexpr ControlOutput::Type kCValueOutput = ControlOutput::Type::kCValue;
+constexpr ControlOutput::Type kDValueOutput = ControlOutput::Type::kDValue;
+constexpr ControlOutput::Type kTextOutput = ControlOutput::Type::kText;
+constexpr ControlOutput::Type kColorOutput = ControlOutput::Type::kColor;
+
 }  // namespace
 
 //==============================================================================
@@ -872,8 +884,9 @@ void RegisterSysex() {
 //==============================================================================
 
 DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
-                           MidiIn* midi_in, MidiOut* midi_out)
-    : Device(run_registry) {
+                           MidiIn* midi_in, MidiOut* midi_out,
+                           absl::Span<const ControlOverride> overrides)
+    : Device(run_registry, overrides) {
   // Ensure all sysex message types are registered.
   RegisterSysex();
 
@@ -898,29 +911,39 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
 
     // Timecode display.
     Control::Options timecode_options = {.name = kTimecode};
-    timecode_options.text_output =
-        std::make_unique<XTouchTimecodeDisplay>(midi_out);
+    if (IsUsed(kTimecode, kTextOutput)) {
+      timecode_options.text_output =
+          std::make_unique<XTouchTimecodeDisplay>(midi_out);
+    }
     AddControl(std::move(timecode_options));
 
     for (const NamedNote& light : kLights) {
       Control::Options light_options = {.name = light.name};
-      light_options.dvalue_output =
-          std::make_unique<ControlDValueOutputMidiNote>(
-              midi_out, ControlDValueOutputMidiNote::McuLight(light.note));
+      if (IsUsed(light.name, kDValueOutput)) {
+        light_options.dvalue_output =
+            std::make_unique<ControlDValueOutputMidiNote>(
+                midi_out, ControlDValueOutputMidiNote::McuLight(light.note));
+      }
       AddControl(std::move(light_options));
     }
 
     // Master fader.
     Control::Options master_fader_options = {.name = kMasterFader};
-    master_fader_options.value_input =
-        std::make_unique<ControlValueInputMcuFader>(
-            midi_in, ControlValueInputMcuFader::MasterFader());
-    master_fader_options.press_input =
-        std::make_unique<ControlPressInputMidiMsg>(
-            midi_in, ControlPressInputMidiMsg::McuMasterFaderTouch());
-    master_fader_options.cvalue_output =
-        std::make_unique<ControlCValueOutputMcuFader>(
-            midi_out, ControlCValueOutputMcuFader::MasterFader());
+    if (IsUsed(kMasterFader, kValueInput)) {
+      master_fader_options.value_input =
+          std::make_unique<ControlValueInputMcuFader>(
+              midi_in, ControlValueInputMcuFader::MasterFader());
+    }
+    if (IsUsed(kMasterFader, kPressInput)) {
+      master_fader_options.press_input =
+          std::make_unique<ControlPressInputMidiMsg>(
+              midi_in, ControlPressInputMidiMsg::McuMasterFaderTouch());
+    }
+    if (IsUsed(kMasterFader, kCValueOutput)) {
+      master_fader_options.cvalue_output =
+          std::make_unique<ControlCValueOutputMcuFader>(
+              midi_out, ControlCValueOutputMcuFader::MasterFader());
+    }
     master_fader_options.binding = Control::Binding::kMotorized;
     AddControl(std::move(master_fader_options));
   }
@@ -930,36 +953,46 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     // Pan pots.
     std::string name = GetStripControlName(track, kPot);
     Control::Options pan_options = {.name = name};
-    pan_options.delta_input =
-        std::make_unique<ControlDeltaInputMidiCcSignMagnitude>(
-            midi_in, ControlDeltaInputMidiCcSignMagnitude::McuEncoder(track));
-    pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
-        midi_out, ControlDValueOutputMidiCc::McuEncoder(track));
-    // Value 0 still lights an LED in most modes, but "off" turns them all off.
-    pan_options.dvalue_output->SetCleared(0, kRingOffMode);
+    if (IsUsed(name, kDeltaInput)) {
+      pan_options.delta_input =
+          std::make_unique<ControlDeltaInputMidiCcSignMagnitude>(
+              midi_in, ControlDeltaInputMidiCcSignMagnitude::McuEncoder(track));
+    }
+    if (IsUsed(name, kDValueOutput)) {
+      pan_options.dvalue_output = std::make_unique<ControlDValueOutputMidiCc>(
+          midi_out, ControlDValueOutputMidiCc::McuEncoder(track));
+      // Value 0 still lights an LED in most modes, but "off" turns them all
+      // off.
+      pan_options.dvalue_output->SetCleared(0, kRingOffMode);
+    }
     AddControl(std::move(pan_options));
 
     // Faders.
     name = GetStripControlName(track, kFader);
     Control::Options fader_options = {.name = name};
-    fader_options.value_input = std::make_unique<ControlValueInputMcuFader>(
-        midi_in, ControlValueInputMcuFader::Track(track));
-    // My extender unit's third fader lost touch sensing, so disabling the press
-    // input for just that fader to fall back on delayed feedback.
-    if (type != Type::kExtender || track != 2) {
+    if (IsUsed(name, kValueInput)) {
+      fader_options.value_input = std::make_unique<ControlValueInputMcuFader>(
+          midi_in, ControlValueInputMcuFader::Track(track));
+    }
+    if (IsUsed(name, kPressInput)) {
       fader_options.press_input = std::make_unique<ControlPressInputMidiMsg>(
           midi_in, ControlPressInputMidiMsg::McuFaderTouch(track));
     }
-    fader_options.cvalue_output = std::make_unique<ControlCValueOutputMcuFader>(
-        midi_out, ControlCValueOutputMcuFader::Track(track));
+    if (IsUsed(name, kCValueOutput)) {
+      fader_options.cvalue_output =
+          std::make_unique<ControlCValueOutputMcuFader>(
+              midi_out, ControlCValueOutputMcuFader::Track(track));
+    }
     fader_options.binding = Control::Binding::kMotorized;
     AddControl(std::move(fader_options));
 
     // VU meter.
     name = GetStripControlName(track, kMeter);
     Control::Options meter_options = {.name = name};
-    meter_options.cvalue_output =
-        std::make_unique<XTouchTrackMeter>(midi_out, track);
+    if (IsUsed(name, kCValueOutput)) {
+      meter_options.cvalue_output =
+          std::make_unique<XTouchTrackMeter>(midi_out, track);
+    }
     AddControl(std::move(meter_options));
 
     // Scribble strip text.
@@ -969,8 +1002,11 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
     for (int line = 0; line < std::ssize(kScribbleLines); ++line) {
       name = GetStripControlName(track, kScribbleLines[line]);
       Control::Options scribble_options = {.name = name};
-      scribble_options.text_output = std::make_unique<XTouchTrackScribbleText>(
-          scribble_prefix, midi_out, track, line);
+      if (IsUsed(name, kTextOutput)) {
+        scribble_options.text_output =
+            std::make_unique<XTouchTrackScribbleText>(scribble_prefix, midi_out,
+                                                      track, line);
+      }
       AddControl(std::move(scribble_options));
     }
 
@@ -980,8 +1016,10 @@ DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
                              : SysexPrefix(kColorExtSysexPrefix));
     name = GetStripControlName(track, kScribbleColor);
     Control::Options color_options = {.name = name};
-    color_options.color_output = std::make_unique<XTouchTrackScribbleColor>(
-        color_prefix, midi_out, track, scribble_colors_);
+    if (IsUsed(name, kColorOutput)) {
+      color_options.color_output = std::make_unique<XTouchTrackScribbleColor>(
+          color_prefix, midi_out, track, scribble_colors_);
+    }
     AddControl(std::move(color_options));
   }
 }
@@ -1007,9 +1045,11 @@ void DeviceXTouch::AddButton(std::string_view name, uint8_t note,
                              bool has_light, MidiIn* midi_in,
                              MidiOut* midi_out) {
   Control::Options options = {.name = name};
-  options.press_input = std::make_unique<ControlPressInputMidiMsg>(
-      midi_in, ControlPressInputMidiMsg::McuButton(note));
-  if (has_light) {
+  if (IsUsed(name, kPressInput)) {
+    options.press_input = std::make_unique<ControlPressInputMidiMsg>(
+        midi_in, ControlPressInputMidiMsg::McuButton(note));
+  }
+  if (has_light && IsUsed(name, kDValueOutput)) {
     options.dvalue_output = std::make_unique<ControlDValueOutputMidiNote>(
         midi_out, ControlDValueOutputMidiNote::McuLight(note));
   }

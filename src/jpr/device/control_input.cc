@@ -18,6 +18,18 @@ void NotifyListener(InputType* input, typename InputType::Listener& listener) {
 
 }  // namespace
 
+std::string_view ControlInput::GetTypeName(Type type) {
+  switch (type) {
+    case Type::kValue:
+      return "value";
+    case Type::kDelta:
+      return "delta";
+    case Type::kPress:
+      return "press";
+  }
+  return "unknown";
+}
+
 void ControlValueInput::SetValue(double value) {
   value_ = value;
   NotifyListener(this, listener_);

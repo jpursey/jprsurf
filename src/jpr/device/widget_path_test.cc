@@ -109,6 +109,18 @@ TEST(WidgetPathTest, MalformedPathGivesTheParserError) {
   EXPECT_FALSE(error_message.empty());
 }
 
+TEST(WidgetPathTest, FieldAndElementPathTextsAreAsTheTextOfThePath) {
+  EXPECT_EQ(GetFieldPathText("", "play"), "play");
+  EXPECT_EQ(GetFieldPathText("strip[2]", "fader"), "strip[2].fader");
+  EXPECT_EQ(GetElementPathText("strip", 2), "strip[2]");
+  EXPECT_EQ(GetElementPathText("", 2), "[2]");
+
+  std::optional<WidgetPath> path = WidgetPath::Parse("strip[2].fader");
+  ASSERT_TRUE(path.has_value());
+  EXPECT_EQ(GetFieldPathText(GetElementPathText("strip", 2), "fader"),
+            path->ToString());
+}
+
 TEST(WidgetPathTest, SubpathHasTheStepsFromFirstOn) {
   std::optional<WidgetPath> path = WidgetPath::Parse("xtouch.strip[0].fader");
   ASSERT_TRUE(path.has_value());

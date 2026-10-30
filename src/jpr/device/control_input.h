@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <string_view>
+
 #include "absl/functional/any_invocable.h"
 #include "sdk/reaper_plugin.h"
 
@@ -33,6 +35,13 @@ class ControlInput {
     // ControlPressInput.
     kPress,
   };
+
+  // Every type, in order.
+  static constexpr Type kTypes[] = {Type::kValue, Type::kDelta, Type::kPress};
+
+  // Returns the type's name, as errors and configs name it: "value", "delta",
+  // or "press".
+  static std::string_view GetTypeName(Type type);
 
   ControlInput(const ControlInput&) = delete;
   ControlInput& operator=(const ControlInput&) = delete;

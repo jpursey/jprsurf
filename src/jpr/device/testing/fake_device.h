@@ -8,8 +8,10 @@
 #include <memory>
 #include <string_view>
 
+#include "absl/types/span.h"
 #include "jpr/common/runner.h"
 #include "jpr/device/control.h"
+#include "jpr/device/control_override.h"
 #include "jpr/device/device.h"
 #include "jpr/device/testing/fake_control_io.h"
 
@@ -53,12 +55,16 @@ class FakeDevice final : public Device {
     FakeColorOutput* color_output = nullptr;
   };
 
-  // `run_registry` runs the controls, and must outlive this.
-  explicit FakeDevice(RunRegistry& run_registry) : Device(run_registry) {}
+  // `run_registry` runs the controls, and must outlive this. `overrides` name
+  // the inputs and outputs of controls it drops (see Device).
+  explicit FakeDevice(RunRegistry& run_registry,
+                      absl::Span<const ControlOverride> overrides = {})
+      : Device(run_registry, overrides) {}
 
   // Adds a control made of the fakes, and returns it. If the name is taken,
   // the control isn't added (and Device logs an error), and every pointer
-  // returned is null.
+  // returned is null. A fake its override drops is destroyed, and returned as
+  // null.
   FakeControl AddControl(ControlOptions options);
 
   // Each adds a control of a common kind, as AddControl() does:
