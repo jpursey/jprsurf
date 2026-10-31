@@ -170,9 +170,12 @@ absl::Span<const DeviceType> GetDeviceTypes() {
   static const DeviceType kTypes[] = {
       {.name = "XTouch",
        .catalog = &DeviceXTouch::GetCatalog(DeviceXTouch::Type::kFull),
+       .catalog_doc = &DeviceXTouch::GetCatalogDoc(DeviceXTouch::Type::kFull),
        .create = &CreateXTouch<DeviceXTouch::Type::kFull>},
       {.name = "XTouchExt",
        .catalog = &DeviceXTouch::GetCatalog(DeviceXTouch::Type::kExtender),
+       .catalog_doc =
+           &DeviceXTouch::GetCatalogDoc(DeviceXTouch::Type::kExtender),
        .create = &CreateXTouch<DeviceXTouch::Type::kExtender>},
   };
   return kTypes;

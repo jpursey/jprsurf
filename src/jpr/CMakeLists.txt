@@ -5,5 +5,6 @@
 
 add_subdirectory(common)
 add_subdirectory(device)
+add_subdirectory(doc)
 add_subdirectory(plugin)
 add_subdirectory(scene)

@@ -14,14 +14,17 @@ set(jpr_device_SOURCE
   control_override.cc control_override.h
   device.cc device.h
   device_xtouch.cc device_xtouch.h
+  device_xtouch_doc.cc
   device_types.cc device_types.h
   widget.cc widget.h
   widget_definition.cc widget_definition.h
+  widget_doc.cc widget_doc.h
   widget_path.cc widget_path.h
   widget_shape.cc widget_shape.h
 )
 
 set(jpr_device_DEPS
+  absl::algorithm_container
   absl::flat_hash_map
   absl::flat_hash_set
   absl::log
@@ -49,6 +52,7 @@ set(jpr_device_TEST_SOURCE
   device_types_test.cc
   device_xtouch_test.cc
   widget_definition_test.cc
+  widget_doc_test.cc
   widget_path_test.cc
   widget_shape_test.cc
   widget_test.cc

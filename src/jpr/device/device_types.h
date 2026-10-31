@@ -15,6 +15,7 @@
 #include "jpr/common/runner.h"
 #include "jpr/device/control_override.h"
 #include "jpr/device/device.h"
+#include "jpr/device/widget_doc.h"
 #include "jpr/device/widget_shape.h"
 
 namespace jpr {
@@ -25,6 +26,10 @@ struct DeviceType {
 
   // The type's controls: a struct shape, which never changes.
   const WidgetShape* catalog;
+
+  // The documentation of the catalog, from which the type's page is
+  // generated.
+  const CatalogDoc* catalog_doc;
 
   // Creates the device on its ports, with its controls named by their paths
   // in the catalog, without the overrides' inputs and outputs.

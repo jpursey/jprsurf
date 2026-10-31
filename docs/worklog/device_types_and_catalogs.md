@@ -135,10 +135,14 @@ struct WidgetDoc {
 
   // Its path in the catalog by field names only, such as "strip.pot", as
   // every element of an array has the same shape, and so the same doc. An
-  // array's own doc is at its path, such as "strip".
+  // array's own doc is at its path, such as "strip", which also documents its
+  // element, if that is a control.
   std::string_view path;
   std::string_view description;  // Such as "The rotary encoder above the fader."
-  std::vector<Mode> modes;       // Every mode, for a control with modes.
+
+  // Every mode, for a control with modes. Controls with the same modes share
+  // one array of them, which their page lists once.
+  absl::Span<const Mode> modes;
 };
 
 // Documentation of a catalog: the hardware, and each widget.
@@ -147,9 +151,11 @@ struct CatalogDoc {
   std::vector<WidgetDoc> widgets;
 };
 
-// Returns true if the docs document every widget in the catalog, and every
-// mode of each control with modes, adding an error for each widget or mode
-// that isn't documented, and for each doc path or mode that names nothing.
+// Returns true if the doc has a description, and documents every widget in the
+// catalog and every mode of each control with modes, each with a description,
+// adding an error for each widget or mode that isn't documented, or has no
+// description, and for each doc of a path or mode that names nothing or is
+// repeated.
 bool ValidateCatalogDoc(const WidgetShape& catalog, const CatalogDoc& doc,
                         std::vector<std::string>* errors);
 ```
@@ -178,8 +184,9 @@ bool ValidateCatalogDoc(const WidgetShape& catalog, const CatalogDoc& doc,
 - **A page:** the type's description, then a table of its catalog in order,
   with each widget's path, inputs, outputs, mode names, and description. An
   array is listed once, as `strip[0..7]`, with its element's fields below it as
-  `strip[i].fader`. Then a table of each control's modes, with their
-  descriptions.
+  `strip[i].fader`. Then a table of each set of modes, with their
+  descriptions, headed by the mode names and listing the controls that share
+  its array, as every light on the X-Touch has the same two modes.
 - **Published as checked-in markdown,** so the pages read on GitHub without a
   build. Generating them in every build would either leave them out of the
   repository or dirty the tree.
@@ -433,7 +440,7 @@ Depends on: CL1.
 - The tests above, and `track_strip_test.cc`'s test of the extender's third
   fader still passes.
 
-### CL3 [ ] device, doc: Documentation of the device types
+### CL3 [x] device, doc: Documentation of the device types
 
 Depends on: CL2, for the device types it documents.
 

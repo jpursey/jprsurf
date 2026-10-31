@@ -14,6 +14,7 @@
 #include "jpr/common/runner.h"
 #include "jpr/device/control_override.h"
 #include "jpr/device/device.h"
+#include "jpr/device/widget_doc.h"
 #include "jpr/device/widget_shape.h"
 
 namespace jpr {
@@ -95,6 +96,9 @@ class DeviceXTouch final : public Device {
   // channel strips in the array `strip`. Both models have the same strips, so
   // one join can take strips from each.
   static const WidgetShape& GetCatalog(Type type);
+
+  // Returns the documentation of the model's catalog (see CatalogDoc).
+  static const CatalogDoc& GetCatalogDoc(Type type);
 
   //----------------------------------------------------------------------------
   // Strip control names

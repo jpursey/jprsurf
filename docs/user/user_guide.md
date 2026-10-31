@@ -31,6 +31,9 @@ no way to put the extender on the right, or to use more than one.
 
 Both units must be in Mackie Control (MC) mode, not HUI or standard MIDI mode.
 
+The [X-Touch](devices/XTouch.md) and [X-Touch Extender](devices/XTouchExt.md)
+pages list every control on each unit, by the names JPRSurf gives them.
+
 ### Installing the extension
 
 1. Close REAPER.

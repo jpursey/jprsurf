@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,10 +29,16 @@
 #include "jpr/device/testing/fake_control_io.h"
 #include "jpr/device/testing/fake_device.h"
 #include "jpr/device/widget_definition.h"
+#include "jpr/device/widget_doc.h"
 #include "jpr/device/widget_path.h"
 #include "jpr/device/widget_shape.h"
 
 namespace jpr {
+
+// Prints a type in test failures by its name. It is in jpr, not the tests'
+// namespace, for gtest to find it with the type.
+void PrintTo(const DeviceType& type, std::ostream* os) { *os << type.name; }
+
 namespace {
 
 using ::testing::ElementsAre;
@@ -127,6 +134,14 @@ TEST_P(DeviceTypeTest, CatalogIsValid) {
   EXPECT_TRUE(
       ValidateWidgets({}, {{.name = "device", .catalog = catalog}}, &errors)
           .has_value());
+  EXPECT_THAT(errors, IsEmpty());
+}
+
+TEST_P(DeviceTypeTest, CatalogIsDocumented) {
+  const CatalogDoc* doc = GetParam().catalog_doc;
+  ASSERT_NE(doc, nullptr);
+  std::vector<std::string> errors;
+  EXPECT_TRUE(ValidateCatalogDoc(*GetParam().catalog, *doc, &errors));
   EXPECT_THAT(errors, IsEmpty());
 }
 
