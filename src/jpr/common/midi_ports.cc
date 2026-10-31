@@ -38,6 +38,8 @@ MidiPorts::MidiPorts()
 }
 
 MidiPorts::~MidiPorts() {
+  ValidateNoHandles("input", inputs_);
+  ValidateNoHandles("output", outputs_);
   if (std::ranges::none_of(outputs_,
                            [](const auto& port) { return port->IsOpen(); })) {
     return;
@@ -63,15 +65,31 @@ Port* MidiPorts::Find(std::string_view name,
 }
 
 template <typename Port>
-Port* MidiPorts::Open(std::string_view name, std::string_view kind,
-                      RunRegistry& registry,
-                      const std::vector<std::unique_ptr<Port>>& ports) {
+MidiPortHandle<Port> MidiPorts::Open(
+    std::string_view name, std::string_view kind, RunRegistry& registry,
+    const std::vector<std::unique_ptr<Port>>& ports) {
   Port* port = Find(name, ports);
   if (port == nullptr) {
     LOG(INFO) << "No MIDI " << kind << " port named \"" << name << "\"";
-    return nullptr;
+    return {};
   }
-  return port->Open(registry) ? port : nullptr;
+  if (!port->Open(registry)) {
+    return {};
+  }
+  ++port->handle_count_;
+  return MidiPortHandle<Port>(port);
+}
+
+template <typename Port>
+void MidiPorts::ValidateNoHandles(
+    std::string_view kind, const std::vector<std::unique_ptr<Port>>& ports) {
+  for (const auto& port : ports) {
+    if (port->handle_count_ > 0) {
+      LOG(ERROR) << "MIDI " << kind << " port \"" << port->GetName()
+                 << "\" has " << port->handle_count_
+                 << " handle(s) left as MidiPorts is destroyed";
+    }
+  }
 }
 
 bool MidiPorts::HasInput(std::string_view name) const {
@@ -82,11 +100,12 @@ bool MidiPorts::HasOutput(std::string_view name) const {
   return Find(name, outputs_) != nullptr;
 }
 
-MidiIn* MidiPorts::OpenInput(std::string_view name) {
+MidiInHandle MidiPorts::OpenInput(std::string_view name) {
   return Open(name, "input", input_runner_, inputs_);
 }
 
-MidiOut* MidiPorts::OpenOutput(std::string_view name) {
+MidiOutHandle MidiPorts::OpenOutput(std::string_view name) {
   return Open(name, "output", output_runner_, outputs_);
 }
+
 }  // namespace jpr

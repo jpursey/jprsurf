@@ -5,12 +5,15 @@
 
 #include "jpr/common/midi_port.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
 #include "gb/profile/profile_point.h"
+#include "jpr/common/midi_ports.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -275,7 +278,33 @@ void MidiOut::Close() {
   pending_keys_.clear();
   last_sent_.clear();
   sysex_states_.clear();
+  last_send_secs_.reset();
   LOG(INFO) << "Closed MIDI output port " << index_ << " (" << name_ << ")";
+}
+
+void MidiOut::RemoveHandle() {
+  if (--handle_count_ == 0) {
+    CloseIfDone(RunTime::Now().precise_secs);
+  }
+}
+
+void MidiOut::CloseIfDone(double now_secs) {
+  if (HasQueuedOutput()) {
+    return;
+  }
+  if (last_send_secs_.has_value() &&
+      now_secs - *last_send_secs_ <
+          absl::ToDoubleSeconds(MidiPorts::GetFlushWait())) {
+    return;
+  }
+  Close();
+}
+
+bool MidiOut::HasQueuedOutput() const {
+  return !message_queue_.empty() || !pending_keys_.empty() ||
+         std::ranges::any_of(sysex_states_, [](const auto& entry) {
+           return !entry.second.pending_messages.empty();
+         });
 }
 
 void MidiOut::QueueMessage(const MidiMessage& message) {
@@ -516,7 +545,16 @@ void MidiOut::Run(const RunTime& time) {
   if (port_ == nullptr) {
     return;
   }
+  if (HasQueuedOutput()) {
+    last_send_secs_ = time.precise_secs;
+    Send();
+  }
+  if (handle_count_ == 0) {
+    CloseIfDone(time.precise_secs);
+  }
+}
 
+void MidiOut::Send() {
   // First, send all queued explicit messages in FIFO order.
   for (const auto& entry : message_queue_) {
     std::visit(

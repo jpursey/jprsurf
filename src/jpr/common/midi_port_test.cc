@@ -115,8 +115,8 @@ class MidiPortTest : public ::testing::Test {
   FakeMidiInput* fake_input_ = reaper_.AddMidiInput("X-Touch");
   FakeMidiOutput* fake_output_ = reaper_.AddMidiOutput("X-Touch");
   MidiPorts ports_;
-  MidiIn* input_ = ports_.OpenInput("X-Touch");
-  MidiOut* output_ = ports_.OpenOutput("X-Touch");
+  MidiInHandle input_ = ports_.OpenInput("X-Touch");
+  MidiOutHandle output_ = ports_.OpenOutput("X-Touch");
 };
 
 //------------------------------------------------------------------------------
@@ -291,5 +291,17 @@ TEST_F(MidiPortTest, SysexStateIsSentOnlyWhenItChanges) {
               ElementsAre(ElementsAre(0xF0, 0x00, 0x20, 0x32, 2, 0xF7)));
 }
 
+// Queued sysex is output too, which the port sends before it closes.
+TEST_F(MidiPortTest, ReleasedOutputSendsItsQueuedSysexBeforeItCloses) {
+  TestSysexType type;
+  ASSERT_TRUE(type.Register());
+
+  output_->UpdateState(MakeSysex(1));
+  output_ = {};
+  EXPECT_TRUE(fake_output_->IsOpen());
+  EXPECT_THAT(RunOutput(),
+              ElementsAre(ElementsAre(0xF0, 0x00, 0x20, 0x32, 1, 0xF7)));
+  EXPECT_FALSE(fake_output_->IsOpen());
+}
 }  // namespace
 }  // namespace jpr

@@ -884,9 +884,14 @@ constexpr ControlOutput::Type kColorOutput = ControlOutput::Type::kColor;
 //==============================================================================
 
 DeviceXTouch::DeviceXTouch(Type type, RunRegistry& run_registry,
-                           MidiIn* midi_in, MidiOut* midi_out,
+                           MidiInHandle input, MidiOutHandle output,
                            absl::Span<const ControlOverride> overrides)
-    : Device(run_registry, overrides) {
+    : Device(run_registry, overrides),
+      midi_in_(std::move(input)),
+      midi_out_(std::move(output)) {
+  MidiIn* const midi_in = midi_in_.Get();
+  MidiOut* const midi_out = midi_out_.Get();
+
   // Ensure all sysex message types are registered.
   RegisterSysex();
 

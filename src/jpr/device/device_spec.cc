@@ -92,21 +92,23 @@ std::optional<DeviceList> DeviceListCreator::Create(
     if (!HasPorts(spec)) {
       continue;
     }
-    MidiIn* input = ports_.OpenInput(spec.input_port);
-    MidiOut* output = ports_.OpenOutput(spec.output_port);
-    if (input == nullptr || output == nullptr) {
+    // The ports of a device that isn't created close as their handles go.
+    MidiInHandle input = ports_.OpenInput(spec.input_port);
+    MidiOutHandle output = ports_.OpenOutput(spec.output_port);
+    if (!input.IsOpen() || !output.IsOpen()) {
       if (spec.required) {
         AddError(absl::StrCat(spec.name,
                               ": is required, but its ports failed to open"));
       }
       continue;
     }
-    list.devices.push_back(
-        CreateDevice(*types[i], run_registry_, input, output, spec.overrides));
+    list.devices.push_back(CreateDevice(*types[i], run_registry_,
+                                        std::move(input), std::move(output),
+                                        spec.overrides));
     list.widget_devices[i].device = list.devices.back().get();
   }
   if (!valid_) {
-    return std::nullopt;
+    return std::nullopt;  // Its devices close their ports as they go.
   }
   return list;
 }

@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -72,6 +73,8 @@ class MidiIn final {
 
  private:
   friend class MidiPorts;
+  template <typename Port>
+  friend class MidiPortHandle;
 
   // Enumerates the MIDI input ports available in Reaper, none of them open.
   static std::vector<std::unique_ptr<MidiIn>> GetPorts();
@@ -87,6 +90,14 @@ class MidiIn final {
   // Closes the MIDI input port and stops polling for messages.
   void Close();
 
+  // Removes a handle to the open port, which MidiPorts counts as it opens it
+  // (see MidiPortHandle). Removing the last closes the port.
+  void RemoveHandle() {
+    if (--handle_count_ == 0) {
+      Close();
+    }
+  }
+
   void DoSubscribe(MidiListener* listener, uint16_t key);
 
   void Poll(const RunTime& time);
@@ -95,6 +106,7 @@ class MidiIn final {
   std::string name_;
   midi_Input* port_ = nullptr;
   RunHandle run_handle_;
+  int handle_count_ = 0;
   absl::flat_hash_map<uint16_t, std::vector<MidiListener*>> listeners_;
   absl::flat_hash_map<MidiListener*, std::vector<uint16_t>> listener_keys_;
 };
@@ -247,6 +259,8 @@ class MidiOut final {
 
  private:
   friend class MidiPorts;
+  template <typename Port>
+  friend class MidiPortHandle;
 
   // Enumerates the MIDI output ports available in Reaper, none of them open.
   static std::vector<std::unique_ptr<MidiOut>> GetPorts();
@@ -262,6 +276,19 @@ class MidiOut final {
 
   // Closes the MIDI output port, dropping any messages not yet sent.
   void Close();
+
+  // Removes a handle to the open port, which MidiPorts counts as it opens it
+  // (see MidiPortHandle). Removing the last closes the port once it is done
+  // sending (see CloseIfDone()).
+  void RemoveHandle();
+
+  // Returns true if messages or state changes are queued to send.
+  bool HasQueuedOutput() const;
+
+  // Closes the port, which has no handles left, if it has nothing queued, and
+  // sent nothing within MidiPorts' flush wait of `now_secs`, so what it sent
+  // has reached the hardware. Otherwise its runs close it once it is done.
+  void CloseIfDone(double now_secs);
 
   enum class StateType {
     kNote,
@@ -285,6 +312,11 @@ class MidiOut final {
   void UpdateLastSent(const StateInfo& info, const MidiMessage& message);
 
   void Run(const RunTime& time);
+
+  // Sends everything queued, in order: messages, then state changes, then
+  // sysex state changes.
+  void Send();
+
   void SendSysexMessage(const SysexMessage& message);
   void UpdateSysexQueuedState(const SysexMessage& message);
 
@@ -292,6 +324,8 @@ class MidiOut final {
   std::string name_;
   midi_Output* port_ = nullptr;
   RunHandle run_handle_;
+  int handle_count_ = 0;
+  std::optional<double> last_send_secs_;  // The last run that sent anything.
 
   // FIFO queue of messages to send unconditionally (via QueueMessage).
   std::vector<std::variant<MidiMessage, SysexMessage>> message_queue_;
@@ -309,5 +343,58 @@ class MidiOut final {
   };
   absl::flat_hash_map<SysexPrefix, SysexState> sysex_states_;
 };
+
+//==============================================================================
+// MidiPortHandle
+//==============================================================================
+
+// A handle to an open MIDI input or output port (MidiInHandle or
+// MidiOutHandle), which MidiPorts opens it with.
+//
+// The port stays open while any handle to it lives, and closes as its last
+// handle goes, or for an output port, once it is also done sending (see
+// MidiPorts). A handle must not outlive its MidiPorts. A default constructed
+// or moved from handle is null.
+template <typename Port>
+class MidiPortHandle final {
+ public:
+  MidiPortHandle() = default;
+  MidiPortHandle(const MidiPortHandle&) = delete;
+  MidiPortHandle& operator=(const MidiPortHandle&) = delete;
+  MidiPortHandle(MidiPortHandle&& other) noexcept
+      : port_(std::exchange(other.port_, nullptr)) {}
+  MidiPortHandle& operator=(MidiPortHandle&& other) noexcept {
+    if (this != &other) {
+      Release();
+      port_ = std::exchange(other.port_, nullptr);
+    }
+    return *this;
+  }
+  ~MidiPortHandle() { Release(); }
+
+  // Returns true if the handle has a port, which is open.
+  bool IsOpen() const { return port_ != nullptr; }
+
+  // Returns the port, or null if the handle is null.
+  Port* Get() const { return port_; }
+  Port* operator->() const { return port_; }
+
+ private:
+  friend class MidiPorts;
+
+  // MidiPorts counts the handle, as it opens the port.
+  explicit MidiPortHandle(Port* port) : port_(port) {}
+
+  void Release() {
+    if (port_ != nullptr) {
+      std::exchange(port_, nullptr)->RemoveHandle();
+    }
+  }
+
+  Port* port_ = nullptr;
+};
+
+using MidiInHandle = MidiPortHandle<MidiIn>;
+using MidiOutHandle = MidiPortHandle<MidiOut>;
 
 }  // namespace jpr

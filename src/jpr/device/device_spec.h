@@ -54,12 +54,12 @@ struct DeviceList {
 // Creates each device whose ports are both found, on those ports (see
 // CreateDevice()).
 //
-// A device whose ports don't both open is absent, though the one that opened
-// stays open.
+// A device whose ports don't both open is absent, with neither left open. Each
+// device keeps its ports open while it lives.
 //
 // Returns nullopt, opening no ports, if a spec isn't valid or a required
-// device is absent, and nullopt if a required device's ports fail to open,
-// though the ports opened stay open. A spec isn't valid if its type isn't a
+// device is absent, and nullopt, with every port it opened closed again, if a
+// required device's ports fail to open. A spec isn't valid if its type isn't a
 // device type, an override isn't valid for the type's catalog (see
 // ValidateControlOverrides()), a port is also an earlier spec's, or its name
 // isn't a widget name or is repeated (see ValidateWidgets()). For each problem,

@@ -6,6 +6,7 @@
 #include "jpr/device/device_types.h"
 
 #include <algorithm>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -30,10 +31,10 @@ namespace {
 // Creates an X-Touch of the model.
 template <DeviceXTouch::Type kType>
 std::unique_ptr<Device> CreateXTouch(
-    RunRegistry& run_registry, MidiIn* midi_in, MidiOut* midi_out,
+    RunRegistry& run_registry, MidiInHandle midi_in, MidiOutHandle midi_out,
     absl::Span<const ControlOverride> overrides) {
-  return std::make_unique<DeviceXTouch>(kType, run_registry, midi_in, midi_out,
-                                        overrides);
+  return std::make_unique<DeviceXTouch>(kType, run_registry, std::move(midi_in),
+                                        std::move(midi_out), overrides);
 }
 
 //------------------------------------------------------------------------------
@@ -191,10 +192,10 @@ const DeviceType* FindDeviceType(std::string_view name) {
 }
 
 std::unique_ptr<Device> CreateDevice(
-    const DeviceType& type, RunRegistry& run_registry, MidiIn* midi_in,
-    MidiOut* midi_out, absl::Span<const ControlOverride> overrides) {
-  std::unique_ptr<Device> device =
-      type.create(run_registry, midi_in, midi_out, overrides);
+    const DeviceType& type, RunRegistry& run_registry, MidiInHandle midi_in,
+    MidiOutHandle midi_out, absl::Span<const ControlOverride> overrides) {
+  std::unique_ptr<Device> device = type.create(run_registry, std::move(midi_in),
+                                               std::move(midi_out), overrides);
   std::vector<std::string> errors;
   ValidateDeviceControls(*device, *type.catalog, overrides, &errors);
   for (const std::string& error : errors) {

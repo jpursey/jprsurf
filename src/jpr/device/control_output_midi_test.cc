@@ -36,7 +36,8 @@ class ControlOutputMidiTest : public ::testing::Test {
   FakeReaper reaper_;
   FakeMidiOutput* fake_output_ = reaper_.AddMidiOutput("Device");
   MidiPorts ports_;
-  MidiOut* output_ = ports_.OpenOutput("Device");
+  MidiOutHandle output_handle_ = ports_.OpenOutput("Device");
+  MidiOut* output_ = output_handle_.Get();
 };
 
 //==============================================================================

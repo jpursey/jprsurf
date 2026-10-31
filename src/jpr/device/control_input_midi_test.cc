@@ -30,7 +30,8 @@ class ControlInputMidiTest : public ::testing::Test {
   FakeReaper reaper_;
   FakeMidiInput* fake_input_ = reaper_.AddMidiInput("Device");
   MidiPorts ports_;
-  MidiIn* input_ = ports_.OpenInput("Device");
+  MidiInHandle input_handle_ = ports_.OpenInput("Device");
+  MidiIn* input_ = input_handle_.Get();
 };
 
 //==============================================================================

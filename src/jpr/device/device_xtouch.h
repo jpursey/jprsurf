@@ -81,10 +81,10 @@ class DeviceXTouch final : public Device {
   // Construction / Destruction
   //----------------------------------------------------------------------------
 
-  // `overrides` name the inputs and outputs of controls the unit doesn't use
-  // (see Device).
-  DeviceXTouch(Type type, RunRegistry& run_registry, MidiIn* midi_in,
-               MidiOut* midi_out,
+  // The device keeps its ports open while it lives. `overrides` name the
+  // inputs and outputs of controls the unit doesn't use (see Device).
+  DeviceXTouch(Type type, RunRegistry& run_registry, MidiInHandle input,
+               MidiOutHandle output,
                absl::Span<const ControlOverride> overrides = {});
   ~DeviceXTouch() override;
 
@@ -140,6 +140,12 @@ class DeviceXTouch final : public Device {
   // has one.
   void AddButton(std::string_view name, uint8_t note, bool has_light,
                  MidiIn* midi_in, MidiOut* midi_out);
+
+  // The ports, kept open while the device lives. They close before Device
+  // destroys the controls, which only unsubscribe from the input as they go,
+  // as a closed port allows.
+  MidiInHandle midi_in_;
+  MidiOutHandle midi_out_;
 
   uint8_t scribble_colors_[kStripCount] = {};
 };

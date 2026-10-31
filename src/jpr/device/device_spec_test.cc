@@ -128,6 +128,16 @@ TEST_F(CreateDevicesTest, DevicesPresentAreCreatedOnTheirPorts) {
   EXPECT_EQ(xtouch_ext_->GetLight(StripButton::kSelect, 1), Light::kOn);
 }
 
+TEST_F(CreateDevicesTest, DevicesCloseTheirPortsAsTheyGo) {
+  std::optional<DeviceList> list = Create({xtouch_spec_});
+  ASSERT_TRUE(list.has_value());
+  EXPECT_TRUE(xtouch_.GetInputPort()->IsOpen());
+  EXPECT_TRUE(xtouch_.GetOutputPort()->IsOpen());
+  list.reset();
+  EXPECT_FALSE(xtouch_.GetInputPort()->IsOpen());
+  EXPECT_FALSE(xtouch_.GetOutputPort()->IsOpen());
+}
+
 TEST_F(CreateDevicesTest, OptionalDeviceAbsentHasNoDevice) {
   std::optional<DeviceList> list = Create({xtouch_ext_spec_, xtouch_spec_});
   ASSERT_TRUE(list.has_value());
@@ -180,6 +190,7 @@ TEST_F(CreateDevicesTest, OptionalDeviceWhosePortFailsToOpenHasNoDevice) {
   EXPECT_THAT(list->devices, SizeIs(1));
   ASSERT_THAT(list->widget_devices, SizeIs(2));
   EXPECT_THAT(list->widget_devices[1].device, IsNull());
+  EXPECT_FALSE(xtouch_ext_->GetInputPort()->IsOpen());
 }
 
 TEST_F(CreateDevicesTest, RequiredDeviceWhosePortFailsToOpenCreatesNone) {
@@ -191,6 +202,9 @@ TEST_F(CreateDevicesTest, RequiredDeviceWhosePortFailsToOpenCreatesNone) {
   EXPECT_THAT(errors_,
               ElementsAre("xtouch_ext: is required, but its ports failed to "
                           "open"));
+  EXPECT_FALSE(xtouch_.GetInputPort()->IsOpen());
+  EXPECT_FALSE(xtouch_.GetOutputPort()->IsOpen());
+  EXPECT_FALSE(xtouch_ext_->GetOutputPort()->IsOpen());
 }
 
 TEST_F(CreateDevicesTest, SharedPortsCreateNone) {

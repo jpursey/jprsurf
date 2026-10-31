@@ -215,7 +215,8 @@ PluginSurface::~PluginSurface() {
   // exits or the surface is removed. Deactivating the scene releases every
   // mapping's output writer, which clears each control on its next run. There
   // are no more calls to OnRun(), so run the devices to clear their controls.
-  // Destroying the MIDI ports sends it.
+  // The devices let go of their ports as the scene goes, and destroying the
+  // MIDI ports then sends it (see MidiPorts).
   if (scene_ != nullptr) {
     scene_->Deactivate();
     device_runner_.Run(RunTime::Now());
@@ -246,18 +247,20 @@ void PluginSurface::InitViews() {
   // Note: For now we are just hard-coding views to my development setup, which
   // is an X-Touch and X-Touch Extender, with the X-Touch extender to the left
   // of the X-Touch.
-  MidiIn* xtouch_in = midi_ports_.OpenInput("X-Touch");
-  MidiOut* xtouch_out = midi_ports_.OpenOutput("X-Touch");
-  MidiIn* xtouch_ext_in = midi_ports_.OpenInput("X-Touch-Ext");
-  MidiOut* xtouch_ext_out = midi_ports_.OpenOutput("X-Touch-Ext");
+  // The ports of a unit that isn't created close as their handles go.
+  MidiInHandle xtouch_in = midi_ports_.OpenInput("X-Touch");
+  MidiOutHandle xtouch_out = midi_ports_.OpenOutput("X-Touch");
+  MidiInHandle xtouch_ext_in = midi_ports_.OpenInput("X-Touch-Ext");
+  MidiOutHandle xtouch_ext_out = midi_ports_.OpenOutput("X-Touch-Ext");
   scene_ = std::make_unique<Scene>("Scene");
-  bool has_xtouch = (xtouch_in != nullptr && xtouch_out != nullptr);
-  bool has_xtouch_ext = (xtouch_ext_in != nullptr && xtouch_ext_out != nullptr);
+  bool has_xtouch = xtouch_in.IsOpen() && xtouch_out.IsOpen();
+  bool has_xtouch_ext = xtouch_ext_in.IsOpen() && xtouch_ext_out.IsOpen();
   if (has_xtouch) {
     const DeviceType* type = FindDeviceType("XTouch");
     CHECK(type != nullptr);
-    scene_->AddDevice(
-        "XTouch", CreateDevice(*type, device_runner_, xtouch_in, xtouch_out));
+    scene_->AddDevice("XTouch",
+                      CreateDevice(*type, device_runner_, std::move(xtouch_in),
+                                   std::move(xtouch_out)));
   }
   if (has_xtouch_ext) {
     // My extender unit's third fader lost touch sensing, so it falls back on
@@ -272,9 +275,10 @@ void PluginSurface::InitViews() {
     for (const std::string& error : errors) {
       LOG(ERROR) << "XTouchExt has an invalid override: " << error;
     }
-    scene_->AddDevice("XTouchExt",
-                      CreateDevice(*type, device_runner_, xtouch_ext_in,
-                                   xtouch_ext_out, overrides));
+    scene_->AddDevice(
+        "XTouchExt",
+        CreateDevice(*type, device_runner_, std::move(xtouch_ext_in),
+                     std::move(xtouch_ext_out), overrides));
   }
 
   const TrackReference* folder = scene_->AddTrackReference(

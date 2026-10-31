@@ -66,6 +66,7 @@ set(jpr_common_TEST_SOURCE
 )
 
 set(jpr_common_TEST_DEPS
+  gb_test
   jpr_common_testing
 )
 

@@ -341,15 +341,18 @@ class MidiOutHandle;
   goes. Opening a port that is already open gives another handle to the same
   port. There is no other way to close a port.
 - The device holds its handles: `DeviceType::create`, `CreateDevice()` and
-  `DeviceXTouch` take them, and the `Device` base keeps them, so they go after
-  the derived device's controls have unsubscribed. Controls still borrow the
-  raw `MidiIn*` and `MidiOut*`.
+  `DeviceXTouch` take them, and `DeviceXTouch` keeps them. Not every device is
+  MIDI, so the `Device` base has none. The ports close before `Device` destroys
+  the controls, which only unsubscribe from the input as they go, as a closed
+  port allows. Controls still borrow the raw `MidiIn*` and `MidiOut*`.
 - `CreateDevices()` then closes a port whose device is absent, and every port
   of a list that fails, by dropping their handles, with no code of its own.
-- An output port whose last handle goes with output still queued stays open
-  until `MidiPorts` is destroyed, which sends it and waits, as today. So the
-  surface still clears on shutdown, though the scene's devices go before the
-  ports do. Any other port closes as its last handle goes.
+- An output port closes only once it is also done sending: nothing queued,
+  and nothing sent within the flush wait (100ms), so what it sent reaches the
+  hardware. Until then its runs send what is queued, and close it once the
+  wait has passed, and destroying `MidiPorts` sends the rest and waits, as
+  today. So the surface still clears on shutdown, though the scene's devices
+  go before the ports do. An input closes as its last handle goes.
 - A handle must not outlive its `MidiPorts`: destroying `MidiPorts` with a
   handle left logs an error, which fails a test under the fake.
 
@@ -530,7 +533,7 @@ Depends on: CL2.
 - Standard checks, and the contract tests, for the change to the fake.
 - `CreateDevices()` on the fake REAPER's ports, with the cases above.
 
-### CL5 [ ] common, device: MIDI port handles
+### CL5 [x] common, device: MIDI port handles
 
 Depends on: CL4.
 
@@ -544,8 +547,8 @@ Depends on: CL4.
 **Verify**
 - Standard checks.
 - `MidiPorts` tests of two handles on a port, the port closing with the last,
-  a moved handle, queued output sent as `MidiPorts` goes, and a handle left as
-  it goes.
+  a moved handle, a released output closing once it is done sending, queued
+  output sent as `MidiPorts` goes, and a handle left as it goes.
 - `CreateDevices()` tests that the ports of an absent device, and of a list
   that fails, are closed.
 - The surface tests that the surface clears on shutdown, and the load check.

@@ -31,10 +31,11 @@ struct DeviceType {
   // generated.
   const CatalogDoc* catalog_doc;
 
-  // Creates the device on its ports, with its controls named by their paths
-  // in the catalog, without the overrides' inputs and outputs.
+  // Creates the device on its ports, which it keeps open, with its controls
+  // named by their paths in the catalog, without the overrides' inputs and
+  // outputs.
   std::unique_ptr<Device> (*create)(
-      RunRegistry& run_registry, MidiIn* midi_in, MidiOut* midi_out,
+      RunRegistry& run_registry, MidiInHandle midi_in, MidiOutHandle midi_out,
       absl::Span<const ControlOverride> overrides);
 };
 
@@ -49,8 +50,8 @@ const DeviceType* FindDeviceType(std::string_view name);
 // doesn't. The overrides must be valid for the catalog (see
 // ValidateControlOverrides(), which CreateDevices() validates them with).
 std::unique_ptr<Device> CreateDevice(
-    const DeviceType& type, RunRegistry& run_registry, MidiIn* midi_in,
-    MidiOut* midi_out, absl::Span<const ControlOverride> overrides = {});
+    const DeviceType& type, RunRegistry& run_registry, MidiInHandle midi_in,
+    MidiOutHandle midi_out, absl::Span<const ControlOverride> overrides = {});
 
 // Returns true if the device's controls match the catalog, without the
 // overrides: every control in the catalog, named by its path, and no others,
