@@ -52,16 +52,34 @@ MidiPorts::~MidiPorts() {
 }
 
 template <typename Port>
-Port* MidiPorts::Open(std::string_view name, std::string_view kind,
-                      RunRegistry& registry,
+Port* MidiPorts::Find(std::string_view name,
                       const std::vector<std::unique_ptr<Port>>& ports) {
   for (const auto& port : ports) {
     if (port->GetName() == name) {
-      return port->Open(registry) ? port.get() : nullptr;
+      return port.get();
     }
   }
-  LOG(INFO) << "No MIDI " << kind << " port named \"" << name << "\"";
   return nullptr;
+}
+
+template <typename Port>
+Port* MidiPorts::Open(std::string_view name, std::string_view kind,
+                      RunRegistry& registry,
+                      const std::vector<std::unique_ptr<Port>>& ports) {
+  Port* port = Find(name, ports);
+  if (port == nullptr) {
+    LOG(INFO) << "No MIDI " << kind << " port named \"" << name << "\"";
+    return nullptr;
+  }
+  return port->Open(registry) ? port : nullptr;
+}
+
+bool MidiPorts::HasInput(std::string_view name) const {
+  return Find(name, inputs_) != nullptr;
+}
+
+bool MidiPorts::HasOutput(std::string_view name) const {
+  return Find(name, outputs_) != nullptr;
 }
 
 MidiIn* MidiPorts::OpenInput(std::string_view name) {
@@ -71,5 +89,4 @@ MidiIn* MidiPorts::OpenInput(std::string_view name) {
 MidiOut* MidiPorts::OpenOutput(std::string_view name) {
   return Open(name, "output", output_runner_, outputs_);
 }
-
 }  // namespace jpr

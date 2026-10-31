@@ -443,15 +443,15 @@ std::optional<WidgetShape> ValidateWidgets(
   return std::move(validated->shape);
 }
 
-std::unique_ptr<const Widget> ResolveWidgets(
-    const WidgetStructDefinition& widgets,
-    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors) {
+std::optional<WidgetRoot> ResolveWidgets(const WidgetStructDefinition& widgets,
+                                         absl::Span<const WidgetDevice> devices,
+                                         std::vector<std::string>* errors) {
   std::optional<Validated> validated =
       WidgetValidator(/*resolve=*/true, errors).Validate(widgets, devices);
   if (!validated.has_value()) {
-    return nullptr;
+    return std::nullopt;
   }
-  return std::move(validated->widget);
+  return WidgetRoot{std::move(validated->shape), std::move(validated->widget)};
 }
 
 }  // namespace jpr

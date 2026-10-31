@@ -39,6 +39,11 @@ class MidiPorts final {
   MidiPorts& operator=(const MidiPorts&) = delete;
   ~MidiPorts();
 
+  // Returns true if REAPER lists a MIDI input or output port with the given
+  // name, open or not, without opening it.
+  bool HasInput(std::string_view name) const;
+  bool HasOutput(std::string_view name) const;
+
   // Opens the MIDI input or output port with the given name in REAPER.
   //
   // Opening a port that is already open returns the same port. Returns null if
@@ -54,6 +59,11 @@ class MidiPorts final {
   void RunOutput(const RunTime& time) { output_runner_.Run(time); }
 
  private:
+  // Returns the port with the name, or null if there is none.
+  template <typename Port>
+  static Port* Find(std::string_view name,
+                    const std::vector<std::unique_ptr<Port>>& ports);
+
   // Implements OpenInput() and OpenOutput() for either type of port.
   template <typename Port>
   static Port* Open(std::string_view name, std::string_view kind,

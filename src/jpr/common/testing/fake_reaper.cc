@@ -948,8 +948,8 @@ class FakeReaper::Api final {
   }
 
   // Opens the MIDI port at `index` in `ports`, as CreateMIDIInput() and
-  // CreateMIDIOutput() do, returning null if there is none. A port that is
-  // already open fails the test.
+  // CreateMIDIOutput() do, returning null if there is none, or if it is set to
+  // fail to open. A port that is already open fails the test.
   template <typename Port>
   static Port* OpenMidiPort(const std::vector<std::unique_ptr<Port>>& ports,
                             int index, const char* kind) {
@@ -957,6 +957,9 @@ class FakeReaper::Api final {
       return nullptr;
     }
     Port* port = ports[index].get();
+    if (port->open_fails_) {
+      return nullptr;
+    }
     if (port->open_) {
       ADD_FAILURE() << "MIDI " << kind << " \"" << port->GetName()
                     << "\" was created while it is open";

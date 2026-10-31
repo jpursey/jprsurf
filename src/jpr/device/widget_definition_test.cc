@@ -419,9 +419,12 @@ class ResolveWidgetsTest : public WidgetDefinitionTest {
     }
   }
 
-  std::unique_ptr<const Widget> Resolve(const WidgetStructDefinition& widgets) {
+  // Resolves the widgets, keeping them in `root_`. Returns the top-level
+  // struct, or null if they aren't valid.
+  const Widget* Resolve(const WidgetStructDefinition& widgets) {
     errors_.clear();
-    return ResolveWidgets(widgets, devices_, &errors_);
+    root_ = ResolveWidgets(widgets, devices_, &errors_);
+    return root_.has_value() ? root_->widget.get() : nullptr;
   }
 
   // Returns the path, failing the test if the text isn't one.
@@ -467,10 +470,11 @@ class ResolveWidgetsTest : public WidgetDefinitionTest {
   FakeDevice xtouch_device_{runner_};
   FakeDevice ext_1_device_{runner_};
   FakeDevice ext_2_device_{runner_};
+  std::optional<WidgetRoot> root_;  // The widgets Resolve() last resolved.
 };
 
 TEST_F(ResolveWidgetsTest, ControlsAreTheDevicesControls) {
-  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  const Widget* widgets = Resolve(widgets_);
   ASSERT_NE(widgets, nullptr);
   EXPECT_THAT(errors_, IsEmpty());
 
@@ -487,7 +491,7 @@ TEST_F(ResolveWidgetsTest, ControlsAreTheDevicesControls) {
 }
 
 TEST_F(ResolveWidgetsTest, JoinsHaveTheirSlicesElementsInOrder) {
-  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  const Widget* widgets = Resolve(widgets_);
   ASSERT_NE(widgets, nullptr);
 
   EXPECT_EQ(GetSizeAt(*widgets, "strip"), 24);
@@ -513,7 +517,7 @@ TEST_F(ResolveWidgetsTest, JoinsHaveTheirSlicesElementsInOrder) {
 
 TEST_F(ResolveWidgetsTest, AbsentDeviceHasNullControlsAndEmptyArrays) {
   devices_[2].device = nullptr;  // xtouch
-  std::unique_ptr<const Widget> widgets =
+  const Widget* widgets =
       Resolve({.includes = widgets_.includes,
                .fields = {widgets_.fields[0],
                           widgets_.fields[2],
@@ -534,7 +538,7 @@ TEST_F(ResolveWidgetsTest, AbsentDeviceHasNullControlsAndEmptyArrays) {
 
 TEST_F(ResolveWidgetsTest, DevicesSharingACatalogHaveTheirOwnControls) {
   devices_[0].device = nullptr;  // ext_1
-  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  const Widget* widgets = Resolve(widgets_);
   ASSERT_NE(widgets, nullptr);
   EXPECT_EQ(GetSizeAt(*widgets, "strip"), 16);
   EXPECT_EQ(GetControlAt(*widgets, "strip[0].fader"),
@@ -559,13 +563,31 @@ TEST_F(ResolveWidgetsTest, PresentDeviceWithoutACatalogControlHasNull) {
   FakeDevice device(runner_);
   device.AddButton("play");
   devices_[2].device = &device;
-  std::unique_ptr<const Widget> widgets = Resolve(widgets_);
+  const Widget* widgets = Resolve(widgets_);
   ASSERT_NE(widgets, nullptr);
   EXPECT_EQ(GetControlAt(*widgets, "play"), device.GetControl("play"));
   EXPECT_EQ(GetControlAt(*widgets, "stop"), nullptr);
   // A present device has every element of its arrays.
   EXPECT_EQ(GetSizeAt(*widgets, "strip"), 24);
   EXPECT_EQ(GetControlAt(*widgets, "strip[16].fader"), nullptr);
+}
+
+// The shape is the one validating returns, with every widget of the catalogs,
+// whatever is absent.
+TEST_F(ResolveWidgetsTest, ShapeHasTheWidgetsOfAbsentDevices) {
+  devices_[2].device = nullptr;  // xtouch
+  ASSERT_NE(Resolve(widgets_), nullptr);
+  EXPECT_EQ(root_->shape, ValidateWidgets(widgets_, devices_, nullptr));
+
+  const WidgetShape* strip = root_->shape.Find(Path("strip"));
+  ASSERT_NE(strip, nullptr);
+  EXPECT_EQ(strip->GetSize(), 24);
+  EXPECT_EQ(GetSizeAt(*root_->widget, "strip"), 16);
+
+  const WidgetShape* play = root_->shape.Find(Path("play"));
+  ASSERT_NE(play, nullptr);
+  EXPECT_EQ(*play, button_);
+  EXPECT_EQ(GetControlAt(*root_->widget, "play"), nullptr);
 }
 
 TEST_F(ResolveWidgetsTest, InvalidDefinitionHasItsErrors) {

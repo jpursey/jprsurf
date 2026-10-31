@@ -267,6 +267,11 @@ void PluginSurface::InitViews() {
     };
     const DeviceType* type = FindDeviceType("XTouchExt");
     CHECK(type != nullptr);
+    std::vector<std::string> errors;
+    ValidateControlOverrides(*type->catalog, overrides, &errors);
+    for (const std::string& error : errors) {
+      LOG(ERROR) << "XTouchExt has an invalid override: " << error;
+    }
     scene_->AddDevice("XTouchExt",
                       CreateDevice(*type, device_runner_, xtouch_ext_in,
                                    xtouch_ext_out, overrides));

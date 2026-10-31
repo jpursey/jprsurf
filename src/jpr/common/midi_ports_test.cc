@@ -59,6 +59,22 @@ TEST_F(MidiPortsTest, OpensPortsByName) {
   EXPECT_EQ(ports.OpenOutput("X-Touch-Ext"), nullptr);
 }
 
+TEST_F(MidiPortsTest, HasPortsByNameWithoutOpeningThem) {
+  reaper_.AddMidiInput("X-Touch-Ext");
+  MidiPorts ports;
+
+  EXPECT_TRUE(ports.HasInput("X-Touch"));
+  EXPECT_TRUE(ports.HasInput("X-Touch-Ext"));
+  EXPECT_TRUE(ports.HasOutput("X-Touch"));
+  EXPECT_FALSE(ports.HasOutput("X-Touch-Ext"));
+  EXPECT_FALSE(ports.HasInput("Keys"));
+  EXPECT_FALSE(fake_input_->IsOpen());
+  EXPECT_FALSE(fake_output_->IsOpen());
+
+  ports.OpenInput("X-Touch");
+  EXPECT_TRUE(ports.HasInput("X-Touch"));
+}
+
 // The fake fails the test if a port is created again while it is open.
 TEST_F(MidiPortsTest, ReopeningAPortReturnsTheSamePort) {
   MidiPorts ports;
@@ -85,6 +101,13 @@ TEST_F(MidiPortsTest, RunsTheOpenPorts) {
   EXPECT_THAT(fake_output_->TakeReceived(),
               ElementsAre(ElementsAre(0x90, 60, 127)));
   input->Unsubscribe(&listener);
+}
+
+TEST_F(MidiPortsTest, PortThatFailsToOpenIsNull) {
+  fake_input_->SetOpenFails(true);
+  MidiPorts ports;
+  EXPECT_TRUE(ports.HasInput("X-Touch"));
+  EXPECT_EQ(ports.OpenInput("X-Touch"), nullptr);
 }
 
 TEST_F(MidiPortsTest, ClosesThePortsWhenDestroyed) {

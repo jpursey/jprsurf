@@ -72,8 +72,10 @@ Shapes match exactly, apart from the order of a struct's fields.
 ### Resolving
 
 `ResolveWidgets()` validates as `ValidateWidgets()` does, and resolves the
-widgets on the devices that are present, returning the top-level struct, or
-null with the errors.
+widgets on the devices that are present, returning a `WidgetRoot`: the
+top-level struct, and its shape, which has every widget whether or not its
+device is present (*Device types and catalogs* added it), or nullopt with the
+errors.
 - **A device's controls are named by their catalog paths**, such as
   `strip[0].fader` or `play`, so a catalog control resolves to
   `Device::GetControl()` of its path's text. A present device without that
@@ -125,8 +127,8 @@ repeated ones, so a catalog is one nested expression.
   `WidgetJoinDefinition`, and `WidgetFieldDefinition` (a path, a struct, or a
   join).
 - `WidgetDevice`: a name, a catalog, and the `Device`, or null if it is absent.
-- `ValidateWidgets()` and `ResolveWidgets()`, which share one walk (see
-  Building blocks).
+- `ValidateWidgets()`, and `ResolveWidgets()` with its `WidgetRoot`, which
+  share one walk (see Building blocks).
 
 ### widget.h
 

@@ -46,8 +46,8 @@ const DeviceType* FindDeviceType(std::string_view name);
 
 // Creates a device of the type, and validates that the controls it built match
 // the catalog (see ValidateDeviceControls()), logging an error for each that
-// doesn't, and validates the overrides (see ValidateControlOverrides()),
-// logging an error for each problem, as an invalid override drops nothing.
+// doesn't. The overrides must be valid for the catalog (see
+// ValidateControlOverrides(), which CreateDevices() validates them with).
 std::unique_ptr<Device> CreateDevice(
     const DeviceType& type, RunRegistry& run_registry, MidiIn* midi_in,
     MidiOut* midi_out, absl::Span<const ControlOverride> overrides = {});

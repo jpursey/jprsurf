@@ -196,11 +196,6 @@ std::unique_ptr<Device> CreateDevice(
   std::unique_ptr<Device> device =
       type.create(run_registry, midi_in, midi_out, overrides);
   std::vector<std::string> errors;
-  ValidateControlOverrides(*type.catalog, overrides, &errors);
-  for (const std::string& error : errors) {
-    LOG(ERROR) << type.name << " has an invalid override: " << error;
-  }
-  errors.clear();
   ValidateDeviceControls(*device, *type.catalog, overrides, &errors);
   for (const std::string& error : errors) {
     LOG(ERROR) << type.name << " doesn't match its catalog: " << error;

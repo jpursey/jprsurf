@@ -99,9 +99,19 @@ std::optional<WidgetShape> ValidateWidgets(
     const WidgetStructDefinition& widgets,
     absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
 
+// A config's widgets: the top-level struct, and its shape, which has every
+// widget the catalogs give, whether or not its device is present. So the shape
+// tells a path that names nothing from one whose device is absent, and has the
+// mode names of a control that is absent.
+struct WidgetRoot {
+  WidgetShape shape;
+  std::unique_ptr<const Widget> widget;
+};
+
 // Validates the widgets as ValidateWidgets() does, and resolves them on the
-// devices that are present. Returns the top-level struct, or null with the
-// errors validating found. The devices must outlive the widgets.
+// devices that are present. Returns the top-level struct and its shape, or
+// nullopt with the errors validating found. The devices must outlive the
+// widgets.
 //
 // Each device's instance of its catalog has the device's controls, or null for
 // a control it doesn't have. An absent device's instance has every field at
@@ -109,8 +119,8 @@ std::optional<WidgetShape> ValidateWidgets(
 // keep their fields. So a join has the elements of the devices present, in
 // order, and a path in a definition, such as "xtouch.strip[7]", addresses the
 // catalog: it is a struct with null controls when the X-Touch is absent.
-std::unique_ptr<const Widget> ResolveWidgets(
-    const WidgetStructDefinition& widgets,
-    absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
+std::optional<WidgetRoot> ResolveWidgets(const WidgetStructDefinition& widgets,
+                                         absl::Span<const WidgetDevice> devices,
+                                         std::vector<std::string>* errors);
 
 }  // namespace jpr

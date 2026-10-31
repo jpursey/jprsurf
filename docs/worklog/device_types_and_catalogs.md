@@ -111,7 +111,7 @@ are defined once, in the tables the catalog and the constructor are both built
 from. Until the plugin maps through widgets, `DeviceXTouch` keeps the name
 constants and functions the plugin uses (`kPlay`, `Fader()`), returning the new
 names, so the plugin's `"XTouch/..."` names still work. The plugin's last use
-of them goes in CL5, and they go with it. The plugin then names its widgets by
+of them goes in CL6, and they go with it. The plugin then names its widgets by
 strings, as a config will, with no constants of its own.
 
 ### Catalog documentation
@@ -285,21 +285,73 @@ struct DeviceSpec {
   std::vector<ControlOverride> overrides;
 };
 
-// Opens each device's ports, and creates the devices whose ports are both
-// found. Returns a device for each spec, in order, or null where it is absent.
-// Returns none, with an error for each problem, if a type or an override is
-// invalid, a name is repeated, or a required device is absent.
-std::vector<std::unique_ptr<Device>> CreateDevices(
-    absl::Span<const DeviceSpec> specs, MidiPorts& ports,
-    RunRegistry& run_registry, std::vector<std::string>* errors);
+// The devices created from a device list.
+struct DeviceList {
+  std::vector<std::unique_ptr<Device>> devices;  // Those present, in order.
+
+  // A device for each spec, in order, to resolve widgets on: its name, its
+  // type's catalog, and its device, or null if it is absent.
+  std::vector<WidgetDevice> widget_devices;
+};
+
+// Creates each device whose ports are both found, and open. Returns nullopt,
+// opening no ports, with an error for each problem, if a type or an override
+// is invalid, a port is also another spec's, a name isn't a widget name or is
+// repeated, or a required device is absent, and nullopt if a required
+// device's ports fail to open.
+std::optional<DeviceList> CreateDevices(absl::Span<const DeviceSpec> specs,
+                                        MidiPorts& ports,
+                                        RunRegistry& run_registry,
+                                        std::vector<std::string>* errors);
 ```
 
+- They are in a new `device_spec.h`.
 - Devices are found once, when the surface is created, as they are today.
-- The caller makes the `WidgetDevice`s to resolve widgets on from each spec's
-  name, its type's catalog, and its device.
+- `MidiPorts::HasInput()` and `HasOutput()` find a port without opening it, so
+  a list that fails opens no ports, and a device with only one of its ports
+  found leaves that one closed, as every open port is polled each run.
+- A port that is found can still fail to open, as when another program has it,
+  which the fake's ports can be set to do (`SetOpenFails()`). Until the ports
+  are handles (see below), the other port of that device, and the ports a list
+  that fails opened, stay open.
+- Each port is one device's, so a port in two specs is an error.
+- The list gives the `WidgetDevice`s to resolve widgets on, so the caller
+  needn't look up the types again, or pair specs with devices. Their names are
+  validated by `ValidateWidgets()` on them, the one place the rule is.
+- `CreateDevice()` takes valid overrides, as `CreateDevices()` validates them.
+  Until CL8, `PluginSurface` validates its own.
 - It is unit tested on the fake REAPER's MIDI ports and the fake X-Touch: both
-  present, an optional device absent, a required device absent, and each
-  invalid spec.
+  present, an optional device absent, a required device absent, a port that
+  fails to open on an optional and a required device, and each invalid spec.
+
+### MIDI port handles
+
+`MidiPorts::OpenInput()` and `OpenOutput()` return a move-only handle, which
+closes the port when it goes, so nothing can close a port out from under its
+other users, or forget to close one:
+
+```cpp
+// An open MIDI input or output port, which stays open while any handle to it
+// lives. Null if the port isn't found, or fails to open.
+class MidiInHandle;
+class MidiOutHandle;
+```
+
+- `MidiPorts` counts the handles on each port, and closes it as the last one
+  goes. Opening a port that is already open gives another handle to the same
+  port. There is no other way to close a port.
+- The device holds its handles: `DeviceType::create`, `CreateDevice()` and
+  `DeviceXTouch` take them, and the `Device` base keeps them, so they go after
+  the derived device's controls have unsubscribed. Controls still borrow the
+  raw `MidiIn*` and `MidiOut*`.
+- `CreateDevices()` then closes a port whose device is absent, and every port
+  of a list that fails, by dropping their handles, with no code of its own.
+- An output port whose last handle goes with output still queued stays open
+  until `MidiPorts` is destroyed, which sends it and waits, as today. So the
+  surface still clears on shutdown, though the scene's devices go before the
+  ports do. Any other port closes as its last handle goes.
+- A handle must not outlive its `MidiPorts`: destroying `MidiPorts` with a
+  handle left logs an error, which fails a test under the fake.
 
 ### The widget root
 
@@ -464,19 +516,41 @@ Depends on: CL2, for the device types it documents.
   and when a catalog or a doc changes without its page.
 - The pages and the moved guide read correctly, with working links.
 
-### CL4 [ ] device: The device list, and the widget root
+### CL4 [x] common, device: The device list, and the widget root
 
 Depends on: CL2.
 
-- `DeviceSpec` and `CreateDevices()`.
+- `DeviceSpec`, `DeviceList`, and `CreateDevices()`, and in `common`,
+  `MidiPorts::HasInput()` and `HasOutput()`, with the fake's ports able to fail
+  to open.
 - `ResolveWidgets()` returns a `WidgetRoot`.
 - Unused, so no visible change.
 
 **Verify**
-- Standard checks.
+- Standard checks, and the contract tests, for the change to the fake.
 - `CreateDevices()` on the fake REAPER's ports, with the cases above.
 
-### CL5 [ ] scene, plugin: Map through widgets
+### CL5 [ ] common, device: MIDI port handles
+
+Depends on: CL4.
+
+- `MidiPorts` opens ports as handles, and closes each as its last handle goes
+  (see MIDI port handles).
+- Devices hold their ports' handles, and `CreateDevices()` closes the ports of
+  absent devices and of a list that fails.
+- The plugin passes the handles it opens to `CreateDevice()`, until CL8.
+- No visible change.
+
+**Verify**
+- Standard checks.
+- `MidiPorts` tests of two handles on a port, the port closing with the last,
+  a moved handle, queued output sent as `MidiPorts` goes, and a handle left as
+  it goes.
+- `CreateDevices()` tests that the ports of an absent device, and of a list
+  that fails, are closed.
+- The surface tests that the surface clears on shutdown, and the load check.
+
+### CL6 [ ] scene, plugin: Map through widgets
 
 Depends on: CL4.
 
@@ -486,7 +560,7 @@ Depends on: CL4.
   first use, from its fake device.
 - The plugin defines JPRSurf's widgets over the devices it creates as it does
   today, and maps through widget paths. Its strip loops run over the widget
-  arrays, still behind the device checks, which CL7 removes.
+  arrays, still behind the device checks, which CL8 removes.
 - `DeviceXTouch`'s name constants and functions go.
 - This crosses into `plugin` because the scene's mapping API changes under it.
 
@@ -495,9 +569,9 @@ Depends on: CL4.
 - Scene tests of mapping to an absent widget, to a path that names nothing, and
   to a struct. The surface tests verify the plugin.
 
-### CL6 [ ] scene, plugin: Output modes by name
+### CL7 [ ] scene, plugin: Output modes by name
 
-Depends on: CL5.
+Depends on: CL6.
 
 - Mode names in `WriteConfig` and `ModeOverride`, looked up in the shape.
 - The plugin names its modes (`blink`, `center`, `center_edges`, `off`).
@@ -508,9 +582,9 @@ Depends on: CL5.
   doesn't have, and a name on an absent control. The surface tests verify the
   plugin.
 
-### CL7 [ ] plugin: Devices from the list
+### CL8 [ ] plugin: Devices from the list
 
-Depends on: CL6.
+Depends on: CL7.
 
 - JPRSurf's device list, created with `CreateDevices()`, with the X-Touch
   required and the extender optional. Without the X-Touch, the plugin logs the

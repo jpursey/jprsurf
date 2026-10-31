@@ -74,6 +74,10 @@ class FakeMidiInput final : public midi_Input {
   // Returns true if the port is open: created, and not yet destroyed.
   bool IsOpen() const { return open_; }
 
+  // Sets whether creating the port fails, returning null, as REAPER's does
+  // when the port can't be opened (by default, it doesn't).
+  void SetOpenFails(bool fails) { open_fails_ = fails; }
+
   // Sends a message into the port, or a sysex message's bytes, at the fake's
   // current time.
   void Send(const MidiMessage& message);
@@ -101,6 +105,7 @@ class FakeMidiInput final : public midi_Input {
 
   const std::string name_;
   bool open_ = false;
+  bool open_fails_ = false;
   bool started_ = false;
   std::vector<Event> sent_;  // Since the last SwapBufsPrecise().
   FakeMidiEventList read_buffer_;
@@ -133,6 +138,10 @@ class FakeMidiOutput final : public midi_Output {
 
   // Returns true if the port is open: created, and not yet destroyed.
   bool IsOpen() const { return open_; }
+
+  // Sets whether creating the port fails, returning null, as REAPER's does
+  // when the port can't be opened (by default, it doesn't).
+  void SetOpenFails(bool fails) { open_fails_ = fails; }
 
   // Connects fake hardware to the port: each message sent from it is passed to
   // `receiver` as it is sent. A port has at most one device, so connecting one
@@ -170,6 +179,7 @@ class FakeMidiOutput final : public midi_Output {
 
   const std::string name_;
   bool open_ = false;
+  bool open_fails_ = false;
   absl::AnyInvocable<void(absl::Span<const uint8_t> bytes)> receiver_;
   bool recording_ = false;
   std::vector<std::vector<uint8_t>> received_;

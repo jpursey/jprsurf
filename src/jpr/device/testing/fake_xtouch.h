@@ -226,9 +226,10 @@ class FakeXTouch final {
   // the display can draw them (it shows '@' blank, for instance).
   std::string GetTimecode() const;
 
-  // The output port the hardware is connected to. A test that checks the raw
-  // messages sent to the hardware records them there (see
-  // FakeMidiOutput::SetRecording()).
+  // The input and output ports the hardware is connected to. A test that
+  // checks the raw messages sent to the hardware records them on the output
+  // port (see FakeMidiOutput::SetRecording()).
+  FakeMidiInput* GetInputPort() const { return input_; }
   FakeMidiOutput* GetOutputPort() const { return output_; }
 
  private:

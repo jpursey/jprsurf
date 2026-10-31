@@ -70,6 +70,22 @@ TEST(FakeMidiTest, CreatingAPortOpensItUntilItIsDestroyed) {
   input->Destroy();
 }
 
+TEST(FakeMidiTest, PortSetToFailDoesntOpen) {
+  FakeReaper reaper;
+  FakeMidiInput* input = reaper.AddMidiInput("X-Touch");
+  FakeMidiOutput* output = reaper.AddMidiOutput("X-Touch");
+  input->SetOpenFails(true);
+  output->SetOpenFails(true);
+  EXPECT_EQ(::CreateMIDIInput(0), nullptr);
+  EXPECT_EQ(::CreateMIDIOutput(0, false, nullptr), nullptr);
+  EXPECT_FALSE(input->IsOpen());
+  EXPECT_FALSE(output->IsOpen());
+
+  input->SetOpenFails(false);
+  EXPECT_EQ(::CreateMIDIInput(0), input);
+  input->Destroy();
+}
+
 TEST(FakeMidiTest, CreatingAnOpenPortFailsTheTest) {
   FakeReaper reaper;
   FakeMidiOutput* output = reaper.AddMidiOutput("X-Touch");
