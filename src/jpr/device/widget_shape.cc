@@ -7,7 +7,12 @@
 
 #include <algorithm>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <variant>
+
+#include "absl/strings/str_cat.h"
 
 namespace jpr {
 
@@ -137,6 +142,28 @@ bool operator==(const WidgetShape& a, const WidgetShape& b) {
       return x.size == y.size && *x.element == *y.element;
   }
   return false;
+}
+
+const WidgetShape* FindControlShape(const WidgetShape& shape,
+                                    std::string_view path_text,
+                                    WidgetPath* path, std::string* error) {
+  std::string parse_error;
+  std::optional<WidgetPath> parsed = WidgetPath::Parse(path_text, &parse_error);
+  if (!parsed.has_value()) {
+    *error = absl::StrCat("isn't a path: ", parse_error);
+    return nullptr;
+  }
+  const WidgetShape* found = shape.Find(*parsed);
+  if (found == nullptr) {
+    *error = "names nothing";
+    return nullptr;
+  }
+  if (found->GetKind() != WidgetKind::kControl) {
+    *error = "isn't a control";
+    return nullptr;
+  }
+  *path = *std::move(parsed);
+  return found;
 }
 
 }  // namespace jpr

@@ -57,10 +57,10 @@ class ViewListTest : public SceneTest {
   ViewListTest()
       : top_(project_.AddTracks(5)),
         folder_(project_.AddTracks(3, top_[2])),
-        folder_reference_(scene_.AddTrackReference(
+        folder_reference_(GetScene()->AddTrackReference(
             "user:folder", {.fallback = std::string(Scene::kMasterTrack)})),
-        track_reference_(scene_.AddTrackReference("user:track")),
-        revealed_reference_(scene_.AddTrackReference("user:revealed")) {
+        track_reference_(GetScene()->AddTrackReference("user:track")),
+        revealed_reference_(GetScene()->AddTrackReference("user:revealed")) {
     project_.AddSend(top_[1], top_[2]);
     project_.AddSend(top_[3], top_[2]);
     project_.AddSend(top_[0], top_[1]);
@@ -69,14 +69,14 @@ class ViewListTest : public SceneTest {
     project_.AddSend(top_[4], top_[0]);
     project_.AddSend(top_[3], top_[0]);
     project_.AddSend(top_[1], top_[0]);
-    scene_.GetRootView()->Enable();
+    GetScene()->GetRootView()->Enable();
   }
 
   // Adds a view bound to `reference`, with the list, and returns it, or null
   // if it fails to be added.
   View* TryAddList(std::string_view reference, const View::ListConfig& list,
                    std::string_view name = "List") {
-    return scene_.GetRootView()->AddChildView(
+    return GetScene()->GetRootView()->AddChildView(
         name, {.subject = View::ReferenceSubject{std::string(reference)},
                .list = list});
   }
@@ -170,7 +170,7 @@ class ViewListTest : public SceneTest {
 //==============================================================================
 
 TEST_F(ViewListTest, EachListHasThePropertiesThatActOnIt) {
-  View* plain = scene_.GetRootView()->AddChildView("Plain");
+  View* plain = GetScene()->GetRootView()->AddChildView("Plain");
   View* child_tracks = AddChildTracks();
   View* routes = AddRoutes("Routes");
 

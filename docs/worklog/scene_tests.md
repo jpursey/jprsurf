@@ -112,8 +112,9 @@ The fixture for scene tests, in the test-only `jpr_scene_testing` library, as
 `SurfaceTest` is to the plugin. `scene_test.cc` holds `Scene`'s own tests,
 which use it.
 - The fake REAPER, with REAPER's actions, a `SurfaceNotifier`, a `Scene`, and
-  a `FakeDevice` in it (`device_`), which a test adds its controls to.
-  `GetControlName("X")` is the scene's name for one ("Device/X").
+  a `FakeDevice` (`device_`), which a test adds its controls to. The scene is
+  created on first use (`GetScene()`), on the device, with a widget for each
+  control by its name, so a test adds its controls first.
 - **The scene runs from a control surface,** as in the plugin. The scene reads
   REAPER through `TrackCache` and `ContinuousUndo`, which only a
   `ControlSurface` keeps current, so `Scene`'s comment says it must run from a

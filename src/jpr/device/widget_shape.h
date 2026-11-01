@@ -103,4 +103,13 @@ struct WidgetShape::Field {
   WidgetShape shape;
 };
 
+// Returns the shape of the control at the path's text from `shape`, setting
+// `path` to the path. Returns null, setting `error` to why, if the text isn't a
+// path ("isn't a path: " and the parser's error), there is no widget there
+// ("names nothing"), or the widget there is a struct or an array ("isn't a
+// control").
+const WidgetShape* FindControlShape(const WidgetShape& shape,
+                                    std::string_view path_text,
+                                    WidgetPath* path, std::string* error);
+
 }  // namespace jpr

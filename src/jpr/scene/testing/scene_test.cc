@@ -6,16 +6,20 @@
 #include "jpr/scene/testing/scene_test.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "absl/functional/any_invocable.h"
-#include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "jpr/common/control_surface.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/device/control.h"
+#include "jpr/device/device.h"
+#include "jpr/device/widget_definition.h"
+#include "jpr/device/widget_shape.h"
 
 namespace jpr {
 
@@ -36,9 +40,9 @@ SceneTest* g_scene_test = nullptr;
 class SceneTest::Listener final : public ControlSurfaceListener {
  public:
   explicit Listener(SceneTest* test) : test_(test) {
-    test_->scene_.Activate(test_->scene_runner_);
+    test_->GetScene()->Activate(test_->scene_runner_);
   }
-  ~Listener() override { test_->scene_.Deactivate(); }
+  ~Listener() override { test_->GetScene()->Deactivate(); }
 
   static std::unique_ptr<ControlSurfaceListener> Create(
       std::string_view config) {
@@ -59,7 +63,8 @@ class SceneTest::Listener final : public ControlSurfaceListener {
 // Setting up
 //------------------------------------------------------------------------------
 
-SceneTest::SceneTest() : device_(AddDevice()) {
+SceneTest::SceneTest()
+    : device_(new FakeDevice(device_runner_)), new_device_(device_) {
   g_scene_test = this;
   AddReaperActions(&reaper_);
   EXPECT_TRUE(ControlSurface::Register(reaper_.GetPluginInfo(),
@@ -68,19 +73,50 @@ SceneTest::SceneTest() : device_(AddDevice()) {
                                         .create_listener = &Listener::Create}));
 }
 
-SceneTest::~SceneTest() { g_scene_test = nullptr; }
-
-void SceneTest::TearDown() { RemoveSurface(); }
-
-FakeDevice* SceneTest::AddDevice() {
-  auto device = std::make_unique<FakeDevice>(device_runner_);
-  FakeDevice* added = device.get();
-  scene_.AddDevice(kDeviceName, std::move(device));
-  return added;
+SceneTest::~SceneTest() {
+  // The surface is declared before the scene, so it would outlive it.
+  RemoveSurface();
+  g_scene_test = nullptr;
 }
 
-std::string SceneTest::GetControlName(std::string_view name) {
-  return absl::StrCat(kDeviceName, "/", name);
+void SceneTest::TearDown() {
+  RemoveSurface();
+  if (scene_ != nullptr) {
+    EXPECT_EQ(static_cast<int>(device_->GetControls().size()),
+              scene_control_count_)
+        << "A control was added once the scene existed, so it has no widget";
+  }
+}
+
+Scene* SceneTest::GetScene() {
+  if (scene_ != nullptr) {
+    return scene_.get();
+  }
+  // The device's catalog is its controls, which the widgets include, as a
+  // config includes a device's fields.
+  std::vector<WidgetShape::Field> fields;
+  for (const std::unique_ptr<Control>& control : device_->GetControls()) {
+    fields.push_back(
+        {std::string(control->GetName()),
+         WidgetShape::ForControl(control->GetInputs(), control->GetOutputs())});
+  }
+  scene_control_count_ = static_cast<int>(fields.size());
+  const WidgetShape catalog = WidgetShape::ForStruct(std::move(fields));
+  const WidgetDevice widget_device = {
+      .name = "device", .catalog = &catalog, .device = device_};
+  std::vector<std::string> errors;
+  std::optional<WidgetRoot> widgets = ResolveWidgets(
+      {.includes = {{.path = "device"}}}, {&widget_device, 1}, &errors);
+  for (const std::string& error : errors) {
+    ADD_FAILURE() << "Invalid widget: " << error;
+  }
+
+  std::vector<std::unique_ptr<Device>> devices;
+  devices.push_back(std::move(new_device_));
+  scene_ = std::make_unique<Scene>(
+      "Scene", std::move(devices),
+      widgets.has_value() ? std::move(*widgets) : WidgetRoot{});
+  return scene_.get();
 }
 
 void SceneTest::AddSurface() {

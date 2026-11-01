@@ -39,16 +39,15 @@ class SceneTestPressTest : public SceneTest {
         double_press_(device_->AddButton("DoublePress")),
         long_press_(device_->AddButton("LongPress")),
         hold_(device_->AddButton("Hold")) {
-    View* root = scene_.GetRootView();
+    View* root = GetScene()->GetRootView();
     root->Enable();
     AddCounter(root, "Tap", PressBehavior::kNormal, &taps_);
     AddCounter(root, "DoublePress", PressBehavior::kDoublePress,
                &double_presses_);
     AddCounter(root, "LongPress", PressBehavior::kLongPress, &long_presses_);
-    held_ = scene_.AddUserProperty(
+    held_ = GetScene()->AddUserProperty(
         std::make_unique<ToggleValueProperty>("user:held"));
-    EXPECT_TRUE(root->AddMapping(ViewMapping::kReadControl, "user:held",
-                                 GetControlName("Hold"),
+    EXPECT_TRUE(root->AddMapping(ViewMapping::kReadControl, "user:held", "Hold",
                                  {.read = {.press_release = true}}));
     AddSurface();
   }
@@ -57,10 +56,9 @@ class SceneTestPressTest : public SceneTest {
   void AddCounter(View* view, std::string_view name, PressBehavior behavior,
                   int* count) {
     const std::string property = absl::StrCat("user:", name);
-    scene_.AddUserProperty(std::make_unique<CallbackActionProperty>(
+    GetScene()->AddUserProperty(std::make_unique<CallbackActionProperty>(
         property, [count] { ++*count; }));
-    EXPECT_TRUE(view->AddMapping(ViewMapping::kReadControl, property,
-                                 GetControlName(name),
+    EXPECT_TRUE(view->AddMapping(ViewMapping::kReadControl, property, name,
                                  {.read = {.press_behavior = behavior}}));
   }
 
@@ -80,17 +78,19 @@ TEST_F(SceneTestTest, ErrorsLoggedAreKeptToFailTheTest) {
               ElementsAre(Field(&gb::LogRecorder::Message::text, "Expected")));
 }
 
-TEST_F(SceneTestTest, ControlsAreNamedForTheDevice) {
-  EXPECT_EQ(GetControlName("Play"), "Device/Play");
+TEST_F(SceneTestTest, ControlsAreWidgetsByTheirNames) {
+  FakeDevice::FakeControl play = device_->AddButton("Play");
+  FakeDevice::FakeControl fader = device_->AddFader("Fader");
+  EXPECT_EQ(GetScene()->GetControl("Play"), play.control);
+  EXPECT_EQ(GetScene()->GetControl("Fader"), fader.control);
 }
 
 TEST_F(SceneTestTest, TheSurfaceRunsTheSceneUntilItIsShown) {
   FakeDevice::FakeControl mute = device_->AddButton("Mute");
-  View* root = scene_.GetRootView();
+  View* root = GetScene()->GetRootView();
   root->Enable();
   ASSERT_TRUE(root->AddMapping(ViewMapping::kWriteControl,
-                               "state:master_track.mute",
-                               GetControlName("Mute")));
+                               "state:master_track.mute", "Mute"));
   reaper_.GetProject().GetMasterTrack()->mute = true;
 
   AddSurface();

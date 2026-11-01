@@ -8,10 +8,12 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
 #include "absl/types/span.h"
+#include "jpr/device/control.h"
 #include "jpr/device/device.h"
 #include "jpr/device/widget.h"
 #include "jpr/device/widget_shape.h"
@@ -99,13 +101,27 @@ std::optional<WidgetShape> ValidateWidgets(
     const WidgetStructDefinition& widgets,
     absl::Span<const WidgetDevice> devices, std::vector<std::string>* errors);
 
+// A control in a config's widgets (see WidgetRoot::FindControl()).
+struct WidgetControl {
+  const WidgetShape* shape = nullptr;  // The control's shape, never null.
+  Control* control = nullptr;          // Null if its device is absent.
+};
+
 // A config's widgets: the top-level struct, and its shape, which has every
 // widget the catalogs give, whether or not its device is present. So the shape
 // tells a path that names nothing from one whose device is absent, and has the
-// mode names of a control that is absent.
+// mode names of a control that is absent. By default, the struct is empty.
 struct WidgetRoot {
-  WidgetShape shape;
-  std::unique_ptr<const Widget> widget;
+  // Returns the control at the path's text, such as "strip[3].fader", with its
+  // shape, and the device's control, or null if its device is absent. Returns
+  // nullopt, setting `error` to why, if the shape has no control there (see
+  // FindControlShape()).
+  std::optional<WidgetControl> FindControl(std::string_view path,
+                                           std::string* error) const;
+
+  WidgetShape shape = WidgetShape::ForStruct({});
+  std::unique_ptr<const Widget> widget =
+      Widget::ForStruct(std::vector<Widget::Field>());
 };
 
 // Validates the widgets as ValidateWidgets() does, and resolves them on the

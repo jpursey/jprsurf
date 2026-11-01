@@ -5,20 +5,29 @@
 
 #include "jpr/scene/scene.h"
 
+#include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "gb/test/log_error_guard.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/modifiers.h"
+#include "jpr/common/runner.h"
 #include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
+#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/track.h"
+#include "jpr/device/device.h"
 #include "jpr/device/testing/fake_device.h"
+#include "jpr/device/widget_definition.h"
+#include "jpr/device/widget_shape.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/state_properties.h"
@@ -28,6 +37,7 @@
 #include "jpr/scene/value_property.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_condition.h"
+#include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
 
 namespace jpr {
@@ -44,7 +54,7 @@ class SceneReferenceTest : public SceneTest {
   // Returns the track the reference refers to, or null if it refers to
   // nothing.
   MediaTrack* GetTrackOf(std::string_view name) {
-    const TrackReference* reference = scene_.GetTrackReference(name);
+    const TrackReference* reference = GetScene()->GetTrackReference(name);
     EXPECT_NE(reference, nullptr) << name;
     if (reference == nullptr || reference->GetTrack() == nullptr) {
       return nullptr;
@@ -56,16 +66,113 @@ class SceneReferenceTest : public SceneTest {
 };
 
 //==============================================================================
-// Controls
+// Widgets
 //==============================================================================
 
-TEST_F(SceneTest, FindsControlsByDeviceAndName) {
-  FakeDevice::FakeControl play = device_->AddButton("Play");
+// Two devices of one catalog, a struct of "play", "stop", "transport" (a struct
+// of "record"), and "strip" (an array of two structs of "mute"): "present",
+// which has only play and record, and "absent". The widgets are present's
+// play and transport, and absent's stop and strip. The scene has a toggle,
+// "user:flag".
+class SceneWidgetTest : public ::testing::Test {
+ protected:
+  SceneWidgetTest() {
+    auto device = std::make_unique<FakeDevice>(runner_);
+    play_ = device->AddButton("play");
+    record_ = device->AddButton("transport.record");
+    const WidgetShape button = WidgetShape::ForControl(
+        play_.control->GetInputs(), play_.control->GetOutputs());
+    const WidgetShape catalog = WidgetShape::ForStruct(
+        {{"play", button},
+         {"stop", button},
+         {"transport", WidgetShape::ForStruct({{"record", button}})},
+         {"strip", WidgetShape::ForArray(
+                       WidgetShape::ForStruct({{"mute", button}}), 2)}});
+    const WidgetDevice widget_devices[] = {
+        {.name = "present", .catalog = &catalog, .device = device.get()},
+        {.name = "absent", .catalog = &catalog},
+    };
+    std::optional<WidgetRoot> widgets = ResolveWidgets(
+        {.includes = {{.path = "present", .excluded = {"stop", "strip"}}},
+         .fields = {{.name = "stop", .widget = std::string("absent.stop")},
+                    {.name = "strip",
+                     .widget =
+                         WidgetJoinDefinition{
+                             .slices = {{.path = "absent.strip"}}}}}},
+        widget_devices, nullptr);
+    EXPECT_TRUE(widgets.has_value());
 
-  EXPECT_EQ(scene_.GetControl(GetControlName("Play")), play.control);
-  EXPECT_EQ(scene_.GetControl(GetControlName("Stop")), nullptr);
-  EXPECT_EQ(scene_.GetControl("Other/Play"), nullptr);
-  EXPECT_EQ(scene_.GetControl("Play"), nullptr);
+    std::vector<std::unique_ptr<Device>> devices;
+    devices.push_back(std::move(device));
+    scene_ = std::make_unique<Scene>(
+        "Scene", std::move(devices),
+        widgets.has_value() ? std::move(*widgets) : WidgetRoot{});
+    scene_->AddUserProperty(std::make_unique<ToggleValueProperty>("user:flag"));
+  }
+
+  gb::LogErrorGuard log_error_guard_;  // First, so it outlives the rest.
+  FakeReaper reaper_;
+  Runner runner_{"Device"};
+  FakeDevice::FakeControl play_;
+  FakeDevice::FakeControl record_;
+  std::unique_ptr<Scene> scene_;
+};
+
+TEST_F(SceneWidgetTest, FindsControlsByWidgetPath) {
+  EXPECT_EQ(scene_->GetControl("play"), play_.control);
+  EXPECT_EQ(scene_->GetControl("transport.record"), record_.control);
+
+  for (std::string_view path :
+       {"stop", "strip[1].mute", "transport", "nothing", "Device/Play"}) {
+    EXPECT_EQ(scene_->GetControl(path), nullptr) << path;
+  }
+}
+
+TEST_F(SceneWidgetTest, MappingsToAbsentControlsDoNothing) {
+  ToggleValueProperty* other = scene_->AddUserProperty(
+      std::make_unique<ToggleValueProperty>("user:other"));
+  ASSERT_NE(other, nullptr);
+  View* root = scene_->GetRootView();
+  EXPECT_TRUE(
+      root->AddMapping(ViewMapping::kWriteControl, "user:flag", "stop"));
+  EXPECT_TRUE(root->AddMapping(ViewMapping::kWriteControl, "user:flag",
+                               "strip[1].mute"));
+  ASSERT_TRUE(
+      root->AddMapping(ViewMapping::kWriteControl, "user:other", "play"));
+
+  // An active mapping that writes watches its property, so only the mapping to
+  // play, which is present, was added.
+  root->Enable();
+  Runner scene_runner("Scene");
+  scene_->Activate(scene_runner);
+  EXPECT_TRUE(other->IsWatched());
+  EXPECT_FALSE(scene_->GetProperty("user:flag")->IsWatched());
+  scene_->Deactivate();
+
+  // They are still validated.
+  EXPECT_FALSE(
+      root->AddMapping(ViewMapping::kWriteControl, "user:nothing", "stop"));
+  EXPECT_FALSE(root->AddMapping(
+      ViewMapping::kWriteControl, "user:flag", "stop",
+      {.condition = ViewCondition::Config{.property = "user:nothing"}}));
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
+}
+
+TEST_F(SceneWidgetTest, MappingsNeedAControlInTheWidgets) {
+  View* root = scene_->GetRootView();
+  const std::string_view paths[] = {
+      // Paths to nothing.
+      "nothing", "transport.play", "strip[2].mute", "play[0]",
+      // Paths to a struct or an array.
+      "transport", "strip", "strip[0]",
+      // Text that isn't a path.
+      "Device/Play", "play.", ""};
+  for (std::string_view path : paths) {
+    EXPECT_FALSE(
+        root->AddMapping(ViewMapping::kWriteControl, "user:flag", path))
+        << path;
+  }
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(std::size(paths)));
 }
 
 //==============================================================================
@@ -73,44 +180,44 @@ TEST_F(SceneTest, FindsControlsByDeviceAndName) {
 //==============================================================================
 
 TEST_F(SceneTest, CommandPropertiesAreCreatedOnce) {
-  ViewProperty* undo = scene_.GetProperty(kCmdUndo);
+  ViewProperty* undo = GetScene()->GetProperty(kCmdUndo);
   ASSERT_NE(undo, nullptr);
   EXPECT_EQ(undo->GetName(), kCmdUndo);
-  EXPECT_EQ(scene_.GetProperty(kCmdUndo), undo);
-  EXPECT_EQ(scene_.GetProperty("cmd:99999"), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty(kCmdUndo), undo);
+  EXPECT_EQ(GetScene()->GetProperty("cmd:99999"), nullptr);
 }
 
 TEST_F(SceneTest, StatePropertiesAreCreatedOnce) {
-  ViewProperty* can_redo = scene_.GetProperty(kStateCanRedo);
+  ViewProperty* can_redo = GetScene()->GetProperty(kStateCanRedo);
   ASSERT_NE(can_redo, nullptr);
   EXPECT_EQ(can_redo->GetName(), kStateCanRedo);
-  EXPECT_EQ(scene_.GetProperty(kStateCanRedo), can_redo);
-  EXPECT_EQ(scene_.GetProperty("state:nothing"), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty(kStateCanRedo), can_redo);
+  EXPECT_EQ(GetScene()->GetProperty("state:nothing"), nullptr);
 }
 
 TEST_F(SceneTest, ViewNamespacesArentGlobal) {
-  EXPECT_EQ(scene_.GetProperty(TrackProperties::kMute), nullptr);
-  EXPECT_EQ(scene_.GetProperty(View::kChildInc), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty(TrackProperties::kMute), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty(View::kChildInc), nullptr);
 }
 
 TEST_F(SceneTest, ModifierPropertiesAreBuiltIn) {
   for (std::string_view name :
        {ModifierProperty::kShift, ModifierProperty::kCtrl,
         ModifierProperty::kAlt, ModifierProperty::kOpt}) {
-    ViewProperty* modifier = scene_.GetProperty(name);
+    ViewProperty* modifier = GetScene()->GetProperty(name);
     ASSERT_NE(modifier, nullptr) << name;
     EXPECT_EQ(modifier->GetType(), Type::kToggle) << name;
   }
 }
 
 TEST_F(SceneTest, AddedModifierPropertiesHaveFlagsOfTheirOwn) {
-  const Modifiers fn = scene_.AddModifierProperty("mod:fn");
-  const Modifiers fn2 = scene_.AddModifierProperty("mod:fn2");
+  const Modifiers fn = GetScene()->AddModifierProperty("mod:fn");
+  const Modifiers fn2 = GetScene()->AddModifierProperty("mod:fn2");
   EXPECT_NE(fn, 0);
   EXPECT_NE(fn2, 0);
   EXPECT_NE(fn, fn2);
 
-  ViewProperty* property = scene_.GetProperty("mod:fn");
+  ViewProperty* property = GetScene()->GetProperty("mod:fn");
   ASSERT_NE(property, nullptr);
   property->SetBool(true);
   EXPECT_TRUE(AreModifiersOn(fn));
@@ -120,63 +227,63 @@ TEST_F(SceneTest, AddedModifierPropertiesHaveFlagsOfTheirOwn) {
 }
 
 TEST_F(SceneTest, AddedModifierPropertiesNeedANewModName) {
-  ASSERT_NE(scene_.AddModifierProperty("mod:fn"), 0);
-  EXPECT_EQ(scene_.AddModifierProperty("mod:fn"), 0);
-  EXPECT_EQ(scene_.AddModifierProperty(ModifierProperty::kShift), 0);
-  EXPECT_EQ(scene_.AddModifierProperty("user:fn"), 0);
+  ASSERT_NE(GetScene()->AddModifierProperty("mod:fn"), 0);
+  EXPECT_EQ(GetScene()->AddModifierProperty("mod:fn"), 0);
+  EXPECT_EQ(GetScene()->AddModifierProperty(ModifierProperty::kShift), 0);
+  EXPECT_EQ(GetScene()->AddModifierProperty("user:fn"), 0);
 }
 
 TEST_F(SceneTest, AddedModifierPropertiesRunOut) {
   int count = 0;
-  while (scene_.AddModifierProperty(absl::StrCat("mod:m", count)) != 0) {
+  while (GetScene()->AddModifierProperty(absl::StrCat("mod:m", count)) != 0) {
     ++count;
   }
   EXPECT_EQ(count, 60);
 }
 
 TEST_F(SceneTest, ConstPropertiesAreFoundByName) {
-  ViewProperty* on = scene_.AddConstProperty(Type::kToggle, true);
+  ViewProperty* on = GetScene()->AddConstProperty(Type::kToggle, true);
   ASSERT_NE(on, nullptr);
-  EXPECT_EQ(scene_.GetProperty(on->GetName()), on);
-  EXPECT_EQ(scene_.AddConstProperty(Type::kVolume, 1.0), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty(on->GetName()), on);
+  EXPECT_EQ(GetScene()->AddConstProperty(Type::kVolume, 1.0), nullptr);
 }
 
 TEST_F(SceneTest, UserPropertiesAreFoundByName) {
-  ToggleValueProperty* flag = scene_.AddUserProperty(
+  ToggleValueProperty* flag = GetScene()->AddUserProperty(
       std::make_unique<ToggleValueProperty>("user:flag"));
   ASSERT_NE(flag, nullptr);
-  EXPECT_EQ(scene_.GetProperty("user:flag"), flag);
+  EXPECT_EQ(GetScene()->GetProperty("user:flag"), flag);
 }
 
 TEST_F(SceneTest, UserPropertiesNeedANewUserName) {
-  View* view = scene_.GetRootView()->AddChildView("View");
+  View* view = GetScene()->GetRootView()->AddChildView("View");
   ASSERT_NE(view->AddUserProperty(
                 std::make_unique<ToggleValueProperty>("user:in_view")),
             nullptr);
-  ASSERT_NE(scene_.AddTrackReference("user:reference"), nullptr);
-  ASSERT_NE(scene_.AddUserProperty(
+  ASSERT_NE(GetScene()->AddTrackReference("user:reference"), nullptr);
+  ASSERT_NE(GetScene()->AddUserProperty(
                 std::make_unique<ToggleValueProperty>("user:flag")),
             nullptr);
 
   for (std::string_view name : {"user:flag", "user:in_view", "user:reference",
                                 "state:flag", "user:a.b"}) {
-    EXPECT_EQ(
-        scene_.AddUserProperty(std::make_unique<ToggleValueProperty>(name)),
-        nullptr)
+    EXPECT_EQ(GetScene()->AddUserProperty(
+                  std::make_unique<ToggleValueProperty>(name)),
+              nullptr)
         << name;
   }
 }
 
 TEST_F(SceneTest, ReferenceFieldsAreFoundByName) {
-  ASSERT_NE(scene_.AddTrackReference("user:track"), nullptr);
+  ASSERT_NE(GetScene()->AddTrackReference("user:track"), nullptr);
 
-  ViewProperty* volume = scene_.GetProperty("state:master_track.volume");
+  ViewProperty* volume = GetScene()->GetProperty("state:master_track.volume");
   ASSERT_NE(volume, nullptr);
   EXPECT_EQ(volume->GetName(), TrackProperties::kVolume);
-  EXPECT_EQ(scene_.GetProperty("state:master_track.volume"), volume);
-  EXPECT_NE(scene_.GetProperty("user:track.volume"), nullptr);
-  EXPECT_EQ(scene_.GetProperty("state:master_track.nothing"), nullptr);
-  EXPECT_EQ(scene_.GetProperty("state:nothing.volume"), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty("state:master_track.volume"), volume);
+  EXPECT_NE(GetScene()->GetProperty("user:track.volume"), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty("state:master_track.nothing"), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty("state:nothing.volume"), nullptr);
 }
 
 //==============================================================================
@@ -220,27 +327,28 @@ TEST_F(SceneReferenceTest, LastTouchedTrackIsReferred) {
 }
 
 TEST_F(SceneReferenceTest, AddedReferencesNeedValidNamesAndRules) {
-  ASSERT_NE(scene_.AddTrackReference("user:track"), nullptr);
+  ASSERT_NE(GetScene()->AddTrackReference("user:track"), nullptr);
 
-  EXPECT_EQ(scene_.AddTrackReference("user:track"), nullptr);
-  EXPECT_EQ(scene_.AddTrackReference("state:track"), nullptr);
-  EXPECT_EQ(scene_.AddTrackReference("user:a.b"), nullptr);
-  EXPECT_EQ(
-      scene_.AddTrackReference("user:fallback", {.fallback = "user:nothing"}),
-      nullptr);
-  EXPECT_EQ(scene_.AddTrackReference("user:follow", {.follow = "user:nothing"}),
+  EXPECT_EQ(GetScene()->AddTrackReference("user:track"), nullptr);
+  EXPECT_EQ(GetScene()->AddTrackReference("state:track"), nullptr);
+  EXPECT_EQ(GetScene()->AddTrackReference("user:a.b"), nullptr);
+  EXPECT_EQ(GetScene()->AddTrackReference("user:fallback",
+                                          {.fallback = "user:nothing"}),
             nullptr);
+  EXPECT_EQ(
+      GetScene()->AddTrackReference("user:follow", {.follow = "user:nothing"}),
+      nullptr);
   EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(5));
 }
 
 TEST_F(SceneReferenceTest, AddedReferencesStartAsNothing) {
-  ASSERT_NE(scene_.AddTrackReference("user:track"), nullptr);
+  ASSERT_NE(GetScene()->AddTrackReference("user:track"), nullptr);
   AddSurface();
   EXPECT_EQ(GetTrackOf("user:track"), nullptr);
 }
 
 TEST_F(SceneReferenceTest, AddedReferencesFallBack) {
-  TrackReference* reference = scene_.AddTrackReference(
+  TrackReference* reference = GetScene()->AddTrackReference(
       "user:track", {.fallback = std::string(Scene::kMasterTrack)});
   ASSERT_NE(reference, nullptr);
   AddSurface();
@@ -262,7 +370,7 @@ TEST_F(SceneReferenceTest, AddedReferencesFallBack) {
 
 TEST_F(SceneReferenceTest, AddedReferencesFollowTracksOnTheSurface) {
   ASSERT_NE(
-      scene_.AddTrackReference(
+      GetScene()->AddTrackReference(
           "user:track", {.follow = std::string(Scene::kLastTouchedTrack)}),
       nullptr);
   reaper_.GetProject().ShowInMixer(tracks_[2], false);
@@ -278,11 +386,12 @@ TEST_F(SceneReferenceTest, AddedReferencesFollowTracksOnTheSurface) {
 }
 
 TEST_F(SceneReferenceTest, AddedReferencesUpdateInTheOrderAdded) {
-  ASSERT_NE(scene_.AddTrackReference(
+  ASSERT_NE(GetScene()->AddTrackReference(
                 "user:first", {.follow = std::string(Scene::kSelectedTrack)}),
             nullptr);
-  ASSERT_NE(scene_.AddTrackReference("user:second", {.follow = "user:first"}),
-            nullptr);
+  ASSERT_NE(
+      GetScene()->AddTrackReference("user:second", {.follow = "user:first"}),
+      nullptr);
   AddSurface();
 
   notifier_.ClickTrack(tracks_[1]);
@@ -296,22 +405,22 @@ TEST_F(SceneReferenceTest, AddedReferencesUpdateInTheOrderAdded) {
 //==============================================================================
 
 TEST_F(SceneTest, IsActiveWhileItsSurfaceIs) {
-  View* root = scene_.GetRootView();
+  View* root = GetScene()->GetRootView();
   root->Enable();
-  EXPECT_FALSE(scene_.IsActive());
+  EXPECT_FALSE(GetScene()->IsActive());
   EXPECT_FALSE(root->IsActive());
 
   AddSurface();
-  EXPECT_TRUE(scene_.IsActive());
+  EXPECT_TRUE(GetScene()->IsActive());
   EXPECT_TRUE(root->IsActive());
 
   RemoveSurface();
-  EXPECT_FALSE(scene_.IsActive());
+  EXPECT_FALSE(GetScene()->IsActive());
   EXPECT_FALSE(root->IsActive());
 }
 
 TEST_F(SceneTest, StatePropertiesArePolledOnlyWhileWatched) {
-  ViewProperty* dirty = scene_.GetProperty(kStateProjectDirty);
+  ViewProperty* dirty = GetScene()->GetProperty(kStateProjectDirty);
   ASSERT_NE(dirty, nullptr);
   AddSurface();
 
@@ -337,10 +446,10 @@ TEST_F(SceneTest, StatePropertiesArePolledOnlyWhileWatched) {
 }
 
 TEST_F(SceneTest, ViewConditionsApplyOnTheNextRun) {
-  ToggleValueProperty* flag = scene_.AddUserProperty(
+  ToggleValueProperty* flag = GetScene()->AddUserProperty(
       std::make_unique<ToggleValueProperty>("user:flag"));
   ASSERT_NE(flag, nullptr);
-  View* root = scene_.GetRootView();
+  View* root = GetScene()->GetRootView();
   root->Enable();
   View* view = root->AddChildView(
       "View", {.condition = ViewCondition::Config{.property = "user:flag"}});

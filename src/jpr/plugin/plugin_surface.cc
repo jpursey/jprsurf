@@ -7,6 +7,7 @@
 
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -22,8 +23,11 @@
 #include "jpr/common/reaper_api.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_override.h"
+#include "jpr/device/device.h"
 #include "jpr/device/device_types.h"
-#include "jpr/device/device_xtouch.h"
+#include "jpr/device/widget.h"
+#include "jpr/device/widget_definition.h"
+#include "jpr/device/widget_path.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/route_properties.h"
@@ -50,9 +54,6 @@ constexpr std::string_view kSurfaceMode = kUserName<"surface_mode">;
 constexpr int kTrackMode = 0;        // Strips show tracks in the hierarchy.
 constexpr int kSendReceiveMode = 1;  // Strips show one track's routes.
 constexpr std::string_view kSurfaceModeNames[] = {"track", "send_receive"};
-
-// The X-Touch strip that shows the Send/Receive mode track itself.
-constexpr int kInfoStrip = 7;
 
 // The track whose child tracks the track list shows. It starts as, and returns
 // to, the master track if its track is deleted. A folder that is only hidden is
@@ -107,9 +108,40 @@ struct TransportStep {
 };
 constexpr TransportStep kTransportSteps[] = {
     {"measure", {}, kCmdGoPrevMeasure, kCmdGoNextMeasure},
-    {"beat", DeviceXTouch::kNudge, kCmdGoPrevBeat, kCmdGoNextBeat},
-    {"marker", DeviceXTouch::kMarker, kCmdGoPrevMarker, kCmdGoNextMarker},
+    {"beat", "nudge", kCmdGoPrevBeat, kCmdGoNextBeat},
+    {"marker", "marker", kCmdGoPrevMarker, kCmdGoNextMarker},
 };
+
+// Returns JPRSurf's widgets: the X-Touch's controls apart from its strips, and
+// these arrays of strips, each from left to right:
+// - strip: every strip, the extender's and then the X-Touch's.
+// - route_strip: the strips that show routes in Send/Receive mode, which are
+//   all but the X-Touch's last.
+// - info_strip: the X-Touch's last strip, which shows the Send/Receive mode
+//   track itself.
+WidgetStructDefinition GetWidgetDefinition() {
+  return {.includes = {{.path = "xtouch", .excluded = {"strip"}}},
+          .fields = {
+              {.name = "strip",
+               .widget =
+                   WidgetJoinDefinition{.slices = {{.path = "xtouch_ext.strip"},
+                                                   {.path = "xtouch.strip"}}}},
+              {.name = "route_strip",
+               .widget =
+                   WidgetJoinDefinition{
+                       .slices = {{.path = "xtouch_ext.strip"},
+                                  {.path = "xtouch.strip", .count = 7}}}},
+              {.name = "info_strip", .widget = std::string("xtouch.strip[7]")},
+          }};
+}
+
+// Returns the number of elements present in the array that is the field of
+// the scene's widgets.
+int GetElementCount(const Scene& scene, std::string_view field) {
+  const Widget* array = scene.GetWidgets().widget->GetField(field);
+  CHECK(array != nullptr) << field;
+  return static_cast<int>(array->GetElements().size());
+}
 
 // Maps the control's touch to the touched property (such as
 // TrackProperties::kVolumeTouched), so REAPER records Touch and Latch
@@ -124,17 +156,16 @@ void AddTouchMapping(View* view, std::string_view property,
 // way in every mode: mute, solo, record arm, pan, volume, name, color, and
 // meter, and the touch of the pot and fader. The select button and the bottom
 // scribble line are left to the caller, as their meaning depends on the mode.
-void AddTrackStripMappings(View* view, std::string_view device_prefix,
-                           int strip) {
-  const std::string pot = absl::StrCat(device_prefix, DeviceXTouch::Pot(strip));
-  const std::string fader =
-      absl::StrCat(device_prefix, DeviceXTouch::Fader(strip));
+// `strip` is the strip's path, such as "strip[3]".
+void AddTrackStripMappings(View* view, std::string_view strip) {
+  const std::string pot = GetFieldPathText(strip, "pot");
+  const std::string fader = GetFieldPathText(strip, "fader");
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiMute,
-                   absl::StrCat(device_prefix, DeviceXTouch::Mute(strip)));
+                   GetFieldPathText(strip, "mute"));
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiSolo,
-                   absl::StrCat(device_prefix, DeviceXTouch::Solo(strip)));
+                   GetFieldPathText(strip, "solo"));
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiRecArm,
-                   absl::StrCat(device_prefix, DeviceXTouch::Rec(strip)));
+                   GetFieldPathText(strip, "rec"));
   view->AddMapping(
       ViewMapping::kReadWriteControl, TrackProperties::kUiPan, pot,
       {.write = {
@@ -143,20 +174,18 @@ void AddTrackStripMappings(View* view, std::string_view device_prefix,
                {std::string(TrackProperties::kTrackExists), {{false, 8}}},
                {std::string(TrackProperties::kTrackIsFolder), {{true, 5}}}}}});
   view->AddMapping(ViewMapping::kReadControl, TrackProperties::kUiPan,
-                   absl::StrCat(device_prefix, DeviceXTouch::PotButton(strip)),
+                   GetFieldPathText(strip, "pot_button"),
                    {.read = {.property_min = 0.0, .property_max = 0.0}});
   AddTouchMapping(view, TrackProperties::kPanTouched, pot);
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiVolume,
                    fader);
   AddTouchMapping(view, TrackProperties::kVolumeTouched, fader);
-  view->AddMapping(
-      ViewMapping::kWriteControl, TrackProperties::kName,
-      absl::StrCat(device_prefix, DeviceXTouch::Scribble(strip, 0)));
-  view->AddMapping(
-      ViewMapping::kWriteControl, TrackProperties::kColor,
-      absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(strip)));
+  view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kName,
+                   GetFieldPathText(strip, "scribble_top"));
+  view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kColor,
+                   GetFieldPathText(strip, "scribble_color"));
   view->AddMapping(ViewMapping::kWriteControl, TrackProperties::kMeter,
-                   absl::StrCat(device_prefix, DeviceXTouch::Meter(strip)));
+                   GetFieldPathText(strip, "meter"));
 }
 
 // Adds a track anchor with the name to the view, which anchors the view's track
@@ -252,15 +281,20 @@ void PluginSurface::InitViews() {
   MidiOutHandle xtouch_out = midi_ports_.OpenOutput("X-Touch");
   MidiInHandle xtouch_ext_in = midi_ports_.OpenInput("X-Touch-Ext");
   MidiOutHandle xtouch_ext_out = midi_ports_.OpenOutput("X-Touch-Ext");
-  scene_ = std::make_unique<Scene>("Scene");
-  bool has_xtouch = xtouch_in.IsOpen() && xtouch_out.IsOpen();
-  bool has_xtouch_ext = xtouch_ext_in.IsOpen() && xtouch_ext_out.IsOpen();
+  const bool has_xtouch = xtouch_in.IsOpen() && xtouch_out.IsOpen();
+  const bool has_xtouch_ext = xtouch_ext_in.IsOpen() && xtouch_ext_out.IsOpen();
+  const DeviceType* xtouch_type = FindDeviceType("XTouch");
+  CHECK(xtouch_type != nullptr);
+  const DeviceType* xtouch_ext_type = FindDeviceType("XTouchExt");
+  CHECK(xtouch_ext_type != nullptr);
+  std::vector<std::unique_ptr<Device>> devices;
+  Device* xtouch = nullptr;
+  Device* xtouch_ext = nullptr;
   if (has_xtouch) {
-    const DeviceType* type = FindDeviceType("XTouch");
-    CHECK(type != nullptr);
-    scene_->AddDevice("XTouch",
-                      CreateDevice(*type, device_runner_, std::move(xtouch_in),
+    devices.push_back(CreateDevice(*xtouch_type, device_runner_,
+                                   std::move(xtouch_in),
                                    std::move(xtouch_out)));
+    xtouch = devices.back().get();
   }
   if (has_xtouch_ext) {
     // My extender unit's third fader lost touch sensing, so it falls back on
@@ -268,18 +302,33 @@ void PluginSurface::InitViews() {
     const ControlOverride overrides[] = {
         {.control = "strip[2].fader", .inputs = ControlInput::Type::kPress},
     };
-    const DeviceType* type = FindDeviceType("XTouchExt");
-    CHECK(type != nullptr);
     std::vector<std::string> errors;
-    ValidateControlOverrides(*type->catalog, overrides, &errors);
+    ValidateControlOverrides(*xtouch_ext_type->catalog, overrides, &errors);
     for (const std::string& error : errors) {
       LOG(ERROR) << "XTouchExt has an invalid override: " << error;
     }
-    scene_->AddDevice(
-        "XTouchExt",
-        CreateDevice(*type, device_runner_, std::move(xtouch_ext_in),
-                     std::move(xtouch_ext_out), overrides));
+    devices.push_back(CreateDevice(*xtouch_ext_type, device_runner_,
+                                   std::move(xtouch_ext_in),
+                                   std::move(xtouch_ext_out), overrides));
+    xtouch_ext = devices.back().get();
   }
+  const WidgetDevice widget_devices[] = {
+      {.name = "xtouch", .catalog = xtouch_type->catalog, .device = xtouch},
+      {.name = "xtouch_ext",
+       .catalog = xtouch_ext_type->catalog,
+       .device = xtouch_ext},
+  };
+  std::vector<std::string> errors;
+  std::optional<WidgetRoot> widgets =
+      ResolveWidgets(GetWidgetDefinition(), widget_devices, &errors);
+  for (const std::string& error : errors) {
+    LOG(ERROR) << "Invalid widget: " << error;
+  }
+  CHECK(widgets.has_value());
+  scene_ =
+      std::make_unique<Scene>("Scene", std::move(devices), std::move(*widgets));
+  const int strip_count = GetElementCount(*scene_, "strip");
+  const int route_strip_count = GetElementCount(*scene_, "route_strip");
 
   const TrackReference* folder = scene_->AddTrackReference(
       kFolder, {.fallback = std::string(Scene::kMasterTrack)});
@@ -300,70 +349,61 @@ void PluginSurface::InitViews() {
         "MasterFader", {.subject = View::ReferenceSubject{
                             .name = std::string(Scene::kMasterTrack)}});
     CHECK(master_track_view != nullptr);
-    const std::string master_fader =
-        absl::StrCat("XTouch/", DeviceXTouch::kMasterFader);
     master_track_view->AddMapping(ViewMapping::kReadWriteControl,
-                                  TrackProperties::kVolume, master_fader);
+                                  TrackProperties::kVolume, "master_fader");
     AddTouchMapping(master_track_view, TrackProperties::kVolumeTouched,
-                    master_fader);
+                    "master_fader");
     master_track_view->Enable();
 
     // Modifiers
     root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kShift,
-                          absl::StrCat("XTouch/", DeviceXTouch::kShift),
+                          ModifierProperty::kShift, "shift",
                           {.read = {.press_release = true}});
     root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kCtrl,
-                          absl::StrCat("XTouch/", DeviceXTouch::kControl),
+                          ModifierProperty::kCtrl, "control",
                           {.read = {.press_release = true}});
     root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kAlt,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAlt),
+                          ModifierProperty::kAlt, "alt",
                           {.read = {.press_release = true}});
     root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kOpt,
-                          absl::StrCat("XTouch/", DeviceXTouch::kOption),
+                          ModifierProperty::kOpt, "option",
                           {.read = {.press_release = true}});
 
     // Timecode display
     root_view->AddMapping(ViewMapping::kWriteControl, kStateTimelinePosition,
-                          absl::StrCat("XTouch/", DeviceXTouch::kTimecode));
+                          "timecode");
     root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerFrames,
-                          absl::StrCat("XTouch/", DeviceXTouch::kSmpteLed));
+                          "smpte_light");
     root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerBeats,
-                          absl::StrCat("XTouch/", DeviceXTouch::kBeatsLed));
-    root_view->AddMapping(
-        ViewMapping::kReadControl, kStateRulerMode,
-        absl::StrCat("XTouch/", DeviceXTouch::kShowTimeBeats));
+                          "beats_light");
+    root_view->AddMapping(ViewMapping::kReadControl, kStateRulerMode,
+                          "show_time_beats");
     root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyTrackSolo,
-                          absl::StrCat("XTouch/", DeviceXTouch::kSoloLed));
+                          "solo_light");
 
     // Utility buttons
-    const std::string undo = absl::StrCat("XTouch/", DeviceXTouch::kUndo);
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, undo);
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, undo,
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, "undo");
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, "undo",
                           {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateCanRedo, undo);
-    const std::string save = absl::StrCat("XTouch/", DeviceXTouch::kSave);
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, save);
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateCanRedo, "undo");
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, "save");
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
-                          save, {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty, save,
-                          {.write = {.mode = 1}});  // Blinking
-    const std::string cancel = absl::StrCat("XTouch/", DeviceXTouch::kCancel);
+                          "save", {.read = {.required_modifiers = kModShift}});
+    root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty,
+                          "save", {.write = {.mode = 1}});  // Blinking
     root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
-                          cancel);
+                          "cancel");
     root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyItemSelected,
-                          cancel);
+                          "cancel");
     root_view->AddMapping(ViewMapping::kReadControl, kCmdRemoveTimeSelection,
-                          cancel, {.read = {.required_modifiers = kModShift}});
-    const std::string enter = absl::StrCat("XTouch/", DeviceXTouch::kEnter);
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem, enter);
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem, enter,
+                          "cancel",
                           {.read = {.required_modifiers = kModShift}});
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem,
+                          "enter");
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem,
+                          "enter", {.read = {.required_modifiers = kModShift}});
     root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
-                          enter, {.read = {.required_modifiers = kModCtrl}});
+                          "enter", {.read = {.required_modifiers = kModCtrl}});
 
     // Automation buttons. Group turns the global automation override on and
     // off, and is lit while it is on.
@@ -377,8 +417,7 @@ void PluginSurface::InitViews() {
     // There is no Latch Preview button, so Latch blinks for Latch Preview, and
     // pressing it sets Latch.
     root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          kStateAutoOverrideActive,
-                          absl::StrCat("XTouch/", DeviceXTouch::kAutoGroup));
+                          kStateAutoOverrideActive, "auto_group");
     const ViewCondition::Config no_override = {
         .property = std::string(kStateAutoOverrideActive), .value = false};
     const ViewCondition::Config in_override = {
@@ -393,35 +432,34 @@ void PluginSurface::InitViews() {
       std::string_view override_light = {};
     };
     static constexpr AutoModeButton kAutoModeButtons[] = {
-        {DeviceXTouch::kAutoTrim, kCmdAutoModeTrim, kStateSelectedAutoTrimRead,
+        {"auto_trim", kCmdAutoModeTrim, kStateSelectedAutoTrimRead,
          kStateAutoOverrideTrimRead},
-        {DeviceXTouch::kAutoRead, kCmdAutoModeRead, kStateSelectedAutoRead,
+        {"auto_read", kCmdAutoModeRead, kStateSelectedAutoRead,
          kStateAutoOverrideRead},
-        {DeviceXTouch::kAutoTouch, kCmdAutoModeTouch, kStateSelectedAutoTouch,
+        {"auto_touch", kCmdAutoModeTouch, kStateSelectedAutoTouch,
          kStateAutoOverrideTouch},
-        {DeviceXTouch::kAutoWrite, kCmdAutoModeWrite, kStateSelectedAutoWrite,
+        {"auto_write", kCmdAutoModeWrite, kStateSelectedAutoWrite,
          kStateAutoOverrideWrite},
-        {DeviceXTouch::kAutoLatch, kCmdAutoModeLatch, kStateSelectedAutoLatch,
+        {"auto_latch", kCmdAutoModeLatch, kStateSelectedAutoLatch,
          kStateAutoOverrideLatch, kStateAutoOverrideAnyLatch},
     };
     for (const AutoModeButton& info : kAutoModeButtons) {
-      const std::string control = absl::StrCat("XTouch/", info.button);
-      root_view->AddMapping(ViewMapping::kReadControl, info.command, control,
-                            {.condition = no_override});
+      root_view->AddMapping(ViewMapping::kReadControl, info.command,
+                            info.button, {.condition = no_override});
       root_view->AddMapping(
-          ViewMapping::kWriteControl, info.selected_state, control,
+          ViewMapping::kWriteControl, info.selected_state, info.button,
           {.write = {.mode_overrides = {{std::string(kStateSelectedAutoMixed),
                                          {{true, 1}}}}},
            .condition = no_override});
       root_view->AddMapping(ViewMapping::kReadControl, info.override_state,
-                            control, {.condition = in_override});
+                            info.button, {.condition = in_override});
       // The other override lights are never on during Latch Preview, so the
       // blink only affects Latch.
       root_view->AddMapping(
           ViewMapping::kWriteControl,
           info.override_light.empty() ? info.override_state
                                       : info.override_light,
-          control,
+          info.button,
           {.write = {.mode_overrides = {{std::string(
                                              kStateAutoOverrideLatchPreview),
                                          {{true, 1}}}}},
@@ -431,14 +469,13 @@ void PluginSurface::InitViews() {
     // Misc buttons (above transport). Marker and Nudge are with the transport
     // controls below.
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
-                          absl::StrCat("XTouch/", DeviceXTouch::kCycle));
+                          "cycle");
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome,
-                          absl::StrCat("XTouch/", DeviceXTouch::kClick));
-    const std::string solo = absl::StrCat("XTouch/", DeviceXTouch::kSolo);
+                          "click");
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdSoloInFront,
-                          solo);
+                          "solo");
     root_view->AddMapping(
-        ViewMapping::kReadControl, kCmdSoloDefeat, solo,
+        ViewMapping::kReadControl, kCmdSoloDefeat, "solo",
         {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
 
     // Transport controls. Rewind and Forward move by the transport step, which
@@ -451,35 +488,31 @@ void PluginSurface::InitViews() {
     }
     CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
               kTransportStep, std::move(step_names))) != nullptr);
-    const std::string rewind = absl::StrCat("XTouch/", DeviceXTouch::kRewind);
-    const std::string forward = absl::StrCat("XTouch/", DeviceXTouch::kForward);
     for (int i = 0; i < static_cast<int>(std::size(kTransportSteps)); ++i) {
       const TransportStep& step = kTransportSteps[i];
       const ViewCondition::Config on_step = {
           .property = std::string(kTransportStep), .value = i};
       root_view->AddMapping(ViewMapping::kReadControl, step.prev_command,
-                            rewind, {.condition = on_step});
+                            "rewind", {.condition = on_step});
       root_view->AddMapping(ViewMapping::kReadControl, step.next_command,
-                            forward, {.condition = on_step});
+                            "forward", {.condition = on_step});
       if (step.button.empty()) {
         continue;
       }
-      const std::string button = absl::StrCat("XTouch/", step.button);
       root_view->AddMapping(
-          ViewMapping::kReadControl, kTransportStep, button,
+          ViewMapping::kReadControl, kTransportStep, step.button,
           {.read = {
                .property_min = 0, .property_max = i, .press_toggles = true}});
-      root_view->AddMapping(ViewMapping::kWriteControl, lit, button,
+      root_view->AddMapping(ViewMapping::kWriteControl, lit, step.button,
                             {.condition = on_step});
     }
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportStop,
-                          absl::StrCat("XTouch/", DeviceXTouch::kStop));
+    root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportStop, "stop");
     root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportPlayPause,
-                          absl::StrCat("XTouch/", DeviceXTouch::kPlay));
+                          "play");
     root_view->AddMapping(ViewMapping::kWriteControl, kCmdTransportPlay,
-                          absl::StrCat("XTouch/", DeviceXTouch::kPlay));
+                          "play");
     root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRecord,
-                          absl::StrCat("XTouch/", DeviceXTouch::kRecord));
+                          "record");
   }
 
   // Surface modes. Track returns to Track mode, and each mode view maps what
@@ -496,15 +529,11 @@ void PluginSurface::InitViews() {
   CHECK(scene_->AddUserProperty(std::make_unique<TrackPickProperty>(
             kPickSelectedTrack, *current_track,
             scene_->GetTrackReference(Scene::kSelectedTrack))) != nullptr);
-  const std::string track_button =
-      absl::StrCat("XTouch/", DeviceXTouch::kAssignTrack);
-  const std::string send_button =
-      absl::StrCat("XTouch/", DeviceXTouch::kAssignSend);
   if (has_xtouch) {
     root_view->AddMapping(
-        ViewMapping::kReadControl, kSurfaceMode, track_button,
+        ViewMapping::kReadControl, kSurfaceMode, "assign_track",
         {.read = {.property_min = kTrackMode, .property_max = kTrackMode}});
-    root_view->AddMapping(ViewMapping::kReadControl, kSendHold, send_button,
+    root_view->AddMapping(ViewMapping::kReadControl, kSendHold, "assign_send",
                           {.read = {.press_release = true}});
   }
   root_view->Enable();
@@ -533,122 +562,108 @@ void PluginSurface::InitViews() {
            .items = View::ChildTracks{.reveal = std::string(kCurrentTrack)},
            .bank_size = 8}});
   CHECK(track_list_view != nullptr);
-  int child_view_index = 0;
-  for (int d = 0; d < 2; ++d) {
-    if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
-      continue;
+  for (int i = 0; i < strip_count; ++i) {
+    const std::string strip = GetElementPathText("strip", i);
+    View* track_view = track_list_view->AddChildView(
+        absl::StrCat("Track", i + 1), {.subject = View::ListItemSubject{}});
+    CHECK(track_view != nullptr);
+    // Select selects the track, and double press navigates into it.
+    const std::string select = GetFieldPathText(strip, "select");
+    track_view->AddMapping(ViewMapping::kReadControl,
+                           TrackProperties::kUiSelected, select);
+    track_view->AddMapping(
+        ViewMapping::kReadControl, View::kParentTrackChild, select,
+        {.read = {.press_behavior = InputConfig::PressBehavior::kDoublePress}});
+
+    // Holding select (a long press) selects the track and anchors it, so
+    // pressing another track's select selects the range between them. The
+    // select anchor turns on a modifier, which puts the other select
+    // buttons in a group with no double press, so the range is selected as
+    // soon as they are pressed.
+    track_view->AddMapping(
+        ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
+        {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+    AddTrackAnchorMapping(track_view, kAnchorSelect,
+                          {.action = TrackBoolProperty::kSelected,
+                           .modifier = select_anchor_modifier},
+                          select, InputConfig::PressBehavior::kLongPress);
+    track_view->AddMapping(
+        ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
+        {.read = {.required_modifiers = select_anchor_modifier}});
+
+    // While Send is held, pressing select instead enters Send/Receive mode
+    // for the track, if it has routes, and otherwise does nothing. This uses
+    // required modifiers rather than a condition, so holding Send never
+    // resets a pending press. Required modifiers must match exactly, so this
+    // also needs mappings for Send held along with a select anchor, where
+    // picking wins over the range.
+    track_view->AddUserProperty(
+        std::make_unique<TrackPickProperty>(kPickTrack, *current_track));
+    const ViewCondition::Config has_routes = {
+        .property = std::string(TrackProperties::kTrackHasRoutes)};
+    for (const Modifiers modifiers :
+         {send_hold_modifier, send_hold_modifier | select_anchor_modifier}) {
+      track_view->AddMapping(
+          ViewMapping::kReadControl, kPickTrack, select,
+          {.read = {.required_modifiers = modifiers}, .condition = has_routes});
+      track_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode, select,
+                             {.read = {.required_modifiers = modifiers,
+                                       .property_min = kSendReceiveMode,
+                                       .property_max = kSendReceiveMode},
+                              .condition = has_routes});
     }
-    std::string device_prefix = (d == 0) ? "XTouchExt/" : "XTouch/";
-    for (int i = 0; i < 8; ++i) {
-      View* track_view = track_list_view->AddChildView(
-          absl::StrCat("Track", ++child_view_index),
-          {.subject = View::ListItemSubject{}});
-      CHECK(track_view != nullptr);
-      // Select selects the track, and double press navigates into it.
-      const std::string select =
-          absl::StrCat(device_prefix, DeviceXTouch::Select(i));
-      track_view->AddMapping(ViewMapping::kReadControl,
-                             TrackProperties::kUiSelected, select);
-      track_view->AddMapping(
-          ViewMapping::kReadControl, View::kParentTrackChild, select,
-          {.read = {.press_behavior =
-                        InputConfig::PressBehavior::kDoublePress}});
 
-      // Holding select (a long press) selects the track and anchors it, so
-      // pressing another track's select selects the range between them. The
-      // select anchor turns on a modifier, which puts the other select
-      // buttons in a group with no double press, so the range is selected as
-      // soon as they are pressed.
-      track_view->AddMapping(
-          ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
-          {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-      AddTrackAnchorMapping(track_view, kAnchorSelect,
-                            {.action = TrackBoolProperty::kSelected,
-                             .modifier = select_anchor_modifier},
-                            select, InputConfig::PressBehavior::kLongPress);
-      track_view->AddMapping(
-          ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
-          {.read = {.required_modifiers = select_anchor_modifier}});
+    // The select light shows whether the track is selected, or while Send is
+    // held, whether it has routes to show in Send/Receive mode.
+    track_view->AddMapping(
+        ViewMapping::kWriteControl, TrackProperties::kUiSelected, select,
+        {.condition = ViewCondition::Config{.property = std::string(kSendHold),
+                                            .value = false}});
+    track_view->AddMapping(
+        ViewMapping::kWriteControl, TrackProperties::kTrackHasRoutes, select,
+        {.condition = ViewCondition::Config{.property = std::string(kSendHold),
+                                            .value = true}});
+    AddTrackStripMappings(track_view, strip);
 
-      // While Send is held, pressing select instead enters Send/Receive mode
-      // for the track, if it has routes, and otherwise does nothing. This uses
-      // required modifiers rather than a condition, so holding Send never
-      // resets a pending press. Required modifiers must match exactly, so this
-      // also needs mappings for Send held along with a select anchor, where
-      // picking wins over the range.
-      track_view->AddUserProperty(
-          std::make_unique<TrackPickProperty>(kPickTrack, *current_track));
-      const ViewCondition::Config has_routes = {
-          .property = std::string(TrackProperties::kTrackHasRoutes)};
-      for (const Modifiers modifiers :
-           {send_hold_modifier, send_hold_modifier | select_anchor_modifier}) {
-        track_view->AddMapping(ViewMapping::kReadControl, kPickTrack, select,
-                               {.read = {.required_modifiers = modifiers},
-                                .condition = has_routes});
-        track_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode, select,
-                               {.read = {.required_modifiers = modifiers,
-                                         .property_min = kSendReceiveMode,
-                                         .property_max = kSendReceiveMode},
-                                .condition = has_routes});
-      }
-
-      // The select light shows whether the track is selected, or while Send is
-      // held, whether it has routes to show in Send/Receive mode.
-      track_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kUiSelected, select,
-          {.condition = ViewCondition::Config{
-               .property = std::string(kSendHold), .value = false}});
-      track_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kTrackHasRoutes, select,
-          {.condition = ViewCondition::Config{
-               .property = std::string(kSendHold), .value = true}});
-      AddTrackStripMappings(track_view, device_prefix, i);
-
-      // Holding mute, solo, or record arm anchors the track, so pressing the
-      // same button on another track sets the range between them to the held
-      // track's value.
-      AddTrackAnchorMapping(track_view, kAnchorMute,
-                            {.action = TrackBoolProperty::kMute},
-                            absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
-      AddTrackAnchorMapping(track_view, kAnchorSolo,
-                            {.action = TrackBoolProperty::kSolo},
-                            absl::StrCat(device_prefix, DeviceXTouch::Solo(i)));
-      AddTrackAnchorMapping(track_view, kAnchorRecArm,
-                            {.action = TrackBoolProperty::kRecArm},
-                            absl::StrCat(device_prefix, DeviceXTouch::Rec(i)));
-      // The bottom scribble line shows the volume, and is blank for an empty
-      // strip.
-      track_view->AddMapping(
-          ViewMapping::kWriteControl, TrackProperties::kUiVolume,
-          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)),
-          {.condition = ViewCondition::Config{
-               .property = std::string(TrackProperties::kTrackExists)}});
-      track_view->Enable();
-    }
+    // Holding mute, solo, or record arm anchors the track, so pressing the
+    // same button on another track sets the range between them to the held
+    // track's value.
+    AddTrackAnchorMapping(track_view, kAnchorMute,
+                          {.action = TrackBoolProperty::kMute},
+                          GetFieldPathText(strip, "mute"));
+    AddTrackAnchorMapping(track_view, kAnchorSolo,
+                          {.action = TrackBoolProperty::kSolo},
+                          GetFieldPathText(strip, "solo"));
+    AddTrackAnchorMapping(track_view, kAnchorRecArm,
+                          {.action = TrackBoolProperty::kRecArm},
+                          GetFieldPathText(strip, "rec"));
+    // The bottom scribble line shows the volume, and is blank for an empty
+    // strip.
+    track_view->AddMapping(
+        ViewMapping::kWriteControl, TrackProperties::kUiVolume,
+        GetFieldPathText(strip, "scribble_bottom"),
+        {.condition = ViewCondition::Config{
+             .property = std::string(TrackProperties::kTrackExists)}});
+    track_view->Enable();
   }
   if (has_xtouch) {
     // Global navigates up one level, or all the way to the root when held. It
     // is lit while there is a level to go up to.
-    const std::string global = absl::StrCat("XTouch/", DeviceXTouch::kGlobal);
     track_list_view->AddMapping(ViewMapping::kReadControl, View::kTrackParent,
-                                global);
+                                "global");
     track_list_view->AddMapping(
-        ViewMapping::kReadControl, View::kTrackRoot, global,
+        ViewMapping::kReadControl, View::kTrackRoot, "global",
         {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
     track_list_view->AddMapping(ViewMapping::kWriteControl,
-                                TrackProperties::kTrackHasParent, global);
-    track_list_view->AddMapping(
-        ViewMapping::kReadControl, View::kChildDec,
-        absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));
-    track_list_view->AddMapping(
-        ViewMapping::kReadControl, View::kChildInc,
-        absl::StrCat("XTouch/", DeviceXTouch::kChannelRight));
-    track_list_view->AddMapping(
-        ViewMapping::kReadControl, View::kBankDec,
-        absl::StrCat("XTouch/", DeviceXTouch::kBankLeft));
-    track_list_view->AddMapping(
-        ViewMapping::kReadControl, View::kBankInc,
-        absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
+                                TrackProperties::kTrackHasParent, "global");
+    track_list_view->AddMapping(ViewMapping::kReadControl, View::kChildDec,
+                                "channel_left");
+    track_list_view->AddMapping(ViewMapping::kReadControl, View::kChildInc,
+                                "channel_right");
+    track_list_view->AddMapping(ViewMapping::kReadControl, View::kBankDec,
+                                "bank_left");
+    track_list_view->AddMapping(ViewMapping::kReadControl, View::kBankInc,
+                                "bank_right");
   }
   track_list_view->Enable();
   if (has_xtouch) {
@@ -658,10 +673,10 @@ void PluginSurface::InitViews() {
         .property = std::string(kSelectedTrackHasRoutes)};
     const InputConfig::PressBehavior tap = InputConfig::PressBehavior::kTap;
     track_mode_view->AddMapping(
-        ViewMapping::kReadControl, kPickSelectedTrack, send_button,
+        ViewMapping::kReadControl, kPickSelectedTrack, "assign_send",
         {.read = {.press_behavior = tap}, .condition = has_routes});
     track_mode_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode,
-                                send_button,
+                                "assign_send",
                                 {.read = {.press_behavior = tap,
                                           .property_min = kSendReceiveMode,
                                           .property_max = kSendReceiveMode},
@@ -669,10 +684,10 @@ void PluginSurface::InitViews() {
 
     // Track blinks, as it is the current mode, and Send is lit while the
     // selected track has routes to show.
-    track_mode_view->AddMapping(ViewMapping::kWriteControl, lit, track_button,
+    track_mode_view->AddMapping(ViewMapping::kWriteControl, lit, "assign_track",
                                 {.write = {.mode = 1}});
     track_mode_view->AddMapping(ViewMapping::kWriteControl,
-                                kSelectedTrackHasRoutes, send_button);
+                                kSelectedTrackHasRoutes, "assign_send");
   }
   track_mode_view->Enable();
 
@@ -690,92 +705,75 @@ void PluginSurface::InitViews() {
 
   // Add a route view for each channel strip, which will show consecutive sends
   // or receives of the Send/Receive mode track.
-  int route_view_index = 0;
-  for (int d = 0; d < 2; ++d) {
-    if ((d == 0 && !has_xtouch_ext) || (d == 1 && !has_xtouch)) {
-      continue;
-    }
-    std::string device_prefix = (d == 0) ? "XTouchExt/" : "XTouch/";
-    for (int i = 0; i < 8; ++i) {
-      // The Info strip on the X-Touch (d == 1) shows the track, not a route.
-      if (d == 1 && i == kInfoStrip) {
-        continue;
-      }
-      View* route_view = send_receive_mode_view->AddChildView(
-          absl::StrCat("Route", ++route_view_index),
-          {.subject = View::ListItemSubject{}});
-      CHECK(route_view != nullptr);
-      // Select navigates across the route to the track at its other end.
-      route_view->AddMapping(
-          ViewMapping::kReadControl, View::kParentRouteOtherTrack,
-          absl::StrCat(device_prefix, DeviceXTouch::Select(i)));
-      route_view->AddMapping(
-          ViewMapping::kReadWriteControl, RouteProperties::kMute,
-          absl::StrCat(device_prefix, DeviceXTouch::Mute(i)));
-      route_view->AddMapping(
-          ViewMapping::kReadWriteControl, RouteProperties::kPan,
-          absl::StrCat(device_prefix, DeviceXTouch::Pot(i)),
-          {.write = {.mode = 1,
-                     .mode_overrides = {{std::string(RouteProperties::kExists),
-                                         {{false, 8}}}}}});
-      route_view->AddMapping(
-          ViewMapping::kReadControl, RouteProperties::kPan,
-          absl::StrCat(device_prefix, DeviceXTouch::PotButton(i)),
-          {.read = {.property_min = 0.0, .property_max = 0.0}});
-      route_view->AddMapping(
-          ViewMapping::kReadWriteControl, RouteProperties::kVolume,
-          absl::StrCat(device_prefix, DeviceXTouch::Fader(i)));
-      route_view->AddMapping(
-          ViewMapping::kWriteControl, kOtherTrackName,
-          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 0)));
-      // The bottom scribble line shows the volume, and is blank for an empty
-      // strip.
-      route_view->AddMapping(
-          ViewMapping::kWriteControl, RouteProperties::kVolume,
-          absl::StrCat(device_prefix, DeviceXTouch::Scribble(i, 1)),
-          {.condition = ViewCondition::Config{
-               .property = std::string(RouteProperties::kExists)}});
-      route_view->AddMapping(
-          ViewMapping::kWriteControl, kOtherTrackColor,
-          absl::StrCat(device_prefix, DeviceXTouch::ScribbleColor(i)));
-      route_view->Enable();
-    }
+  for (int i = 0; i < route_strip_count; ++i) {
+    const std::string strip = GetElementPathText("route_strip", i);
+    View* route_view = send_receive_mode_view->AddChildView(
+        absl::StrCat("Route", i + 1), {.subject = View::ListItemSubject{}});
+    CHECK(route_view != nullptr);
+    // Select navigates across the route to the track at its other end.
+    route_view->AddMapping(ViewMapping::kReadControl,
+                           View::kParentRouteOtherTrack,
+                           GetFieldPathText(strip, "select"));
+    route_view->AddMapping(ViewMapping::kReadWriteControl,
+                           RouteProperties::kMute,
+                           GetFieldPathText(strip, "mute"));
+    route_view->AddMapping(
+        ViewMapping::kReadWriteControl, RouteProperties::kPan,
+        GetFieldPathText(strip, "pot"),
+        {.write = {.mode = 1,
+                   .mode_overrides = {{std::string(RouteProperties::kExists),
+                                       {{false, 8}}}}}});
+    route_view->AddMapping(
+        ViewMapping::kReadControl, RouteProperties::kPan,
+        GetFieldPathText(strip, "pot_button"),
+        {.read = {.property_min = 0.0, .property_max = 0.0}});
+    route_view->AddMapping(ViewMapping::kReadWriteControl,
+                           RouteProperties::kVolume,
+                           GetFieldPathText(strip, "fader"));
+    route_view->AddMapping(ViewMapping::kWriteControl, kOtherTrackName,
+                           GetFieldPathText(strip, "scribble_top"));
+    // The bottom scribble line shows the volume, and is blank for an empty
+    // strip.
+    route_view->AddMapping(
+        ViewMapping::kWriteControl, RouteProperties::kVolume,
+        GetFieldPathText(strip, "scribble_bottom"),
+        {.condition = ViewCondition::Config{
+             .property = std::string(RouteProperties::kExists)}});
+    route_view->AddMapping(ViewMapping::kWriteControl, kOtherTrackColor,
+                           GetFieldPathText(strip, "scribble_color"));
+    route_view->Enable();
   }
   if (has_xtouch) {
-    send_receive_mode_view->AddMapping(
-        ViewMapping::kReadControl, View::kChildDec,
-        absl::StrCat("XTouch/", DeviceXTouch::kChannelLeft));
-    send_receive_mode_view->AddMapping(
-        ViewMapping::kReadControl, View::kChildInc,
-        absl::StrCat("XTouch/", DeviceXTouch::kChannelRight));
-    send_receive_mode_view->AddMapping(
-        ViewMapping::kReadControl, View::kBankDec,
-        absl::StrCat("XTouch/", DeviceXTouch::kBankLeft));
-    send_receive_mode_view->AddMapping(
-        ViewMapping::kReadControl, View::kBankInc,
-        absl::StrCat("XTouch/", DeviceXTouch::kBankRight));
+    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
+                                       View::kChildDec, "channel_left");
+    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
+                                       View::kChildInc, "channel_right");
+    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
+                                       View::kBankDec, "bank_left");
+    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
+                                       View::kBankInc, "bank_right");
 
     // The Info strip shows the Send/Receive mode track itself, the same as in
     // Track mode, except the bottom scribble line shows whether its sends or
     // receives are shown, and is blank once the track is deleted.
-    AddTrackStripMappings(send_receive_mode_view, "XTouch/", kInfoStrip);
+    AddTrackStripMappings(send_receive_mode_view, "info_strip");
     send_receive_mode_view->AddMapping(
         ViewMapping::kWriteControl, View::kChildRouteTypeName,
-        absl::StrCat("XTouch/", DeviceXTouch::Scribble(kInfoStrip, 1)),
+        "info_strip.scribble_bottom",
         {.condition = ViewCondition::Config{
              .property = std::string(TrackProperties::kTrackExists)}});
 
     // Tapping Send switches between showing sends and receives.
     send_receive_mode_view->AddMapping(
-        ViewMapping::kReadControl, View::kChildRouteToggle, send_button,
+        ViewMapping::kReadControl, View::kChildRouteToggle, "assign_send",
         {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
 
     // Send blinks, as it is the current mode, even if the track no longer has
     // routes, and Track is lit, as it is always available.
     send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
-                                       send_button, {.write = {.mode = 1}});
+                                       "assign_send", {.write = {.mode = 1}});
     send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
-                                       track_button);
+                                       "assign_track");
   }
   send_receive_mode_view->Enable();
 

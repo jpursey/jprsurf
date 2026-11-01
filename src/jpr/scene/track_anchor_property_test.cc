@@ -29,9 +29,9 @@ class TrackAnchorPropertyTest : public SceneTest {
  protected:
   TrackAnchorPropertyTest()
       : tracks_(reaper_.GetProject().AddTracks(2)),
-        reference_(scene_.AddTrackReference("user:track")),
-        modifier_(scene_.AddModifierProperty("mod:anchor")) {
-    View* root = scene_.GetRootView();
+        reference_(GetScene()->AddTrackReference("user:track")),
+        modifier_(GetScene()->AddModifierProperty("mod:anchor")) {
+    View* root = GetScene()->GetRootView();
     root->Enable();
     View* view = root->AddChildView(
         "View", {.subject = View::ReferenceSubject{"user:track"}});
@@ -45,7 +45,7 @@ class TrackAnchorPropertyTest : public SceneTest {
 
   // Returns the track the action's anchor is held on, or null.
   Track* GetAnchorTrack(TrackBoolProperty action = TrackBoolProperty::kMute) {
-    return scene_.GetTrackActions().GetAnchor(action).Get();
+    return GetScene()->GetTrackActions().GetAnchor(action).Get();
   }
 
   std::vector<FakeTrack*> tracks_;
@@ -78,7 +78,7 @@ TEST_F(TrackAnchorPropertyTest, AViewWithNoTrackHoldsNothing) {
 
 TEST_F(TrackAnchorPropertyTest, OutsideAViewItDoesNothing) {
   TrackAnchorProperty* anchor =
-      scene_.AddUserProperty(std::make_unique<TrackAnchorProperty>(
+      GetScene()->AddUserProperty(std::make_unique<TrackAnchorProperty>(
           "user:scene_anchor",
           TrackAnchorProperty::Config{.action = TrackBoolProperty::kMute}));
   anchor->SetBool(true);

@@ -17,7 +17,9 @@
 #include "jpr/common/modifiers.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/track.h"
+#include "jpr/device/control.h"
 #include "jpr/device/device.h"
+#include "jpr/device/widget_definition.h"
 #include "jpr/scene/track_actions.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/view.h"
@@ -37,10 +39,16 @@ namespace jpr {
 // ControlSurfaceListener's OnRun(), as its ControlSurface keeps them current.
 class Scene final {
  public:
-  // The track filter decides which tracks the scene's views show, and which
-  // tracks its track actions include in ranges.
+  // Creates a scene on the devices, which it keeps for its lifetime, and the
+  // widgets on them, which mappings name controls by (see GetControl()). A
+  // scene may have no devices, and so no widgets. The track filter decides
+  // which tracks the scene's views show, and which tracks its track actions
+  // include in ranges.
   explicit Scene(std::string_view name,
+                 std::vector<std::unique_ptr<Device>> devices = {},
+                 WidgetRoot widgets = {},
                  TrackFilter track_filter = TrackFilter::kMcp);
+
   Scene(const Scene&) = delete;
   Scene& operator=(const Scene&) = delete;
   ~Scene();
@@ -48,8 +56,8 @@ class Scene final {
   // Attributes
   std::string_view GetName() const { return name_; }
 
-  // Devices
-  void AddDevice(std::string_view device_name, std::unique_ptr<Device> device);
+  // Widgets
+  const WidgetRoot& GetWidgets() const { return widgets_; }
 
   // Views
   View* GetRootView() const { return root_view_.get(); }
@@ -60,9 +68,9 @@ class Scene final {
 
   // Controls and Properties
 
-  // Returns the control named <device>/<control>, such as "XTouch/Play", or
-  // null if there is none.
-  Control* GetControl(std::string_view name) const;
+  // Returns the control at the widget path, such as "strip[3].fader", or null
+  // if its device is absent, or the path names no control.
+  Control* GetControl(std::string_view path) const;
 
   // Returns the global property with the name, or null if there is none (see
   // the property namespaces in view_property.h). This includes the fields of
@@ -199,7 +207,12 @@ class Scene final {
 
   // State
   std::string name_;
-  absl::flat_hash_map<std::string, std::unique_ptr<Device>> devices_;
+
+  // The widgets hold the devices' controls, so the devices outlive them, and
+  // mappings hold the widgets' controls, so the views go first.
+  std::vector<std::unique_ptr<Device>> devices_;
+  WidgetRoot widgets_;
+
   absl::flat_hash_map<std::string, std::unique_ptr<ViewProperty>> properties_;
   absl::flat_hash_set<SceneStateProperty*> state_properties_;
   TrackActions track_actions_;

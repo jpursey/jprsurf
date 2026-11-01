@@ -44,8 +44,8 @@ them are frozen.
 
 | Part       | What it is                                                                   | Today                                              |
 | ---------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `MidiPorts`, `Scene::AddDevice()`                  |
-| Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `"XTouchExt/"` prefixes and the strip loops        |
+| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `DeviceType`, `CreateDevice()`                     |
+| Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `ResolveWidgets()`, which the `Scene` takes        |
 | Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, `Scene::AddUserProperty()` |
 | Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                             |
 | Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                               |

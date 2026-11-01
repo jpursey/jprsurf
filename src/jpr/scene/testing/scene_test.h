@@ -31,9 +31,12 @@ namespace jpr {
 // follows what REAPER calls back: the track list, the selection, and the last
 // touched track.
 //
-// A test adds the controls it needs to the device, builds its project, views,
-// and mappings, and then adds the surface (AddSurface()), as REAPER does at
-// startup.
+// A test adds the controls it needs to the device, then builds its project,
+// views, and mappings, and then adds the surface (AddSurface()), as REAPER does
+// at startup. The scene is created on the device the first time it is used
+// (GetScene()), with a widget for each control by the control's name, so a
+// mapping names a control such as "Play". Adding a control once the scene
+// exists fails the test.
 //
 // Anything logged at ERROR or above fails the test, unless the test takes it
 // from log_error_guard_.
@@ -41,22 +44,20 @@ namespace jpr {
 
 class SceneTest : public ::testing::Test {
  protected:
-  // The name the device is added to the scene with (see GetControlName()).
-  static constexpr std::string_view kDeviceName = "Device";
-
   SceneTest();
   ~SceneTest() override;
 
-  // Calls RemoveSurface(), before any fixture's members go.
+  // Calls RemoveSurface(), before any fixture's members go, and fails the test
+  // if a control was added once the scene existed.
   void TearDown() override;
 
   //----------------------------------------------------------------------------
   // Setting up
   //----------------------------------------------------------------------------
 
-  // Returns the name the scene knows the device's control `name` by, such as
-  // "Device/Play".
-  static std::string GetControlName(std::string_view name);
+  // Returns the scene, creating it the first time on the device, with a struct
+  // of a widget for each of the device's controls, named by the control's name.
+  Scene* GetScene();
 
   // Adds the surface, as REAPER does at startup, which activates the scene, and
   // runs the devices and the scene on each run. Then calls
@@ -121,17 +122,14 @@ class SceneTest : public ::testing::Test {
   SurfaceNotifier notifier_{&reaper_};
   Runner device_runner_{"Device"};
   Runner scene_runner_{"Scene"};
-  Scene scene_{"Scene"};
 
-  FakeDevice* const device_;  // Owned by the scene.
+  // Owned by the fixture until the scene exists, and then by the scene.
+  FakeDevice* const device_;
 
   std::unique_ptr<TestControlSurface> surface_;
 
  private:
   class Listener;
-
-  // Adds the device to the scene, and returns it.
-  FakeDevice* AddDevice();
 
   // Runs until whatever a press started is done, and shown.
   void Settle();
@@ -141,6 +139,14 @@ class SceneTest : public ::testing::Test {
 
   // The input given since the last run, which arrives on the next.
   std::vector<absl::AnyInvocable<void()>> input_;
+
+  // The device, until the scene takes it.
+  std::unique_ptr<FakeDevice> new_device_;
+
+  // The scene, created the first time it is used, and the device's control
+  // count then.
+  std::unique_ptr<Scene> scene_;
+  int scene_control_count_ = 0;
 };
 
 }  // namespace jpr

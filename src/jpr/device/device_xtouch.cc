@@ -44,11 +44,6 @@ constexpr std::string_view kScribbleColor = "scribble_color";
 constexpr std::string_view kMasterFader = "master_fader";
 constexpr std::string_view kTimecode = "timecode";
 
-// The constructor names these controls by DeviceXTouch's constants, which
-// hide these in its scope.
-static_assert(kMasterFader == DeviceXTouch::kMasterFader);
-static_assert(kTimecode == DeviceXTouch::kTimecode);
-
 // Returns the name of the field's control on the strip.
 std::string GetStripControlName(int strip, std::string_view field) {
   return absl::StrCat(kStrip, "[", strip, "].", field);
@@ -1040,10 +1035,6 @@ const WidgetShape& DeviceXTouch::GetCatalog(Type type) {
   static const absl::NoDestructor<WidgetShape> s_extender(
       CreateCatalog(Type::kExtender));
   return *s_extender;
-}
-
-std::string DeviceXTouch::GetStripControl(int strip, std::string_view field) {
-  return GetStripControlName(strip, field);
 }
 
 void DeviceXTouch::AddButton(std::string_view name, uint8_t note,

@@ -454,4 +454,22 @@ std::optional<WidgetRoot> ResolveWidgets(const WidgetStructDefinition& widgets,
   return WidgetRoot{std::move(validated->shape), std::move(validated->widget)};
 }
 
+std::optional<WidgetControl> WidgetRoot::FindControl(std::string_view path,
+                                                     std::string* error) const {
+  WidgetPath widget_path;
+  const WidgetShape* control_shape =
+      FindControlShape(shape, path, &widget_path, error);
+  if (control_shape == nullptr) {
+    return std::nullopt;
+  }
+
+  // The widgets leave out the elements of an absent device's arrays, which the
+  // shape keeps.
+  const Widget* control_widget = widget->Find(widget_path);
+  return WidgetControl{.shape = control_shape,
+                       .control = control_widget != nullptr
+                                      ? control_widget->GetControl()
+                                      : nullptr};
+}
+
 }  // namespace jpr

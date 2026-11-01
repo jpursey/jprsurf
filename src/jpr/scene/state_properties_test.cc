@@ -44,7 +44,7 @@ class StatePropertiesTest : public SceneTest {
 
   // Returns the state property `name`, watched, which brings it up to date.
   ViewProperty* Watch(std::string_view name) {
-    ViewProperty* property = scene_.GetProperty(name);
+    ViewProperty* property = GetScene()->GetProperty(name);
     EXPECT_NE(property, nullptr) << name;
     if (property != nullptr) {
       property->RegisterFlag(&changed_);
@@ -86,8 +86,8 @@ class StatePropertiesTest : public SceneTest {
 };
 
 TEST_F(StatePropertiesTest, UnknownNamesAreNull) {
-  EXPECT_EQ(CreateStateProperty(&scene_, "state:nothing"), nullptr);
-  EXPECT_EQ(CreateStateProperty(&scene_, "nothing"), nullptr);
+  EXPECT_EQ(CreateStateProperty(GetScene(), "state:nothing"), nullptr);
+  EXPECT_EQ(CreateStateProperty(GetScene(), "nothing"), nullptr);
 }
 
 TEST_F(StatePropertiesTest, PolledTogglesEachFollowTheirState) {

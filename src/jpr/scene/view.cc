@@ -5,6 +5,8 @@
 
 #include "jpr/scene/view.h"
 
+#include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
@@ -13,6 +15,8 @@
 #include "absl/memory/memory.h"
 #include "gb/profile/profile_point.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/device/control.h"
+#include "jpr/device/widget_definition.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/view_list.h"
@@ -288,7 +292,7 @@ bool View::HasUserPropertyInSubtree(std::string_view name) const {
 
 bool View::AddMapping(ViewMapping::TypeFlags type,
                       std::string_view property_name,
-                      std::string_view control_name,
+                      std::string_view control_path,
                       ViewMapping::Config config) {
   if (scene_ == nullptr) {
     return false;
@@ -299,10 +303,12 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
                << "': property '" << property_name << "' not found";
     return false;
   }
-  Control* control = scene_->GetControl(control_name);
-  if (control == nullptr) {
+  std::string error;
+  std::optional<WidgetControl> control =
+      scene_->GetWidgets().FindControl(control_path, &error);
+  if (!control.has_value()) {
     LOG(ERROR) << "Failed to add mapping for view '" << GetName()
-               << "': control '" << control_name << "' not found";
+               << "': widget '" << control_path << "' " << error;
     return false;
   }
   std::vector<ViewProperty*> mode_properties;
@@ -322,8 +328,11 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
       return false;
     }
   }
+  if (control->control == nullptr) {
+    return true;
+  }
   mappings_.push_back(absl::WrapUnique(
-      new ViewMapping(this, type, property, control, std::move(config),
+      new ViewMapping(this, type, property, control->control, std::move(config),
                       std::move(mode_properties), std::move(condition))));
   return true;
 }

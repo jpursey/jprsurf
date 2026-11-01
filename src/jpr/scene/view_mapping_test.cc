@@ -60,7 +60,13 @@ constexpr Control::Inputs kAllInputs = {Input::kValue, Input::kDelta,
 // The device has a control with each kind of output alone: "DValue" (off or
 // on), "CValue", "Text", and "Color"; and with each kind of input alone:
 // "Fader" (a value input), "Pot" (a delta input), and "Button" (a press input,
-// with a release). Mappings are added to an active view.
+// with a release). Mappings are added to an active view (GetView()).
+//
+// The scene is created on first use (see SceneTest), so a test adds any
+// controls of its own before its properties and mappings. For the same reason,
+// the root view is only enabled with the view, the first time GetView() is
+// called (as Read() and Write() do), so a test that adds views of its own and
+// checks them before then enables the root view itself.
 class ViewMappingTest : public SceneTest {
  protected:
   ViewMappingTest()
@@ -70,10 +76,18 @@ class ViewMappingTest : public SceneTest {
         color_(AddColor("Color")),
         fader_(AddInputs("Fader", Input::kValue)),
         pot_(AddInputs("Pot", Input::kDelta)),
-        button_(AddInputs("Button", Input::kPress)),
-        view_(scene_.GetRootView()->AddChildView("View")) {
-    scene_.GetRootView()->Enable();
-    view_->Enable();
+        button_(AddInputs("Button", Input::kPress)) {}
+
+  // Returns the view mappings are added to, adding it, and enabling it and the
+  // root view, the first time.
+  View* GetView() {
+    if (view_ == nullptr) {
+      View* root = GetScene()->GetRootView();
+      root->Enable();
+      view_ = root->AddChildView("View");
+      view_->Enable();
+    }
+    return view_;
   }
 
   // Each adds a control with only the output: a DValue output whose modes
@@ -128,15 +142,27 @@ class ViewMappingTest : public SceneTest {
     return device_->AddControl(std::move(options));
   }
 
+  // Adds `count` controls with only the inputs, as AddInputs() does, each
+  // named `name` with its index, such as "value0".
+  std::vector<FakeDevice::FakeControl> AddInputControls(
+      std::string_view name, int count, Control::Inputs inputs) {
+    std::vector<FakeDevice::FakeControl> controls;
+    for (int i = 0; i < count; ++i) {
+      controls.push_back(AddInputs(absl::StrCat(name, i), inputs));
+    }
+    return controls;
+  }
+
   // Adds a property to the scene that holds `value` (see TestProperty).
   TestProperty* AddProperty(Type type, Value value,
                             std::string_view name = "user:value",
                             int max_value = 0) {
-    return scene_.AddUserProperty(std::make_unique<TestProperty>(
+    return GetScene()->AddUserProperty(std::make_unique<TestProperty>(
         type, std::move(value), max_value, name));
   }
   ToggleValueProperty* AddFlag(std::string_view name = "user:flag") {
-    return scene_.AddUserProperty(std::make_unique<ToggleValueProperty>(name));
+    return GetScene()->AddUserProperty(
+        std::make_unique<ToggleValueProperty>(name));
   }
 
   // Maps the property to write to, or read from, each control.
@@ -163,16 +189,17 @@ class ViewMappingTest : public SceneTest {
   };
 
   // Adds a property that holds `value` (see AddProperty(), with a highest
-  // value of 2), and a control with the inputs that reads it, named
-  // "user:<name>" and `name`.
-  Reader AddReader(std::string_view name, Type type, Value value,
-                   Control::Inputs inputs,
-                   const ViewMapping::ReadConfig& read = {}) {
+  // value of 2), which the control reads, named "user:<name>" for the
+  // control's name. The control is added first (see AddInputs()), as every
+  // control is.
+  Reader AddReader(const FakeDevice::FakeControl& control, Type type,
+                   Value value, const ViewMapping::ReadConfig& read = {}) {
+    const std::string_view name = control.control->GetName();
     const std::string property = absl::StrCat("user:", name);
     Reader reader = {
         .property = AddProperty(type, std::move(value), property,
                                 /*max_value=*/2),
-        .control = AddInputs(name, inputs),
+        .control = control,
     };
     Read(property, {name}, {.read = read});
     return reader;
@@ -214,18 +241,18 @@ class ViewMappingTest : public SceneTest {
   const FakeDevice::FakeControl fader_;
   const FakeDevice::FakeControl pot_;
   const FakeDevice::FakeControl button_;
-  View* const view_;
 
  private:
   void Map(ViewMapping::TypeFlags type, std::string_view property,
            std::initializer_list<std::string_view> controls,
            const ViewMapping::Config& config) {
     for (std::string_view control : controls) {
-      EXPECT_TRUE(
-          view_->AddMapping(type, property, GetControlName(control), config))
+      EXPECT_TRUE(GetView()->AddMapping(type, property, control, config))
           << property << " and " << control;
     }
   }
+
+  View* view_ = nullptr;
 };
 
 //==============================================================================
@@ -250,9 +277,11 @@ TEST_F(ViewMappingTest, EachTypeWritesTheOutputItSuitsBest) {
   };
   std::vector<FakeDevice::FakeControl> controls;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    controls.push_back(AddAllOutputs(absl::StrCat("All", i)));
+  }
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     const std::string name = absl::StrCat("user:value", i);
     AddProperty(rows[i].type, rows[i].value, name, /*max_value=*/2);
-    controls.push_back(AddAllOutputs(absl::StrCat("All", i)));
     Write(name, {absl::StrCat("All", i)});
   }
   AddSurface();
@@ -288,10 +317,10 @@ TEST_F(ViewMappingTest, TogglesWriteEachOutput) {
 }
 
 TEST_F(ViewMappingTest, PansWriteSteps) {
-  TestProperty* property = AddProperty(Type::kPan, -1.0);
   FakeDevice::FakeControl three = AddDValue("Three", {2});
   FakeDevice::FakeControl four = AddDValue("Four", {3});
   FakeDevice::FakeControl five = AddDValue("Five", {4});
+  TestProperty* property = AddProperty(Type::kPan, -1.0);
   Write("user:value", {"DValue", "Three", "Four", "Five", "CValue"});
   AddSurface();
 
@@ -326,9 +355,9 @@ TEST_F(ViewMappingTest, PansWriteSteps) {
 }
 
 TEST_F(ViewMappingTest, VolumesWriteTextThatFitsTheControl) {
-  AddProperty(Type::kVolume, 0.000000631);  // "-124.0dB".
   FakeDevice::FakeControl strip =
       AddText("Strip", /*mode_count=*/1, /*width=*/7);
+  AddProperty(Type::kVolume, 0.000000631);  // "-124.0dB".
   Write("user:value", {"Text", "Strip"});
   AddSurface();
   EXPECT_EQ(text_.text_output->GetText(), "-124.0dB");
@@ -336,9 +365,9 @@ TEST_F(ViewMappingTest, VolumesWriteTextThatFitsTheControl) {
 }
 
 TEST_F(ViewMappingTest, VolumesWriteStepsUpToTheMax) {
-  TestProperty* property = AddProperty(Type::kVolume, 0.0);
   FakeDevice::FakeControl three = AddDValue("Three", {2});
   FakeDevice::FakeControl five = AddDValue("Five", {4});
+  TestProperty* property = AddProperty(Type::kVolume, 0.0);
   Write("user:value", {"DValue", "Three", "Five", "CValue"});
   AddSurface();
 
@@ -369,9 +398,9 @@ TEST_F(ViewMappingTest, VolumesWriteStepsUpToTheMax) {
 }
 
 TEST_F(ViewMappingTest, NormalizedValuesWriteEachOutput) {
-  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
   FakeDevice::FakeControl three = AddDValue("Three", {2});
   FakeDevice::FakeControl five = AddDValue("Five", {4});
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
   WriteToEach("user:value");
   Write("user:value", {"Three", "Five"});
   AddSurface();
@@ -401,9 +430,9 @@ TEST_F(ViewMappingTest, NormalizedValuesWriteEachOutput) {
 }
 
 TEST_F(ViewMappingTest, EnumeratedValuesWriteEachOutput) {
+  FakeDevice::FakeControl five = AddDValue("Five", {4});
   TestProperty* property =
       AddProperty(Type::kEnumerated, 0, "user:value", /*max_value=*/2);
-  FakeDevice::FakeControl five = AddDValue("Five", {4});
   WriteToEach("user:value");
   Write("user:value", {"Five"});
   AddSurface();
@@ -433,8 +462,8 @@ TEST_F(ViewMappingTest, EnumeratedValuesWriteEachOutput) {
 }
 
 TEST_F(ViewMappingTest, AnEnumeratedPropertyWithOneValueWritesTheFirstStep) {
-  AddProperty(Type::kEnumerated, 0);
   FakeDevice::FakeControl five = AddDValue("Five", {4});
+  AddProperty(Type::kEnumerated, 0);
   Write("user:value", {"Five"});
   AddSurface();
   EXPECT_EQ(five.dvalue_output->GetValue(), 0);
@@ -473,9 +502,9 @@ TEST_F(ViewMappingTest, ColorsWriteEachOutput) {
 }
 
 TEST_F(ViewMappingTest, TimelinePositionsWriteTextInTheModesFormat) {
+  FakeDevice::FakeControl time = AddText("Time");
   TestProperty* property =
       AddProperty(Type::kTimelinePosition, TimelinePosition(1.5));
-  FakeDevice::FakeControl time = AddText("Time");
   WriteToEach("user:value");
 
   // Mode 2 is the time format (see ControlTextOutput::SetTimelineText()).
@@ -494,7 +523,7 @@ TEST_F(ViewMappingTest, TimelinePositionsWriteTextInTheModesFormat) {
 }
 
 TEST_F(ViewMappingTest, ActionsWriteNothing) {
-  scene_.AddUserProperty(
+  GetScene()->AddUserProperty(
       std::make_unique<CallbackActionProperty>("user:value", [] {}));
   WriteToEach("user:value");
   AddSurface();
@@ -509,9 +538,9 @@ TEST_F(ViewMappingTest, ActionsWriteNothing) {
 //==============================================================================
 
 TEST_F(ViewMappingTest, WritesInItsMode) {
-  AddProperty(Type::kToggle, true);
   FakeDevice::FakeControl lights = AddDValue("Lights", {1, 3});
   FakeDevice::FakeControl texts = AddText("Texts", 2);
+  AddProperty(Type::kToggle, true);
   Write("user:value", {"Lights", "Texts"}, {.write = {.mode = 1}});
   AddSurface();
 
@@ -523,11 +552,11 @@ TEST_F(ViewMappingTest, WritesInItsMode) {
 }
 
 TEST_F(ViewMappingTest, TheFirstModeOverrideThatMatchesWins) {
+  FakeDevice::FakeControl lights = AddDValue("Lights", {1, 3, 2, 4});
   AddProperty(Type::kToggle, true);
   TestProperty* mode =
       AddProperty(Type::kEnumerated, 0, "user:mode", /*max_value=*/2);
   ToggleValueProperty* alt = AddFlag("user:alt");
-  FakeDevice::FakeControl lights = AddDValue("Lights", {1, 3, 2, 4});
   Write("user:value", {"Lights"},
         {.write = {
              .mode = 0,
@@ -578,14 +607,15 @@ TEST_F(ViewMappingTest, StepsAreThoseOfTheModeAnOverridePicks) {
       // A luminance of 0.6.
       {Type::kColor, Color{204, 204, 204}, 2},
   };
-  ToggleValueProperty* alt = AddFlag("user:alt");
+  // Mode 0 is off or on, and mode 1 has five steps.
   std::vector<FakeDevice::FakeControl> controls;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    controls.push_back(AddDValue(absl::StrCat("Lights", i), {1, 4}));
+  }
+  ToggleValueProperty* alt = AddFlag("user:alt");
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     const std::string name = absl::StrCat("user:value", i);
     AddProperty(rows[i].type, rows[i].value, name);
-
-    // Mode 0 is off or on, and mode 1 has five steps.
-    controls.push_back(AddDValue(absl::StrCat("Lights", i), {1, 4}));
     Write(
         name, {absl::StrCat("Lights", i)},
         {.write = {.mode_overrides = {{.property = "user:alt",
@@ -712,15 +742,21 @@ TEST_F(ViewMappingTest, EachTypeReadsTheInputItSuitsBest) {
   // Text reads a press only with a range.
   const ViewMapping::ReadConfig read = {.property_min = std::string("A"),
                                         .property_max = std::string("B")};
-  std::vector<Reader> best;
-  std::vector<Reader> next;
+  std::vector<FakeDevice::FakeControl> best_controls;
+  std::vector<FakeDevice::FakeControl> next_controls;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     Control::Inputs rest = kAllInputs;
     rest.Clear(rows[i].best);
-    best.push_back(AddReader(absl::StrCat("best", i), rows[i].type,
-                             rows[i].initial, kAllInputs, read));
-    next.push_back(AddReader(absl::StrCat("next", i), rows[i].type,
-                             rows[i].initial, rest, read));
+    best_controls.push_back(AddInputs(absl::StrCat("best", i), kAllInputs));
+    next_controls.push_back(AddInputs(absl::StrCat("next", i), rest));
+  }
+  std::vector<Reader> best;
+  std::vector<Reader> next;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    best.push_back(
+        AddReader(best_controls[i], rows[i].type, rows[i].initial, read));
+    next.push_back(
+        AddReader(next_controls[i], rows[i].type, rows[i].initial, read));
   }
   AddSurface();
 
@@ -754,11 +790,12 @@ TEST_F(ViewMappingTest, AConfiguredInputTypeIsReadInPlaceOfTheBest) {
       {Type::kTimelinePosition, TimelinePosition(0.0), Input::kPress,
        std::nullopt},
   };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), kAllInputs);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     // Text reads a press only with a range.
-    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
-                                rows[i].initial, kAllInputs,
+    readers.push_back(AddReader(controls[i], rows[i].type, rows[i].initial,
                                 {.input_type = rows[i].input,
                                  .property_min = std::string("A"),
                                  .property_max = std::string("B")}));
@@ -781,7 +818,7 @@ TEST_F(ViewMappingTest, AConfiguredInputTypeTheControlLacksReadsNothing) {
 
 TEST_F(ViewMappingTest, PressReleaseReadsNothingWithAnotherInputType) {
   Reader reader =
-      AddReader("value", Type::kToggle, false, kAllInputs,
+      AddReader(AddInputs("value", kAllInputs), Type::kToggle, false,
                 {.input_type = Input::kValue, .press_release = true});
   AddSurface();
   Press(reader.control);
@@ -795,7 +832,7 @@ TEST_F(ViewMappingTest, PressReleaseReadsNothingWithAnotherInputType) {
 
 TEST_F(ViewMappingTest, ActionsReadOnlyPresses) {
   int run_count = 0;
-  scene_.AddUserProperty(std::make_unique<CallbackActionProperty>(
+  GetScene()->AddUserProperty(std::make_unique<CallbackActionProperty>(
       "user:value", [&run_count] { ++run_count; }));
   Read("user:value", {"Fader", "Pot", "Button"});
   AddSurface();
@@ -968,10 +1005,10 @@ TEST_F(ViewMappingTest, EnumeratedValuesReadEachInput) {
 }
 
 TEST_F(ViewMappingTest, TextReadsAValueAndAPressInItsRange) {
+  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
   TestProperty* property = AddProperty(Type::kText, std::string("C"));
   TestProperty* unranged =
       AddProperty(Type::kText, std::string("C"), "user:unranged");
-  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
   Read("user:value", {"Fader", "Pot", "Button"},
        {.read = {.property_min = std::string("A"),
                  .property_max = std::string("B")}});
@@ -1074,10 +1111,12 @@ TEST_F(ViewMappingTest, APressGoesToTheOtherEndOrTheNearerOne) {
       {Type::kVolume, 2.0, {}, 0.0},
       {Type::kNormalized, 0.1, middle, 0.6},
   };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), Input::kPress);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
-                                rows[i].initial, Input::kPress, rows[i].read));
+    readers.push_back(
+        AddReader(controls[i], rows[i].type, rows[i].initial, rows[i].read));
   }
   AddSurface();
 
@@ -1104,10 +1143,12 @@ TEST_F(ViewMappingTest, APressStepsAPanToItsNextStop) {
       {-0.3, {}, 0.0},  {0.4, {}, 1.0},    {-0.2, half, 0.0},
       {0.2, half, 0.5}, {-0.8, half, 0.0}, {0.8, half, -0.5},
   };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), Input::kPress);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-    readers.push_back(AddReader(absl::StrCat("value", i), Type::kPan,
-                                rows[i].initial, Input::kPress, rows[i].read));
+    readers.push_back(
+        AddReader(controls[i], Type::kPan, rows[i].initial, rows[i].read));
   }
   AddSurface();
 
@@ -1138,10 +1179,12 @@ TEST_F(ViewMappingTest, PressesInOneRunEachStep) {
       {Type::kVolume, 0.3, {}, 2, 1.0},
       {Type::kNormalized, 0.7, {}, 2, 0.0},
   };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), Input::kPress);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
-                                rows[i].initial, Input::kPress, rows[i].read));
+    readers.push_back(
+        AddReader(controls[i], rows[i].type, rows[i].initial, rows[i].read));
   }
   AddSurface();
 
@@ -1247,11 +1290,11 @@ TEST_F(ViewMappingTest, EnumeratedValuesReadInTheirRange) {
 }
 
 TEST_F(ViewMappingTest, PressTogglesSwitchAnEnumeratedValueBetweenItsEnds) {
+  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
   TestProperty* property =
       AddProperty(Type::kEnumerated, 1, "user:value", /*max_value=*/3);
   TestProperty* ranged =
       AddProperty(Type::kEnumerated, 0, "user:ranged", /*max_value=*/3);
-  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
   Read("user:value", {"Button"}, {.read = {.press_toggles = true}});
   Read("user:ranged", {"Other"},
        {.read = {.property_min = Value(1),
@@ -1272,11 +1315,11 @@ TEST_F(ViewMappingTest, PressTogglesSwitchAnEnumeratedValueBetweenItsEnds) {
 }
 
 TEST_F(ViewMappingTest, ColorsReadInTheirRange) {
+  FakeDevice::FakeControl max_fader = AddInputs("MaxFader", Input::kValue);
+  FakeDevice::FakeControl min_fader = AddInputs("MinFader", Input::kValue);
   TestProperty* property = AddProperty(Type::kColor, kBlack);
   TestProperty* max_only = AddProperty(Type::kColor, kBlack, "user:max_only");
   TestProperty* min_only = AddProperty(Type::kColor, kBlack, "user:min_only");
-  FakeDevice::FakeControl max_fader = AddInputs("MaxFader", Input::kValue);
-  FakeDevice::FakeControl min_fader = AddInputs("MinFader", Input::kValue);
   Read("user:value", {"Fader", "Button"},
        {.read = {.property_min = kRed, .property_max = kBlue}});
   Read("user:max_only", {"MaxFader"}, {.read = {.property_max = kRed}});
@@ -1352,12 +1395,14 @@ TEST_F(ViewMappingTest, PressReleaseSetsTheMaxWhileHeld) {
       {Type::kVolume, 1.0, {}, 1.0, 1.0},
       {Type::kText, std::string("C"), {}, std::string("C"), std::string("C")},
   };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), Input::kPress);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     ViewMapping::ReadConfig read = rows[i].read;
     read.press_release = true;
-    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
-                                rows[i].initial, Input::kPress, read));
+    readers.push_back(
+        AddReader(controls[i], rows[i].type, rows[i].initial, read));
   }
   AddSurface();
 
@@ -1400,10 +1445,12 @@ TEST_F(ViewMappingTest, APressIsReadWhenPressedNotReleased) {
        {.property_min = kRed, .property_max = kBlue},
        kBlue},
   };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), Input::kPress);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-    readers.push_back(AddReader(absl::StrCat("value", i), rows[i].type,
-                                rows[i].initial, Input::kPress, rows[i].read));
+    readers.push_back(
+        AddReader(controls[i], rows[i].type, rows[i].initial, rows[i].read));
   }
   AddSurface();
 
@@ -1419,9 +1466,9 @@ TEST_F(ViewMappingTest, APressIsReadWhenPressedNotReleased) {
 }
 
 TEST_F(ViewMappingTest, PressReleaseNeedsARelease) {
-  TestProperty* property = AddProperty(Type::kToggle, false);
   FakeDevice::FakeControl pedal =
       AddInputs("Pedal", Input::kPress, /*has_release=*/false);
+  TestProperty* property = AddProperty(Type::kToggle, false);
   Read("user:value", {"Pedal"}, {.read = {.press_release = true}});
   AddSurface();
   Tap(pedal);
@@ -1479,9 +1526,9 @@ TEST_F(ViewMappingTest, TouchIgnoresTheInputType) {
 
 TEST_F(ViewMappingTest, AControlWithoutInputReadsNoTouch) {
   TestProperty* property = AddProperty(Type::kToggle, false);
-  EXPECT_TRUE(view_->AddMapping(
-      ViewMapping::kReadControl, "user:value", GetControlName("CValue"),
-      {.read = {.press_release = true, .touch = true}}));
+  EXPECT_TRUE(
+      GetView()->AddMapping(ViewMapping::kReadControl, "user:value", "CValue",
+                            {.read = {.press_release = true, .touch = true}}));
   AddSurface();
   RunUntilShown();
   EXPECT_FALSE(property->GetBool());
@@ -1499,7 +1546,7 @@ TEST_F(ViewMappingTest, PressReleaseReleasesWhenItsViewDeactivates) {
   surface_->Run();
   ASSERT_TRUE(property->GetBool());
 
-  view_->Disable();
+  GetView()->Disable();
   EXPECT_FALSE(property->GetBool());
 
   // The release, read while the view is inactive, changes nothing, and a
@@ -1509,7 +1556,7 @@ TEST_F(ViewMappingTest, PressReleaseReleasesWhenItsViewDeactivates) {
   surface_->Run();
   EXPECT_TRUE(property->GetBool());
   property->SetBool(false);
-  view_->Enable();
+  GetView()->Enable();
   Press(button_);
   surface_->Run();
   EXPECT_TRUE(property->GetBool());
@@ -1524,7 +1571,7 @@ TEST_F(ViewMappingTest, TouchReleasesWhenItsViewDeactivates) {
   surface_->Run();
   ASSERT_TRUE(property->GetBool());
 
-  view_->Disable();
+  GetView()->Disable();
   EXPECT_FALSE(property->GetBool());
 }
 
@@ -1547,8 +1594,8 @@ class ViewEnablingProperty final : public ViewProperty {
 };
 
 TEST_F(ViewMappingTest, AViewChangeWhileViewsAreRefreshedIsRefused) {
-  View* other = scene_.GetRootView()->AddChildView("Other");
-  scene_.AddUserProperty(
+  View* other = GetScene()->GetRootView()->AddChildView("Other");
+  GetScene()->AddUserProperty(
       std::make_unique<ViewEnablingProperty>("user:enabler", other));
   Read("user:enabler", {"Button"}, {.read = {.press_release = true}});
   AddSurface();
@@ -1557,14 +1604,14 @@ TEST_F(ViewMappingTest, AViewChangeWhileViewsAreRefreshedIsRefused) {
   ASSERT_FALSE(other->IsEnabled());
 
   // The release is written as the view deactivates.
-  view_->Disable();
+  GetView()->Disable();
   EXPECT_FALSE(other->IsEnabled());
   EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(1));
 
   // Outside a refresh, the release's write enables the view.
   Release(button_);
   surface_->Run();
-  view_->Enable();
+  GetView()->Enable();
   Press(button_);
   surface_->Run();
   Release(button_);
@@ -1578,11 +1625,11 @@ TEST_F(ViewMappingTest, AReleaseThatChangesAConditionIsAppliedOnTheNextRun) {
   ToggleValueProperty* flag = AddFlag();
   TestProperty* property = AddProperty(Type::kNormalized, 0.0);
   Read("user:flag", {"Button"}, {.read = {.press_release = true}});
-  View* shifted = scene_.GetRootView()->AddChildView(
+  View* shifted = GetScene()->GetRootView()->AddChildView(
       "Shifted", {.condition = ViewCondition::Config{.property = "user:flag"}});
   shifted->Enable();
-  EXPECT_TRUE(shifted->AddMapping(ViewMapping::kReadControl, "user:value",
-                                  GetControlName("Fader")));
+  EXPECT_TRUE(
+      shifted->AddMapping(ViewMapping::kReadControl, "user:value", "Fader"));
   AddSurface();
   Press(button_);
   surface_->Run();
@@ -1590,7 +1637,7 @@ TEST_F(ViewMappingTest, AReleaseThatChangesAConditionIsAppliedOnTheNextRun) {
   ASSERT_TRUE(flag->GetBool());
   ASSERT_TRUE(shifted->IsActive());
 
-  view_->Disable();
+  GetView()->Disable();
   EXPECT_FALSE(flag->GetBool());
   surface_->Run();
   EXPECT_FALSE(shifted->IsActive());
@@ -1806,16 +1853,20 @@ TEST_F(ViewMappingTest, ReadsFromThePropertysValueWatchIt) {
     Reader by_delta;
     Reader by_press;
   };
+  const int count = static_cast<int>(rows.size());
+  const std::vector<FakeDevice::FakeControl> by_value =
+      AddInputControls("value", count, Input::kValue);
+  const std::vector<FakeDevice::FakeControl> by_delta =
+      AddInputControls("delta", count, Input::kDelta);
+  const std::vector<FakeDevice::FakeControl> by_press =
+      AddInputControls("press", count, Input::kPress);
   std::vector<Readers> readers;
-  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+  for (int i = 0; i < count; ++i) {
     const Row& row = rows[i];
     readers.push_back({
-        AddReader(absl::StrCat("value", i), row.type, row.initial,
-                  Input::kValue, read),
-        AddReader(absl::StrCat("delta", i), row.type, row.initial,
-                  Input::kDelta, read),
-        AddReader(absl::StrCat("press", i), row.type, row.initial,
-                  Input::kPress, read),
+        AddReader(by_value[i], row.type, row.initial, read),
+        AddReader(by_delta[i], row.type, row.initial, read),
+        AddReader(by_press[i], row.type, row.initial, read),
     });
   }
   AddSurface();

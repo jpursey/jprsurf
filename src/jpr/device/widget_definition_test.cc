@@ -595,5 +595,61 @@ TEST_F(ResolveWidgetsTest, InvalidDefinitionHasItsErrors) {
   EXPECT_THAT(errors_, ElementsAre("play: path \"xtouch.paly\" names nothing"));
 }
 
+TEST_F(ResolveWidgetsTest, FindsControlsWithTheirShapes) {
+  devices_[2].device = nullptr;  // xtouch
+  ASSERT_NE(Resolve(widgets_), nullptr);
+  std::string error;
+
+  // A control on a device that is present.
+  std::optional<WidgetControl> control =
+      root_->FindControl("strip[15].fader", &error);
+  ASSERT_TRUE(control.has_value());
+  EXPECT_EQ(control->control, ext_2_device_.GetControl("strip[7].fader"));
+  EXPECT_EQ(*control->shape, fader_);
+
+  // Controls on the device that is absent, including the elements its arrays
+  // leave out, which still have their shapes.
+  for (std::string_view path :
+       {"play", "strip[16].select", "info_strip.fader"}) {
+    control = root_->FindControl(path, &error);
+    ASSERT_TRUE(control.has_value()) << path;
+    EXPECT_EQ(control->control, nullptr) << path;
+    EXPECT_NE(control->shape, nullptr) << path;
+  }
+  EXPECT_EQ(*root_->FindControl("strip[16].select", &error)->shape, button_);
+}
+
+TEST_F(ResolveWidgetsTest, FindsNoControlWhereTheShapeHasNone) {
+  ASSERT_NE(Resolve(widgets_), nullptr);
+  struct Row {
+    std::string_view path;
+    std::string_view error;
+  };
+  for (const Row& row : std::vector<Row>{
+           {"paly", "names nothing"},
+           {"strip[24].fader", "names nothing"},
+           {"play.solid", "names nothing"},
+           {"strip", "isn't a control"},
+           {"info_strip", "isn't a control"},
+       }) {
+    std::string error;
+    EXPECT_FALSE(root_->FindControl(row.path, &error).has_value()) << row.path;
+    EXPECT_EQ(error, row.error) << row.path;
+  }
+  std::string error;
+  EXPECT_FALSE(root_->FindControl("strip.[2]", &error).has_value());
+  EXPECT_THAT(error, StartsWith("isn't a path: "));
+}
+
+TEST(WidgetRootTest, DefaultIsAnEmptyStruct) {
+  const WidgetRoot root;
+  EXPECT_EQ(root.shape, WidgetShape::ForStruct({}));
+  ASSERT_NE(root.widget, nullptr);
+  EXPECT_EQ(root.widget->GetKind(), WidgetKind::kStruct);
+  EXPECT_THAT(root.widget->GetFields(), IsEmpty());
+  std::string error;
+  EXPECT_FALSE(root.FindControl("play", &error).has_value());
+}
+
 }  // namespace
 }  // namespace jpr

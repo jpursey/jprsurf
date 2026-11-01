@@ -399,18 +399,32 @@ class Scene {
   `SceneTest` would still have to set them between a test's controls and its
   mappings, the same work as creating the scene then. `Scene::AddDevice()`
   goes. The scene's other `Add*()` functions stay until *Build the scene from
-  a SurfaceSpec*.
+  a SurfaceSpec*. The devices and widgets default to none (a `WidgetRoot`
+  defaults to an empty struct), for the property tests that need only a
+  scene.
+- `WidgetRoot::FindControl()` finds the control at a path's text: its shape,
+  and the device's control, or null if its device is absent. The scene maps
+  through it, and CL7 looks up mode names in the shape it gives. It and
+  `ValidateControlOverrides()` share `FindControlShape()`, so a path's errors
+  read the same in a mapping and an override.
 - A path the shape has, but whose control is absent, adds a mapping that does
   nothing, and returns true: the model's rule that a mapping to an absent
-  widget does nothing. A path the shape doesn't have, or that isn't a control,
-  returns false and logs why, as a missing control does today.
+  widget does nothing. It is validated as any mapping is (its properties and
+  its condition), and then not added, as it would never read or write. A path
+  the shape doesn't have, or that isn't a control, returns false and logs why,
+  as a missing control does today.
 - `Scene::GetControl()` takes a widget path.
 - `SceneTest` creates its scene the first time a test calls `GetScene()`,
   which replaces `scene_`, on its fake device and a struct of the device's
-  controls, by their names. Tests already add their controls before building
-  views and mappings, so that order is unchanged, and adding a control once the
-  scene exists fails the test. Every `scene_.` in the scene tests (about 110)
-  becomes `GetScene()->`.
+  controls, by their names. Adding a control once the scene exists fails the
+  test. Every `scene_.` in the scene tests (about 90) becomes `GetScene()->`.
+  Most tests already add their controls before their properties and mappings,
+  but `ViewMappingTest`'s didn't: it adds its view on first use
+  (`GetView()`), and its tests add their controls first, `AddReader()` taking
+  a control already added.
+- The plugin's strip loops run over the strips present (the elements of
+  `strip` and `route_strip`), not the shape's size, so the track list has as
+  many items as there are strips, as today.
 
 ### Output modes by name
 
@@ -553,7 +567,7 @@ Depends on: CL4.
   that fails, are closed.
 - The surface tests that the surface clears on shutdown, and the load check.
 
-### CL6 [ ] scene, plugin: Map through widgets
+### CL6 [x] scene, plugin: Map through widgets
 
 Depends on: CL4.
 

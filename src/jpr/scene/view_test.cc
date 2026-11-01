@@ -32,16 +32,18 @@ namespace {
 
 using ::testing::SizeIs;
 
-// The project is T1 and T2. The scene has a track reference, "user:track", and
-// a toggle, "user:flag". The root view starts disabled.
+// The project is T1 and T2. The device has a button, "Button". The scene has a
+// track reference, "user:track", and a toggle, "user:flag". The root view
+// starts disabled.
 class ViewTest : public SceneTest {
  protected:
   ViewTest()
       : tracks_(reaper_.GetProject().AddTracks(2)),
-        reference_(scene_.AddTrackReference("user:track")),
-        flag_(scene_.AddUserProperty(
+        button_(device_->AddButton("Button")),
+        reference_(GetScene()->AddTrackReference("user:track")),
+        flag_(GetScene()->AddUserProperty(
             std::make_unique<ToggleValueProperty>("user:flag"))),
-        root_(scene_.GetRootView()) {}
+        root_(GetScene()->GetRootView()) {}
 
   // Adds a child view of the root view, and enables it.
   View* AddEnabledView(std::string_view name, const View::Config& config = {}) {
@@ -54,6 +56,7 @@ class ViewTest : public SceneTest {
   }
 
   std::vector<FakeTrack*> tracks_;
+  const FakeDevice::FakeControl button_;
   TrackReference* const reference_;
   ToggleValueProperty* const flag_;
   View* const root_;
@@ -195,7 +198,7 @@ TEST_F(ViewTest, TrackPropertiesAreTheSubjectsFields) {
   View* view = root_->AddChildView(
       "View", {.subject = View::ReferenceSubject{"user:track"}});
   ASSERT_NE(view, nullptr);
-  ViewProperty* mute = scene_.GetProperty("user:track.mute");
+  ViewProperty* mute = GetScene()->GetProperty("user:track.mute");
   ASSERT_NE(mute, nullptr);
   EXPECT_EQ(view->GetProperty(TrackProperties::kMute), mute);
   EXPECT_EQ(view->GetProperty(RouteProperties::kVolume), nullptr);
@@ -231,7 +234,7 @@ TEST_F(ViewTest, UserPropertiesAreSeenFromTheirViewAndBelow) {
   EXPECT_EQ(child->GetProperty("user:local"), local);
   EXPECT_EQ(root_->GetProperty("user:local"), nullptr);
   EXPECT_EQ(sibling->GetProperty("user:local"), nullptr);
-  EXPECT_EQ(scene_.GetProperty("user:local"), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty("user:local"), nullptr);
   EXPECT_EQ(child->GetProperty("user:flag"), flag_);
 }
 
@@ -331,16 +334,15 @@ TEST_F(ViewTest, AViewHoldsOneAnchor) {
 //==============================================================================
 
 TEST_F(ViewTest, MappingsNeedTheirPropertiesAndControl) {
-  device_->AddButton("Button");
-  const std::string button = GetControlName("Button");
+  const std::string_view button = "Button";
   View* view = root_->AddChildView("View");
   EXPECT_TRUE(
       view->AddMapping(ViewMapping::kWriteControl, "user:flag", button));
 
   EXPECT_FALSE(
       view->AddMapping(ViewMapping::kWriteControl, "user:nothing", button));
-  EXPECT_FALSE(view->AddMapping(ViewMapping::kWriteControl, "user:flag",
-                                GetControlName("Nothing")));
+  EXPECT_FALSE(
+      view->AddMapping(ViewMapping::kWriteControl, "user:flag", "Nothing"));
   EXPECT_FALSE(view->AddMapping(
       ViewMapping::kWriteControl, "user:flag", button,
       {.write = {.mode_overrides = {{.property = "user:nothing"}}}}));
@@ -351,18 +353,17 @@ TEST_F(ViewTest, MappingsNeedTheirPropertiesAndControl) {
 }
 
 TEST_F(ViewTest, OnlyActiveViewsWriteTheirControls) {
-  FakeDevice::FakeControl button = device_->AddButton("Button");
   View* view = root_->AddChildView("View");
-  ASSERT_TRUE(view->AddMapping(ViewMapping::kWriteControl, "user:flag",
-                               GetControlName("Button")));
+  ASSERT_TRUE(
+      view->AddMapping(ViewMapping::kWriteControl, "user:flag", "Button"));
   root_->Enable();
   flag_->SetBool(true);
   AddSurface();
-  EXPECT_EQ(button.dvalue_output->GetValue(), 0);
+  EXPECT_EQ(button_.dvalue_output->GetValue(), 0);
 
   view->Enable();
   RunUntilShown();
-  EXPECT_EQ(button.dvalue_output->GetValue(), 1);
+  EXPECT_EQ(button_.dvalue_output->GetValue(), 1);
 }
 
 }  // namespace

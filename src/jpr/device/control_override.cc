@@ -6,6 +6,7 @@
 #include "jpr/device/control_override.h"
 
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -41,23 +42,15 @@ class OverrideValidator {
 };
 
 void OverrideValidator::Validate(const ControlOverride& control_override) {
-  std::string error_message;
-  const std::optional<WidgetPath> path =
-      WidgetPath::Parse(control_override.control, &error_message);
-  if (!path.has_value()) {
-    AddError(control_override, absl::StrCat("isn't a path: ", error_message));
-    return;
-  }
-  const WidgetShape* shape = catalog_.Find(*path);
+  WidgetPath path;
+  std::string error;
+  const WidgetShape* shape =
+      FindControlShape(catalog_, control_override.control, &path, &error);
   if (shape == nullptr) {
-    AddError(control_override, "names nothing");
+    AddError(control_override, error);
     return;
   }
-  if (shape->GetKind() != WidgetKind::kControl) {
-    AddError(control_override, "isn't a control");
-    return;
-  }
-  if (!controls_.insert(path->ToString()).second) {
+  if (!controls_.insert(path.ToString()).second) {
     AddError(control_override, "is overridden more than once");
   }
   if (control_override.inputs.IsEmpty() && control_override.outputs.IsEmpty()) {

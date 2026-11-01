@@ -6,7 +6,9 @@
 #include "jpr/scene/scene.h"
 
 #include <memory>
+#include <optional>
 #include <stack>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -18,6 +20,7 @@
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/device/widget_definition.h"
 #include "jpr/scene/command_properties.h"
 #include "jpr/scene/const_property.h"
 #include "jpr/scene/modifier_property.h"
@@ -26,8 +29,13 @@
 
 namespace jpr {
 
-Scene::Scene(std::string_view name, TrackFilter track_filter)
-    : name_(name), track_actions_(track_filter) {
+Scene::Scene(std::string_view name,
+             std::vector<std::unique_ptr<Device>> devices, WidgetRoot widgets,
+             TrackFilter track_filter)
+    : name_(name),
+      devices_(std::move(devices)),
+      widgets_(std::move(widgets)),
+      track_actions_(track_filter) {
   master_track_reference_ = CreateTrackReference(kMasterTrack);
   last_touched_track_reference_ = CreateTrackReference(kLastTouchedTrack);
   selected_track_reference_ = CreateTrackReference(kSelectedTrack);
@@ -49,17 +57,10 @@ Scene::Scene(std::string_view name, TrackFilter track_filter)
 
 Scene::~Scene() { SetWorkloadValues(); }
 
-void Scene::AddDevice(std::string_view device_name,
-                      std::unique_ptr<Device> device) {
-  devices_.emplace(device_name, std::move(device));
-}
-
-Control* Scene::GetControl(std::string_view name) const {
-  const auto [device_name, control_name] =
-      std::pair<std::string_view, std::string_view>(
-          absl::StrSplit(name, absl::MaxSplits('/', 1)));
-  auto it = devices_.find(device_name);
-  return it != devices_.end() ? it->second->GetControl(control_name) : nullptr;
+Control* Scene::GetControl(std::string_view path) const {
+  std::string error;
+  std::optional<WidgetControl> control = widgets_.FindControl(path, &error);
+  return control.has_value() ? control->control : nullptr;
 }
 
 ViewProperty* Scene::GetProperty(std::string_view name) {
@@ -232,7 +233,7 @@ void Scene::SetWorkloadValues() const {
   }
   gb::ProfileSetValue<"devices">(static_cast<int>(devices_.size()));
   int control_count = 0;
-  for (const auto& [name, device] : devices_) {
+  for (const auto& device : devices_) {
     control_count += static_cast<int>(device->GetControls().size());
   }
   gb::ProfileSetValue<"controls">(control_count);
@@ -295,4 +296,4 @@ void Scene::UnregisterProperty(SceneStateProperty* property) {
   state_properties_.erase(property);
 }
 
-}  // namespace jpr
+}  // namespace jpr

@@ -287,12 +287,16 @@ class View final {
     return static_cast<PropertyType*>(DoAddUserProperty(std::move(property)));
   }
 
-  // Adds a mapping to this view.
+  // Adds a mapping of the property to the control at the widget path, such as
+  // "strip[3].fader" (see Scene::GetControl()).
   //
-  // This will return false if the mapping is invalid, for instance if the
-  // named control or property doesn't exist in the scene.
+  // This returns false (logging why) if the mapping is invalid: a property
+  // isn't found, or the scene's widgets have no control at the path (see
+  // WidgetRoot::FindControl()). A mapping
+  // to a control whose device is absent does nothing, so it is validated, and
+  // returns true, but isn't added.
   bool AddMapping(ViewMapping::TypeFlags type, std::string_view property_name,
-                  std::string_view control_name,
+                  std::string_view control_path,
                   ViewMapping::Config config = {});
 
   // Synchronizes all active mappings for this view and all active child views.
