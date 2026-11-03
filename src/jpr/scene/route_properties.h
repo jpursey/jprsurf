@@ -10,8 +10,10 @@
 #include <string_view>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/types/span.h"
 #include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/scene/catalog.h"
 #include "jpr/scene/track_actions.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/view_property.h"
@@ -116,5 +118,9 @@ class RouteProperties final : public TrackListener {
       properties_;
   TrackReference other_track_;
 };
+
+// Returns the info of every route property, and of every route reference.
+absl::Span<const PropertyInfo> GetRoutePropertyInfo();
+absl::Span<const ReferenceInfo> GetRouteReferenceInfo();
 
 }  // namespace jpr

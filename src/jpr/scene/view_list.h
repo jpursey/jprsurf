@@ -5,20 +5,104 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
 #include "jpr/common/track.h"
+#include "jpr/scene/catalog.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_property.h"
 #include "jpr/scene/view_reference.h"
 
 namespace jpr {
+
+//==============================================================================
+// View properties
+//==============================================================================
+
+// Every view: property (see View::kChildDec), with what it needs of its view.
+// A list adds the properties of each need its view meets, by a
+// ViewPropertyName, so it can't add one without a row here. A "writable"
+// reference is one the view may set (see Scene::AddTrackReference()).
+inline constexpr PropertyInfo kViewProperties[] = {
+    {View::kChildDec, ViewProperty::Type::kAction, kTriggerAccess,
+     "Scrolls the view's list one item back. The scroll position is kept in "
+     "range.",
+     ViewNeed::kList},
+    {View::kChildInc, ViewProperty::Type::kAction, kTriggerAccess,
+     "Scrolls the view's list one item forward. The scroll position is kept "
+     "in range.",
+     ViewNeed::kList},
+    {View::kBankDec, ViewProperty::Type::kAction, kTriggerAccess,
+     "Scrolls the view's list back by its bank size. The scroll position is "
+     "kept in range.",
+     ViewNeed::kList},
+    {View::kBankInc, ViewProperty::Type::kAction, kTriggerAccess,
+     "Scrolls the view's list forward by its bank size. The scroll position "
+     "is kept in range.",
+     ViewNeed::kList},
+    {View::kTrackParent, ViewProperty::Type::kAction, kTriggerAccess,
+     "Sets the view's reference to its track's parent track, navigating up "
+     "one level, with the track that was left centered in the list if "
+     "possible. This does nothing if the track has no parent track.",
+     ViewNeed::kChildTracksList},
+    {View::kTrackRoot, ViewProperty::Type::kAction, kTriggerAccess,
+     "Sets the view's reference to the master track.",
+     ViewNeed::kChildTracksList},
+    {View::kParentTrackChild, ViewProperty::Type::kAction, kTriggerAccess,
+     "Sets the parent view's reference to this view's track, navigating into "
+     "it, if it has child tracks on the surface.",
+     ViewNeed::kChildTracksItem},
+    {View::kParentTrackParent, ViewProperty::Type::kAction, kTriggerAccess,
+     "The same as \"view:track_parent\" on the parent view.",
+     ViewNeed::kChildTracksItem},
+    {View::kParentTrackRoot, ViewProperty::Type::kAction, kTriggerAccess,
+     "The same as \"view:track_root\" on the parent view.",
+     ViewNeed::kChildTracksItem},
+    {View::kParentRouteOtherTrack, ViewProperty::Type::kAction, kTriggerAccess,
+     "Sets the parent view's reference to the track at the other end of this "
+     "view's route, showing the other route type: from a send to the "
+     "destination track's receives, or from a receive to the source track's "
+     "sends. The list is scrolled so the route back to the original track is "
+     "shown. This does nothing if this view has no route.",
+     ViewNeed::kRoutesItem},
+    {View::kChildRouteToggle, ViewProperty::Type::kAction, kTriggerAccess,
+     "Switches the view's routes list between sends and receives, from the "
+     "start of the list. This does nothing if the track has no routes of the "
+     "other type.",
+     ViewNeed::kRoutesList},
+    {View::kChildRouteTypeName, ViewProperty::Type::kText, kReadAccess,
+     "The route type the view's routes list shows: \"Send\" or \"Recv\".",
+     ViewNeed::kRoutesList},
+};
+static_assert(AreValidProperties(kViewProperties, kViewNamespace),
+              "kViewProperties rows must have unique names in view:");
+
+// The name of a view: property, which must have a row in kViewProperties: a
+// name without one doesn't compile.
+class ViewPropertyName {
+ public:
+  // Implicit, so a list adds a property by its name alone.
+  consteval ViewPropertyName(std::string_view name) : name_(name) {
+    if (std::ranges::find(kViewProperties, name, &PropertyInfo::name) ==
+        std::end(kViewProperties)) {
+      throw "A view: property needs a row in kViewProperties";
+    }
+  }
+
+  std::string_view Get() const { return name_; }
+
+ private:
+  std::string_view name_;
+};
 
 //==============================================================================
 // ViewList
@@ -85,11 +169,20 @@ class ViewList {
   // Adds an action property to the view (the list's view, or one of its
   // items), which brings the list's view up to date (see
   // View::UpdateSubject()) before it calls the callback.
-  void AddAction(View* view, std::string_view name,
+  void AddAction(View* view, ViewPropertyName name,
                  absl::AnyInvocable<void()> callback);
 
-  // Adds a property to the view.
-  static void AddProperty(View* view, std::unique_ptr<ViewProperty> property);
+  // Adds a property of type PropertyType to the view, created from its name
+  // and `args`, and returns it.
+  template <typename PropertyType, typename... Args>
+  static PropertyType* AddProperty(View* view, ViewPropertyName name,
+                                   Args&&... args) {
+    auto property =
+        std::make_unique<PropertyType>(name.Get(), std::forward<Args>(args)...);
+    PropertyType* added_property = property.get();
+    view->properties_.emplace(name.Get(), std::move(property));
+    return added_property;
+  }
 
   // Scrolls to the position, kept in range, and lays out the list if it moved.
   void SetPosition(int position);

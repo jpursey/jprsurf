@@ -4,6 +4,7 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 set(jpr_scene_SOURCE
+  catalog.cc catalog.h
   command_properties.cc command_properties.h
   const_property.cc const_property.h
   modifier_property.h
@@ -39,6 +40,7 @@ set(jpr_scene_DEPS
 )
 
 set(jpr_scene_TEST_SOURCE
+  catalog_test.cc
   command_properties_test.cc
   const_property_test.cc
   polled_toggle_property_test.cc

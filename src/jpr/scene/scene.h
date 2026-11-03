@@ -14,12 +14,14 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/types/span.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/track.h"
 #include "jpr/device/control.h"
 #include "jpr/device/device.h"
 #include "jpr/device/widget_definition.h"
+#include "jpr/scene/catalog.h"
 #include "jpr/scene/track_actions.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/view.h"
@@ -105,23 +107,27 @@ class Scene final {
   // namespace or is already used, this will return zero.
   //
   // Modifier properties are already preset for "mod:shift", "mod:ctrl",
-  // "mod:alt", and "mod:opt", but this allows for up to 60 additional modifiers
-  // to be added for mapping to custom properties.
+  // "mod:alt", and "mod:opt" (see GetBuiltInModifierInfo()), but this allows
+  // for up to 60 additional modifiers to be added for mapping to custom
+  // properties.
   Modifiers AddModifierProperty(std::string_view name);
+
+  // Returns the info of every built in modifier, which every scene has.
+  static absl::Span<const PropertyInfo> GetBuiltInModifierInfo();
 
   // References
 
-  // Built in references, which the scene keeps current:
-  // - The master track.
-  // - The last touched track (see TrackCache::GetLastTouchedTrack()), which may
-  //   be the master track, or a track that isn't on the surface.
-  // - The selected track, if exactly one track is selected, and it is on the
-  //   surface.
+  // Built in references, which the scene keeps current. Each is described by
+  // its row in kBuiltInReferences (scene.cc), which the catalog reads (see
+  // GetBuiltInReferenceInfo()).
   static constexpr std::string_view kMasterTrack = kStateName<"master_track">;
   static constexpr std::string_view kLastTouchedTrack =
       kStateName<"last_touched_track">;
   static constexpr std::string_view kSelectedTrack =
       kStateName<"selected_track">;
+
+  // Returns the info of every built in reference.
+  static absl::Span<const ReferenceInfo> GetBuiltInReferenceInfo();
 
   // Returns the reference with the name, built in or added, or null if there is
   // none. Only the scene, whoever added the reference, and the lists of views

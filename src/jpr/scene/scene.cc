@@ -29,6 +29,49 @@
 
 namespace jpr {
 
+namespace {
+
+using Type = ViewProperty::Type;
+
+struct BuiltInModifier {
+  PropertyInfo info;
+  Modifiers flag;
+};
+
+// The modifiers every scene has, which it creates from these rows.
+constexpr BuiltInModifier kBuiltInModifiers[] = {
+    {{ModifierProperty::kShift, Type::kToggle, kReadWriteAccess,
+      "True while the surface's Shift modifier is on."},
+     kModShift},
+    {{ModifierProperty::kCtrl, Type::kToggle, kReadWriteAccess,
+      "True while the surface's Ctrl modifier is on."},
+     kModCtrl},
+    {{ModifierProperty::kAlt, Type::kToggle, kReadWriteAccess,
+      "True while the surface's Alt modifier is on."},
+     kModAlt},
+    {{ModifierProperty::kOpt, Type::kToggle, kReadWriteAccess,
+      "True while the surface's Opt modifier is on."},
+     kModOpt},
+};
+
+constexpr auto kBuiltInModifierInfo = GetPropertyInfo(kBuiltInModifiers);
+static_assert(AreValidProperties(kBuiltInModifierInfo, kModNamespace),
+              "kBuiltInModifiers rows must have unique names in mod:");
+
+// The references every scene has (see Scene::kMasterTrack), which a test
+// checks the scene creates.
+constexpr ReferenceInfo kBuiltInReferences[] = {
+    {Scene::kMasterTrack, SubjectKind::kTrack, "The master track."},
+    {Scene::kLastTouchedTrack, SubjectKind::kTrack,
+     "The last touched track, which may be the master track, or a track that "
+     "isn't on the surface."},
+    {Scene::kSelectedTrack, SubjectKind::kTrack,
+     "The selected track, if exactly one track is selected, and it is on the "
+     "surface. Otherwise it refers to nothing."},
+};
+
+}  // namespace
+
 Scene::Scene(std::string_view name,
              std::vector<std::unique_ptr<Device>> devices, WidgetRoot widgets,
              TrackFilter track_filter)
@@ -41,18 +84,19 @@ Scene::Scene(std::string_view name,
   selected_track_reference_ = CreateTrackReference(kSelectedTrack);
 
   root_view_ = absl::WrapUnique(new View(this, nullptr, "root"));
-  properties_.emplace(
-      ModifierProperty::kShift,
-      std::make_unique<ModifierProperty>(ModifierProperty::kShift, kModShift));
-  properties_.emplace(
-      ModifierProperty::kCtrl,
-      std::make_unique<ModifierProperty>(ModifierProperty::kCtrl, kModCtrl));
-  properties_.emplace(
-      ModifierProperty::kAlt,
-      std::make_unique<ModifierProperty>(ModifierProperty::kAlt, kModAlt));
-  properties_.emplace(
-      ModifierProperty::kOpt,
-      std::make_unique<ModifierProperty>(ModifierProperty::kOpt, kModOpt));
+  for (const BuiltInModifier& modifier : kBuiltInModifiers) {
+    properties_.emplace(
+        modifier.info.name,
+        std::make_unique<ModifierProperty>(modifier.info.name, modifier.flag));
+  }
+}
+
+absl::Span<const PropertyInfo> Scene::GetBuiltInModifierInfo() {
+  return kBuiltInModifierInfo;
+}
+
+absl::Span<const ReferenceInfo> Scene::GetBuiltInReferenceInfo() {
+  return kBuiltInReferences;
 }
 
 Scene::~Scene() { SetWorkloadValues(); }

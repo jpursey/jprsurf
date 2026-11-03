@@ -42,7 +42,7 @@ Performance below).
 | `ComponentSpec`: `ModifierSpec`, `EnumeratedValueSpec`, `TrackReferenceSpec`, ... | `*Declaration`                      | The property classes they declare (`EnumeratedValueProperty`, ...)          |
 | `TemplateUse`                                                                    | `TemplateCall`                      | The instances of a repeated view                                            |
 | `FixedValue`                                                                     | `ConstValue`                        | `const:` properties, which creating a scene adds for each                   |
-| `GetPropertyCatalog()`, `PropertyInfo`, `PropertyNamespaceInfo`                   | `PropertyRegistry`, `PropertyEntry` | A device type's catalog, a `WidgetShape`                                    |
+| `GetPropertyCatalog()`, `PropertyInfo`, `ReferenceInfo`, `PropertyNamespaceInfo` | `PropertyRegistry`, `PropertyEntry` | A device type's catalog, a `WidgetShape`                                    |
 | `GetComponentKinds()`, `ComponentKindInfo`                                        | `ComponentCatalog`                  | `ComponentSpec`, a declared instance of a kind                              |
 | `ViewProperty::FindValue()`                                                      | `GetValueByName()`                  | `ViewProperty::SetText()`, which also takes a value's name                  |
 | `ValidateSurfaceSpec()`, `ValidateDeviceSpecs()`                                 | `Check*()`                          | `ValidateWidgets()`, which it calls                                         |
@@ -65,7 +65,7 @@ A config sees three kinds of thing:
 
 The first two are the catalog, which checking and the user docs read. It is
 **scene's own tables**, rather than data kept beside them, so nothing the scene
-provides can be missing from it:
+provides can be missing from it. It is in `scene/catalog.h`:
 
 ```
 // What a mapping can do with a property.
@@ -82,24 +82,28 @@ enum class ViewNeed {
                      // reference: parent_route_other_track.
 };
 
-// One built in property or reference.
+// One built in property.
 struct PropertyInfo {
-  std::string_view name;  // Without its namespace, such as "can_redo".
+  std::string_view name;  // Such as "state:can_redo".
   ViewProperty::Type type;
   PropertyAccessFlags access;
   std::string_view description;
-
-  // For a reference, the kind of subject it refers to, whose properties are
-  // its fields. kNone for a property.
-  SubjectKind reference = SubjectKind::kNone;
   std::optional<ViewNeed> view_need;  // view: properties only.
 };
 
-// The built in properties of a namespace.
+// One built in reference, whose fields are its kind of subject's properties.
+struct ReferenceInfo {
+  std::string_view name;  // Such as "state:master_track".
+  SubjectKind kind;
+  std::string_view description;
+};
+
+// The built in properties and references of a namespace.
 struct PropertyNamespaceInfo {
   std::string_view name;  // Such as "state:".
   std::string_view description;
   absl::Span<const PropertyInfo> properties;
+  absl::Span<const ReferenceInfo> references;
 };
 
 // Every namespace a config can name a built in property in: cmd:, state:,
@@ -108,33 +112,64 @@ struct PropertyNamespaceInfo {
 // created.
 absl::Span<const PropertyNamespaceInfo> GetPropertyCatalog();
 
+// What a component parameter's text is: every parameter is written as text,
+// so this is what a config may write in it.
+enum class ParamKind {
+  kNewName,         // A name the config makes up, such as a value's.
+  kNewNameList,     // A list of them.
+  kValueName,       // One of the names of the component's kNewNameList.
+  kTrackReference,  // A track reference: built in, or declared before it.
+  kModifier,        // A modifier: built in, or declared.
+  kChoice,          // One of the parameter's choices.
+};
+enum class ParamUse { kRequired, kOptional, kTopLevelOnly };
+
+// One parameter of a kind of component.
+struct ParamInfo {
+  std::string_view name;
+  ParamKind kind;
+  ParamUse use;
+  std::string_view description;  // What it does, rather than its form.
+  absl::Span<const std::string_view> choices;  // For kChoice only.
+};
+
 // One kind of component (see Components in the config model).
 struct ComponentKindInfo {
   std::string_view name;  // Such as "enumerated_value".
   bool top_level;         // Where it may be declared.
   bool on_view;
   std::string_view description;
-  absl::Span<const ParamInfo> params;  // Each a name and a description.
+  absl::Span<const ParamInfo> params;
 };
 absl::Span<const ComponentKindInfo> GetComponentKinds();
 ```
 
 - **The state rows** (`kStateProperties`) already are a table. Each row gains
-  its type, access, and description beside its create function, and the
-  catalog reads them.
+  a `PropertyInfo` beside its create function, and the catalog reads them. The
+  descriptions move from the header's comments to the rows, so they are
+  written once.
 - **A track's and a route's fields,** created by if-chains in
   `TrackProperties::GetProperty()` and `RouteProperties`, become tables the
   same way, each row with its create function, and so do the built in
-  modifiers and references.
+  modifiers, which the scene creates from their rows. The built in references
+  are a table of `ReferenceInfo` (in `scene.cc`, and `route:other_track` in
+  `route_properties.cc`).
 - **`view:` properties** are added by each kind of list (`ViewList`), so their
-  table is the names, types, and needs, and each list adds its properties from
-  the rows with its need.
+  table (`kViewProperties`, in `view_list.h`) is the names, types, and needs. A
+  list adds a property by a `ViewPropertyName`, whose `consteval` constructor
+  finds its row, so a property without a row doesn't compile.
 - **A test** creates every row's property and checks that it has the row's
-  type, and builds a view of each need and checks that it has exactly the rows
-  with that need. That is all that is left to agree, so there is no check at
-  run time.
+  type, checks the scene has each built in reference, and builds a view of each
+  need and checks that it has exactly the rows with that need. That is all that
+  is left to agree, so there is no check at run time.
 - **`ComponentKindInfo`** is documentation and checking data for the
-  `ComponentSpec` kinds below. A test checks there is one for each kind.
+  `ComponentSpec` kinds below. From a config, every parameter is text, so each
+  parameter says what text it takes (its `ParamKind`, and its choices), and
+  whether it must be given, as data rather than prose, which the docs show the
+  same way for every kind. A test checks the kinds by name, and that the track
+  anchor's actions are the track toggles. Once `ComponentSpec` exists, a test
+  checks there is one for each of its kinds, with the parameters its spec
+  struct takes.
 - **A page for each namespace,** and one of the component kinds, in
   `docs/user/scene/` (`state.md`, `track.md`, ..., `components.md`), generated
   by `jpr_doc` and checked in, as the device pages are. The
@@ -375,7 +410,7 @@ relies on, and the fake already models.
 
 ## CLs
 
-### CL1 [ ] scene: The catalog of what the scene provides
+### CL1 [x] scene: The catalog of what the scene provides
 
 Depends on: nothing.
 
@@ -388,8 +423,9 @@ Depends on: nothing.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
-- The table tests, and that they fail when a row's type is wrong, or a list
-  adds a `view:` property its table lacks.
+- The table tests, and that they fail when a row's type or a `view:` row's
+  need is wrong. A list that adds a `view:` property its table lacks doesn't
+  compile.
 - The call count bounds don't move, as the same properties are created.
 
 ### CL2 [ ] doc: Pages for the scene's properties and components
@@ -434,6 +470,8 @@ Depends on: CL1, CL3.
 - Standard checks.
 - Tests of each rule, valid and not, with every error reported rather than the
   first.
+- Each component kind's `ParamInfo` matches its spec struct: a parameter for
+  each of its fields, with the kind and use checking enforces.
 
 ### CL5 [ ] scene: Checking mappings
 

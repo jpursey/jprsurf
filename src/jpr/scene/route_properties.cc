@@ -5,6 +5,7 @@
 
 #include "jpr/scene/route_properties.h"
 
+#include <memory>
 #include <string_view>
 #include <utility>
 
@@ -13,6 +14,8 @@
 namespace jpr {
 
 namespace {
+
+using Type = ViewProperty::Type;
 
 class RouteVolumeProperty final : public RouteProperty {
  public:
@@ -76,6 +79,44 @@ class RouteExistsProperty final : public RouteProperty {
   }
 };
 
+// Creates a property of type T on the route.
+template <typename T>
+std::unique_ptr<RouteProperty> Create(const RouteProperties* route_properties) {
+  return std::make_unique<T>(route_properties);
+}
+
+struct RoutePropertyRow {
+  PropertyInfo info;
+  std::unique_ptr<RouteProperty> (*create)(
+      const RouteProperties* route_properties);
+};
+
+// A new route property needs a name in the header, and a row here. The
+// static_assert below checks that the names are unique, and in route:.
+constexpr RoutePropertyRow kRouteProperties[] = {
+    {{RouteProperties::kVolume, Type::kVolume, kReadWriteAccess,
+      "The route's volume."},
+     Create<RouteVolumeProperty>},
+    {{RouteProperties::kPan, Type::kPan, kReadWriteAccess, "The route's pan."},
+     Create<RoutePanProperty>},
+    {{RouteProperties::kMute, Type::kToggle, kReadWriteAccess,
+      "True while the route is muted."},
+     Create<RouteMuteProperty>},
+    {{RouteProperties::kExists, Type::kToggle, kReadAccess,
+      "True if there is a route, as what shows a route may show none."},
+     Create<RouteExistsProperty>},
+};
+
+constexpr auto kRoutePropertyInfo = GetPropertyInfo(kRouteProperties);
+static_assert(AreValidProperties(kRoutePropertyInfo, kRouteNamespace),
+              "kRouteProperties rows must have unique names in route:");
+
+constexpr ReferenceInfo kRouteReferences[] = {
+    {RouteProperties::kOtherTrack, SubjectKind::kTrack,
+     "The track at the other end of the route: the track a send goes to, or a "
+     "receive comes from. It refers to nothing if there is no route."},
+};
+
 }  // namespace
 
 RouteProperties::RouteProperties(TrackActions* actions, Track* track,
@@ -137,21 +178,21 @@ ViewProperty* RouteProperties::GetProperty(std::string_view name) const {
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }
-  std::unique_ptr<RouteProperty> property;
-  if (name == kVolume) {
-    property = std::make_unique<RouteVolumeProperty>(this);
-  } else if (name == kPan) {
-    property = std::make_unique<RoutePanProperty>(this);
-  } else if (name == kMute) {
-    property = std::make_unique<RouteMuteProperty>(this);
-  } else if (name == kExists) {
-    property = std::make_unique<RouteExistsProperty>(this);
-  } else {
+  const RoutePropertyRow* row = FindRow(kRouteProperties, name);
+  if (row == nullptr) {
     return nullptr;
   }
-  RouteProperty* property_ptr = property.get();
-  properties_[name] = std::move(property);
-  return property_ptr;
+  std::unique_ptr<RouteProperty>& property = properties_[name];
+  property = row->create(this);
+  return property.get();
+}
+
+absl::Span<const PropertyInfo> GetRoutePropertyInfo() {
+  return kRoutePropertyInfo;
+}
+
+absl::Span<const ReferenceInfo> GetRouteReferenceInfo() {
+  return kRouteReferences;
 }
 
 }  // namespace jpr

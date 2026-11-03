@@ -5,8 +5,6 @@
 
 #include "jpr/scene/state_properties.h"
 
-#include <algorithm>
-#include <iterator>
 #include <memory>
 
 #include "jpr/common/automation.h"
@@ -20,6 +18,8 @@
 namespace jpr {
 
 namespace {
+
+using Type = ViewProperty::Type;
 
 //------------------------------------------------------------------------------
 // Polled toggle read and write functions
@@ -102,109 +102,172 @@ std::unique_ptr<ViewProperty> CreateAutoOverride(Scene* scene,
 }
 
 struct StateProperty {
-  std::string_view name;
+  PropertyInfo info;
   std::unique_ptr<ViewProperty> (*create)(Scene* scene, std::string_view name);
 };
 
 // A new state property needs a name in the header, and a row here, in the same
-// group. The static_asserts below check that the names are unique, and in
+// group. The static_assert below checks that the names are unique, and in
 // state:.
 constexpr StateProperty kStateProperties[] = {
     // Polled toggles.
-    {kStateAnyTrackSolo, Create<PolledToggleProperty, IsAnyTrackSolo>},
-    {kStateCanRedo, Create<PolledToggleProperty, CanRedo>},
-    {kStateProjectDirty, Create<PolledToggleProperty, IsCurrentProjectDirty>},
-    {kStateAnyItemSelected, Create<PolledToggleProperty, IsAnyItemSelected>},
-    {kStateSelectedAutoTrimRead,
+    {{kStateAnyTrackSolo, Type::kToggle, kReadAccess,
+      "True while any track is soloed."},
+     Create<PolledToggleProperty, IsAnyTrackSolo>},
+    {{kStateCanRedo, Type::kToggle, kReadAccess,
+      "True while the current project has anything to redo."},
+     Create<PolledToggleProperty, CanRedo>},
+    {{kStateProjectDirty, Type::kToggle, kReadAccess,
+      "True while the current project has unsaved changes. This is always "
+      "false if \"undo/prompt to save\" is disabled in REAPER's preferences."},
+     Create<PolledToggleProperty, IsCurrentProjectDirty>},
+    {{kStateAnyItemSelected, Type::kToggle, kReadAccess,
+      "True while any media items are selected in the current project."},
+     Create<PolledToggleProperty, IsAnyItemSelected>},
+    {{kStateSelectedAutoTrimRead, Type::kToggle, kReadAccess,
+      "True while any selected track, including the master track, is in "
+      "Trim/Read automation mode."},
      Create<PolledToggleProperty, HasSelectedAutoMode<AutoMode::kTrimRead>>},
-    {kStateSelectedAutoRead,
+    {{kStateSelectedAutoRead, Type::kToggle, kReadAccess,
+      "True while any selected track, including the master track, is in Read "
+      "automation mode."},
      Create<PolledToggleProperty, HasSelectedAutoMode<AutoMode::kRead>>},
-    {kStateSelectedAutoTouch,
+    {{kStateSelectedAutoTouch, Type::kToggle, kReadAccess,
+      "True while any selected track, including the master track, is in Touch "
+      "automation mode."},
      Create<PolledToggleProperty, HasSelectedAutoMode<AutoMode::kTouch>>},
-    {kStateSelectedAutoWrite,
+    {{kStateSelectedAutoWrite, Type::kToggle, kReadAccess,
+      "True while any selected track, including the master track, is in Write "
+      "automation mode."},
      Create<PolledToggleProperty, HasSelectedAutoMode<AutoMode::kWrite>>},
-    {kStateSelectedAutoLatch,
+    {{kStateSelectedAutoLatch, Type::kToggle, kReadAccess,
+      "True while any selected track, including the master track, is in Latch "
+      "automation mode."},
      Create<PolledToggleProperty, HasSelectedAutoMode<AutoMode::kLatch>>},
-    {kStateSelectedAutoLatchPreview,
+    {{kStateSelectedAutoLatchPreview, Type::kToggle, kReadAccess,
+      "True while any selected track, including the master track, is in Latch "
+      "Preview automation mode."},
      Create<PolledToggleProperty,
             HasSelectedAutoMode<AutoMode::kLatchPreview>>},
-    {kStateSelectedAutoMixed,
+    {{kStateSelectedAutoMixed, Type::kToggle, kReadAccess,
+      "True while the selected tracks, including the master track, are in "
+      "more than one automation mode."},
      Create<PolledToggleProperty, HasMixedSelectedAutoModes>},
-    {kStateAutoOverrideActive,
+    {{kStateAutoOverrideActive, Type::kToggle, kReadWriteAccess,
+      "True while any global automation override is on. Turning it on "
+      "restores the last override it saw on, or Bypass if there hasn't been "
+      "one since REAPER started. Turning it off removes the override."},
      Create<PolledToggleProperty, IsAutoOverrideActive,
             WriteAutoOverrideActive>},
-    {kStateAutoOverrideTrimRead, CreateAutoOverride<AutoOverride::kTrimRead>},
-    {kStateAutoOverrideRead, CreateAutoOverride<AutoOverride::kRead>},
-    {kStateAutoOverrideTouch, CreateAutoOverride<AutoOverride::kTouch>},
-    {kStateAutoOverrideWrite, CreateAutoOverride<AutoOverride::kWrite>},
-    {kStateAutoOverrideLatch, CreateAutoOverride<AutoOverride::kLatch>},
-    {kStateAutoOverrideLatchPreview,
+    {{kStateAutoOverrideTrimRead, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Trim/Read. Turning it on "
+      "sets the override to Trim/Read, and turning it off sets it to Bypass."},
+     CreateAutoOverride<AutoOverride::kTrimRead>},
+    {{kStateAutoOverrideRead, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Read. Turning it on sets "
+      "the override to Read, and turning it off sets it to Bypass."},
+     CreateAutoOverride<AutoOverride::kRead>},
+    {{kStateAutoOverrideTouch, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Touch. Turning it on sets "
+      "the override to Touch, and turning it off sets it to Bypass."},
+     CreateAutoOverride<AutoOverride::kTouch>},
+    {{kStateAutoOverrideWrite, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Write. Turning it on sets "
+      "the override to Write, and turning it off sets it to Bypass."},
+     CreateAutoOverride<AutoOverride::kWrite>},
+    {{kStateAutoOverrideLatch, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Latch. Turning it on sets "
+      "the override to Latch, and turning it off sets it to Bypass."},
+     CreateAutoOverride<AutoOverride::kLatch>},
+    {{kStateAutoOverrideLatchPreview, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Latch Preview. Turning it "
+      "on sets the override to Latch Preview, and turning it off sets it to "
+      "Bypass."},
      CreateAutoOverride<AutoOverride::kLatchPreview>},
-    {kStateAutoOverrideAnyLatch,
+    {{kStateAutoOverrideAnyLatch, Type::kToggle, kReadAccess,
+      "True while the global automation override is Latch or Latch Preview."},
      Create<PolledToggleProperty,
             IsAutoOverride<AutoOverride::kLatch, AutoOverride::kLatchPreview>>},
-    {kStateAutoOverrideBypass, CreateAutoOverride<AutoOverride::kBypass>},
+    {{kStateAutoOverrideBypass, Type::kToggle, kReadWriteAccess,
+      "True while the global automation override is Bypass. Turning it on sets "
+      "Bypass, and turning it off removes the override."},
+     CreateAutoOverride<AutoOverride::kBypass>},
 
     // Timeline positions.
-    {kStateTimelinePosition,
+    {{kStateTimelinePosition, Type::kTimelinePosition, kReadAccess,
+      "The playback position while playing or paused, and otherwise the edit "
+      "cursor's position."},
      Create<TimelinePositionProperty,
             TimelinePositionProperty::Source::kCurrent>},
-    {kStatePlaybackPosition,
+    {{kStatePlaybackPosition, Type::kTimelinePosition, kReadAccess,
+      "The playback position."},
      Create<TimelinePositionProperty,
             TimelinePositionProperty::Source::kPlayback>},
-    {kStateEditPosition,
+    {{kStateEditPosition, Type::kTimelinePosition, kReadAccess,
+      "The edit cursor's position."},
      Create<TimelinePositionProperty, TimelinePositionProperty::Source::kEdit>},
 
     // Rulers.
-    {kStateRulerMode, Create<RulerModeProperty>},
-    {kStateRulerBeats, Create<IsRulerModeProperty, TimelineMode::kBeats>},
-    {kStateRulerTime, Create<IsRulerModeProperty, TimelineMode::kTime>},
-    {kStateRulerFrames, Create<IsRulerModeProperty, TimelineMode::kFrames>},
-    {kStateRulerSamples, Create<IsRulerModeProperty, TimelineMode::kSamples>},
-    {kStateSecondaryRulerMode, Create<SecondaryRulerModeProperty>},
-    {kStateSecondaryRulerTime,
+    {{kStateRulerMode, Type::kEnumerated, kReadWriteAccess,
+      "The primary ruler's mode: 0 for beats, 1 for time, 2 for frames, and 3 "
+      "for samples."},
+     Create<RulerModeProperty>},
+    {{kStateRulerBeats, Type::kToggle, kReadWriteAccess,
+      "True while the primary ruler is in beats. Turning it on sets the "
+      "primary ruler to beats, and turning it off does nothing, as the "
+      "primary ruler always has a mode."},
+     Create<IsRulerModeProperty, TimelineMode::kBeats>},
+    {{kStateRulerTime, Type::kToggle, kReadWriteAccess,
+      "True while the primary ruler is in time. Turning it on sets the "
+      "primary ruler to time, and turning it off does nothing."},
+     Create<IsRulerModeProperty, TimelineMode::kTime>},
+    {{kStateRulerFrames, Type::kToggle, kReadWriteAccess,
+      "True while the primary ruler is in frames. Turning it on sets the "
+      "primary ruler to frames, and turning it off does nothing."},
+     Create<IsRulerModeProperty, TimelineMode::kFrames>},
+    {{kStateRulerSamples, Type::kToggle, kReadWriteAccess,
+      "True while the primary ruler is in samples. Turning it on sets the "
+      "primary ruler to samples, and turning it off does nothing."},
+     Create<IsRulerModeProperty, TimelineMode::kSamples>},
+    {{kStateSecondaryRulerMode, Type::kEnumerated, kReadWriteAccess,
+      "The secondary ruler's mode: 0 for none, 1 for time, 2 for frames, and "
+      "3 for samples."},
+     Create<SecondaryRulerModeProperty>},
+    {{kStateSecondaryRulerTime, Type::kToggle, kReadWriteAccess,
+      "True while the secondary ruler is in time. Turning it on sets the "
+      "secondary ruler to time, and turning it off clears the secondary "
+      "ruler."},
      Create<IsSecondaryRulerModeProperty, TimelineMode::kTime>},
-    {kStateSecondaryRulerFrames,
+    {{kStateSecondaryRulerFrames, Type::kToggle, kReadWriteAccess,
+      "True while the secondary ruler is in frames. Turning it on sets the "
+      "secondary ruler to frames, and turning it off clears the secondary "
+      "ruler."},
      Create<IsSecondaryRulerModeProperty, TimelineMode::kFrames>},
-    {kStateSecondaryRulerSamples,
+    {{kStateSecondaryRulerSamples, Type::kToggle, kReadWriteAccess,
+      "True while the secondary ruler is in samples. Turning it on sets the "
+      "secondary ruler to samples, and turning it off clears the secondary "
+      "ruler."},
      Create<IsSecondaryRulerModeProperty, TimelineMode::kSamples>},
 };
 
-// Returns true if no two rows in kStateProperties have the same name.
-constexpr bool StatePropertyNamesAreUnique() {
-  for (auto it = std::begin(kStateProperties); it != std::end(kStateProperties);
-       ++it) {
-    if (std::ranges::find(it + 1, std::end(kStateProperties), it->name,
-                          &StateProperty::name) != std::end(kStateProperties)) {
-      return false;
-    }
-  }
-  return true;
-}
-static_assert(StatePropertyNamesAreUnique(),
-              "kStateProperties rows must have unique names");
-static_assert(std::ranges::all_of(
-                  kStateProperties,
-                  [](std::string_view name) {
-                    return name.starts_with(kStateNamespace);
-                  },
-                  &StateProperty::name),
-              "kStateProperties rows must be in state:");
+constexpr auto kStatePropertyInfo = GetPropertyInfo(kStateProperties);
+static_assert(AreValidProperties(kStatePropertyInfo, kStateNamespace),
+              "kStateProperties rows must have unique names in state:");
 
 }  // namespace
 
 //==============================================================================
-// CreateStateProperty
+// State properties
 //==============================================================================
 
 std::unique_ptr<ViewProperty> CreateStateProperty(Scene* scene,
                                                   std::string_view name) {
-  const StateProperty* row =
-      std::ranges::find(kStateProperties, name, &StateProperty::name);
-  if (row == std::end(kStateProperties)) {
-    return nullptr;
-  }
-  return row->create(scene, name);
+  const StateProperty* row = FindRow(kStateProperties, name);
+  return row != nullptr ? row->create(scene, name) : nullptr;
+}
+
+absl::Span<const PropertyInfo> GetStatePropertyInfo() {
+  return kStatePropertyInfo;
 }
 
 }  // namespace jpr

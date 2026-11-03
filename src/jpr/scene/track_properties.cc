@@ -5,6 +5,10 @@
 
 #include "jpr/scene/track_properties.h"
 
+#include <algorithm>
+#include <memory>
+#include <string_view>
+
 #include "absl/algorithm/container.h"
 #include "absl/log/check.h"
 #include "jpr/common/reaper_api.h"
@@ -12,6 +16,8 @@
 namespace jpr {
 
 namespace {
+
+using Type = ViewProperty::Type;
 
 class TrackNameProperty : public TrackProperty {
  public:
@@ -106,24 +112,6 @@ class TrackVolumeProperty : public TrackProperty {
   TrackActions* const actions_;
 };
 
-// The names of the TrackBoolViewProperty properties, without and with track
-// actions.
-struct BoolViewPropertyNames {
-  std::string_view name;
-  std::string_view ui_name;
-  TrackBoolProperty property;
-};
-constexpr BoolViewPropertyNames kBoolViewPropertyNames[] = {
-    {TrackProperties::kSelected, TrackProperties::kUiSelected,
-     TrackBoolProperty::kSelected},
-    {TrackProperties::kMute, TrackProperties::kUiMute,
-     TrackBoolProperty::kMute},
-    {TrackProperties::kSolo, TrackProperties::kUiSolo,
-     TrackBoolProperty::kSolo},
-    {TrackProperties::kRecArm, TrackProperties::kUiRecArm,
-     TrackBoolProperty::kRecArm},
-};
-
 // A property for whether the track's volume or pan is touched. Writing true
 // holds a touch on the track, which moves with the property to another track.
 class TrackTouchedProperty : public TrackProperty {
@@ -199,6 +187,146 @@ class TrackHasRoutesProperty : public TrackProperty {
   }
 };
 
+//------------------------------------------------------------------------------
+// Track property table
+//------------------------------------------------------------------------------
+
+// Creates a property of type T on the track.
+template <typename T>
+std::unique_ptr<TrackProperty> Create(std::string_view name, Track* track,
+                                      TrackActions* actions) {
+  return std::make_unique<T>(track);
+}
+
+// Creates a property for selected, mute, solo, or record arm, which runs the
+// track action if kUi is true.
+template <TrackBoolProperty kProperty, bool kUi>
+std::unique_ptr<TrackProperty> CreateBool(std::string_view name, Track* track,
+                                          TrackActions* actions) {
+  return std::make_unique<TrackBoolViewProperty>(name, kProperty, track,
+                                                 kUi ? actions : nullptr);
+}
+
+// Creates a pan or volume property of type T, which runs the track action if
+// kUi is true.
+template <typename T, bool kUi>
+std::unique_ptr<TrackProperty> CreateLevel(std::string_view name, Track* track,
+                                           TrackActions* actions) {
+  return std::make_unique<T>(name, track, kUi ? actions : nullptr);
+}
+
+template <TrackTouchType kType>
+std::unique_ptr<TrackProperty> CreateTouched(std::string_view name,
+                                             Track* track,
+                                             TrackActions* actions) {
+  return std::make_unique<TrackTouchedProperty>(name, kType, track);
+}
+
+std::unique_ptr<TrackProperty> CreateIsFolder(std::string_view name,
+                                              Track* track,
+                                              TrackActions* actions) {
+  return std::make_unique<TrackIsFolderProperty>(track,
+                                                 actions->GetTrackFilter());
+}
+
+struct TrackPropertyRow {
+  PropertyInfo info;
+  std::unique_ptr<TrackProperty> (*create)(std::string_view name, Track* track,
+                                           TrackActions* actions);
+};
+
+// A new track property needs a name in the header, and a row here. The
+// static_assert below checks that the names are unique, and in track:.
+constexpr TrackPropertyRow kTrackProperties[] = {
+    {{TrackProperties::kName, Type::kText, kReadWriteAccess,
+      "The track's name. Writing it renames the track."},
+     Create<TrackNameProperty>},
+    {{TrackProperties::kColor, Type::kColor, kReadAccess, "The track's color."},
+     Create<TrackColorProperty>},
+    {{TrackProperties::kSelected, Type::kToggle, kReadWriteAccess,
+      "True while the track is selected. Writing it selects or unselects this "
+      "track alone."},
+     CreateBool<TrackBoolProperty::kSelected, false>},
+    {{TrackProperties::kMute, Type::kToggle, kReadWriteAccess,
+      "True while the track is muted. Writing it mutes or unmutes this track "
+      "alone."},
+     CreateBool<TrackBoolProperty::kMute, false>},
+    {{TrackProperties::kSolo, Type::kToggle, kReadWriteAccess,
+      "True while the track is soloed. Writing it solos or unsolos this track "
+      "alone."},
+     CreateBool<TrackBoolProperty::kSolo, false>},
+    {{TrackProperties::kRecArm, Type::kToggle, kReadWriteAccess,
+      "True while the track is armed for recording. Writing it arms or "
+      "disarms this track alone."},
+     CreateBool<TrackBoolProperty::kRecArm, false>},
+    {{TrackProperties::kPan, Type::kPan, kReadWriteAccess,
+      "The track's pan. Writing it pans this track alone."},
+     CreateLevel<TrackPanProperty, false>},
+    {{TrackProperties::kVolume, Type::kVolume, kReadWriteAccess,
+      "The track's volume. Writing it sets this track's volume alone."},
+     CreateLevel<TrackVolumeProperty, false>},
+    {{TrackProperties::kMeter, Type::kNormalized, kReadAccess,
+      "The track's peak meter level."},
+     Create<TrackMeterProperty>},
+    {{TrackProperties::kUiSelected, Type::kToggle, kReadWriteAccess,
+      "The same as \"track:selected\", but writing it runs the surface's "
+      "select action, as clicking the track in REAPER does, with the surface's "
+      "modifiers and anchors."},
+     CreateBool<TrackBoolProperty::kSelected, true>},
+    {{TrackProperties::kUiMute, Type::kToggle, kReadWriteAccess,
+      "The same as \"track:mute\", but writing it runs the surface's mute "
+      "action, as clicking mute in REAPER does, with the surface's modifiers, "
+      "grouping, and anchors."},
+     CreateBool<TrackBoolProperty::kMute, true>},
+    {{TrackProperties::kUiSolo, Type::kToggle, kReadWriteAccess,
+      "The same as \"track:solo\", but writing it runs the surface's solo "
+      "action, as clicking solo in REAPER does, with the surface's modifiers, "
+      "grouping, and anchors."},
+     CreateBool<TrackBoolProperty::kSolo, true>},
+    {{TrackProperties::kUiRecArm, Type::kToggle, kReadWriteAccess,
+      "The same as \"track:rec_arm\", but writing it runs the surface's record "
+      "arm action, as clicking record arm in REAPER does, with the surface's "
+      "modifiers, grouping, and anchors."},
+     CreateBool<TrackBoolProperty::kRecArm, true>},
+    {{TrackProperties::kUiPan, Type::kPan, kReadWriteAccess,
+      "The same as \"track:pan\", but writing it runs the surface's pan "
+      "action, as panning in REAPER does, with the surface's modifiers and "
+      "grouping."},
+     CreateLevel<TrackPanProperty, true>},
+    {{TrackProperties::kUiVolume, Type::kVolume, kReadWriteAccess,
+      "The same as \"track:volume\", but writing it runs the surface's volume "
+      "action, as moving the fader in REAPER does, with the surface's "
+      "modifiers and grouping."},
+     CreateLevel<TrackVolumeProperty, true>},
+    {{TrackProperties::kTrackIsFolder, Type::kToggle, kReadAccess,
+      "True if the track has child tracks on the surface."},
+     CreateIsFolder},
+    {{TrackProperties::kTrackHasParent, Type::kToggle, kReadAccess,
+      "True if the track has a parent track, which is every track except the "
+      "master track."},
+     Create<TrackHasParentProperty>},
+    {{TrackProperties::kTrackExists, Type::kToggle, kReadAccess,
+      "True if there is a track, as what shows a track may show none."},
+     Create<TrackExistsProperty>},
+    {{TrackProperties::kTrackHasRoutes, Type::kToggle, kReadAccess,
+      "True if the track has any sends or receives."},
+     Create<TrackHasRoutesProperty>},
+    {{TrackProperties::kVolumeTouched, Type::kToggle, kReadWriteAccess,
+      "True while anything touches the track's volume, for REAPER's Touch and "
+      "Latch automation. Writing true touches it until false is written, and "
+      "the touch moves with the property to another track."},
+     CreateTouched<TrackTouchType::kVolume>},
+    {{TrackProperties::kPanTouched, Type::kToggle, kReadWriteAccess,
+      "True while anything touches the track's pan, for REAPER's Touch and "
+      "Latch automation. Writing true touches it until false is written, and "
+      "the touch moves with the property to another track."},
+     CreateTouched<TrackTouchType::kPan>},
+};
+
+constexpr auto kTrackPropertyInfo = GetPropertyInfo(kTrackProperties);
+static_assert(AreValidProperties(kTrackPropertyInfo, kTrackNamespace),
+              "kTrackProperties rows must have unique names in track:");
+
 }  // namespace
 
 TrackProperties::TrackProperties(TrackActions* actions, Track* track)
@@ -259,77 +387,35 @@ ViewProperty* TrackProperties::GetProperty(std::string_view name) const {
   if (auto it = properties_.find(name); it != properties_.end()) {
     return it->second.get();
   }
+  const TrackPropertyRow* row = FindRow(kTrackProperties, name);
+  if (row == nullptr) {
+    return nullptr;
+  }
+  std::unique_ptr<TrackProperty>& property = properties_[name];
+  property = row->create(name, track_, actions_);
+
+  // The properties notified of more than a change to the track.
   if (name == kMeter) {
-    auto meter_property = std::make_unique<TrackMeterProperty>(track_);
-    meter_property_ = meter_property.get();
-    properties_[name] = std::move(meter_property);
-    return meter_property_;
-  }
-  if (name == kName) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackNameProperty>(track_);
-    return property.get();
-  }
-  if (name == kColor) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackColorProperty>(track_);
-    return property.get();
-  }
-  for (const BoolViewPropertyNames& names : kBoolViewPropertyNames) {
-    if (name == names.name || name == names.ui_name) {
-      auto& property = properties_[name] =
-          std::make_unique<TrackBoolViewProperty>(
-              name, names.property, track_,
-              name == names.ui_name ? actions_ : nullptr);
-      return property.get();
-    }
-  }
-  if (name == kPan || name == kUiPan) {
-    auto& property = properties_[name] = std::make_unique<TrackPanProperty>(
-        name, track_, name == kUiPan ? actions_ : nullptr);
-    return property.get();
-  }
-  if (name == kVolume || name == kUiVolume) {
-    auto& property = properties_[name] = std::make_unique<TrackVolumeProperty>(
-        name, track_, name == kUiVolume ? actions_ : nullptr);
-    return property.get();
-  }
-  if (name == kVolumeTouched || name == kPanTouched) {
-    const TrackTouchType type =
-        name == kVolumeTouched ? TrackTouchType::kVolume : TrackTouchType::kPan;
-    auto& property = properties_[name] =
-        std::make_unique<TrackTouchedProperty>(name, type, track_);
-    touched_properties_[static_cast<int>(type)] = property.get();
-    return property.get();
-  }
-  if (name == kTrackIsFolder) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackIsFolderProperty>(track_,
-                                                actions_->GetTrackFilter());
-    return property.get();
-  }
-  if (name == kTrackHasParent) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackHasParentProperty>(track_);
-    return property.get();
-  }
-  if (name == kTrackExists) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackExistsProperty>(track_);
-    return property.get();
-  }
-  if (name == kTrackHasRoutes) {
-    auto& property = properties_[name] =
-        std::make_unique<TrackHasRoutesProperty>(track_);
+    meter_property_ = static_cast<TrackMeterProperty*>(property.get());
+  } else if (name == kTrackHasRoutes) {
     has_routes_property_ = property.get();
-    return property.get();
+  } else if (name == kVolumeTouched) {
+    touched_properties_[static_cast<int>(TrackTouchType::kVolume)] =
+        property.get();
+  } else if (name == kPanTouched) {
+    touched_properties_[static_cast<int>(TrackTouchType::kPan)] =
+        property.get();
   }
-  return nullptr;
+  return property.get();
 }
 
 bool TrackProperties::IsWatched() const {
   return absl::c_any_of(
       properties_, [](const auto& entry) { return entry.second->IsWatched(); });
+}
+
+absl::Span<const PropertyInfo> GetTrackPropertyInfo() {
+  return kTrackPropertyInfo;
 }
 
 }  // namespace jpr

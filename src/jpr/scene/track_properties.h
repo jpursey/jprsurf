@@ -8,8 +8,10 @@
 #include <memory>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/types/span.h"
 #include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/scene/catalog.h"
 #include "jpr/scene/track_actions.h"
 #include "jpr/scene/view_property.h"
 #include "sdk/reaper_plugin.h"
@@ -78,10 +80,8 @@ class TrackMeterProperty : public TrackProperty {
 //   or no views are mapped to the track anymore.
 class TrackProperties final : public TrackListener {
  public:
-  // Selected, mute, solo, record arm, pan, and volume each have two properties,
-  // which read the same value. Writing the plain one sets the value on this
-  // track alone. Writing the ui_ one runs the scene's track action instead
-  // (see TrackActions), which applies the modifiers, grouping, and anchors.
+  // Each is described by its row in kTrackProperties (track_properties.cc),
+  // which the catalog reads (see GetTrackPropertyInfo()).
   static constexpr std::string_view kName = kTrackName<"name">;
   static constexpr std::string_view kColor = kTrackName<"color">;
   static constexpr std::string_view kSelected = kTrackName<"selected">;
@@ -98,17 +98,11 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kUiPan = kTrackName<"ui_pan">;
   static constexpr std::string_view kUiVolume = kTrackName<"ui_volume">;
   static constexpr std::string_view kTrackIsFolder = kTrackName<"is_folder">;
-  // True if the track has a parent track, which is every track except the
-  // master track (and the stub track).
   static constexpr std::string_view kTrackHasParent = kTrackName<"has_parent">;
   static constexpr std::string_view kTrackExists = kTrackName<"exists">;
   static constexpr std::string_view kTrackHasRoutes = kTrackName<"has_routes">;
 
-  // Whether the track's volume or pan is touched, for REAPER's Touch and Latch
-  // automation (see Track::RegisterTouch()). Writing true touches the track
-  // until false is written, or the property is destroyed, and the touch moves
-  // with the property to another track. Reading is whether anything touches
-  // the track. Each TrackProperties has its own, so two of them on the same
+  // Each TrackProperties holds its own touches, so two of them on the same
   // track each hold their own touch.
   static constexpr std::string_view kVolumeTouched =
       kTrackName<"volume_touched">;
@@ -171,5 +165,8 @@ class TrackProperties final : public TrackListener {
   // the only one notified when the track's touch of its type changes.
   mutable TrackProperty* touched_properties_[kTrackTouchTypeCount] = {};
 };
+
+// Returns the info of every track property.
+absl::Span<const PropertyInfo> GetTrackPropertyInfo();
 
 }  // namespace jpr

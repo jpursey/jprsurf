@@ -113,51 +113,23 @@ class View final {
   //----------------------------------------------------------------------------
 
   // Each property only exists on a view it applies to, so a mapping on one
-  // anywhere else fails to be added. A "writable" reference is one the view
-  // may set (see Scene::AddTrackReference()).
-
-  // On a view with a list: scroll one item back (kChildDec) or forward
-  // (kChildInc), or by the bank size (kBankDec and kBankInc). The scroll
-  // position is kept in range.
+  // anywhere else fails to be added. Each is described by its row in
+  // kViewProperties (view_list.h), with what it needs of its view, which the
+  // catalog reads.
   static constexpr std::string_view kChildDec = kViewName<"child_dec">;
   static constexpr std::string_view kChildInc = kViewName<"child_inc">;
   static constexpr std::string_view kBankDec = kViewName<"bank_dec">;
   static constexpr std::string_view kBankInc = kViewName<"bank_inc">;
-
-  // On a view with a child tracks list, bound to a writable reference: set the
-  // reference to its track's parent track (navigating "up" one level), with
-  // the track that was left centered in the list if possible (kTrackParent),
-  // or to the master track (kTrackRoot). kTrackParent does nothing if the
-  // track has no parent track.
   static constexpr std::string_view kTrackParent = kViewName<"track_parent">;
   static constexpr std::string_view kTrackRoot = kViewName<"track_root">;
-
-  // On a list item view of such a view: set the parent's reference to this
-  // view's track (navigating "in" to it), if it has child tracks on the
-  // surface.
   static constexpr std::string_view kParentTrackChild =
       kViewName<"parent_track_child">;
-
-  // On a list item view of such a view: the same as kTrackParent and
-  // kTrackRoot on the parent view.
   static constexpr std::string_view kParentTrackParent =
       kViewName<"parent_track_parent">;
   static constexpr std::string_view kParentTrackRoot =
       kViewName<"parent_track_root">;
-
-  // On a list item view of a view with a routes list, bound to a writable
-  // reference: set the parent's reference to the track at the other end of
-  // this view's route, showing the other route type. This navigates across the
-  // route: from a send to the destination track's receives, or from a receive
-  // to the source track's sends. The list is scrolled so the route back to the
-  // original track is shown. This does nothing if this view has no route.
   static constexpr std::string_view kParentRouteOtherTrack =
       kViewName<"parent_route_other_track">;
-
-  // On a view with a routes list: switch between showing sends and receives,
-  // from the start of the list (doing nothing if the track has no routes of
-  // the other type), and a text property with the route type shown, "Send" or
-  // "Recv".
   static constexpr std::string_view kChildRouteToggle =
       kViewName<"child_route_toggle">;
   static constexpr std::string_view kChildRouteTypeName =

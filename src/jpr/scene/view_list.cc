@@ -182,7 +182,8 @@ void ChildTrackList::Reveal(Track* track) {
 // (see View::kChildRouteTypeName).
 class RouteTypeProperty final : public ViewProperty {
  public:
-  RouteTypeProperty() : ViewProperty(View::kChildRouteTypeName, Type::kText) {}
+  explicit RouteTypeProperty(std::string_view name)
+      : ViewProperty(name, Type::kText) {}
 
   TrackRouteType GetRouteType() const { return route_type_; }
   void SetRouteType(TrackRouteType route_type) {
@@ -242,9 +243,7 @@ RouteList::RouteList(View* view, std::optional<int> bank_size,
                      View::RouteTypeRule rule)
     : ViewList(view, bank_size, writable_reference), rule_(rule) {
   AddAction(view, View::kChildRouteToggle, [this] { ToggleRouteType(); });
-  auto route_type = std::make_unique<RouteTypeProperty>();
-  route_type_ = route_type.get();
-  AddProperty(view, std::move(route_type));
+  route_type_ = AddProperty<RouteTypeProperty>(view, View::kChildRouteTypeName);
 }
 
 void RouteList::AddItemProperties(View* item) {
@@ -390,18 +389,13 @@ TrackFilter ViewList::GetTrackFilter() const {
   return view_->GetScene()->GetTrackFilter();
 }
 
-void ViewList::AddAction(View* view, std::string_view name,
+void ViewList::AddAction(View* view, ViewPropertyName name,
                          absl::AnyInvocable<void()> callback) {
-  AddProperty(view, std::make_unique<CallbackActionProperty>(
-                        name, [this, callback = std::move(callback)]() mutable {
-                          view_->UpdateSubject();
-                          callback();
-                        }));
-}
-
-void ViewList::AddProperty(View* view, std::unique_ptr<ViewProperty> property) {
-  const std::string name(property->GetName());
-  view->properties_.emplace(name, std::move(property));
+  AddProperty<CallbackActionProperty>(
+      view, name, [this, callback = std::move(callback)]() mutable {
+        view_->UpdateSubject();
+        callback();
+      });
 }
 
 void ViewList::SetPosition(int position) {
