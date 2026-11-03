@@ -162,6 +162,15 @@ absl::Span<const ComponentKindInfo> GetComponentKinds();
   type, checks the scene has each built in reference, and builds a view of each
   need and checks that it has exactly the rows with that need. That is all that
   is left to agree, so there is no check at run time.
+- **Access** is declared by each property, as its type is (CL5), so the test
+  checks it too. Checking mappings relies on it, and otherwise a row's access
+  would only be what someone typed.
+- **Left as they are,** as not worth the machinery: the three built in
+  references are created by the scene's constructor rather than from their
+  rows, so only a test checks each row has one (not that each has a row); and
+  `TrackProperties::GetProperty()` still picks out the meter, `has_routes`, and
+  touched properties by name after creating them, to notify them of the
+  track's meter, routes, and touches.
 - **`ComponentKindInfo`** is documentation and checking data for the
   `ComponentSpec` kinds below. From a config, every parameter is text, so each
   parameter says what text it takes (its `ParamKind`, and its choices), and
@@ -463,7 +472,7 @@ Depends on: CL1, CL3.
 - `SurfaceSpec` and its parts.
 - `ValidateDeviceSpecs()` in `device`, which `CreateDevices()` calls.
 - `ValidateSurfaceSpec()`, checking devices, widgets, components, views, and
-  templates and their uses. Mappings are left to CL5.
+  templates and their uses. Mappings are left to CL6.
 - Unused, so no visible change.
 
 **Verify**
@@ -473,9 +482,25 @@ Depends on: CL1, CL3.
 - Each component kind's `ParamInfo` matches its spec struct: a parameter for
   each of its fields, with the kind and use checking enforces.
 
-### CL5 [ ] scene: Checking mappings
+### CL5 [ ] scene: Properties declare their access
 
-Depends on: CL4.
+Depends on: CL1.
+
+- `ViewProperty` takes its access in its constructor, as it does its type, and
+  `GetAccess()` returns it. Each property class passes what it supports: a
+  `PolledToggleProperty` is writable exactly when it has a write function, an
+  action is triggered, and so on.
+- The catalog test checks each row's access against its property's, as it does
+  its type.
+- No visible change.
+
+**Verify**
+- Standard checks.
+- The catalog test fails when a row's access is wrong.
+
+### CL6 [ ] scene: Checking mappings
+
+Depends on: CL4, CL5.
 
 - The rules for a type's inputs and outputs, and for finding a mode, are made
   available outside `ViewMapping`, which still uses them.
@@ -489,9 +514,9 @@ Depends on: CL4.
   elements, and an inner name hiding an outer one. `ViewMapping`'s tests still
   pass.
 
-### CL6 [ ] scene: Creating a scene from a spec
+### CL7 [ ] scene: Creating a scene from a spec
 
-Depends on: CL5.
+Depends on: CL6.
 
 - `CreateScene()` (see Creating the scene).
 - Unused, so no visible change.
@@ -504,9 +529,9 @@ Depends on: CL5.
   views and their instances' subjects, and fixed values sharing one `const:`
   property.
 
-### CL7 [ ] plugin, docs: JPRSurf's surface from its spec
+### CL8 [ ] plugin, docs: JPRSurf's surface from its spec
 
-Depends on: CL6.
+Depends on: CL7.
 
 - `GetDefaultSpec()`, and `PluginSurface` creating its scene from it (see The
   plugin).
