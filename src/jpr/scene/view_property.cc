@@ -126,6 +126,19 @@ bool ViewProperty::Equals(const Value& value) const {
       value);
 }
 
+std::optional<ViewProperty::Value> ViewProperty::ResolveValue(
+    const Value& value) const {
+  const std::string* name = std::get_if<std::string>(&value);
+  if (name == nullptr || type_ != Type::kEnumerated) {
+    return value;
+  }
+  std::optional<int> number = FindValue(*name);
+  if (!number.has_value()) {
+    return std::nullopt;
+  }
+  return Value(*number);
+}
+
 bool ViewProperty::GetBool() const {
   switch (type_) {
     case Type::kAction:

@@ -47,11 +47,16 @@ constexpr const char kDescString[] = "Jovian Path Control Surface";
 
 // The top level mode of the surface, which determines what the channel strips
 // control. Each mode has a view that is active while it is the mode. Its values
-// are the modes below, whose names are kSurfaceModeNames, in order.
+// are the modes below, in kSurfaceModeNames' order.
 constexpr std::string_view kSurfaceMode = kUserName<"surface_mode">;
-constexpr int kTrackMode = 0;        // Strips show tracks in the hierarchy.
-constexpr int kSendReceiveMode = 1;  // Strips show one track's routes.
-constexpr std::string_view kSurfaceModeNames[] = {"track", "send_receive"};
+
+// Strips show tracks in the hierarchy.
+constexpr std::string_view kTrackMode = "track";
+
+// Strips show one track's routes.
+constexpr std::string_view kSendReceiveMode = "send_receive";
+
+constexpr std::string_view kSurfaceModeNames[] = {kTrackMode, kSendReceiveMode};
 
 // The track whose child tracks the track list shows. It starts as, and returns
 // to, the master track if its track is deleted. A folder that is only hidden is
@@ -362,13 +367,17 @@ void PluginSurface::InitViews() {
                         "solo_light");
 
   // Utility buttons
+  const ViewMapping::ReadConfig shift = {
+      .required_modifiers = {std::string(ModifierProperty::kShift)}};
+  const ViewMapping::ReadConfig ctrl = {
+      .required_modifiers = {std::string(ModifierProperty::kCtrl)}};
   root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, "undo");
   root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, "undo",
-                        {.read = {.required_modifiers = kModShift}});
+                        {.read = shift});
   root_view->AddMapping(ViewMapping::kWriteControl, kStateCanRedo, "undo");
   root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, "save");
   root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
-                        "save", {.read = {.required_modifiers = kModShift}});
+                        "save", {.read = shift});
   root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty, "save",
                         {.write = {.mode = "blink"}});
   root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
@@ -376,12 +385,12 @@ void PluginSurface::InitViews() {
   root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyItemSelected,
                         "cancel");
   root_view->AddMapping(ViewMapping::kReadControl, kCmdRemoveTimeSelection,
-                        "cancel", {.read = {.required_modifiers = kModShift}});
+                        "cancel", {.read = shift});
   root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem, "enter");
   root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem, "enter",
-                        {.read = {.required_modifiers = kModShift}});
+                        {.read = shift});
   root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
-                        "enter", {.read = {.required_modifiers = kModCtrl}});
+                        "enter", {.read = ctrl});
 
   // Automation buttons. Group turns the global automation override on and
   // off, and is lit while it is on.
@@ -464,10 +473,10 @@ void PluginSurface::InitViews() {
   }
   CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
             kTransportStep, std::move(step_names))) != nullptr);
-  for (int i = 0; i < static_cast<int>(std::size(kTransportSteps)); ++i) {
-    const TransportStep& step = kTransportSteps[i];
+  for (const TransportStep& step : kTransportSteps) {
     const ViewCondition::Config on_step = {
-        .property = std::string(kTransportStep), .value = i};
+        .property = std::string(kTransportStep),
+        .value = std::string(step.name)};
     root_view->AddMapping(ViewMapping::kReadControl, step.prev_command,
                           "rewind", {.condition = on_step});
     root_view->AddMapping(ViewMapping::kReadControl, step.next_command,
@@ -477,8 +486,9 @@ void PluginSurface::InitViews() {
     }
     root_view->AddMapping(
         ViewMapping::kReadControl, kTransportStep, step.button,
-        {.read = {
-             .property_min = 0, .property_max = i, .press_toggles = true}});
+        {.read = {.property_min = std::string(kTransportSteps[0].name),
+                  .property_max = std::string(step.name),
+                  .press_toggles = true}});
     root_view->AddMapping(ViewMapping::kWriteControl, lit, step.button,
                           {.condition = on_step});
   }
@@ -497,14 +507,13 @@ void PluginSurface::InitViews() {
             kSurfaceMode,
             std::vector<std::string>(std::begin(kSurfaceModeNames),
                                      std::end(kSurfaceModeNames)))) != nullptr);
-  const Modifiers send_hold_modifier = scene_->AddModifierProperty(kSendHold);
-  CHECK(send_hold_modifier != 0);
+  CHECK(scene_->AddModifierProperty(kSendHold) != 0);
   CHECK(scene_->AddUserProperty(std::make_unique<TrackPickProperty>(
             kPickSelectedTrack, *current_track,
             scene_->GetTrackReference(Scene::kSelectedTrack))) != nullptr);
-  root_view->AddMapping(
-      ViewMapping::kReadControl, kSurfaceMode, "assign_track",
-      {.read = {.property_min = kTrackMode, .property_max = kTrackMode}});
+  root_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode, "assign_track",
+                        {.read = {.property_min = std::string(kTrackMode),
+                                  .property_max = std::string(kTrackMode)}});
   root_view->AddMapping(ViewMapping::kReadControl, kSendHold, "assign_send",
                         {.read = {.press_release = true}});
   root_view->Enable();
@@ -514,7 +523,7 @@ void PluginSurface::InitViews() {
   View* track_mode_view = root_view->AddChildView(
       "TrackMode",
       {.condition = ViewCondition::Config{.property = std::string(kSurfaceMode),
-                                          .value = kTrackMode}});
+                                          .value = std::string(kTrackMode)}});
   CHECK(track_mode_view != nullptr);
 
   // On while a track's select button is held as the anchor for a range.
@@ -560,7 +569,7 @@ void PluginSurface::InitViews() {
                           select, InputConfig::PressBehavior::kLongPress);
     track_view->AddMapping(
         ViewMapping::kReadControl, TrackProperties::kUiSelected, select,
-        {.read = {.required_modifiers = select_anchor_modifier}});
+        {.read = {.required_modifiers = {std::string(kSelectAnchor)}}});
 
     // While Send is held, pressing select instead enters Send/Receive mode
     // for the track, if it has routes, and otherwise does nothing. This uses
@@ -572,16 +581,19 @@ void PluginSurface::InitViews() {
         std::make_unique<TrackPickProperty>(kPickTrack, *current_track));
     const ViewCondition::Config has_routes = {
         .property = std::string(TrackProperties::kTrackHasRoutes)};
-    for (const Modifiers modifiers :
-         {send_hold_modifier, send_hold_modifier | select_anchor_modifier}) {
+    const std::string send_hold(kSendHold);
+    for (const std::vector<std::string>& modifiers :
+         {std::vector{send_hold},
+          std::vector{send_hold, std::string(kSelectAnchor)}}) {
       track_view->AddMapping(
           ViewMapping::kReadControl, kPickTrack, select,
           {.read = {.required_modifiers = modifiers}, .condition = has_routes});
-      track_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode, select,
-                             {.read = {.required_modifiers = modifiers,
-                                       .property_min = kSendReceiveMode,
-                                       .property_max = kSendReceiveMode},
-                              .condition = has_routes});
+      track_view->AddMapping(
+          ViewMapping::kReadControl, kSurfaceMode, select,
+          {.read = {.required_modifiers = modifiers,
+                    .property_min = std::string(kSendReceiveMode),
+                    .property_max = std::string(kSendReceiveMode)},
+           .condition = has_routes});
     }
 
     // The select light shows whether the track is selected, or while Send is
@@ -643,12 +655,12 @@ void PluginSurface::InitViews() {
   track_mode_view->AddMapping(
       ViewMapping::kReadControl, kPickSelectedTrack, "assign_send",
       {.read = {.press_behavior = tap}, .condition = has_routes});
-  track_mode_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode,
-                              "assign_send",
-                              {.read = {.press_behavior = tap,
-                                        .property_min = kSendReceiveMode,
-                                        .property_max = kSendReceiveMode},
-                               .condition = has_routes});
+  track_mode_view->AddMapping(
+      ViewMapping::kReadControl, kSurfaceMode, "assign_send",
+      {.read = {.press_behavior = tap,
+                .property_min = std::string(kSendReceiveMode),
+                .property_max = std::string(kSendReceiveMode)},
+       .condition = has_routes});
 
   // Track blinks, as it is the current mode, and Send is lit while the
   // selected track has routes to show.
@@ -664,8 +676,9 @@ void PluginSurface::InitViews() {
   // nothing until another track is touched.
   View* send_receive_mode_view = root_view->AddChildView(
       "SendReceiveMode",
-      {.condition = ViewCondition::Config{.property = std::string(kSurfaceMode),
-                                          .value = kSendReceiveMode},
+      {.condition =
+           ViewCondition::Config{.property = std::string(kSurfaceMode),
+                                 .value = std::string(kSendReceiveMode)},
        .subject = View::ReferenceSubject{.name = std::string(kCurrentTrack)},
        .list = View::ListConfig{.items = View::Routes{}}});
   CHECK(send_receive_mode_view != nullptr);

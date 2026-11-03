@@ -71,10 +71,11 @@ class ViewMapping final {
     // with any input type but a press.
     std::optional<ControlInput::Type> input_type;
 
-    // The modifier keys that must be active for this input to trigger. When
-    // multiple mappings exist for the same control and input type, modifiers
-    // are used for mutual exclusivity.
-    Modifiers required_modifiers = 0;
+    // The names of the modifiers, built in or added (such as "mod:shift", see
+    // Scene::AddModifierProperty()), that must be active for this input to
+    // trigger. When multiple mappings exist for the same control and input
+    // type, modifiers are used for mutual exclusivity.
+    std::vector<std::string> required_modifiers;
 
     // The press behavior for this mapping. Only meaningful for press input
     // types and is ignored for value and delta inputs.
@@ -84,7 +85,9 @@ class ViewMapping final {
     // If set, the minimum and maximum values for the property that the control
     // maps to. If not set, the default mapping will be used (e.g. for a pan
     // property, -1 maps to min and 1 maps to max). The values must match the
-    // property's underlying type or they will be ignored.
+    // property's underlying type or they will be ignored, except that an
+    // enumerated property's values may be the names of its values (see
+    // ViewProperty::ResolveValue()).
     //
     // This is further affected by the input type of the control:
     //   - If the control has a Value input, then the property value will be
@@ -151,7 +154,8 @@ class ViewMapping final {
 
     // Maps property values to output modes, by name (see WriteConfig::mode).
     // The property's current value is looked up in this map; the first match
-    // is used.
+    // is used. An enumerated property's values may be the names of its values
+    // (see ViewProperty::ResolveValue()).
     std::vector<std::pair<ViewProperty::Value, std::string>> value_to_mode;
   };
 
@@ -230,9 +234,11 @@ class ViewMapping final {
     std::vector<std::pair<ViewProperty::Value, int>> value_to_mode;
   };
 
-  // The modes are the numbers of the config's write modes (see FindMode()).
+  // The modifiers are the flags of the read config's required modifiers, and
+  // the modes are the numbers of the config's write modes (see FindMode()).
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-              Control* control, ReadConfig read_config, int mode,
+              Control* control, ReadConfig read_config,
+              Modifiers required_modifiers, int mode,
               std::vector<PropertyModes> mode_overrides,
               std::unique_ptr<ViewCondition> condition);
 
@@ -252,7 +258,7 @@ class ViewMapping final {
   // whether its condition is met.
   void RefreshActive(bool parent_active);
 
-  void InitReadControl();
+  void InitReadControl(Modifiers required_modifiers);
   void InitReadActionSyncFunction(Control::Inputs inputs);
   void InitReadToggleSyncFunction(Control::Inputs inputs);
   void InitReadPanSyncFunction(Control::Inputs inputs);

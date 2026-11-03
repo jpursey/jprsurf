@@ -30,8 +30,9 @@ class ViewCondition final {
     // or that has the mapping with the condition.
     std::string property;
 
-    // The value the property must equal, such as true for a toggle, or an int
-    // for an enumerated property.
+    // The value the property must equal, such as true for a toggle, or for an
+    // enumerated property, an int or the name of one of its values (see
+    // ViewProperty::ResolveValue()).
     ViewProperty::Value value = true;
   };
 

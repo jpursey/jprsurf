@@ -165,6 +165,13 @@ class ViewMappingTest : public SceneTest {
         std::make_unique<ToggleValueProperty>(name));
   }
 
+  // Adds an enumerated property to the scene whose values have the names.
+  EnumeratedValueProperty* AddNamedValues(std::string_view name,
+                                          std::vector<std::string> names) {
+    return GetScene()->AddUserProperty(
+        std::make_unique<EnumeratedValueProperty>(name, std::move(names)));
+  }
+
   // Maps the property to write to, or read from, each control.
   void Write(std::string_view property,
              std::initializer_list<std::string_view> controls,
@@ -180,6 +187,17 @@ class ViewMappingTest : public SceneTest {
   // Maps the property to write to each of DValue, CValue, Text, and Color.
   void WriteToEach(std::string_view property) {
     Write(property, {"DValue", "CValue", "Text", "Color"});
+  }
+
+  // Returns the read config, with a range of "A" to "B" for a text property,
+  // as text reads a press only with a range.
+  static ViewMapping::ReadConfig WithTextRange(
+      Type type, ViewMapping::ReadConfig read = {}) {
+    if (type == Type::kText) {
+      read.property_min = std::string("A");
+      read.property_max = std::string("B");
+    }
+    return read;
   }
 
   // A property, and a control that reads it.
@@ -594,6 +612,23 @@ TEST_F(ViewMappingTest, TheFirstModeOverrideThatMatchesWins) {
   }
 }
 
+TEST_F(ViewMappingTest, AModeOverrideMayNameAnEnumeratedValue) {
+  FakeDevice::FakeControl lights = AddDValue("Lights", {1, 1});
+  AddProperty(Type::kToggle, true);
+  EnumeratedValueProperty* mode = AddNamedValues("user:mode", {"a", "b"});
+  Write(
+      "user:value", {"Lights"},
+      {.write = {.mode_overrides = {{.property = "user:mode",
+                                     .value_to_mode = {{Value(std::string("b")),
+                                                        GetModeName(1)}}}}}});
+  AddSurface();
+  EXPECT_EQ(lights.dvalue_output->GetMode(), 0);
+
+  mode->SetInt(1);
+  surface_->Run();
+  EXPECT_EQ(lights.dvalue_output->GetMode(), 1);
+}
+
 TEST_F(ViewMappingTest, StepsAreThoseOfTheModeAnOverridePicks) {
   // Each value is on in mode 0, and its step in mode 1.
   struct Row {
@@ -784,9 +819,6 @@ TEST_F(ViewMappingTest, EachTypeReadsTheInputItSuitsBest) {
        std::nullopt},
   };
 
-  // Text reads a press only with a range.
-  const ViewMapping::ReadConfig read = {.property_min = std::string("A"),
-                                        .property_max = std::string("B")};
   std::vector<FakeDevice::FakeControl> best_controls;
   std::vector<FakeDevice::FakeControl> next_controls;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
@@ -798,6 +830,7 @@ TEST_F(ViewMappingTest, EachTypeReadsTheInputItSuitsBest) {
   std::vector<Reader> best;
   std::vector<Reader> next;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    const ViewMapping::ReadConfig read = WithTextRange(rows[i].type);
     best.push_back(
         AddReader(best_controls[i], rows[i].type, rows[i].initial, read));
     next.push_back(
@@ -839,11 +872,9 @@ TEST_F(ViewMappingTest, AConfiguredInputTypeIsReadInPlaceOfTheBest) {
       AddInputControls("value", static_cast<int>(rows.size()), kAllInputs);
   std::vector<Reader> readers;
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-    // Text reads a press only with a range.
-    readers.push_back(AddReader(controls[i], rows[i].type, rows[i].initial,
-                                {.input_type = rows[i].input,
-                                 .property_min = std::string("A"),
-                                 .property_max = std::string("B")}));
+    readers.push_back(
+        AddReader(controls[i], rows[i].type, rows[i].initial,
+                  WithTextRange(rows[i].type, {.input_type = rows[i].input})));
   }
   AddSurface();
 
@@ -1334,6 +1365,21 @@ TEST_F(ViewMappingTest, EnumeratedValuesReadInTheirRange) {
   EXPECT_EQ(property->GetInt(), 1);
 }
 
+TEST_F(ViewMappingTest, AnEnumeratedRangeMayNameItsValues) {
+  EnumeratedValueProperty* property =
+      AddNamedValues("user:step", {"measure", "beat", "marker", "bar"});
+  Read("user:step", {"Fader"},
+       {.read = {.property_min = Value(std::string("beat")),
+                 .property_max = Value(std::string("marker"))}});
+  AddSurface();
+  Move(fader_, 0.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetText(), "beat");
+  Move(fader_, 1.0);
+  surface_->Run();
+  EXPECT_EQ(property->GetText(), "marker");
+}
+
 TEST_F(ViewMappingTest, PressTogglesSwitchAnEnumeratedValueBetweenItsEnds) {
   FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
   TestProperty* property =
@@ -1697,13 +1743,31 @@ TEST_F(ViewMappingTest, AReleaseThatChangesAConditionIsAppliedOnTheNextRun) {
 
 TEST_F(ViewMappingTest, ARequiredModifierMustBeOn) {
   TestProperty* property = AddProperty(Type::kNormalized, 0.0);
-  Read("user:value", {"Fader"}, {.read = {.required_modifiers = kModShift}});
+  Read("user:value", {"Fader"},
+       {.read = {.required_modifiers = {"mod:shift"}}});
   AddSurface();
   Move(fader_, 0.5);
   surface_->Run();
   EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
 
   SetModifiers(kModShift, true);
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
+}
+
+TEST_F(ViewMappingTest, AnAddedModifierIsRequiredByItsName) {
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  const Modifiers fn = GetScene()->AddModifierProperty("mod:fn");
+  Read("user:value", {"Fader"}, {.read = {.required_modifiers = {"mod:fn"}}});
+  AddSurface();
+  SetModifiers(kModShift, true);
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
+
+  ResetModifiers();
+  SetModifiers(fn, true);
   Move(fader_, 0.5);
   surface_->Run();
   EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
@@ -1717,9 +1781,10 @@ TEST_F(ViewMappingTest, MappingsTakeTurnsOnAControlByTheirModifiers) {
   TestProperty* ctrl_shift =
       AddProperty(Type::kNormalized, 0.0, "user:ctrl_shift");
   Read("user:plain", {"Fader"});
-  Read("user:shift", {"Fader"}, {.read = {.required_modifiers = kModShift}});
+  Read("user:shift", {"Fader"},
+       {.read = {.required_modifiers = {"mod:shift"}}});
   Read("user:ctrl_shift", {"Fader"},
-       {.read = {.required_modifiers = kModShift | kModCtrl}});
+       {.read = {.required_modifiers = {"mod:shift", "mod:ctrl"}}});
   AddSurface();
 
   struct Row {
@@ -1817,12 +1882,30 @@ TEST_F(ViewMappingTest, AConditionMustBeMetToRead) {
   EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
 }
 
+TEST_F(ViewMappingTest, AConditionMayNameAnEnumeratedValue) {
+  TestProperty* property = AddProperty(Type::kNormalized, 0.0);
+  EnumeratedValueProperty* mode = AddNamedValues("user:mode", {"a", "b"});
+  Read("user:value", {"Fader"},
+       {.condition = ViewCondition::Config{.property = "user:mode",
+                                           .value = std::string("b")}});
+  AddSurface();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.0);
+
+  mode->SetInt(1);
+  surface_->Run();
+  Move(fader_, 0.5);
+  surface_->Run();
+  EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
+}
+
 TEST_F(ViewMappingTest, InputForAnUnmetConditionGoesToNoOtherMapping) {
   TestProperty* shift = AddProperty(Type::kToggle, false, "user:shift");
   TestProperty* plain = AddProperty(Type::kToggle, false, "user:plain");
   ToggleValueProperty* flag = AddFlag();
   Read("user:shift", {"Button"},
-       {.read = {.required_modifiers = kModShift},
+       {.read = {.required_modifiers = {"mod:shift"}},
         .condition = ViewCondition::Config{.property = "user:flag"}});
   Read("user:plain", {"Button"});
   AddSurface();
@@ -1891,8 +1974,6 @@ TEST_F(ViewMappingTest, ReadsFromThePropertysValueWatchIt) {
       {Type::kColor, kBlack, true, true},
       {Type::kTimelinePosition, TimelinePosition(0.0), true, false},
   };
-  const ViewMapping::ReadConfig read = {.property_min = std::string("A"),
-                                        .property_max = std::string("B")};
   struct Readers {
     Reader by_value;
     Reader by_delta;
@@ -1908,6 +1989,7 @@ TEST_F(ViewMappingTest, ReadsFromThePropertysValueWatchIt) {
   std::vector<Readers> readers;
   for (int i = 0; i < count; ++i) {
     const Row& row = rows[i];
+    const ViewMapping::ReadConfig read = WithTextRange(row.type);
     readers.push_back({
         AddReader(by_value[i], row.type, row.initial, read),
         AddReader(by_delta[i], row.type, row.initial, read),

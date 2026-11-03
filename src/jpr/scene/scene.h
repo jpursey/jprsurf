@@ -112,6 +112,10 @@ class Scene final {
   // properties.
   Modifiers AddModifierProperty(std::string_view name);
 
+  // Returns the flag of the modifier property with the name, built in or
+  // added, or zero if there is none.
+  Modifiers GetModifier(std::string_view name) const;
+
   // Returns the info of every built in modifier, which every scene has.
   static absl::Span<const PropertyInfo> GetBuiltInModifierInfo();
 

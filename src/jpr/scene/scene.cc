@@ -177,6 +177,18 @@ Modifiers Scene::AddModifierProperty(std::string_view name) {
   return flag;
 }
 
+Modifiers Scene::GetModifier(std::string_view name) const {
+  // Every property in the mod: namespace is a modifier property.
+  if (!name.starts_with(kModNamespace)) {
+    return 0;
+  }
+  auto it = properties_.find(name);
+  return it != properties_.end()
+             ? static_cast<const ModifierProperty*>(it->second.get())
+                   ->GetModifier()
+             : 0;
+}
+
 const ViewReference* Scene::GetReference(std::string_view name) const {
   return GetTrackReference(name);
 }

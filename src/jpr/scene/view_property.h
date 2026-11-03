@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -249,6 +250,21 @@ class ViewProperty {
   // meaningful for properties of type kEnumerated, and will return 0 for other
   // types.
   virtual int GetMaxValue() const { return 0; }
+
+  // Returns the value of an enumerated property with the name (see
+  // GetText()), or nullopt if it has none. Only a property whose values have
+  // names has any (see EnumeratedValueProperty), so a config may name its
+  // values rather than number them (see ResolveValue()).
+  virtual std::optional<int> FindValue(std::string_view name) const {
+    return std::nullopt;
+  }
+
+  // Returns the value as a config gives it for this property, as Equals() and
+  // the mappings read it: for an enumerated property, the name of one of its
+  // values is its number (see FindValue()), and any other value is itself.
+  // Returns nullopt if it is a name that isn't one of the enumerated
+  // property's values.
+  std::optional<Value> ResolveValue(const Value& value) const;
 
   // Runs the action associated with this property. This is only applicable for
   // properties of type kAction, and will have no effect for other types.

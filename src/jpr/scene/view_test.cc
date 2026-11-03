@@ -21,6 +21,7 @@
 #include "jpr/device/testing/fake_device.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/testing/scene_test.h"
+#include "jpr/scene/testing/test_property.h"
 #include "jpr/scene/track_properties.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/value_property.h"
@@ -117,6 +118,22 @@ TEST_F(ViewTest, AConditionComparesWithItsValue) {
   EXPECT_FALSE(view->IsActive());
 }
 
+TEST_F(ViewTest, AConditionMayNameAnEnumeratedValue) {
+  EnumeratedValueProperty* mode =
+      GetScene()->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
+          "user:mode", std::vector<std::string>{"a", "b"}));
+  View* view = AddEnabledView(
+      "View", {.condition = ViewCondition::Config{.property = "user:mode",
+                                                  .value = std::string("b")}});
+  root_->Enable();
+  AddSurface();
+  EXPECT_FALSE(view->IsActive());
+
+  mode->SetInt(1);
+  surface_->Run();
+  EXPECT_TRUE(view->IsActive());
+}
+
 TEST_F(ViewTest, AConditionMayUseTheViewsSubject) {
   tracks_[0]->mute = true;
   View* view = AddEnabledView(
@@ -147,6 +164,26 @@ TEST_F(ViewTest, AConditionsPropertyMustExist) {
           {.condition = ViewCondition::Config{.property = std::string(
                                                   TrackProperties::kMute)}}),
       nullptr);
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
+}
+
+TEST_F(ViewTest, AConditionsValueNameMustBeOneOfItsValues) {
+  GetScene()->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
+      "user:mode", std::vector<std::string>{"a", "b"}));
+  EXPECT_EQ(root_->AddChildView(
+                "View", {.condition =
+                             ViewCondition::Config{.property = "user:mode",
+                                                   .value = std::string("c")}}),
+            nullptr);
+
+  // An enumerated property whose values have no names has none.
+  GetScene()->AddUserProperty(std::make_unique<TestProperty>(
+      ViewProperty::Type::kEnumerated, 0, /*max_value=*/1, "user:number"));
+  EXPECT_EQ(root_->AddChildView(
+                "View", {.condition =
+                             ViewCondition::Config{.property = "user:number",
+                                                   .value = std::string("0")}}),
+            nullptr);
   EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
 }
 
@@ -350,6 +387,49 @@ TEST_F(ViewTest, MappingsNeedTheirPropertiesAndControl) {
       ViewMapping::kWriteControl, "user:flag", button,
       {.condition = ViewCondition::Config{.property = "user:nothing"}}));
   EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(4));
+}
+
+TEST_F(ViewTest, MappingsNeedTheirModifiersAndValueNames) {
+  using Value = ViewProperty::Value;
+  const std::string_view button = "Button";
+  GetScene()->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
+      "user:mode", std::vector<std::string>{"a", "b"}));
+  View* view = root_->AddChildView("View");
+  EXPECT_TRUE(view->AddMapping(
+      ViewMapping::kReadWriteControl, "user:mode", button,
+      {.read = {.required_modifiers = {"mod:shift"},
+                .property_min = Value(std::string("a")),
+                .property_max = Value(std::string("b"))},
+       .write = {.mode_overrides = {{.property = "user:mode",
+                                     .value_to_mode = {{std::string("b"),
+                                                        ""}}}}},
+       .condition = ViewCondition::Config{.property = "user:mode",
+                                          .value = std::string("a")}}));
+
+  // Modifiers are only those built in or added.
+  EXPECT_FALSE(view->AddMapping(ViewMapping::kReadControl, "user:mode", button,
+                                {.read = {.required_modifiers = {"mod:fn"}}}));
+  EXPECT_FALSE(
+      view->AddMapping(ViewMapping::kReadControl, "user:mode", button,
+                       {.read = {.required_modifiers = {"user:flag"}}}));
+
+  // Names are only those of the property's values.
+  EXPECT_FALSE(
+      view->AddMapping(ViewMapping::kReadControl, "user:mode", button,
+                       {.read = {.property_min = Value(std::string("c"))}}));
+  EXPECT_FALSE(
+      view->AddMapping(ViewMapping::kReadControl, "user:mode", button,
+                       {.read = {.property_max = Value(std::string("c"))}}));
+  EXPECT_FALSE(view->AddMapping(
+      ViewMapping::kWriteControl, "user:flag", button,
+      {.write = {
+           .mode_overrides = {{.property = "user:mode",
+                               .value_to_mode = {{std::string("c"), ""}}}}}}));
+  EXPECT_FALSE(view->AddMapping(
+      ViewMapping::kWriteControl, "user:flag", button,
+      {.condition = ViewCondition::Config{.property = "user:mode",
+                                          .value = std::string("c")}}));
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(6));
 }
 
 TEST_F(ViewTest, OnlyActiveViewsWriteTheirControls) {

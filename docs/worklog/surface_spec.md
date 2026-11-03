@@ -197,12 +197,13 @@ rather than structs of its own that a build translates, once they take names in
 the three places they still take numbers:
 - **Required modifiers** are names (`{"mod:shift"}`), rather than bits, as a
   modifier's bit is only known once the scene declares it. `AddMapping()`
-  resolves them, failing on a name that isn't a modifier.
+  resolves them with `Scene::GetModifier()`, failing on a name that isn't a
+  modifier.
 - **An enumerated property's values,** in a condition, a range end, or a mode
   override, can be value names (`"send_receive"`). Each is resolved to its
   number when the condition or mapping is created, with
-  `ViewProperty::FindValue()`, which `EnumeratedValueProperty` answers from its
-  names. So a condition compares numbers, as today, rather than its text, and a
+  `ViewProperty::ResolveValue()`, which asks `ViewProperty::FindValue()`, which
+  `EnumeratedValueProperty` answers from its names. So a condition compares numbers, as today, rather than its text, and a
   name that isn't one of its values fails. Built in enumerated properties have
   no value names yet (*Value names for every enumerated property*), so they
   still take numbers.
@@ -456,7 +457,7 @@ Depends on: CL1.
   without its page.
 - The pages read correctly, with working links.
 
-### CL3 [ ] scene, plugin: Scene's configs take names
+### CL3 [x] scene, plugin: Scene's configs take names
 
 Depends on: nothing.
 

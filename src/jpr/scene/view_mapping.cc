@@ -122,7 +122,8 @@ double Press(StepFunction* step, double value, int press_count, double min,
 }  // namespace
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-                         Control* control, ReadConfig read_config, int mode,
+                         Control* control, ReadConfig read_config,
+                         Modifiers required_modifiers, int mode,
                          std::vector<PropertyModes> mode_overrides,
                          std::unique_ptr<ViewCondition> condition)
     : type_(type),
@@ -135,7 +136,7 @@ ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
       condition_(std::move(condition)),
       reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
-  InitReadControl();
+  InitReadControl(required_modifiers);
   InitWriteControl();
 }
 
@@ -174,7 +175,7 @@ ViewMapping::~ViewMapping() {
   RefreshActive(false);
 }
 
-void ViewMapping::InitReadControl() {
+void ViewMapping::InitReadControl(Modifiers required_modifiers) {
   if (!type_.IsSet(kReadControl)) {
     return;
   }
@@ -198,7 +199,7 @@ void ViewMapping::InitReadControl() {
     read_config_.press_release = false;
     return;
   }
-  input_config_.required_modifiers = read_config_.required_modifiers;
+  input_config_.required_modifiers = required_modifiers;
   input_config_.press_behavior = read_config_.press_behavior;
   input_config_.touch = touch;
   switch (property_->GetType()) {

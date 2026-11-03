@@ -14,6 +14,7 @@
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "gb/profile/profile_point.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/device/control.h"
 #include "jpr/device/widget_definition.h"
@@ -80,7 +81,24 @@ std::unique_ptr<ViewCondition> View::CreateCondition(
                << "': condition property '" << config.property << "' not found";
     return nullptr;
   }
-  return std::make_unique<ViewCondition>(property, config.value);
+  std::optional<ViewProperty::Value> value =
+      ResolveValue(*property, config.value, what);
+  if (!value.has_value()) {
+    return nullptr;
+  }
+  return std::make_unique<ViewCondition>(property, std::move(*value));
+}
+
+std::optional<ViewProperty::Value> View::ResolveValue(
+    const ViewProperty& property, const ViewProperty::Value& value,
+    std::string_view what) const {
+  std::optional<ViewProperty::Value> resolved = property.ResolveValue(value);
+  if (!resolved.has_value()) {
+    LOG(ERROR) << "Failed to add " << what << " '" << name_ << "': property '"
+               << property.GetName() << "' has no value '"
+               << std::get<std::string>(value) << "'";
+  }
+  return resolved;
 }
 
 View::~View() {
@@ -302,6 +320,28 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
                << "': property '" << property_name << "' not found";
     return false;
   }
+  Modifiers required_modifiers = 0;
+  for (const std::string& name : config.read.required_modifiers) {
+    const Modifiers modifier = scene_->GetModifier(name);
+    if (modifier == 0) {
+      LOG(ERROR) << "Failed to add mapping for view '" << GetName() << "': '"
+                 << name << "' is not a modifier";
+      return false;
+    }
+    required_modifiers |= modifier;
+  }
+  config.read.required_modifiers.clear();  // The mapping takes their flags.
+
+  // Each end of the range that is given is resolved in place.
+  for (std::optional<ViewProperty::Value>* end :
+       {&config.read.property_min, &config.read.property_max}) {
+    if (end->has_value()) {
+      *end = ResolveValue(*property, **end, "mapping for view");
+      if (!end->has_value()) {
+        return false;
+      }
+    }
+  }
   std::string error;
   std::optional<WidgetControl> control =
       scene_->GetWidgets().FindControl(control_path, &error);
@@ -330,7 +370,13 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
       if (!override_mode.has_value()) {
         return false;
       }
-      mode_override.value_to_mode.emplace_back(value, *override_mode);
+      std::optional<ViewProperty::Value> override_value =
+          ResolveValue(*mode_override.property, value, "mapping for view");
+      if (!override_value.has_value()) {
+        return false;
+      }
+      mode_override.value_to_mode.emplace_back(std::move(*override_value),
+                                               *override_mode);
     }
   }
   std::unique_ptr<ViewCondition> condition;
@@ -343,9 +389,10 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
   if (control->control == nullptr) {
     return true;
   }
-  mappings_.push_back(absl::WrapUnique(new ViewMapping(
-      this, type, property, control->control, std::move(config.read), *mode,
-      std::move(mode_overrides), std::move(condition))));
+  mappings_.push_back(absl::WrapUnique(
+      new ViewMapping(this, type, property, control->control,
+                      std::move(config.read), required_modifiers, *mode,
+                      std::move(mode_overrides), std::move(condition))));
   return true;
 }
 

@@ -5,6 +5,7 @@
 
 #include "jpr/scene/value_property.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -72,6 +73,18 @@ TEST(EnumeratedValuePropertyTest, SetsTextByName) {
   property.SetText("0");
   EXPECT_EQ(property.GetInt(), 0);
   EXPECT_TRUE(property.Equals(std::string("measure")));
+}
+
+TEST(EnumeratedValuePropertyTest, FindsValuesByName) {
+  EnumeratedValueProperty property("user:step", {"measure", "beat", "marker"});
+  EXPECT_EQ(property.FindValue("measure"), 0);
+  EXPECT_EQ(property.FindValue("marker"), 2);
+  EXPECT_EQ(property.FindValue("bar"), std::nullopt);
+  EXPECT_EQ(property.FindValue("1"), std::nullopt);
+
+  EXPECT_EQ(property.ResolveValue(std::string("beat")), ViewProperty::Value(1));
+  EXPECT_EQ(property.ResolveValue(2), ViewProperty::Value(2));
+  EXPECT_EQ(property.ResolveValue(std::string("bar")), std::nullopt);
 }
 
 TEST(EnumeratedValuePropertyTest, NotifiesOnlyOnChange) {

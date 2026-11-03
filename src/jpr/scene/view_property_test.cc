@@ -5,6 +5,7 @@
 
 #include "jpr/scene/view_property.h"
 
+#include <optional>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -65,6 +66,19 @@ TEST(ViewPropertyTest, EqualsTextReadsAsText) {
                    .Equals(std::string("Bus")));
   EXPECT_TRUE(TestProperty(Type::kToggle, true).Equals(std::string("On")));
   EXPECT_TRUE(TestProperty(Type::kEnumerated, 1, 2).Equals(std::string("1")));
+}
+
+TEST(ViewPropertyTest, OnlyAnEnumeratedPropertyResolvesNames) {
+  using Value = ViewProperty::Value;
+  EXPECT_EQ(TestProperty(Type::kText, std::string("A"))
+                .ResolveValue(std::string("B")),
+            Value(std::string("B")));
+  EXPECT_EQ(TestProperty(Type::kToggle, true).ResolveValue(true), Value(true));
+
+  // Its values have no names, so it takes only numbers.
+  TestProperty enumerated(Type::kEnumerated, 0, 2);
+  EXPECT_EQ(enumerated.ResolveValue(1), Value(1));
+  EXPECT_EQ(enumerated.ResolveValue(std::string("1")), std::nullopt);
 }
 
 TEST(ViewPropertyTest, EqualsColorReadsAsColor) {

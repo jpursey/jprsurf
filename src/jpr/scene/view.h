@@ -264,11 +264,13 @@ class View final {
   // "strip[3].fader" (see Scene::GetControl()).
   //
   // This returns false (logging why) if the mapping is invalid: a property
-  // isn't found, the scene's widgets have no control at the path (see
-  // WidgetRoot::FindControl()), or the control's shape has no mode a mode name
-  // names (see ViewMapping::WriteConfig::mode). A mapping to a control whose
-  // device is absent does nothing, so it is validated, and returns true, but
-  // isn't added.
+  // isn't found, a required modifier isn't a modifier, a name given for an
+  // enumerated property's value isn't one of its values (see
+  // ViewProperty::ResolveValue()), the scene's widgets have no control at the
+  // path (see WidgetRoot::FindControl()), or the control's shape has no mode a
+  // mode name names (see ViewMapping::WriteConfig::mode). A mapping to a
+  // control whose device is absent does nothing, so it is validated, and
+  // returns true, but isn't added.
   bool AddMapping(ViewMapping::TypeFlags type, std::string_view property_name,
                   std::string_view control_path,
                   ViewMapping::Config config = {});
@@ -288,9 +290,17 @@ class View final {
   bool ApplyConfig(const Config& config);
 
   // Creates a condition, with its property as seen from this view. Returns
-  // null (logging that adding `what` failed) if the property isn't found.
+  // null (logging that adding `what` failed) if the property isn't found, or
+  // its value can't be resolved (see ResolveValue()).
   std::unique_ptr<ViewCondition> CreateCondition(
       const ViewCondition::Config& config, std::string_view what) const;
+
+  // Returns the value as the property takes it (see
+  // ViewProperty::ResolveValue()). Returns nullopt, logging that adding `what`
+  // failed, if it is a name that isn't one of the property's values.
+  std::optional<ViewProperty::Value> ResolveValue(
+      const ViewProperty& property, const ViewProperty::Value& value,
+      std::string_view what) const;
 
   // Returns the number of the mode with the name, for a mapping of the
   // property to the control at the path, of the shape (see

@@ -23,6 +23,9 @@ class ModifierProperty : public ViewProperty {
   explicit ModifierProperty(std::string_view name, Modifiers modifier)
       : ViewProperty(name, Type::kToggle), modifier_(modifier) {}
 
+  // Returns the modifier flag the property turns on.
+  Modifiers GetModifier() const { return modifier_; }
+
  protected:
   bool ReadBool() const override { return AreModifiersOn(modifier_); }
   void WriteBool(bool value) override {

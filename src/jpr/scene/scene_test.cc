@@ -233,6 +233,19 @@ TEST_F(SceneTest, AddedModifierPropertiesHaveFlagsOfTheirOwn) {
   EXPECT_FALSE(AreModifiersOn(fn));
 }
 
+TEST_F(SceneTest, ModifiersAreFoundByName) {
+  EXPECT_EQ(GetScene()->GetModifier(ModifierProperty::kShift), kModShift);
+  EXPECT_EQ(GetScene()->GetModifier(ModifierProperty::kOpt), kModOpt);
+  const Modifiers fn = GetScene()->AddModifierProperty("mod:fn");
+  EXPECT_EQ(GetScene()->GetModifier("mod:fn"), fn);
+
+  EXPECT_EQ(GetScene()->GetModifier("mod:nothing"), 0);
+  ASSERT_NE(GetScene()->AddUserProperty(
+                std::make_unique<ToggleValueProperty>("user:fn")),
+            nullptr);
+  EXPECT_EQ(GetScene()->GetModifier("user:fn"), 0);
+}
+
 TEST_F(SceneTest, AddedModifierPropertiesNeedANewModName) {
   ASSERT_NE(GetScene()->AddModifierProperty("mod:fn"), 0);
   EXPECT_EQ(GetScene()->AddModifierProperty("mod:fn"), 0);
