@@ -904,9 +904,9 @@ come together:
      [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)):
      the plugin has no surface state or callbacks left.
 - **Devices and widgets**, unit tested: *Widgets* (done,
-  [widgets.md](worklog/widgets.md)), then *Device types and catalogs*,
-  ending with the plugin creating devices by type and mapping through
-  widgets.
+  [widgets.md](worklog/widgets.md)), then *Device types and catalogs* (done,
+  [device_types_and_catalogs.md](worklog/device_types_and_catalogs.md)): the
+  plugin creates its devices from a device list and maps through widgets.
 - **Independent pieces**: *Named command IDs* (done), *Track actions in scene*
   ([track_actions.md](worklog/track_actions.md), done), and *Extension host in
   common* ([extension_host.md](worklog/extension_host.md), done).
