@@ -17,6 +17,7 @@
 #include "jpr/common/track_cache.h"
 #include "jpr/device/control.h"
 #include "jpr/device/widget_definition.h"
+#include "jpr/device/widget_shape.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/track_reference.h"
 #include "jpr/scene/view_list.h"
@@ -311,15 +312,28 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
                << "': widget '" << control_path << "' " << error;
     return false;
   }
-  std::vector<ViewProperty*> mode_properties;
+  std::optional<int> mode = FindMappingMode(*property, *control->shape,
+                                            control_path, config.write.mode);
+  if (!mode.has_value()) {
+    return false;
+  }
+  std::vector<ViewMapping::PropertyModes> mode_overrides;
   for (const auto& override : config.write.mode_overrides) {
-    ViewProperty* mode_property = GetProperty(override.property);
-    if (mode_property == nullptr) {
+    ViewMapping::PropertyModes& mode_override = mode_overrides.emplace_back();
+    mode_override.property = GetProperty(override.property);
+    if (mode_override.property == nullptr) {
       LOG(ERROR) << "Failed to add mapping for view '" << GetName()
                  << "': mode property '" << override.property << "' not found";
       return false;
     }
-    mode_properties.push_back(mode_property);
+    for (const auto& [value, mode_name] : override.value_to_mode) {
+      std::optional<int> override_mode =
+          FindMappingMode(*property, *control->shape, control_path, mode_name);
+      if (!override_mode.has_value()) {
+        return false;
+      }
+      mode_override.value_to_mode.emplace_back(value, *override_mode);
+    }
   }
   std::unique_ptr<ViewCondition> condition;
   if (config.condition.has_value()) {
@@ -331,10 +345,23 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
   if (control->control == nullptr) {
     return true;
   }
-  mappings_.push_back(absl::WrapUnique(
-      new ViewMapping(this, type, property, control->control, std::move(config),
-                      std::move(mode_properties), std::move(condition))));
+  mappings_.push_back(absl::WrapUnique(new ViewMapping(
+      this, type, property, control->control, std::move(config.read), *mode,
+      std::move(mode_overrides), std::move(condition))));
   return true;
+}
+
+std::optional<int> View::FindMappingMode(const ViewProperty& property,
+                                         const WidgetShape& shape,
+                                         std::string_view control_path,
+                                         std::string_view name) const {
+  std::optional<int> mode = ViewMapping::FindMode(property, shape, name);
+  if (!mode.has_value()) {
+    LOG(ERROR) << "Failed to add mapping for view '" << GetName()
+               << "': widget '" << control_path << "' has no mode '" << name
+               << "'";
+  }
+  return mode;
 }
 
 void View::SyncMappings() {

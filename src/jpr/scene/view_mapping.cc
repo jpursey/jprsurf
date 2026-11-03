@@ -7,8 +7,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
+#include <string>
+#include <string_view>
 
+#include "absl/types/span.h"
 #include "gb/base/flags.h"
+#include "jpr/device/control_output.h"
+#include "jpr/device/widget_shape.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_property.h"
 
@@ -116,20 +122,49 @@ double Press(StepFunction* step, double value, int press_count, double min,
 }  // namespace
 
 ViewMapping::ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-                         Control* control, Config config,
-                         std::vector<ViewProperty*> mode_properties,
+                         Control* control, ReadConfig read_config, int mode,
+                         std::vector<PropertyModes> mode_overrides,
                          std::unique_ptr<ViewCondition> condition)
     : type_(type),
       view_(view),
       property_(property),
       control_(control),
-      config_(std::move(config)),
-      mode_properties_(std::move(mode_properties)),
+      read_config_(std::move(read_config)),
+      mode_(mode),
+      mode_overrides_(std::move(mode_overrides)),
       condition_(std::move(condition)),
       reads_property_(type.IsSet(kWriteControl)),
       write_control_(NoOpSyncFunction) {
   InitReadControl();
   InitWriteControl();
+}
+
+std::optional<int> ViewMapping::FindMode(const ViewProperty& property,
+                                         const WidgetShape& shape,
+                                         std::string_view name) {
+  if (name.empty()) {
+    return 0;
+  }
+  if (WritesTimelineText(property.GetType(), shape.GetOutputs())) {
+    for (const TimelineFormat& format : kTimelineFormats) {
+      if (format.name == name) {
+        return ControlTextOutput::GetTimelineTextMode(format.mode);
+      }
+    }
+    return std::nullopt;
+  }
+  const absl::Span<const std::string> names = shape.GetModeNames();
+  const auto it = std::ranges::find(names, name);
+  if (it == names.end()) {
+    return std::nullopt;
+  }
+  return static_cast<int>(it - names.begin());
+}
+
+bool ViewMapping::WritesTimelineText(ViewProperty::Type type,
+                                     Control::Outputs outputs) {
+  return type == ViewProperty::Type::kTimelinePosition &&
+         outputs.IsSet(ControlOutput::Type::kText);
 }
 
 ViewMapping::~ViewMapping() {
@@ -146,7 +181,7 @@ void ViewMapping::InitReadControl() {
   // Touch reads as a press with release on any control with input. Otherwise,
   // a configured input type leaves only that input to read from, if the
   // control has it.
-  const bool touch = config_.read.touch;
+  const bool touch = read_config_.touch;
   Control::Inputs inputs = control_->GetInputs();
   bool has_press_release = control_->HasPressRelease();
   if (touch) {
@@ -154,17 +189,17 @@ void ViewMapping::InitReadControl() {
     if (has_press_release) {
       inputs = ControlInput::Type::kPress;
     }
-  } else if (config_.read.input_type.has_value()) {
-    inputs = gb::Intersect(inputs, *config_.read.input_type);
+  } else if (read_config_.input_type.has_value()) {
+    inputs = gb::Intersect(inputs, *read_config_.input_type);
   }
-  if (config_.read.press_release &&
+  if (read_config_.press_release &&
       (!has_press_release || !inputs.IsSet(ControlInput::Type::kPress))) {
     type_.Clear(kReadControl);
-    config_.read.press_release = false;
+    read_config_.press_release = false;
     return;
   }
-  input_config_.required_modifiers = config_.read.required_modifiers;
-  input_config_.press_behavior = config_.read.press_behavior;
+  input_config_.required_modifiers = read_config_.required_modifiers;
+  input_config_.press_behavior = read_config_.press_behavior;
   input_config_.touch = touch;
   switch (property_->GetType()) {
     case ViewProperty::Type::kAction:
@@ -214,7 +249,7 @@ void ViewMapping::InitReadActionSyncFunction(Control::Inputs inputs) {
 void ViewMapping::InitReadToggleSyncFunction(Control::Inputs inputs) {
   // If we are configured for press/release behavior, then we set the property
   // based on whether the control is currently pressed.
-  if (config_.read.press_release) {
+  if (read_config_.press_release) {
     input_config_.input_type = ControlInput::Type::kPress;
     read_control_ = [](ViewProperty& property, Control& control, InputId id) {
       property.SetBool(control.IsPressed(id));
@@ -259,11 +294,11 @@ void ViewMapping::InitReadToggleSyncFunction(Control::Inputs inputs) {
 }
 
 void ViewMapping::InitReadPanSyncFunction(Control::Inputs inputs) {
-  auto cfg_min = GetDouble(config_.read.property_min);
-  auto cfg_max = GetDouble(config_.read.property_max);
+  auto cfg_min = GetDouble(read_config_.property_min);
+  auto cfg_max = GetDouble(read_config_.property_max);
 
   // Panning does not make sense for press/release behavior.
-  if (config_.read.press_release) {
+  if (read_config_.press_release) {
     return;
   }
 
@@ -319,11 +354,11 @@ void ViewMapping::InitReadPanSyncFunction(Control::Inputs inputs) {
 }
 
 void ViewMapping::InitReadVolumeSyncFunction(Control::Inputs inputs) {
-  auto cfg_min = GetDouble(config_.read.property_min);
-  auto cfg_max = GetDouble(config_.read.property_max);
+  auto cfg_min = GetDouble(read_config_.property_min);
+  auto cfg_max = GetDouble(read_config_.property_max);
 
   // Volume does not make sense for press/release behavior.
-  if (config_.read.press_release) {
+  if (read_config_.press_release) {
     return;
   }
 
@@ -378,13 +413,13 @@ void ViewMapping::InitReadVolumeSyncFunction(Control::Inputs inputs) {
 }
 
 void ViewMapping::InitReadNormalizedSyncFunction(Control::Inputs inputs) {
-  auto cfg_min = GetDouble(config_.read.property_min);
-  auto cfg_max = GetDouble(config_.read.property_max);
+  auto cfg_min = GetDouble(read_config_.property_min);
+  auto cfg_max = GetDouble(read_config_.property_max);
 
   // While weird, press/release behavior is technically supported for normalized
   // properties. If configured, the property is set to 1.0 when the control is
   // pressed, and set to 0.0 when the control is released.
-  if (config_.read.press_release) {
+  if (read_config_.press_release) {
     input_config_.input_type = ControlInput::Type::kPress;
     double min = cfg_min.value_or(0.0);
     double max = cfg_max.value_or(1.0);
@@ -450,9 +485,9 @@ void ViewMapping::InitReadTextSyncFunction(Control::Inputs inputs) {
   // properties. If configured, the property is set to the configured max text
   // value when the control is pressed, and set to the configured min text value
   // when the control is released.
-  if (config_.read.press_release) {
-    auto cfg_min = GetString(config_.read.property_min);
-    auto cfg_max = GetString(config_.read.property_max);
+  if (read_config_.press_release) {
+    auto cfg_min = GetString(read_config_.property_min);
+    auto cfg_max = GetString(read_config_.property_max);
     if (cfg_min.has_value() && cfg_max.has_value()) {
       input_config_.input_type = ControlInput::Type::kPress;
       std::string min = std::move(*cfg_min);
@@ -478,8 +513,8 @@ void ViewMapping::InitReadTextSyncFunction(Control::Inputs inputs) {
   // If there is a press input and both min and max text values are configured,
   // we toggle between them.
   if (inputs.IsSet(ControlInput::Type::kPress)) {
-    auto cfg_min = GetString(config_.read.property_min);
-    auto cfg_max = GetString(config_.read.property_max);
+    auto cfg_min = GetString(read_config_.property_min);
+    auto cfg_max = GetString(read_config_.property_max);
     if (cfg_min.has_value() && cfg_max.has_value()) {
       input_config_.input_type = ControlInput::Type::kPress;
       std::string min = std::move(*cfg_min);
@@ -500,14 +535,14 @@ void ViewMapping::InitReadTextSyncFunction(Control::Inputs inputs) {
 }
 
 void ViewMapping::InitReadColorSyncFunction(Control::Inputs inputs) {
-  auto cfg_min = GetColor(config_.read.property_min);
-  auto cfg_max = GetColor(config_.read.property_max);
+  auto cfg_min = GetColor(read_config_.property_min);
+  auto cfg_max = GetColor(read_config_.property_max);
 
   // While weird, press/release behavior is technically supported for color
   // properties. If configured, the property is set to the configured max color
   // value when the control is pressed, and set to the configured min color
   // value when the control is released.
-  if (config_.read.press_release) {
+  if (read_config_.press_release) {
     input_config_.input_type = ControlInput::Type::kPress;
     if (cfg_min.has_value() && cfg_max.has_value()) {
       Color min = *cfg_min;
@@ -603,12 +638,12 @@ void ViewMapping::InitReadTimelinePositionSyncFunction(Control::Inputs inputs) {
 }
 
 void ViewMapping::InitReadEnumeratedSyncFunction(Control::Inputs inputs) {
-  auto cfg_min = GetInt(config_.read.property_min);
-  auto cfg_max = GetInt(config_.read.property_max);
+  auto cfg_min = GetInt(read_config_.property_min);
+  auto cfg_max = GetInt(read_config_.property_max);
 
   // If we are configured for press/release behavior, then we set the property
   // to the max value when pressed and the min value when released.
-  if (config_.read.press_release) {
+  if (read_config_.press_release) {
     input_config_.input_type = ControlInput::Type::kPress;
     int min = cfg_min.value_or(0);
     int max = cfg_max.value_or(property_->GetMaxValue());
@@ -660,7 +695,7 @@ void ViewMapping::InitReadEnumeratedSyncFunction(Control::Inputs inputs) {
     int min = cfg_min.value_or(0);
     int max = cfg_max.value_or(property_->GetMaxValue());
     reads_property_ = true;
-    if (config_.read.press_toggles) {
+    if (read_config_.press_toggles) {
       read_control_ = [min, max](ViewProperty& property, Control& control,
                                  InputId id) {
         if (control.GetPressCount(id) % 2 != 0) {
@@ -1098,12 +1133,10 @@ void ViewMapping::InitWriteColorSyncFunction() {
 }
 
 void ViewMapping::InitWriteTimelinePositionSyncFunction() {
-  Control::Outputs outputs = control_->GetOutputs();
-
   // Only text outputs make sense for timeline position, as the position needs
   // to be formatted for display. The mode is passed through to
   // Control::SetTimelineText to select the timeline display format.
-  if (outputs.IsSet(ControlOutput::Type::kText)) {
+  if (WritesTimelineText(property_->GetType(), control_->GetOutputs())) {
     write_control_ = [](ViewProperty& property, Control& control, int mode) {
       control.SetTimelineText(property.GetTimelinePosition(), mode);
     };
@@ -1206,8 +1239,8 @@ void ViewMapping::RefreshActive(bool parent_active) {
     if (reads_property_) {
       property_changed_ = true;
       property_->RegisterFlag(&property_changed_);
-      for (ViewProperty* mode_property : mode_properties_) {
-        mode_property->RegisterFlag(&property_changed_);
+      for (const PropertyModes& mode_override : mode_overrides_) {
+        mode_override.property->RegisterFlag(&property_changed_);
       }
     }
     if (type_.IsSet(kWriteControl)) {
@@ -1216,8 +1249,8 @@ void ViewMapping::RefreshActive(bool parent_active) {
   } else {
     if (reads_property_) {
       property_->UnregisterFlag(&property_changed_);
-      for (ViewProperty* mode_property : mode_properties_) {
-        mode_property->UnregisterFlag(&property_changed_);
+      for (const PropertyModes& mode_override : mode_overrides_) {
+        mode_override.property->UnregisterFlag(&property_changed_);
       }
     }
     output_handle_ = {};
@@ -1242,8 +1275,8 @@ void ViewMapping::ReadControl() {
     return;
   }
   InputId id = input_handle_.GetId();
-  bool pressed = config_.read.press_release && control_->IsPressed(id);
-  if (config_.read.press_release && !pressed) {
+  bool pressed = read_config_.press_release && control_->IsPressed(id);
+  if (read_config_.press_release && !pressed) {
     // A release is applied only for a press that was, whether or not the
     // condition is met now, so what the mapping holds can't stick on.
     if (!holding_) {
@@ -1266,15 +1299,14 @@ void ViewMapping::WriteControl() {
 }
 
 int ViewMapping::ResolveMode() const {
-  for (int i = 0; i < static_cast<int>(mode_properties_.size()); ++i) {
-    for (const auto& [map_value, map_mode] :
-         config_.write.mode_overrides[i].value_to_mode) {
-      if (mode_properties_[i]->Equals(map_value)) {
+  for (const PropertyModes& mode_override : mode_overrides_) {
+    for (const auto& [map_value, map_mode] : mode_override.value_to_mode) {
+      if (mode_override.property->Equals(map_value)) {
         return map_mode;
       }
     }
   }
-  return config_.write.mode;
+  return mode_;
 }
 
 }  // namespace jpr

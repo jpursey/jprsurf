@@ -431,7 +431,21 @@ class Scene {
 `ViewMapping::WriteConfig::mode` and the modes in `ModeOverride` become names
 (`"blink"`, `"off"`), and an empty name is mode 0. `AddMapping()` looks each up
 in the control's mode names in the shape, and fails, logging why, on a name the
-control doesn't have.
+control doesn't have. As the shape is there for an absent control, its modes are
+validated too.
+
+A timeline position written to text is the exception: the mode is its format
+(`ControlTextOutput::SetTimelineText()`), which isn't one of the control's
+modes. Its names are `ViewMapping::kTimelineFormats` (`beats`, `time`,
+`frames`, and `samples`, each a `TimelineMode`), and an empty name is the
+ruler's format, mode 0. `ControlTextOutput::GetTimelineTextMode()` is the one
+place a `TimelineMode` becomes a mode, and `ViewMapping::WritesTimelineText()`
+the one place a mapping is found to write one. `ViewMapping::FindMode()` has
+both rules, and `AddMapping()` passes the numbers to the mapping, with only its
+read config, so the mapping keeps no names.
+
+`SceneTest`'s fake catalog names the modes of a control with more than one by
+number, `mode0`, `mode1`, and so on (`SceneTest::GetModeName()`).
 
 ### JPRSurf's devices and widgets
 
@@ -586,12 +600,14 @@ Depends on: CL4.
 - Scene tests of mapping to an absent widget, to a path that names nothing, and
   to a struct. The surface tests verify the plugin.
 
-### CL7 [ ] scene, plugin: Output modes by name
+### CL7 [x] device, scene, plugin: Output modes by name
 
 Depends on: CL6.
 
 - Mode names in `WriteConfig` and `ModeOverride`, looked up in the shape.
 - The plugin names its modes (`blink`, `center`, `center_edges`, `off`).
+- Timeline formats by name (`ViewMapping::kTimelineFormats`), with the format's
+  mode from `ControlTextOutput::GetTimelineTextMode()` in `device`.
 
 **Verify**
 - Standard checks.

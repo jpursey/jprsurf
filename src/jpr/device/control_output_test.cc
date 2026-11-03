@@ -166,6 +166,17 @@ TEST_F(ControlTextOutputTest, TimelineModeIsTheRulersOrChosen) {
   }
 }
 
+TEST_F(ControlTextOutputTest, TimelineTextModesChooseTheirTimelineModes) {
+  FakeTextOutput output;
+  for (TimelineMode mode : {TimelineMode::kBeats, TimelineMode::kTime,
+                            TimelineMode::kFrames, TimelineMode::kSamples}) {
+    SCOPED_TRACE(mode);
+    output.SetTimelineText(TimelinePosition(3.5),
+                           ControlTextOutput::GetTimelineTextMode(mode));
+    EXPECT_EQ(output.GetTimelineMode(), mode);
+  }
+}
+
 // By default, a position is set as Timeline formats it, as text in mode 0.
 TEST_F(ControlTextOutputTest, TimelineTextIsFormattedByDefault) {
   constexpr TimelineMode kModes[] = {TimelineMode::kBeats, TimelineMode::kTime,

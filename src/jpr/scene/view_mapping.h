@@ -8,14 +8,17 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
 #include "gb/base/flags.h"
+#include "jpr/common/timeline.h"
 #include "jpr/device/control.h"
 #include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output_handle.h"
+#include "jpr/device/widget_shape.h"
 #include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_property.h"
 
@@ -42,6 +45,20 @@ class ViewMapping final {
   static constexpr TypeFlags kWriteControl = Type::kWriteControl;
   static constexpr TypeFlags kReadWriteControl = {Type::kReadControl,
                                                   Type::kWriteControl};
+
+  // A format a timeline position is written to text in, by name.
+  struct TimelineFormat {
+    std::string_view name;
+    TimelineMode mode;
+  };
+
+  // The formats a timeline position is written to text in, apart from the
+  // ruler's, which an empty name is (see WriteConfig::mode).
+  static constexpr TimelineFormat kTimelineFormats[] = {
+      {"beats", TimelineMode::kBeats},
+      {"time", TimelineMode::kTime},
+      {"frames", TimelineMode::kFrames},
+      {"samples", TimelineMode::kSamples}};
 
   struct ReadConfig {
     // The type of physical input to use for reading the control. If not set,
@@ -132,17 +149,20 @@ class ViewMapping final {
     // the output mode.
     std::string property;
 
-    // Maps property values to output modes. The property's current value is
-    // looked up in this map; the first match is used.
-    std::vector<std::pair<ViewProperty::Value, int>> value_to_mode;
+    // Maps property values to output modes, by name (see WriteConfig::mode).
+    // The property's current value is looked up in this map; the first match
+    // is used.
+    std::vector<std::pair<ViewProperty::Value, std::string>> value_to_mode;
   };
 
   struct WriteConfig {
-    // The default output mode index to use when writing to the control. This is
-    // passed through to the control's Set* methods. Defaults to 0.
+    // The name of the output mode to write to the control in: one of the
+    // control's mode names in its shape (such as "blink"), or empty for its
+    // first mode. A timeline position written to text names its format
+    // instead: the name of one of kTimelineFormats, or empty for the ruler's.
     //
     // If any mode override matches, its mode is used instead.
-    int mode = 0;
+    std::string mode;
 
     // Ordered list of mode overrides. Each override specifies a property and a
     // value-to-mode map. Overrides are checked in order; the first override
@@ -204,10 +224,28 @@ class ViewMapping final {
 
   using WriteSyncFunction = void(ViewProperty&, Control&, int mode);
 
+  // A mode override, with its property and the numbers of its modes.
+  struct PropertyModes {
+    ViewProperty* property = nullptr;
+    std::vector<std::pair<ViewProperty::Value, int>> value_to_mode;
+  };
+
+  // The modes are the numbers of the config's write modes (see FindMode()).
   ViewMapping(View* view, TypeFlags type, ViewProperty* property,
-              Control* control, Config config = {},
-              std::vector<ViewProperty*> mode_properties = {},
-              std::unique_ptr<ViewCondition> condition = nullptr);
+              Control* control, ReadConfig read_config, int mode,
+              std::vector<PropertyModes> mode_overrides,
+              std::unique_ptr<ViewCondition> condition);
+
+  // Returns the number of the mode that a mapping of the property to a control
+  // of the shape names (see WriteConfig::mode), or nullopt if there is none.
+  static std::optional<int> FindMode(const ViewProperty& property,
+                                     const WidgetShape& shape,
+                                     std::string_view name);
+
+  // Returns true if a mapping of a property of the type to a control with the
+  // outputs writes a timeline position as text, so its mode is a format.
+  static bool WritesTimelineText(ViewProperty::Type type,
+                                 Control::Outputs outputs);
 
   // Refreshes the active state of this mapping, and whether it has its input,
   // based on whether it is enabled, whether its parent view is active, and
@@ -236,15 +274,16 @@ class ViewMapping final {
   void InitWriteEnumeratedSyncFunction();
 
   // Returns the current mode for writing to the control, resolved from the
-  // mode override properties if configured, or the static mode otherwise.
+  // mode overrides if configured, or the mode otherwise.
   int ResolveMode() const;
 
   TypeFlags type_;
   View* view_;
   ViewProperty* property_;
   Control* control_;
-  Config config_;
-  std::vector<ViewProperty*> mode_properties_;
+  ReadConfig read_config_;
+  int mode_;
+  std::vector<PropertyModes> mode_overrides_;
   std::unique_ptr<ViewCondition> condition_;  // Null if there is none.
   absl::AnyInvocable<void(ViewProperty&, Control&, InputId)> read_control_;
   WriteSyncFunction* write_control_;

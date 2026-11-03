@@ -180,13 +180,15 @@ class ControlTextOutput : public ControlOutput {
   // output mode, and is clamped to the valid range.
   void SetText(std::string_view text, int mode = 0);
 
-  // Sets the text of this output based on the given timeline position. The mode
-  // maps to the TimelineMode as follows:
-  //   mode = 0: GetRulerMode()
-  //   mode = 1: TimelineMode::kBeats
-  //   mode = 2: TimelineMode::kTime
-  //   mode = 3: TimelineMode::kFrames
-  //   mode = 4: TimelineMode::kSamples
+  // Returns the mode SetTimelineText() takes to show a position in the
+  // timeline mode, rather than the ruler's: 1 to 4, for kBeats to kSamples.
+  static constexpr int GetTimelineTextMode(TimelineMode mode) {
+    return static_cast<int>(mode) + 1;
+  }
+
+  // Sets the text of this output based on the given timeline position, in the
+  // ruler's mode (GetRulerMode()) for mode 0, or the timeline mode whose
+  // GetTimelineTextMode() it is. The mode is clamped to the valid range.
   void SetTimelineText(TimelinePosition position, int mode = 0);
 
   // Returns how many characters the display shows, or 0 if it has no limit.

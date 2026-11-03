@@ -18,6 +18,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/anchor.h"
 #include "jpr/common/track.h"
+#include "jpr/device/widget_shape.h"
 #include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
@@ -291,10 +292,11 @@ class View final {
   // "strip[3].fader" (see Scene::GetControl()).
   //
   // This returns false (logging why) if the mapping is invalid: a property
-  // isn't found, or the scene's widgets have no control at the path (see
-  // WidgetRoot::FindControl()). A mapping
-  // to a control whose device is absent does nothing, so it is validated, and
-  // returns true, but isn't added.
+  // isn't found, the scene's widgets have no control at the path (see
+  // WidgetRoot::FindControl()), or the control's shape has no mode a mode name
+  // names (see ViewMapping::WriteConfig::mode). A mapping to a control whose
+  // device is absent does nothing, so it is validated, and returns true, but
+  // isn't added.
   bool AddMapping(ViewMapping::TypeFlags type, std::string_view property_name,
                   std::string_view control_path,
                   ViewMapping::Config config = {});
@@ -317,6 +319,15 @@ class View final {
   // null (logging that adding `what` failed) if the property isn't found.
   std::unique_ptr<ViewCondition> CreateCondition(
       const ViewCondition::Config& config, std::string_view what) const;
+
+  // Returns the number of the mode with the name, for a mapping of the
+  // property to the control at the path, of the shape (see
+  // ViewMapping::FindMode()). Returns nullopt, logging that adding the mapping
+  // failed, if there is none.
+  std::optional<int> FindMappingMode(const ViewProperty& property,
+                                     const WidgetShape& shape,
+                                     std::string_view control_path,
+                                     std::string_view name) const;
 
   // Returns the subject's field with the name (without its namespace), or null
   // if the view's subject isn't of the kind, or has no such field.

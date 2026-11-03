@@ -507,8 +507,8 @@ TEST_F(ViewMappingTest, TimelinePositionsWriteTextInTheModesFormat) {
       AddProperty(Type::kTimelinePosition, TimelinePosition(1.5));
   WriteToEach("user:value");
 
-  // Mode 2 is the time format (see ControlTextOutput::SetTimelineText()).
-  Write("user:value", {"Time"}, {.write = {.mode = 2}});
+  // The time format, rather than the ruler's.
+  Write("user:value", {"Time"}, {.write = {.mode = "time"}});
   AddSurface();
   EXPECT_EQ(time.text_output->GetPosition(), 1.5);
   EXPECT_EQ(time.text_output->GetTimelineMode(), TimelineMode::kTime);
@@ -541,7 +541,7 @@ TEST_F(ViewMappingTest, WritesInItsMode) {
   FakeDevice::FakeControl lights = AddDValue("Lights", {1, 3});
   FakeDevice::FakeControl texts = AddText("Texts", 2);
   AddProperty(Type::kToggle, true);
-  Write("user:value", {"Lights", "Texts"}, {.write = {.mode = 1}});
+  Write("user:value", {"Lights", "Texts"}, {.write = {.mode = GetModeName(1)}});
   AddSurface();
 
   // On is the mode's highest value.
@@ -558,13 +558,14 @@ TEST_F(ViewMappingTest, TheFirstModeOverrideThatMatchesWins) {
       AddProperty(Type::kEnumerated, 0, "user:mode", /*max_value=*/2);
   ToggleValueProperty* alt = AddFlag("user:alt");
   Write("user:value", {"Lights"},
-        {.write = {
-             .mode = 0,
-             .mode_overrides = {
-                 {.property = "user:mode",
-                  .value_to_mode = {{Value(1), 1}, {Value(2), 2}}},
-                 {.property = "user:alt", .value_to_mode = {{Value(true), 3}}},
-             }}});
+        {.write = {.mode = GetModeName(0),
+                   .mode_overrides = {
+                       {.property = "user:mode",
+                        .value_to_mode = {{Value(1), GetModeName(1)},
+                                          {Value(2), GetModeName(2)}}},
+                       {.property = "user:alt",
+                        .value_to_mode = {{Value(true), GetModeName(3)}}},
+                   }}});
   AddSurface();
   EXPECT_EQ(lights.dvalue_output->GetMode(), 0);
   EXPECT_EQ(lights.dvalue_output->GetValue(), 1);
@@ -616,10 +617,10 @@ TEST_F(ViewMappingTest, StepsAreThoseOfTheModeAnOverridePicks) {
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     const std::string name = absl::StrCat("user:value", i);
     AddProperty(rows[i].type, rows[i].value, name);
-    Write(
-        name, {absl::StrCat("Lights", i)},
-        {.write = {.mode_overrides = {{.property = "user:alt",
-                                       .value_to_mode = {{Value(true), 1}}}}}});
+    Write(name, {absl::StrCat("Lights", i)},
+          {.write = {.mode_overrides = {
+                         {.property = "user:alt",
+                          .value_to_mode = {{Value(true), GetModeName(1)}}}}}});
   }
   AddSurface();
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
@@ -635,6 +636,50 @@ TEST_F(ViewMappingTest, StepsAreThoseOfTheModeAnOverridePicks) {
     EXPECT_EQ(controls[i].dvalue_output->GetMode(), 1);
     EXPECT_EQ(controls[i].dvalue_output->GetValue(), rows[i].step);
   }
+}
+
+TEST_F(ViewMappingTest, ModesAreNamesTheControlHas) {
+  AddDValue("Lights", {1, 3});
+  AddProperty(Type::kToggle, true);
+  AddProperty(Type::kTimelinePosition, TimelinePosition(1.5), "user:time");
+  AddFlag("user:alt");
+  struct Row {
+    std::string_view property;
+    std::string_view control;
+    std::string mode;
+  };
+  const Row rows[] = {
+      // A control with one mode has no names.
+      {"user:value", "DValue", GetModeName(0)},
+      // A name past the control's modes, or not one of them.
+      {"user:value", "Lights", GetModeName(2)},
+      {"user:value", "Lights", "blink"},
+      // A timeline position written to text names its format, and one
+      // written to anything else has the control's modes.
+      {"user:time", "Text", "seconds"},
+      {"user:time", "Text", GetModeName(0)},
+      {"user:time", "DValue", "time"},
+  };
+  for (const Row& row : rows) {
+    SCOPED_TRACE(absl::StrCat(row.property, " ", row.control, " ", row.mode));
+    EXPECT_FALSE(GetView()->AddMapping(ViewMapping::kWriteControl, row.property,
+                                       row.control,
+                                       {.write = {.mode = row.mode}}));
+    EXPECT_FALSE(GetView()->AddMapping(
+        ViewMapping::kWriteControl, row.property, row.control,
+        {.write = {
+             .mode_overrides = {{.property = "user:alt",
+                                 .value_to_mode = {{true, row.mode}}}}}}));
+  }
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2 * std::size(rows)));
+
+  // Any control has an empty name, its first mode.
+  EXPECT_TRUE(GetView()->AddMapping(
+      ViewMapping::kWriteControl, "user:value", "DValue",
+      {.write = {.mode_overrides = {{.property = "user:alt",
+                                     .value_to_mode = {{true, ""}}}}}}));
+  EXPECT_TRUE(GetView()->AddMapping(ViewMapping::kWriteControl, "user:time",
+                                    "Text", {.write = {.mode = "samples"}}));
 }
 
 //==============================================================================

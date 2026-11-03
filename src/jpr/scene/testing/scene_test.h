@@ -35,8 +35,9 @@ namespace jpr {
 // views, and mappings, and then adds the surface (AddSurface()), as REAPER does
 // at startup. The scene is created on the device the first time it is used
 // (GetScene()), with a widget for each control by the control's name, so a
-// mapping names a control such as "Play". Adding a control once the scene
-// exists fails the test.
+// mapping names a control such as "Play", and a control with more than one mode
+// names them by number (GetModeName()). Adding a control once the scene exists
+// fails the test.
 //
 // Anything logged at ERROR or above fails the test, unless the test takes it
 // from log_error_guard_.
@@ -54,6 +55,10 @@ class SceneTest : public ::testing::Test {
   //----------------------------------------------------------------------------
   // Setting up
   //----------------------------------------------------------------------------
+
+  // Returns the name a control's mode has in the scene's widgets, if the
+  // control has more than one mode: "mode0", "mode1", and so on.
+  static std::string GetModeName(int mode);
 
   // Returns the scene, creating it the first time on the device, with a struct
   // of a widget for each of the device's controls, named by the control's name.

@@ -166,13 +166,13 @@ void AddTrackStripMappings(View* view, std::string_view strip) {
                    GetFieldPathText(strip, "solo"));
   view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiRecArm,
                    GetFieldPathText(strip, "rec"));
-  view->AddMapping(
-      ViewMapping::kReadWriteControl, TrackProperties::kUiPan, pot,
-      {.write = {
-           .mode = 1,
-           .mode_overrides = {
-               {std::string(TrackProperties::kTrackExists), {{false, 8}}},
-               {std::string(TrackProperties::kTrackIsFolder), {{true, 5}}}}}});
+  view->AddMapping(ViewMapping::kReadWriteControl, TrackProperties::kUiPan, pot,
+                   {.write = {.mode = "center",
+                              .mode_overrides = {
+                                  {std::string(TrackProperties::kTrackExists),
+                                   {{false, "off"}}},
+                                  {std::string(TrackProperties::kTrackIsFolder),
+                                   {{true, "center_edges"}}}}}});
   view->AddMapping(ViewMapping::kReadControl, TrackProperties::kUiPan,
                    GetFieldPathText(strip, "pot_button"),
                    {.read = {.property_min = 0.0, .property_max = 0.0}});
@@ -390,7 +390,7 @@ void PluginSurface::InitViews() {
     root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
                           "save", {.read = {.required_modifiers = kModShift}});
     root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty,
-                          "save", {.write = {.mode = 1}});  // Blinking
+                          "save", {.write = {.mode = "blink"}});
     root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
                           "cancel");
     root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyItemSelected,
@@ -449,7 +449,7 @@ void PluginSurface::InitViews() {
       root_view->AddMapping(
           ViewMapping::kWriteControl, info.selected_state, info.button,
           {.write = {.mode_overrides = {{std::string(kStateSelectedAutoMixed),
-                                         {{true, 1}}}}},
+                                         {{true, "blink"}}}}},
            .condition = no_override});
       root_view->AddMapping(ViewMapping::kReadControl, info.override_state,
                             info.button, {.condition = in_override});
@@ -462,7 +462,7 @@ void PluginSurface::InitViews() {
           info.button,
           {.write = {.mode_overrides = {{std::string(
                                              kStateAutoOverrideLatchPreview),
-                                         {{true, 1}}}}},
+                                         {{true, "blink"}}}}},
            .condition = in_override});
     }
 
@@ -685,7 +685,7 @@ void PluginSurface::InitViews() {
     // Track blinks, as it is the current mode, and Send is lit while the
     // selected track has routes to show.
     track_mode_view->AddMapping(ViewMapping::kWriteControl, lit, "assign_track",
-                                {.write = {.mode = 1}});
+                                {.write = {.mode = "blink"}});
     track_mode_view->AddMapping(ViewMapping::kWriteControl,
                                 kSelectedTrackHasRoutes, "assign_send");
   }
@@ -720,9 +720,9 @@ void PluginSurface::InitViews() {
     route_view->AddMapping(
         ViewMapping::kReadWriteControl, RouteProperties::kPan,
         GetFieldPathText(strip, "pot"),
-        {.write = {.mode = 1,
+        {.write = {.mode = "center",
                    .mode_overrides = {{std::string(RouteProperties::kExists),
-                                       {{false, 8}}}}}});
+                                       {{false, "off"}}}}}});
     route_view->AddMapping(
         ViewMapping::kReadControl, RouteProperties::kPan,
         GetFieldPathText(strip, "pot_button"),
@@ -771,7 +771,8 @@ void PluginSurface::InitViews() {
     // Send blinks, as it is the current mode, even if the track no longer has
     // routes, and Track is lit, as it is always available.
     send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
-                                       "assign_send", {.write = {.mode = 1}});
+                                       "assign_send",
+                                       {.write = {.mode = "blink"}});
     send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
                                        "assign_track");
   }

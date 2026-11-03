@@ -502,7 +502,9 @@ A mapping connects one property to one control widget, in one view.
 - **Write options**: the output mode, by name, and an ordered list of mode
   overrides, each a condition and a mode. The first override whose condition is
   met picks the mode. A strip's pan ring is off when it has no track, and
-  different for a folder.
+  different for a folder. A timeline position written to text names its format
+  in place of a mode (`beats`, `time`, `frames`, or `samples`), or follows the
+  ruler's.
 - **Condition**: the mapping only acts while a property equals a value (true,
   for a toggle), read as the value's type. A write mapping writes, and holds
   the control, only while it is met. A read mapping keeps its input, and checks
@@ -776,9 +778,10 @@ feature at a time, so they need changes before they are frozen. *Property
 namespaces and names* made the ones that didn't need a new component: every
 property is in a namespace, the polled state rows have names rather than
 indices, rec arm is `rec_arm` everywhere, and the secondary ruler is
-`state:secondary_ruler_*` rather than `ruler2_*`. The audit below is what is
-left. Properties the plugin declares are in `user:`, as a config's will be, and
-device control names and output modes wait for *Device types and catalogs*.
+`state:secondary_ruler_*` rather than `ruler2_*`. *Device types and catalogs*
+named the controls by their widget paths, and the output modes by name. The
+audit below is what is left. Properties the plugin declares are in `user:`, as
+a config's will be.
 
 ### Conventions
 
@@ -803,9 +806,6 @@ identifiers.
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `mod:send_hold`, `mod:select_anchor`                                       | Declared by the plugin                                                                              | Declared by the config: `mod:send_hold`, and so on                                                             |
 | `view:track_parent`, `view:track_root`, and the other view properties      | Named before the model had references and lists                                                     | Settled when navigation is reviewed as a component                                                             |
-| `Fader1`, `Scribble1Line2`, `AssignTrack`                                  | Mixed case, with 1-based numbers inside names                                                       | Catalog arrays with lower case fields (a strip's `fader`), and lower case single controls (`assign_track`)     |
-| `XTouch/`, `XTouchExt/`                                                    | Mappings name devices                                                                               | Widgets                                                                                                        |
-| Output modes 0, 1, 5, and 8                                                | Numbers from the MCU protocol                                                                       | Named by the device type for each output: solid and blink for lights, and the ring styles and off for encoders |
 | `Track1` to `Track16`, `Route1` to `Route15`, `TrackMode`                  | Generated, and mixed case                                                                           | Repeated views need no names. The others follow the conventions.                                               |
 
 ## JPRSurf's surface in the model

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
+#include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "jpr/common/control_surface.h"
 #include "jpr/common/testing/reaper_actions.h"
@@ -88,6 +89,10 @@ void SceneTest::TearDown() {
   }
 }
 
+std::string SceneTest::GetModeName(int mode) {
+  return absl::StrCat("mode", mode);
+}
+
 Scene* SceneTest::GetScene() {
   if (scene_ != nullptr) {
     return scene_.get();
@@ -96,9 +101,16 @@ Scene* SceneTest::GetScene() {
   // config includes a device's fields.
   std::vector<WidgetShape::Field> fields;
   for (const std::unique_ptr<Control>& control : device_->GetControls()) {
+    std::vector<std::string> mode_names;
+    if (control->GetModeCount() > 1) {
+      for (int mode = 0; mode < control->GetModeCount(); ++mode) {
+        mode_names.push_back(GetModeName(mode));
+      }
+    }
     fields.push_back(
         {std::string(control->GetName()),
-         WidgetShape::ForControl(control->GetInputs(), control->GetOutputs())});
+         WidgetShape::ForControl(control->GetInputs(), control->GetOutputs(),
+                                 std::move(mode_names))});
   }
   scene_control_count_ = static_cast<int>(fields.size());
   const WidgetShape catalog = WidgetShape::ForStruct(std::move(fields));

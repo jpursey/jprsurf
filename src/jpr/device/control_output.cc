@@ -66,25 +66,10 @@ void ControlTextOutput::SetText(std::string_view text, int mode) {
 }
 
 void ControlTextOutput::SetTimelineText(TimelinePosition position, int mode) {
-  mode = std::clamp(mode, 0, 4);
-  TimelineMode timeline_mode = TimelineMode::kBeats;
-  switch (mode) {
-    case 0:
-      timeline_mode = GetRulerMode();
-      break;
-    case 1:
-      timeline_mode = TimelineMode::kBeats;
-      break;
-    case 2:
-      timeline_mode = TimelineMode::kTime;
-      break;
-    case 3:
-      timeline_mode = TimelineMode::kFrames;
-      break;
-    case 4:
-      timeline_mode = TimelineMode::kSamples;
-      break;
-  }
+  mode = std::clamp(mode, 0, GetTimelineTextMode(TimelineMode::kSamples));
+  // Any other mode is GetTimelineTextMode()'s.
+  const TimelineMode timeline_mode =
+      mode == 0 ? GetRulerMode() : static_cast<TimelineMode>(mode - 1);
   OnTimelineTextChanged(position, timeline_mode);
 }
 

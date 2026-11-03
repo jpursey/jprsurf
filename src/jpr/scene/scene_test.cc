@@ -71,9 +71,9 @@ class SceneReferenceTest : public SceneTest {
 
 // Two devices of one catalog, a struct of "play", "stop", "transport" (a struct
 // of "record"), and "strip" (an array of two structs of "mute"): "present",
-// which has only play and record, and "absent". The widgets are present's
-// play and transport, and absent's stop and strip. The scene has a toggle,
-// "user:flag".
+// which has only play and record, and "absent". Each is a button, with the
+// modes "solid" and "blink". The widgets are present's play and transport, and
+// absent's stop and strip. The scene has a toggle, "user:flag".
 class SceneWidgetTest : public ::testing::Test {
  protected:
   SceneWidgetTest() {
@@ -81,7 +81,8 @@ class SceneWidgetTest : public ::testing::Test {
     play_ = device->AddButton("play");
     record_ = device->AddButton("transport.record");
     const WidgetShape button = WidgetShape::ForControl(
-        play_.control->GetInputs(), play_.control->GetOutputs());
+        play_.control->GetInputs(), play_.control->GetOutputs(),
+        {"solid", "blink"});
     const WidgetShape catalog = WidgetShape::ForStruct(
         {{"play", button},
          {"stop", button},
@@ -133,8 +134,8 @@ TEST_F(SceneWidgetTest, MappingsToAbsentControlsDoNothing) {
       std::make_unique<ToggleValueProperty>("user:other"));
   ASSERT_NE(other, nullptr);
   View* root = scene_->GetRootView();
-  EXPECT_TRUE(
-      root->AddMapping(ViewMapping::kWriteControl, "user:flag", "stop"));
+  EXPECT_TRUE(root->AddMapping(ViewMapping::kWriteControl, "user:flag", "stop",
+                               {.write = {.mode = "blink"}}));
   EXPECT_TRUE(root->AddMapping(ViewMapping::kWriteControl, "user:flag",
                                "strip[1].mute"));
   ASSERT_TRUE(
@@ -149,13 +150,19 @@ TEST_F(SceneWidgetTest, MappingsToAbsentControlsDoNothing) {
   EXPECT_FALSE(scene_->GetProperty("user:flag")->IsWatched());
   scene_->Deactivate();
 
-  // They are still validated.
+  // They are still validated, modes included.
   EXPECT_FALSE(
       root->AddMapping(ViewMapping::kWriteControl, "user:nothing", "stop"));
   EXPECT_FALSE(root->AddMapping(
       ViewMapping::kWriteControl, "user:flag", "stop",
       {.condition = ViewCondition::Config{.property = "user:nothing"}}));
-  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
+  EXPECT_FALSE(root->AddMapping(ViewMapping::kWriteControl, "user:flag", "stop",
+                                {.write = {.mode = "fast"}}));
+  EXPECT_FALSE(root->AddMapping(
+      ViewMapping::kWriteControl, "user:flag", "stop",
+      {.write = {.mode_overrides = {{.property = "user:other",
+                                     .value_to_mode = {{true, "fast"}}}}}}));
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(4));
 }
 
 TEST_F(SceneWidgetTest, MappingsNeedAControlInTheWidgets) {
