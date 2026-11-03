@@ -912,8 +912,10 @@ come together:
   common* ([extension_host.md](worklog/extension_host.md), done).
 
 Then, in order:
-1. *Build the scene from a SurfaceSpec*: this model as a C++ struct, with
-   checking (against device and property catalogs) separate from building.
+1. *Build the scene from a SurfaceSpec*
+   ([surface_spec.md](worklog/surface_spec.md)): this model as a C++ struct,
+   with checking (against device and property catalogs) separate from
+   building.
 2. *Config file language and loader*: the syntax, and reading it into the same
    struct.
 3. *Public config spec and user guide split*: this doc becomes the spec.
