@@ -180,9 +180,14 @@ absl::Span<const ComponentKindInfo> GetComponentKinds();
   checks there is one for each of its kinds, with the parameters its spec
   struct takes.
 - **A page for each namespace,** and one of the component kinds, in
-  `docs/user/scene/` (`state.md`, `track.md`, ..., `components.md`), generated
-  by `jpr_doc` and checked in, as the device pages are. The
-  `update_device_docs` target becomes `update_user_docs`, writing both.
+  `docs/user/scene/` (`cmd.md`, `state.md`, ..., `components.md`), generated
+  by `jpr_doc` and checked in, as the device pages are. Each directory has an
+  index (`README.md`), which the user guide links to. Every `.md` file in a
+  directory of `docs/user/` is generated, so a page left behind is found.
+  `GenerateUserDocPages()` lists every generated page, which the
+  `update_user_docs` target (in place of `update_device_docs`) writes, and
+  `jpr_doc_test` compares with the checked-in pages. A type is named by
+  `ViewProperty::GetTypeName()`, as configs and errors will name it.
 
 ### Scene's configs take names
 
@@ -437,7 +442,7 @@ Depends on: nothing.
   compile.
 - The call count bounds don't move, as the same properties are created.
 
-### CL2 [ ] doc: Pages for the scene's properties and components
+### CL2 [x] doc: Pages for the scene's properties and components
 
 Depends on: CL1.
 

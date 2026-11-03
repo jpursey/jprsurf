@@ -10,45 +10,17 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
-#include "absl/strings/str_replace.h"
 #include "absl/types/span.h"
-#include "gb/base/flags.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_output.h"
 #include "jpr/device/widget_doc.h"
 #include "jpr/device/widget_path.h"
 #include "jpr/device/widget_shape.h"
+#include "jpr/doc/markdown.h"
 
 namespace jpr {
 
 namespace {
-
-// Returns the text, safe in a table cell, on one line.
-std::string GetCellText(std::string_view text) {
-  return absl::StrReplaceAll(text, {{"|", "\\|"}, {"\r\n", " "}, {"\n", " "}});
-}
-
-// Returns the names as code, such as "`solid`, `blink`".
-template <typename Names>
-std::string GetCodeList(const Names& names) {
-  return absl::StrJoin(names, ", ",
-                       [](std::string* out, std::string_view name) {
-                         absl::StrAppend(out, "`", name, "`");
-                       });
-}
-
-// Returns the names of the inputs or outputs, such as "value, press".
-template <typename Base>
-std::string GetTypeNames(gb::Flags<typename Base::Type> flags) {
-  std::vector<std::string_view> names;
-  for (typename Base::Type type : Base::kTypes) {
-    if (flags.IsSet(type)) {
-      names.push_back(Base::GetTypeName(type));
-    }
-  }
-  return absl::StrJoin(names, ", ");
-}
 
 // The page of one device type.
 class PageWriter {
@@ -94,9 +66,8 @@ std::string PageWriter::Write() {
   AddFields(*type_.catalog, "", "", 0);
 
   std::string page = absl::StrCat(
-      "<!-- Generated from the ", type_.name,
-      " catalog by the update_device_docs target. Don't edit. -->\n\n# ",
-      type_.name, "\n\n", type_.catalog_doc->description,
+      GetGeneratedPageHeader(absl::StrCat("the ", type_.name, " catalog")),
+      "\n# ", type_.name, "\n\n", type_.catalog_doc->description,
       "\n\n## Widgets\n\n"
       "| Widget | Inputs | Outputs | Modes | Description |\n"
       "| --- | --- | --- | --- | --- |\n",
@@ -137,8 +108,10 @@ void PageWriter::AddField(const WidgetShape& shape, const std::string& path,
   std::string inputs;
   std::string outputs;
   if (widget->GetKind() == WidgetKind::kControl) {
-    inputs = GetTypeNames<ControlInput>(widget->GetInputs());
-    outputs = GetTypeNames<ControlOutput>(widget->GetOutputs());
+    inputs = GetFlagNames(widget->GetInputs(), ControlInput::kTypes,
+                          &ControlInput::GetTypeName);
+    outputs = GetFlagNames(widget->GetOutputs(), ControlOutput::kTypes,
+                           &ControlOutput::GetTypeName);
   }
   if (doc != nullptr && !doc->modes.empty()) {
     AddModes(doc->modes, element_path);
@@ -182,6 +155,19 @@ std::string GenerateDeviceTypePage(const DeviceType& type) {
 
 std::string GetDeviceTypePageName(const DeviceType& type) {
   return absl::StrCat(type.name, ".md");
+}
+
+std::string GenerateDeviceTypesIndexPage(absl::Span<const DeviceType> types) {
+  std::string page = absl::StrCat(
+      GetGeneratedPageHeader("the device types"),
+      "\n# Device types\n\nThe hardware JPRSurf supports, each with a page of "
+      "its widgets, by the names JPRSurf gives them.\n\n"
+      "| Device type | Description |\n| --- | --- |\n");
+  for (const DeviceType& type : types) {
+    absl::StrAppend(&page, "| [", type.name, "](", GetDeviceTypePageName(type),
+                    ") | ", GetCellText(type.catalog_doc->description), " |\n");
+  }
+  return page;
 }
 
 }  // namespace jpr

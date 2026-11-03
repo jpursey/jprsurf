@@ -690,8 +690,8 @@ Only worth doing once a debugging session needs it.
 - **Background:** none
 
 JPRSurf's programs parse their own command lines, each taking only an output
-directory from `argv` and printing its own usage: `jpr_update_device_docs`
-(`src/jpr/doc/update_device_docs.cc`) and `jpr_benchmark`
+directory from `argv` and printing its own usage: `jpr_update_user_docs`
+(`src/jpr/doc/update_user_docs.cc`) and `jpr_benchmark`
 (`src/jpr/plugin/default_config/benchmark.cc`, beside gtest's flags). Once
 Game Bits has its command line library (`gb/cli`), define each one's interface
 with it instead, with help text for each, and validation of the directory.

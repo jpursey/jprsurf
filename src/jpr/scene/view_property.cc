@@ -45,6 +45,30 @@ std::string FitVolumeText(std::string_view text, int width) {
 
 }  // namespace
 
+std::string_view ViewProperty::GetTypeName(Type type) {
+  switch (type) {
+    case Type::kAction:
+      return "action";
+    case Type::kToggle:
+      return "toggle";
+    case Type::kPan:
+      return "pan";
+    case Type::kVolume:
+      return "volume";
+    case Type::kNormalized:
+      return "normalized";
+    case Type::kText:
+      return "text";
+    case Type::kColor:
+      return "color";
+    case Type::kTimelinePosition:
+      return "timeline_position";
+    case Type::kEnumerated:
+      return "enumerated";
+  }
+  return "unknown";
+}
+
 ViewProperty::ViewProperty(std::string_view name, Type type)
     : name_(name), type_(type) {}
 

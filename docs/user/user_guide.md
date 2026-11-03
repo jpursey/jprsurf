@@ -14,6 +14,7 @@ Control support.
 - [Track mode](#track-mode)
 - [Send mode](#send-mode)
 - [Cheat sheet](#cheat-sheet)
+- [Reference](#reference)
 
 ---
 
@@ -530,3 +531,17 @@ other, it does nothing.
 | Channel Left/Right    | Move by one track           | Move by one route   |
 | Fader Bank Left/Right | Move by 8 tracks            | Page through routes |
 | Global View           | Up a level (long press: top) | -                  |
+
+---
+
+## Reference
+
+JPRSurf's surface maps the devices' controls to the properties the scene
+provides. These pages list both, by the names JPRSurf gives them, and are
+generated from JPRSurf's code. They are what a surface config will name, though
+the surface can't be configured yet.
+
+- **[Device types](devices/README.md):** each one's widgets.
+- **[The scene](scene/README.md):** its properties, by namespace, such as
+  REAPER's state and a track's, and the components a config can declare, such
+  as its own modifiers and track references.

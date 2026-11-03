@@ -60,6 +60,12 @@ void ExpectTypes(absl::Span<const PropertyInfo> rows, GetProperty get) {
 
 using CatalogTest = SceneTest;
 
+TEST_F(CatalogTest, AccessesHaveTheirNames) {
+  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kRead), "read");
+  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kWrite), "write");
+  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kTrigger), "trigger");
+}
+
 TEST_F(CatalogTest, NamespacesAreTheBuiltInOnes) {
   std::vector<std::string_view> names;
   for (const PropertyNamespaceInfo& info : GetPropertyCatalog()) {

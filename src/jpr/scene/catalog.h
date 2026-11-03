@@ -35,10 +35,18 @@ enum class PropertyAccess {
 };
 using PropertyAccessFlags = gb::Flags<PropertyAccess>;
 
+// Every access, in order.
+inline constexpr PropertyAccess kPropertyAccesses[] = {
+    PropertyAccess::kRead, PropertyAccess::kWrite, PropertyAccess::kTrigger};
+
 inline constexpr PropertyAccessFlags kReadAccess = PropertyAccess::kRead;
 inline constexpr PropertyAccessFlags kReadWriteAccess = {
     PropertyAccess::kRead, PropertyAccess::kWrite};
 inline constexpr PropertyAccessFlags kTriggerAccess = PropertyAccess::kTrigger;
+
+// Returns the access's name, as errors and docs name it: "read", "write", or
+// "trigger".
+std::string_view GetPropertyAccessName(PropertyAccess access);
 
 // What a view: property needs of the view it is used in. A view has the
 // properties of each need it meets.

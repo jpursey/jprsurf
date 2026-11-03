@@ -1,4 +1,4 @@
-<!-- Generated from the XTouchExt catalog by the update_device_docs target. Don't edit. -->
+<!-- Generated from the XTouchExt catalog by the update_user_docs target. Don't edit. -->
 
 # XTouchExt
 

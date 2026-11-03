@@ -231,13 +231,11 @@ ViewProperty* View::GetSubjectField(SubjectKind kind,
 }
 
 ViewProperty* View::GetProperty(std::string_view name) const {
-  if (name.starts_with(kTrackNamespace)) {
-    return GetSubjectField(SubjectKind::kTrack,
-                           name.substr(kTrackNamespace.size()));
-  }
-  if (name.starts_with(kRouteNamespace)) {
-    return GetSubjectField(SubjectKind::kRoute,
-                           name.substr(kRouteNamespace.size()));
+  for (SubjectKind kind : {SubjectKind::kTrack, SubjectKind::kRoute}) {
+    const std::string_view name_space = GetSubjectNamespace(kind);
+    if (name.starts_with(name_space)) {
+      return GetSubjectField(kind, name.substr(name_space.size()));
+    }
   }
   if (name.starts_with(kViewNamespace)) {
     auto it = properties_.find(name);

@@ -177,6 +177,11 @@ class ViewProperty {
   using Value = std::variant<std::monostate, bool, int, double, std::string,
                              Color, TimelinePosition>;
 
+  // Returns the type's name, as errors and configs name it: "action",
+  // "toggle", "pan", "volume", "normalized", "text", "color",
+  // "timeline_position", or "enumerated".
+  static std::string_view GetTypeName(Type type);
+
   explicit ViewProperty(std::string_view name, Type type);
   ViewProperty(const ViewProperty&) = delete;
   ViewProperty& operator=(const ViewProperty&) = delete;

@@ -18,6 +18,19 @@ namespace {
 
 using Type = ViewProperty::Type;
 
+TEST(ViewPropertyTest, TypesHaveTheirNames) {
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kAction), "action");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kToggle), "toggle");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kPan), "pan");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kVolume), "volume");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kNormalized), "normalized");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kText), "text");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kColor), "color");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kTimelinePosition),
+            "timeline_position");
+  EXPECT_EQ(ViewProperty::GetTypeName(Type::kEnumerated), "enumerated");
+}
+
 TEST(ViewPropertyTest, EqualsBoolReadsAsBool) {
   EXPECT_TRUE(TestProperty(Type::kToggle, true).Equals(true));
   EXPECT_FALSE(TestProperty(Type::kToggle, true).Equals(false));

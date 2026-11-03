@@ -6,7 +6,9 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
+#include "absl/types/span.h"
 #include "jpr/device/device_types.h"
 
 namespace jpr {
@@ -21,8 +23,15 @@ namespace jpr {
 // or mode it doesn't document has no description.
 std::string GenerateDeviceTypePage(const DeviceType& type);
 
-// Returns the name of the type's page file, such as "XTouch.md". The pages
-// are all the .md files in docs/user/devices.
+// Returns the name of the type's page file, such as "XTouch.md". The pages,
+// and the index page, are all the .md files in docs/user/devices.
 std::string GetDeviceTypePageName(const DeviceType& type);
+
+// The name of the device types' index page.
+inline constexpr std::string_view kDeviceTypesIndexPageName = "README.md";
+
+// Returns the index page of the device types, in markdown: a table of them,
+// each linking to its page, with its catalog's description.
+std::string GenerateDeviceTypesIndexPage(absl::Span<const DeviceType> types);
 
 }  // namespace jpr

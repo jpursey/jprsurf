@@ -25,6 +25,21 @@ enum class SubjectKind {
   kRoute,  // A send or receive of a track (see RouteReference).
 };
 
+// Returns the namespace of a view's properties for its subject of the kind,
+// which are also the fields of a reference to it: "track:" for a track,
+// "route:" for a route, and "" for kNone.
+constexpr std::string_view GetSubjectNamespace(SubjectKind kind) {
+  switch (kind) {
+    case SubjectKind::kNone:
+      return "";
+    case SubjectKind::kTrack:
+      return kTrackNamespace;
+    case SubjectKind::kRoute:
+      return kRouteNamespace;
+  }
+  return "";
+}
+
 // A reference to a subject of some kind, or to nothing.
 //
 // A reference isn't a property itself, but its fields are: the properties of
