@@ -319,7 +319,6 @@ std::optional<DeviceList> CreateDevices(absl::Span<const DeviceSpec> specs,
   needn't look up the types again, or pair specs with devices. Their names are
   validated by `ValidateWidgets()` on them, the one place the rule is.
 - `CreateDevice()` takes valid overrides, as `CreateDevices()` validates them.
-  Until CL8, `PluginSurface` validates its own.
 - It is unit tested on the fake REAPER's MIDI ports and the fake X-Touch: both
   present, an optional device absent, a required device absent, a port that
   fails to open on an optional and a required device, and each invalid spec.
@@ -615,7 +614,7 @@ Depends on: CL6.
   doesn't have, and a name on an absent control. The surface tests verify the
   plugin.
 
-### CL8 [ ] plugin: Devices from the list
+### CL8 [x] plugin: Devices from the list
 
 Depends on: CL7.
 

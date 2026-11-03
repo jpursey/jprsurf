@@ -52,7 +52,7 @@ class PluginSurface final : private ControlSurfaceListener {
   Runner device_runner_{"Device"};  // Resets device state, sends output.
   Runner scene_runner_{"Scene"};    // Updates the scene.
   MidiPorts midi_ports_;  // Outlives the scene, whose devices use the ports.
-  std::unique_ptr<Scene> scene_;
+  std::unique_ptr<Scene> scene_;  // Null if the devices weren't created.
 };
 
 }  // namespace jpr

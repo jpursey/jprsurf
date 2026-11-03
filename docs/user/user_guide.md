@@ -22,7 +22,8 @@ Control support.
 ### Hardware
 
 JPRSurf supports one X-Touch, and optionally one X-Touch Extender. An extender
-is not required.
+is not required, but the X-Touch is: with only an extender connected, JPRSurf
+does nothing.
 
 **If you use an extender, it must be physically to the left of the X-Touch.**
 JPRSurf lays out the channel strips in that order: the extender's 8 strips are

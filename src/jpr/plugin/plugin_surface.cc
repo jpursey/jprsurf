@@ -17,14 +17,12 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "gb/config/text_config.h"
-#include "jpr/common/midi_port.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/prefixed_name.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/device/control_input.h"
 #include "jpr/device/control_override.h"
-#include "jpr/device/device.h"
-#include "jpr/device/device_types.h"
+#include "jpr/device/device_spec.h"
 #include "jpr/device/widget.h"
 #include "jpr/device/widget_definition.h"
 #include "jpr/device/widget_path.h"
@@ -111,6 +109,26 @@ constexpr TransportStep kTransportSteps[] = {
     {"beat", "nudge", kCmdGoPrevBeat, kCmdGoNextBeat},
     {"marker", "marker", kCmdGoPrevMarker, kCmdGoNextMarker},
 };
+
+// Returns JPRSurf's devices: an X-Touch, and an X-Touch Extender to its left,
+// if there is one.
+std::vector<DeviceSpec> GetDeviceSpecs() {
+  return {
+      {.name = "xtouch",
+       .type = "XTouch",
+       .input_port = "X-Touch",
+       .output_port = "X-Touch"},
+      {.name = "xtouch_ext",
+       .type = "XTouchExt",
+       .input_port = "X-Touch-Ext",
+       .output_port = "X-Touch-Ext",
+       .required = false,
+       // My extender unit's third fader lost touch sensing, so it falls back
+       // on delayed feedback.
+       .overrides = {{.control = "strip[2].fader",
+                      .inputs = ControlInput::Type::kPress}}},
+  };
+}
 
 // Returns JPRSurf's widgets: the X-Touch's controls apart from its strips, and
 // these arrays of strips, each from left to right:
@@ -273,60 +291,26 @@ std::string PluginSurface::GetConfig() const {
 //------------------------------------------------------------------------------
 
 void PluginSurface::InitViews() {
-  // Note: For now we are just hard-coding views to my development setup, which
-  // is an X-Touch and X-Touch Extender, with the X-Touch extender to the left
-  // of the X-Touch.
-  // The ports of a unit that isn't created close as their handles go.
-  MidiInHandle xtouch_in = midi_ports_.OpenInput("X-Touch");
-  MidiOutHandle xtouch_out = midi_ports_.OpenOutput("X-Touch");
-  MidiInHandle xtouch_ext_in = midi_ports_.OpenInput("X-Touch-Ext");
-  MidiOutHandle xtouch_ext_out = midi_ports_.OpenOutput("X-Touch-Ext");
-  const bool has_xtouch = xtouch_in.IsOpen() && xtouch_out.IsOpen();
-  const bool has_xtouch_ext = xtouch_ext_in.IsOpen() && xtouch_ext_out.IsOpen();
-  const DeviceType* xtouch_type = FindDeviceType("XTouch");
-  CHECK(xtouch_type != nullptr);
-  const DeviceType* xtouch_ext_type = FindDeviceType("XTouchExt");
-  CHECK(xtouch_ext_type != nullptr);
-  std::vector<std::unique_ptr<Device>> devices;
-  Device* xtouch = nullptr;
-  Device* xtouch_ext = nullptr;
-  if (has_xtouch) {
-    devices.push_back(CreateDevice(*xtouch_type, device_runner_,
-                                   std::move(xtouch_in),
-                                   std::move(xtouch_out)));
-    xtouch = devices.back().get();
+  // Without the devices, as when the X-Touch is absent, there is no scene, so
+  // the surface does nothing.
+  std::vector<std::string> device_errors;
+  std::optional<DeviceList> devices = CreateDevices(
+      GetDeviceSpecs(), midi_ports_, device_runner_, &device_errors);
+  for (const std::string& error : device_errors) {
+    LOG(ERROR) << "Failed to create the devices: " << error;
   }
-  if (has_xtouch_ext) {
-    // My extender unit's third fader lost touch sensing, so it falls back on
-    // delayed feedback.
-    const ControlOverride overrides[] = {
-        {.control = "strip[2].fader", .inputs = ControlInput::Type::kPress},
-    };
-    std::vector<std::string> errors;
-    ValidateControlOverrides(*xtouch_ext_type->catalog, overrides, &errors);
-    for (const std::string& error : errors) {
-      LOG(ERROR) << "XTouchExt has an invalid override: " << error;
-    }
-    devices.push_back(CreateDevice(*xtouch_ext_type, device_runner_,
-                                   std::move(xtouch_ext_in),
-                                   std::move(xtouch_ext_out), overrides));
-    xtouch_ext = devices.back().get();
+  if (!devices.has_value()) {
+    return;
   }
-  const WidgetDevice widget_devices[] = {
-      {.name = "xtouch", .catalog = xtouch_type->catalog, .device = xtouch},
-      {.name = "xtouch_ext",
-       .catalog = xtouch_ext_type->catalog,
-       .device = xtouch_ext},
-  };
-  std::vector<std::string> errors;
-  std::optional<WidgetRoot> widgets =
-      ResolveWidgets(GetWidgetDefinition(), widget_devices, &errors);
-  for (const std::string& error : errors) {
+  std::vector<std::string> widget_errors;
+  std::optional<WidgetRoot> widgets = ResolveWidgets(
+      GetWidgetDefinition(), devices->widget_devices, &widget_errors);
+  for (const std::string& error : widget_errors) {
     LOG(ERROR) << "Invalid widget: " << error;
   }
   CHECK(widgets.has_value());
-  scene_ =
-      std::make_unique<Scene>("Scene", std::move(devices), std::move(*widgets));
+  scene_ = std::make_unique<Scene>("Scene", std::move(devices->devices),
+                                   std::move(*widgets));
   const int strip_count = GetElementCount(*scene_, "strip");
   const int route_strip_count = GetElementCount(*scene_, "route_strip");
 
@@ -343,183 +327,172 @@ void PluginSurface::InitViews() {
 
   // Add global mappings
   auto* root_view = scene_->GetRootView();
-  if (has_xtouch) {
-    // Master fader
-    View* master_track_view = root_view->AddChildView(
-        "MasterFader", {.subject = View::ReferenceSubject{
-                            .name = std::string(Scene::kMasterTrack)}});
-    CHECK(master_track_view != nullptr);
-    master_track_view->AddMapping(ViewMapping::kReadWriteControl,
-                                  TrackProperties::kVolume, "master_fader");
-    AddTouchMapping(master_track_view, TrackProperties::kVolumeTouched,
-                    "master_fader");
-    master_track_view->Enable();
+  // Master fader
+  View* master_track_view = root_view->AddChildView(
+      "MasterFader", {.subject = View::ReferenceSubject{
+                          .name = std::string(Scene::kMasterTrack)}});
+  CHECK(master_track_view != nullptr);
+  master_track_view->AddMapping(ViewMapping::kReadWriteControl,
+                                TrackProperties::kVolume, "master_fader");
+  AddTouchMapping(master_track_view, TrackProperties::kVolumeTouched,
+                  "master_fader");
+  master_track_view->Enable();
 
-    // Modifiers
-    root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kShift, "shift",
-                          {.read = {.press_release = true}});
-    root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kCtrl, "control",
-                          {.read = {.press_release = true}});
-    root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kAlt, "alt",
-                          {.read = {.press_release = true}});
-    root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          ModifierProperty::kOpt, "option",
-                          {.read = {.press_release = true}});
+  // Modifiers
+  root_view->AddMapping(ViewMapping::kReadWriteControl,
+                        ModifierProperty::kShift, "shift",
+                        {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kCtrl,
+                        "control", {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kAlt,
+                        "alt", {.read = {.press_release = true}});
+  root_view->AddMapping(ViewMapping::kReadWriteControl, ModifierProperty::kOpt,
+                        "option", {.read = {.press_release = true}});
 
-    // Timecode display
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateTimelinePosition,
-                          "timecode");
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerFrames,
-                          "smpte_light");
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerBeats,
-                          "beats_light");
-    root_view->AddMapping(ViewMapping::kReadControl, kStateRulerMode,
-                          "show_time_beats");
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyTrackSolo,
-                          "solo_light");
+  // Timecode display
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateTimelinePosition,
+                        "timecode");
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerFrames,
+                        "smpte_light");
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateRulerBeats,
+                        "beats_light");
+  root_view->AddMapping(ViewMapping::kReadControl, kStateRulerMode,
+                        "show_time_beats");
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyTrackSolo,
+                        "solo_light");
 
-    // Utility buttons
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, "undo");
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, "undo",
-                          {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateCanRedo, "undo");
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, "save");
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
-                          "save", {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty,
-                          "save", {.write = {.mode = "blink"}});
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
-                          "cancel");
-    root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyItemSelected,
-                          "cancel");
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdRemoveTimeSelection,
-                          "cancel",
-                          {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem,
-                          "enter");
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem,
-                          "enter", {.read = {.required_modifiers = kModShift}});
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
-                          "enter", {.read = {.required_modifiers = kModCtrl}});
+  // Utility buttons
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdUndo, "undo");
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdRedo, "undo",
+                        {.read = {.required_modifiers = kModShift}});
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateCanRedo, "undo");
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveProject, "save");
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdSaveNewProjectVersion,
+                        "save", {.read = {.required_modifiers = kModShift}});
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateProjectDirty, "save",
+                        {.write = {.mode = "blink"}});
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdUnselectAllItems,
+                        "cancel");
+  root_view->AddMapping(ViewMapping::kWriteControl, kStateAnyItemSelected,
+                        "cancel");
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdRemoveTimeSelection,
+                        "cancel", {.read = {.required_modifiers = kModShift}});
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertMidiItem, "enter");
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertEmptyItem, "enter",
+                        {.read = {.required_modifiers = kModShift}});
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdInsertClickSource,
+                        "enter", {.read = {.required_modifiers = kModCtrl}});
 
-    // Automation buttons. Group turns the global automation override on and
-    // off, and is lit while it is on.
-    //
-    // Without an override, each mode button sets the selected tracks' mode,
-    // and is lit while any selected track is in its mode: solid if they all
-    // are, and blinking if only some are.
-    //
-    // With an override, each mode button sets the override to its mode (or to
-    // Bypass if it already is), and is lit while the override is its mode.
-    // There is no Latch Preview button, so Latch blinks for Latch Preview, and
-    // pressing it sets Latch.
-    root_view->AddMapping(ViewMapping::kReadWriteControl,
-                          kStateAutoOverrideActive, "auto_group");
-    const ViewCondition::Config no_override = {
-        .property = std::string(kStateAutoOverrideActive), .value = false};
-    const ViewCondition::Config in_override = {
-        .property = std::string(kStateAutoOverrideActive), .value = true};
-    struct AutoModeButton {
-      std::string_view button;
-      std::string_view command;
-      std::string_view selected_state;
-      std::string_view override_state;
+  // Automation buttons. Group turns the global automation override on and
+  // off, and is lit while it is on.
+  //
+  // Without an override, each mode button sets the selected tracks' mode,
+  // and is lit while any selected track is in its mode: solid if they all
+  // are, and blinking if only some are.
+  //
+  // With an override, each mode button sets the override to its mode (or to
+  // Bypass if it already is), and is lit while the override is its mode.
+  // There is no Latch Preview button, so Latch blinks for Latch Preview, and
+  // pressing it sets Latch.
+  root_view->AddMapping(ViewMapping::kReadWriteControl,
+                        kStateAutoOverrideActive, "auto_group");
+  const ViewCondition::Config no_override = {
+      .property = std::string(kStateAutoOverrideActive), .value = false};
+  const ViewCondition::Config in_override = {
+      .property = std::string(kStateAutoOverrideActive), .value = true};
+  struct AutoModeButton {
+    std::string_view button;
+    std::string_view command;
+    std::string_view selected_state;
+    std::string_view override_state;
 
-      // The light during an override, if it isn't override_state.
-      std::string_view override_light = {};
-    };
-    static constexpr AutoModeButton kAutoModeButtons[] = {
-        {"auto_trim", kCmdAutoModeTrim, kStateSelectedAutoTrimRead,
-         kStateAutoOverrideTrimRead},
-        {"auto_read", kCmdAutoModeRead, kStateSelectedAutoRead,
-         kStateAutoOverrideRead},
-        {"auto_touch", kCmdAutoModeTouch, kStateSelectedAutoTouch,
-         kStateAutoOverrideTouch},
-        {"auto_write", kCmdAutoModeWrite, kStateSelectedAutoWrite,
-         kStateAutoOverrideWrite},
-        {"auto_latch", kCmdAutoModeLatch, kStateSelectedAutoLatch,
-         kStateAutoOverrideLatch, kStateAutoOverrideAnyLatch},
-    };
-    for (const AutoModeButton& info : kAutoModeButtons) {
-      root_view->AddMapping(ViewMapping::kReadControl, info.command,
-                            info.button, {.condition = no_override});
-      root_view->AddMapping(
-          ViewMapping::kWriteControl, info.selected_state, info.button,
-          {.write = {.mode_overrides = {{std::string(kStateSelectedAutoMixed),
-                                         {{true, "blink"}}}}},
-           .condition = no_override});
-      root_view->AddMapping(ViewMapping::kReadControl, info.override_state,
-                            info.button, {.condition = in_override});
-      // The other override lights are never on during Latch Preview, so the
-      // blink only affects Latch.
-      root_view->AddMapping(
-          ViewMapping::kWriteControl,
-          info.override_light.empty() ? info.override_state
-                                      : info.override_light,
-          info.button,
-          {.write = {.mode_overrides = {{std::string(
-                                             kStateAutoOverrideLatchPreview),
-                                         {{true, "blink"}}}}},
-           .condition = in_override});
-    }
-
-    // Misc buttons (above transport). Marker and Nudge are with the transport
-    // controls below.
-    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
-                          "cycle");
-    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome,
-                          "click");
-    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdSoloInFront,
-                          "solo");
+    // The light during an override, if it isn't override_state.
+    std::string_view override_light = {};
+  };
+  static constexpr AutoModeButton kAutoModeButtons[] = {
+      {"auto_trim", kCmdAutoModeTrim, kStateSelectedAutoTrimRead,
+       kStateAutoOverrideTrimRead},
+      {"auto_read", kCmdAutoModeRead, kStateSelectedAutoRead,
+       kStateAutoOverrideRead},
+      {"auto_touch", kCmdAutoModeTouch, kStateSelectedAutoTouch,
+       kStateAutoOverrideTouch},
+      {"auto_write", kCmdAutoModeWrite, kStateSelectedAutoWrite,
+       kStateAutoOverrideWrite},
+      {"auto_latch", kCmdAutoModeLatch, kStateSelectedAutoLatch,
+       kStateAutoOverrideLatch, kStateAutoOverrideAnyLatch},
+  };
+  for (const AutoModeButton& info : kAutoModeButtons) {
+    root_view->AddMapping(ViewMapping::kReadControl, info.command, info.button,
+                          {.condition = no_override});
     root_view->AddMapping(
-        ViewMapping::kReadControl, kCmdSoloDefeat, "solo",
-        {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-
-    // Transport controls. Rewind and Forward move by the transport step, which
-    // Marker and Nudge pick. It is one value, so turning one on turns the other
-    // off. Each toggles between its step and the first (a measure), and is lit
-    // while its step is picked.
-    std::vector<std::string> step_names;
-    for (const TransportStep& step : kTransportSteps) {
-      step_names.emplace_back(step.name);
-    }
-    CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
-              kTransportStep, std::move(step_names))) != nullptr);
-    for (int i = 0; i < static_cast<int>(std::size(kTransportSteps)); ++i) {
-      const TransportStep& step = kTransportSteps[i];
-      const ViewCondition::Config on_step = {
-          .property = std::string(kTransportStep), .value = i};
-      root_view->AddMapping(ViewMapping::kReadControl, step.prev_command,
-                            "rewind", {.condition = on_step});
-      root_view->AddMapping(ViewMapping::kReadControl, step.next_command,
-                            "forward", {.condition = on_step});
-      if (step.button.empty()) {
-        continue;
-      }
-      root_view->AddMapping(
-          ViewMapping::kReadControl, kTransportStep, step.button,
-          {.read = {
-               .property_min = 0, .property_max = i, .press_toggles = true}});
-      root_view->AddMapping(ViewMapping::kWriteControl, lit, step.button,
-                            {.condition = on_step});
-    }
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportStop, "stop");
-    root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportPlayPause,
-                          "play");
-    root_view->AddMapping(ViewMapping::kWriteControl, kCmdTransportPlay,
-                          "play");
-    root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRecord,
-                          "record");
+        ViewMapping::kWriteControl, info.selected_state, info.button,
+        {.write = {.mode_overrides = {{std::string(kStateSelectedAutoMixed),
+                                       {{true, "blink"}}}}},
+         .condition = no_override});
+    root_view->AddMapping(ViewMapping::kReadControl, info.override_state,
+                          info.button, {.condition = in_override});
+    // The other override lights are never on during Latch Preview, so the
+    // blink only affects Latch.
+    root_view->AddMapping(
+        ViewMapping::kWriteControl,
+        info.override_light.empty() ? info.override_state : info.override_light,
+        info.button,
+        {.write = {.mode_overrides = {{std::string(
+                                           kStateAutoOverrideLatchPreview),
+                                       {{true, "blink"}}}}},
+         .condition = in_override});
   }
+
+  // Misc buttons (above transport). Marker and Nudge are with the transport
+  // controls below.
+  root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRepeat,
+                        "cycle");
+  root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdMetronome, "click");
+  root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdSoloInFront,
+                        "solo");
+  root_view->AddMapping(
+      ViewMapping::kReadControl, kCmdSoloDefeat, "solo",
+      {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+
+  // Transport controls. Rewind and Forward move by the transport step, which
+  // Marker and Nudge pick. It is one value, so turning one on turns the other
+  // off. Each toggles between its step and the first (a measure), and is lit
+  // while its step is picked.
+  std::vector<std::string> step_names;
+  for (const TransportStep& step : kTransportSteps) {
+    step_names.emplace_back(step.name);
+  }
+  CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
+            kTransportStep, std::move(step_names))) != nullptr);
+  for (int i = 0; i < static_cast<int>(std::size(kTransportSteps)); ++i) {
+    const TransportStep& step = kTransportSteps[i];
+    const ViewCondition::Config on_step = {
+        .property = std::string(kTransportStep), .value = i};
+    root_view->AddMapping(ViewMapping::kReadControl, step.prev_command,
+                          "rewind", {.condition = on_step});
+    root_view->AddMapping(ViewMapping::kReadControl, step.next_command,
+                          "forward", {.condition = on_step});
+    if (step.button.empty()) {
+      continue;
+    }
+    root_view->AddMapping(
+        ViewMapping::kReadControl, kTransportStep, step.button,
+        {.read = {
+             .property_min = 0, .property_max = i, .press_toggles = true}});
+    root_view->AddMapping(ViewMapping::kWriteControl, lit, step.button,
+                          {.condition = on_step});
+  }
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportStop, "stop");
+  root_view->AddMapping(ViewMapping::kReadControl, kCmdTransportPlayPause,
+                        "play");
+  root_view->AddMapping(ViewMapping::kWriteControl, kCmdTransportPlay, "play");
+  root_view->AddMapping(ViewMapping::kReadWriteControl, kCmdTransportRecord,
+                        "record");
 
   // Surface modes. Track returns to Track mode, and each mode view maps what
   // tapping Send does. Entering Send/Receive mode is two mappings on the same
   // press, with the same condition: one picks the current track, and the other
-  // sets the mode. The send hold modifier is added even without an X-Touch, as
-  // Track mode mappings refer to it.
+  // sets the mode.
   CHECK(scene_->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
             kSurfaceMode,
             std::vector<std::string>(std::begin(kSurfaceModeNames),
@@ -529,13 +502,11 @@ void PluginSurface::InitViews() {
   CHECK(scene_->AddUserProperty(std::make_unique<TrackPickProperty>(
             kPickSelectedTrack, *current_track,
             scene_->GetTrackReference(Scene::kSelectedTrack))) != nullptr);
-  if (has_xtouch) {
-    root_view->AddMapping(
-        ViewMapping::kReadControl, kSurfaceMode, "assign_track",
-        {.read = {.property_min = kTrackMode, .property_max = kTrackMode}});
-    root_view->AddMapping(ViewMapping::kReadControl, kSendHold, "assign_send",
-                          {.read = {.press_release = true}});
-  }
+  root_view->AddMapping(
+      ViewMapping::kReadControl, kSurfaceMode, "assign_track",
+      {.read = {.property_min = kTrackMode, .property_max = kTrackMode}});
+  root_view->AddMapping(ViewMapping::kReadControl, kSendHold, "assign_send",
+                        {.read = {.press_release = true}});
   root_view->Enable();
 
   // Add the Track mode view, which holds everything that is specific to Track
@@ -646,49 +617,45 @@ void PluginSurface::InitViews() {
              .property = std::string(TrackProperties::kTrackExists)}});
     track_view->Enable();
   }
-  if (has_xtouch) {
-    // Global navigates up one level, or all the way to the root when held. It
-    // is lit while there is a level to go up to.
-    track_list_view->AddMapping(ViewMapping::kReadControl, View::kTrackParent,
-                                "global");
-    track_list_view->AddMapping(
-        ViewMapping::kReadControl, View::kTrackRoot, "global",
-        {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
-    track_list_view->AddMapping(ViewMapping::kWriteControl,
-                                TrackProperties::kTrackHasParent, "global");
-    track_list_view->AddMapping(ViewMapping::kReadControl, View::kChildDec,
-                                "channel_left");
-    track_list_view->AddMapping(ViewMapping::kReadControl, View::kChildInc,
-                                "channel_right");
-    track_list_view->AddMapping(ViewMapping::kReadControl, View::kBankDec,
-                                "bank_left");
-    track_list_view->AddMapping(ViewMapping::kReadControl, View::kBankInc,
-                                "bank_right");
-  }
+  // Global navigates up one level, or all the way to the root when held. It
+  // is lit while there is a level to go up to.
+  track_list_view->AddMapping(ViewMapping::kReadControl, View::kTrackParent,
+                              "global");
+  track_list_view->AddMapping(
+      ViewMapping::kReadControl, View::kTrackRoot, "global",
+      {.read = {.press_behavior = InputConfig::PressBehavior::kLongPress}});
+  track_list_view->AddMapping(ViewMapping::kWriteControl,
+                              TrackProperties::kTrackHasParent, "global");
+  track_list_view->AddMapping(ViewMapping::kReadControl, View::kChildDec,
+                              "channel_left");
+  track_list_view->AddMapping(ViewMapping::kReadControl, View::kChildInc,
+                              "channel_right");
+  track_list_view->AddMapping(ViewMapping::kReadControl, View::kBankDec,
+                              "bank_left");
+  track_list_view->AddMapping(ViewMapping::kReadControl, View::kBankInc,
+                              "bank_right");
   track_list_view->Enable();
-  if (has_xtouch) {
-    // Tapping Send enters Send/Receive mode for the selected track, if it has
-    // routes.
-    const ViewCondition::Config has_routes = {
-        .property = std::string(kSelectedTrackHasRoutes)};
-    const InputConfig::PressBehavior tap = InputConfig::PressBehavior::kTap;
-    track_mode_view->AddMapping(
-        ViewMapping::kReadControl, kPickSelectedTrack, "assign_send",
-        {.read = {.press_behavior = tap}, .condition = has_routes});
-    track_mode_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode,
-                                "assign_send",
-                                {.read = {.press_behavior = tap,
-                                          .property_min = kSendReceiveMode,
-                                          .property_max = kSendReceiveMode},
-                                 .condition = has_routes});
+  // Tapping Send enters Send/Receive mode for the selected track, if it has
+  // routes.
+  const ViewCondition::Config has_routes = {
+      .property = std::string(kSelectedTrackHasRoutes)};
+  const InputConfig::PressBehavior tap = InputConfig::PressBehavior::kTap;
+  track_mode_view->AddMapping(
+      ViewMapping::kReadControl, kPickSelectedTrack, "assign_send",
+      {.read = {.press_behavior = tap}, .condition = has_routes});
+  track_mode_view->AddMapping(ViewMapping::kReadControl, kSurfaceMode,
+                              "assign_send",
+                              {.read = {.press_behavior = tap,
+                                        .property_min = kSendReceiveMode,
+                                        .property_max = kSendReceiveMode},
+                               .condition = has_routes});
 
-    // Track blinks, as it is the current mode, and Send is lit while the
-    // selected track has routes to show.
-    track_mode_view->AddMapping(ViewMapping::kWriteControl, lit, "assign_track",
-                                {.write = {.mode = "blink"}});
-    track_mode_view->AddMapping(ViewMapping::kWriteControl,
-                                kSelectedTrackHasRoutes, "assign_send");
-  }
+  // Track blinks, as it is the current mode, and Send is lit while the
+  // selected track has routes to show.
+  track_mode_view->AddMapping(ViewMapping::kWriteControl, lit, "assign_track",
+                              {.write = {.mode = "blink"}});
+  track_mode_view->AddMapping(ViewMapping::kWriteControl,
+                              kSelectedTrackHasRoutes, "assign_send");
   track_mode_view->Enable();
 
   // Add the Send/Receive mode view, which shows the routes of the current
@@ -743,39 +710,37 @@ void PluginSurface::InitViews() {
                            GetFieldPathText(strip, "scribble_color"));
     route_view->Enable();
   }
-  if (has_xtouch) {
-    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
-                                       View::kChildDec, "channel_left");
-    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
-                                       View::kChildInc, "channel_right");
-    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
-                                       View::kBankDec, "bank_left");
-    send_receive_mode_view->AddMapping(ViewMapping::kReadControl,
-                                       View::kBankInc, "bank_right");
+  send_receive_mode_view->AddMapping(ViewMapping::kReadControl, View::kChildDec,
+                                     "channel_left");
+  send_receive_mode_view->AddMapping(ViewMapping::kReadControl, View::kChildInc,
+                                     "channel_right");
+  send_receive_mode_view->AddMapping(ViewMapping::kReadControl, View::kBankDec,
+                                     "bank_left");
+  send_receive_mode_view->AddMapping(ViewMapping::kReadControl, View::kBankInc,
+                                     "bank_right");
 
-    // The Info strip shows the Send/Receive mode track itself, the same as in
-    // Track mode, except the bottom scribble line shows whether its sends or
-    // receives are shown, and is blank once the track is deleted.
-    AddTrackStripMappings(send_receive_mode_view, "info_strip");
-    send_receive_mode_view->AddMapping(
-        ViewMapping::kWriteControl, View::kChildRouteTypeName,
-        "info_strip.scribble_bottom",
-        {.condition = ViewCondition::Config{
-             .property = std::string(TrackProperties::kTrackExists)}});
+  // The Info strip shows the Send/Receive mode track itself, the same as in
+  // Track mode, except the bottom scribble line shows whether its sends or
+  // receives are shown, and is blank once the track is deleted.
+  AddTrackStripMappings(send_receive_mode_view, "info_strip");
+  send_receive_mode_view->AddMapping(
+      ViewMapping::kWriteControl, View::kChildRouteTypeName,
+      "info_strip.scribble_bottom",
+      {.condition = ViewCondition::Config{
+           .property = std::string(TrackProperties::kTrackExists)}});
 
-    // Tapping Send switches between showing sends and receives.
-    send_receive_mode_view->AddMapping(
-        ViewMapping::kReadControl, View::kChildRouteToggle, "assign_send",
-        {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
+  // Tapping Send switches between showing sends and receives.
+  send_receive_mode_view->AddMapping(
+      ViewMapping::kReadControl, View::kChildRouteToggle, "assign_send",
+      {.read = {.press_behavior = InputConfig::PressBehavior::kTap}});
 
-    // Send blinks, as it is the current mode, even if the track no longer has
-    // routes, and Track is lit, as it is always available.
-    send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
-                                       "assign_send",
-                                       {.write = {.mode = "blink"}});
-    send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
-                                       "assign_track");
-  }
+  // Send blinks, as it is the current mode, even if the track no longer has
+  // routes, and Track is lit, as it is always available.
+  send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
+                                     "assign_send",
+                                     {.write = {.mode = "blink"}});
+  send_receive_mode_view->AddMapping(ViewMapping::kWriteControl, lit,
+                                     "assign_track");
   send_receive_mode_view->Enable();
 
   // Finally activate the scene, which will start it running and activate all

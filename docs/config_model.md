@@ -44,7 +44,7 @@ them are frozen.
 
 | Part       | What it is                                                                   | Today                                              |
 | ---------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `DeviceType`, `CreateDevice()`                     |
+| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `DeviceSpec`, `CreateDevices()`                    |
 | Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `ResolveWidgets()`, which the `Scene` takes        |
 | Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, `Scene::AddUserProperty()` |
 | Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                             |
@@ -868,18 +868,17 @@ views
                        volume on scribble line 2, select across the route
 ```
 
-Without the extender, the arrays shrink exactly as the strip loops do today, to
-8 track strips and 7 route strips. Without the X-Touch, the config doesn't
-load, where today the extender alone gives 8 strips with no transport, modes,
-or navigation. That's a deliberate change: the extender alone was never a
-useful surface.
+Without the extender, the arrays shrink to 8 track strips and 7 route strips.
+Without the X-Touch, the surface does nothing, as the X-Touch is required. The
+extender alone once gave 8 strips with no transport, modes, or navigation,
+which was never a useful surface.
 
 What becomes of the plugin's code:
 
 | `PluginSurface` today                                                                     | In the model                                                     |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Opening the MIDI ports and adding the devices                                             | Devices                                                          |
-| `has_xtouch` checks, device prefixes, and the strip loops                                 | Widgets and repeated views                                       |
+| `GetDeviceSpecs()`                                                                        | Devices                                                          |
+| `GetWidgetDefinition()`, and the strip loops                                              | Widgets and repeated views                                       |
 | `AddTrackStripMappings()`                                                                 | The `track_strip` template                                       |
 | The `kAutoModeButtons` table                                                              | The `auto_mode_button` template                                  |
 | `AddTrackAnchorMapping()`                                                                 | Track anchor                                                     |
