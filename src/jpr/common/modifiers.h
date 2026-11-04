@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <bit>
 #include <cstdint>
+#include <limits>
 
 namespace jpr {
 
@@ -20,6 +22,10 @@ inline constexpr Modifiers kModOpt = 8;   // Control on Mac, Windows on Windows
 // The first available "user" modifier bit mask that can be used for custom
 // modifiers in property
 inline constexpr Modifiers kModUserStart = 16;
+
+// The number of "user" modifier bits, from kModUserStart on.
+inline constexpr int kModUserCount =
+    std::numeric_limits<Modifiers>::digits - std::countr_zero(kModUserStart);
 
 // Returns the current state of the modifier keys (shift, ctrl, alt, etc.) as a
 // bitmask. The standard modifier bit masks are defined above, but additional

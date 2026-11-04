@@ -119,9 +119,10 @@ struct ParamInfo {
 // One kind of component a config can declare (see Components in
 // docs/config_model.md), each with a name and its kind's parameters.
 struct ComponentKindInfo {
-  std::string_view name;   // Such as "enumerated_value".
-  bool top_level = false;  // Whether it may be declared at the top level,
-  bool on_view = false;    // and on a view.
+  std::string_view name;        // Such as "enumerated_value".
+  std::string_view name_space;  // Of the name it declares, such as "user:".
+  bool top_level = false;       // Whether it may be declared at the top level,
+  bool on_view = false;         // and on a view.
   std::string_view description;
   absl::Span<const ParamInfo> params;
 };

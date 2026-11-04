@@ -14,6 +14,7 @@ set(jpr_scene_SOURCE
   scene.cc scene.h
   scene_state_property.cc scene_state_property.h
   state_properties.cc state_properties.h
+  surface_spec.cc surface_spec.h
   timeline_property.cc timeline_property.h
   track_actions.cc track_actions.h
   track_anchor_property.cc track_anchor_property.h
@@ -30,8 +31,12 @@ set(jpr_scene_SOURCE
 )
 
 set(jpr_scene_DEPS
+  absl::flat_hash_map
+  absl::flat_hash_set
   absl::log
   absl::log_initialize
+  absl::span
+  absl::strings
   gb_config
   gb_profile
   jpr_common
@@ -48,6 +53,7 @@ set(jpr_scene_TEST_SOURCE
   route_reference_test.cc
   scene_test.cc
   state_properties_test.cc
+  surface_spec_test.cc
   timeline_property_test.cc
   track_actions_test.cc
   track_anchor_property_test.cc

@@ -258,6 +258,7 @@ TEST_F(SceneTest, AddedModifierPropertiesRunOut) {
   while (GetScene()->AddModifierProperty(absl::StrCat("mod:m", count)) != 0) {
     ++count;
   }
+  EXPECT_EQ(count, kModUserCount);
   EXPECT_EQ(count, 60);
 }
 

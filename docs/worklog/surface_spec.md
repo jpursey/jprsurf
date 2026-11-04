@@ -45,7 +45,8 @@ Performance below).
 | `GetPropertyCatalog()`, `PropertyInfo`, `ReferenceInfo`, `PropertyNamespaceInfo` | `PropertyRegistry`, `PropertyEntry` | A device type's catalog, a `WidgetShape`                                    |
 | `GetComponentKinds()`, `ComponentKindInfo`                                        | `ComponentCatalog`                  | `ComponentSpec`, a declared instance of a kind                              |
 | `ViewProperty::FindValue()`                                                      | `GetValueByName()`                  | `ViewProperty::SetText()`, which also takes a value's name                  |
-| `ValidateSurfaceSpec()`, `ValidateDeviceSpecs()`                                 | `Check*()`                          | `ValidateWidgets()`, which it calls                                         |
+| `ValidateSurfaceSpec()`                                                          | `Check*()`                          | `ValidateWidgets()`, which it calls                                         |
+| `CreateWidgetDevices()`                                                          | `ValidateDeviceSpecs()`             | `CreateDevices()`, which calls it to check the specs before opening a port  |
 | `CreateScene()`                                                                  | `BuildScene()`                      | The `Scene` constructor, which it calls. "Create", as it returns a `unique_ptr`. |
 | `GetDefaultSpec()` (`plugin/default_spec.h`)                                     | `GetJprSurfSpec()`                  | `DefaultConfigTest`, which tests it                                         |
 
@@ -323,8 +324,8 @@ struct ViewSpec {
 // Returns true if the spec is valid, adding an error for each problem found
 // to `errors` (if provided). Checking doesn't stop at the first problem, and
 // each error starts with what it is about: a device, a widget, a component, a
-// template, or a view by its path from the root (such as
-// "track_mode/track_list/strip[]"), and for a mapping, its control.
+// template, or a view by its path from the root, which is "/" (such as
+// "/track_mode/track_list/strip[]"), and for a mapping, its control.
 bool ValidateSurfaceSpec(const SurfaceSpec& spec,
                          std::vector<std::string>* errors);
 ```
@@ -333,17 +334,23 @@ It checks everything under "Checking and building a config" in the config
 model:
 - **Devices and widgets:** each device's type, overrides, ports, and name (the
   checks `CreateDevices()` makes before opening a port, moved to a
-  `ValidateDeviceSpecs()` in `device` that both call), and the widgets with
-  `ValidateWidgets()` on the types' catalogs.
+  `CreateWidgetDevices()` in `device` that both call, which returns the devices'
+  names and catalogs), and the widgets with `ValidateWidgets()` on the types'
+  catalogs.
 - **Components:** each kind declared where it may be, no name declared twice or
   hiding a visible one (the model's rule for declarations, unlike paths), a
   reference's fallback and follow declared before it (or built in), a pick's
   reference writable, an anchor's modifier a modifier, enumerated values unique
-  with the initial one among them, and at most 60 declared modifiers.
-- **Views:** names, the subject's kind from its reference or its parent's list,
-  each list on a track subject, its reveal a track reference other than the
-  one it's bound to, exactly one repeated child under each view with a list
-  (none elsewhere), over an array widget.
+  with the initial one among them, an anchor or pick on a view with a track
+  subject, and at most 60 declared modifiers (`kModUserCount`). A built in
+  modifier is visible everywhere, so a declared modifier can't take its name,
+  as the scene doesn't let one replace it yet (the model's precedence rule, see
+  Declared properties).
+- **Views:** names (C identifiers), the subject's kind from its reference or
+  its parent's list, each list on a track subject with a positive bank size,
+  its reveal a track reference other than the one it's bound to, exactly one
+  repeated child under each view with a list (none elsewhere), over an array
+  widget. The root view is the scene's, so it has no name or config.
 - **Templates and uses:** each use names a template and gives exactly its
   parameters, and no template uses itself, however indirectly.
 - **Mappings,** after expanding uses: the control is a control, with the inputs
@@ -471,12 +478,12 @@ Depends on: nothing.
 - Tests of a modifier name, a name that isn't a modifier, a value name in a
   condition, a range, and an override, and a name that isn't a value.
 
-### CL4 [ ] device, scene: The SurfaceSpec, and checking its structure
+### CL4 [x] device, scene: The SurfaceSpec, and checking its structure
 
 Depends on: CL1, CL3.
 
 - `SurfaceSpec` and its parts.
-- `ValidateDeviceSpecs()` in `device`, which `CreateDevices()` calls.
+- `CreateWidgetDevices()` in `device`, which `CreateDevices()` calls.
 - `ValidateSurfaceSpec()`, checking devices, widgets, components, views, and
   templates and their uses. Mappings are left to CL6.
 - Unused, so no visible change.

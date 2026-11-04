@@ -93,7 +93,8 @@ class View final {
   struct ListConfig {
     std::variant<ChildTracks, Routes> items;
 
-    // How far kBankInc and kBankDec scroll. Defaults to the item count.
+    // How far kBankInc and kBankDec scroll, which must be positive. Defaults to
+    // the item count.
     std::optional<int> bank_size;
   };
 
@@ -195,7 +196,8 @@ class View final {
   //
   // This returns null (logging why) if a view with the same name already
   // exists, the reference doesn't exist, a list item's parent has no list, a
-  // list is given for a view without a track subject, a list's reveal isn't
+  // list is given for a view without a track subject, a list's bank size isn't
+  // positive, a list's reveal isn't
   // valid (see ChildTracks::reveal), or the condition's property doesn't exist
   // (as seen from the child view).
   View* AddChildView(std::string_view name, const Config& config = {});

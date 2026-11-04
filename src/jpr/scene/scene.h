@@ -108,8 +108,8 @@ class Scene final {
   //
   // Modifier properties are already preset for "mod:shift", "mod:ctrl",
   // "mod:alt", and "mod:opt" (see GetBuiltInModifierInfo()), but this allows
-  // for up to 60 additional modifiers to be added for mapping to custom
-  // properties.
+  // for up to kModUserCount (60) additional modifiers to be added for
+  // mapping to custom properties.
   Modifiers AddModifierProperty(std::string_view name);
 
   // Returns the flag of the modifier property with the name, built in or

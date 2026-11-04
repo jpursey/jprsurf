@@ -217,6 +217,9 @@ TEST_F(CatalogTest, ComponentKindsAreDescribed) {
     names.push_back(kind.name);
     EXPECT_FALSE(kind.description.empty()) << kind.name;
     EXPECT_TRUE(kind.top_level || kind.on_view) << kind.name;
+    EXPECT_EQ(kind.name_space,
+              kind.name == "modifier" ? kModNamespace : kUserNamespace)
+        << kind.name;
     const bool has_new_names =
         absl::c_any_of(kind.params, [](const ParamInfo& param) {
           return param.kind == ParamKind::kNewNameList;

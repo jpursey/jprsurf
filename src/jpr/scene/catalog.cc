@@ -5,6 +5,7 @@
 
 #include "jpr/scene/catalog.h"
 
+#include "jpr/common/modifiers.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/state_properties.h"
@@ -92,31 +93,34 @@ absl::Span<const ComponentKindInfo> GetComponentKinds() {
   };
   static constexpr ParamInfo kTrackPickParams[] = {
       {"reference", ParamKind::kTrackReference, ParamUse::kRequired,
-       "The reference it sets, which must be one the config declares."},
+       "The reference it sets, which must be one the config declares, as only "
+       "those are writable."},
       {"source", ParamKind::kTrackReference, ParamUse::kTopLevelOnly,
        "The reference whose track it picks. On a view, it picks the view's "
        "track."},
   };
+  // The modifier kind's description names the limit.
+  static_assert(kModUserCount == 60);
   static constexpr ComponentKindInfo kComponentKinds[] = {
-      {"modifier", true, false,
+      {"modifier", kModNamespace, true, false,
        "A \"mod:\" toggle backed by a modifier bit, which modifier sets can "
        "require. A scene has up to 60 besides the built in ones."},
-      {"enumerated_value", true, false,
+      {"enumerated_value", kUserNamespace, true, false,
        "A \"user:\" enumerated property, which is always exactly one of its "
        "values, and whose text is its value's name. Mappings set it, and "
        "conditions on its values enable views and mappings.",
        kEnumeratedValueParams},
-      {"track_reference", true, false,
+      {"track_reference", kUserNamespace, true, false,
        "A writable \"user:\" reference to a track, or to nothing, which views "
        "can be bound to, and which navigation and picks set.",
        kTrackReferenceParams},
-      {"track_anchor", false, true,
+      {"track_anchor", kUserNamespace, false, true,
        "A \"user:\" toggle, for a held mapping. While it is on, it holds its "
        "action's anchor on the view's track, so the action on another track "
        "acts on the range between them. The anchor is released with the "
        "button, or when the view's subject changes.",
        kTrackAnchorParams},
-      {"track_pick", true, true,
+      {"track_pick", kUserNamespace, true, true,
        "A \"user:\" action that sets a track reference to the source's track, "
        "if it has one.",
        kTrackPickParams},

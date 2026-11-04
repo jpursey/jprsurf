@@ -53,5 +53,5 @@ Declared at the top level, or on a view.
 
 | Parameter | Value | Given | Description |
 | --- | --- | --- | --- |
-| `reference` | A track reference: [built in](state.md#references), or declared before it | Required | The reference it sets, which must be one the config declares. |
+| `reference` | A track reference: [built in](state.md#references), or declared before it | Required | The reference it sets, which must be one the config declares, as only those are writable. |
 | `source` | A track reference: [built in](state.md#references), or declared before it | Required at the top level, and not given on a view | The reference whose track it picks. On a view, it picks the view's track. |

@@ -273,6 +273,16 @@ TEST_F(ViewListTest, ABankIsTheBankSizeIfItHasOne) {
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2"));
 }
 
+TEST_F(ViewListTest, ABankSizeIsPositive) {
+  EXPECT_EQ(
+      TryAddList("user:folder", {.items = View::ChildTracks{}, .bank_size = 0}),
+      nullptr);
+  EXPECT_EQ(TryAddList("user:folder",
+                       {.items = View::Routes{}, .bank_size = -1}, "Routes"),
+            nullptr);
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
+}
+
 TEST_F(ViewListTest, ANewSubjectShowsItsListFromTheStart) {
   View* list = AddChildTracks();
   AddSurface();

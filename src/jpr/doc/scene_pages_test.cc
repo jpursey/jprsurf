@@ -107,8 +107,8 @@ TEST(GenerateSceneIndexPageTest, LinksEachNamespaceAndTheComponents) {
       {"state:", "The state."},
   };
   const ComponentKindInfo kinds[] = {
-      {"flag", true, false, "A flag."},
-      {"pick", true, true, "A pick."},
+      {"flag", "user:", true, false, "A flag."},
+      {"pick", "user:", true, true, "A pick."},
   };
 
   EXPECT_EQ(
@@ -151,10 +151,10 @@ TEST(GenerateComponentKindsPageTest, ListsEachKindAndItsParameters) {
       {"way", ParamKind::kChoice, ParamUse::kRequired, "Which way.", kChoices},
   };
   const ComponentKindInfo kinds[] = {
-      {"flag", true, false, "A flag."},
-      {"value", true, false, "A value.", value_params},
-      {"pick", true, true, "A pick.", pick_params},
-      {"anchor", false, true, "An anchor."},
+      {"flag", "user:", true, false, "A flag."},
+      {"value", "user:", true, false, "A value.", value_params},
+      {"pick", "user:", true, true, "A pick.", pick_params},
+      {"anchor", "user:", false, true, "An anchor."},
   };
 
   EXPECT_EQ(

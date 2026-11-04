@@ -330,6 +330,12 @@ void RouteList::CrossRoute(View* item) {
 std::unique_ptr<ViewList> ViewList::Create(View* view,
                                            const View::ListConfig& config,
                                            TrackReference* writable_reference) {
+  if (config.bank_size.has_value() && *config.bank_size <= 0) {
+    LOG(ERROR) << "Failed to add view '" << view->GetName()
+               << "': the bank size " << *config.bank_size
+               << " is not positive";
+    return nullptr;
+  }
   if (const auto* routes = std::get_if<View::Routes>(&config.items)) {
     return std::make_unique<RouteList>(
         view, config.bank_size, writable_reference, routes->route_type_rule);

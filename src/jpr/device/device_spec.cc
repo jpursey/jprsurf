@@ -20,10 +20,48 @@ namespace {
 
 // Stands in for the catalog of a spec whose type isn't a device type, so that
 // its name is still validated.
-const WidgetShape& GetNoCatalog() {
+const WidgetShape* GetNoCatalog() {
   static const absl::NoDestructor<WidgetShape> s_no_catalog(
       WidgetShape::ForStruct({}));
-  return *s_no_catalog;
+  return s_no_catalog.get();
+}
+
+// Returns the spec's type, or null if it isn't one. Validates the spec's type
+// and overrides, but not its name, adding an error to `errors` for each
+// problem.
+const DeviceType* ValidateSpec(const DeviceSpec& spec,
+                               std::vector<std::string>& errors) {
+  const DeviceType* type = FindDeviceType(spec.type);
+  if (type == nullptr) {
+    errors.push_back(absl::StrCat(spec.name, ": type \"", spec.type,
+                                  "\" isn't a device type"));
+    return nullptr;
+  }
+  std::vector<std::string> override_errors;
+  ValidateControlOverrides(*type->catalog, spec.overrides, &override_errors);
+  for (const std::string& error : override_errors) {
+    errors.push_back(absl::StrCat(spec.name, ": ", error));
+  }
+  return type;
+}
+
+// Adds an error to `errors` for each port of the spec at `index` that an
+// earlier spec already has.
+void ValidateUnsharedPorts(absl::Span<const DeviceSpec> specs, int index,
+                           std::vector<std::string>& errors) {
+  const DeviceSpec& spec = specs[index];
+  for (int i = 0; i < index; ++i) {
+    if (specs[i].input_port == spec.input_port) {
+      errors.push_back(absl::StrCat(spec.name, ": input port \"",
+                                    spec.input_port, "\" is also ",
+                                    specs[i].name, "'s"));
+    }
+    if (specs[i].output_port == spec.output_port) {
+      errors.push_back(absl::StrCat(spec.name, ": output port \"",
+                                    spec.output_port, "\" is also ",
+                                    specs[i].name, "'s"));
+    }
+  }
 }
 
 // The creation of one device list.
@@ -36,14 +74,6 @@ class DeviceListCreator {
   std::optional<DeviceList> Create(absl::Span<const DeviceSpec> specs);
 
  private:
-  // Returns the spec's type, or null if it isn't one. Validates the spec's
-  // type and overrides, but not its name.
-  const DeviceType* ValidateSpec(const DeviceSpec& spec);
-
-  // Adds an error for each port of the spec at `index` that an earlier spec
-  // already has.
-  void ValidateUnsharedPorts(absl::Span<const DeviceSpec> specs, int index);
-
   // Adds an error for each port of a required device that isn't found.
   void ValidatePorts(const DeviceSpec& spec);
 
@@ -60,25 +90,12 @@ class DeviceListCreator {
 
 std::optional<DeviceList> DeviceListCreator::Create(
     absl::Span<const DeviceSpec> specs) {
-  DeviceList list;
-  std::vector<const DeviceType*> types;
-  list.widget_devices.reserve(specs.size());
-  types.reserve(specs.size());
-  for (int i = 0; i < std::ssize(specs); ++i) {
-    const DeviceType* type = ValidateSpec(specs[i]);
-    ValidateUnsharedPorts(specs, i);
-    list.widget_devices.push_back(
-        {.name = specs[i].name,
-         .catalog = type != nullptr ? type->catalog : &GetNoCatalog()});
-    types.push_back(type);
-  }
-  // Validating the widgets of no definitions validates the devices' names.
-  if (!ValidateWidgets({}, list.widget_devices, errors_).has_value()) {
-    valid_ = false;
-  }
-  if (!valid_) {
+  std::optional<std::vector<WidgetDevice>> widget_devices =
+      CreateWidgetDevices(specs, errors_);
+  if (!widget_devices.has_value()) {
     return std::nullopt;
   }
+  DeviceList list = {.widget_devices = std::move(*widget_devices)};
 
   for (const DeviceSpec& spec : specs) {
     ValidatePorts(spec);
@@ -102,45 +119,16 @@ std::optional<DeviceList> DeviceListCreator::Create(
       }
       continue;
     }
-    list.devices.push_back(CreateDevice(*types[i], run_registry_,
-                                        std::move(input), std::move(output),
-                                        spec.overrides));
+    // Validating found the type.
+    list.devices.push_back(CreateDevice(*FindDeviceType(spec.type),
+                                        run_registry_, std::move(input),
+                                        std::move(output), spec.overrides));
     list.widget_devices[i].device = list.devices.back().get();
   }
   if (!valid_) {
     return std::nullopt;  // Its devices close their ports as they go.
   }
   return list;
-}
-
-const DeviceType* DeviceListCreator::ValidateSpec(const DeviceSpec& spec) {
-  const DeviceType* type = FindDeviceType(spec.type);
-  if (type == nullptr) {
-    AddError(absl::StrCat(spec.name, ": type \"", spec.type,
-                          "\" isn't a device type"));
-    return nullptr;
-  }
-  std::vector<std::string> override_errors;
-  ValidateControlOverrides(*type->catalog, spec.overrides, &override_errors);
-  for (const std::string& error : override_errors) {
-    AddError(absl::StrCat(spec.name, ": ", error));
-  }
-  return type;
-}
-
-void DeviceListCreator::ValidateUnsharedPorts(
-    absl::Span<const DeviceSpec> specs, int index) {
-  const DeviceSpec& spec = specs[index];
-  for (int i = 0; i < index; ++i) {
-    if (specs[i].input_port == spec.input_port) {
-      AddError(absl::StrCat(spec.name, ": input port \"", spec.input_port,
-                            "\" is also ", specs[i].name, "'s"));
-    }
-    if (specs[i].output_port == spec.output_port) {
-      AddError(absl::StrCat(spec.name, ": output port \"", spec.output_port,
-                            "\" is also ", specs[i].name, "'s"));
-    }
-  }
 }
 
 void DeviceListCreator::ValidatePorts(const DeviceSpec& spec) {
@@ -169,6 +157,30 @@ void DeviceListCreator::AddError(std::string error) {
 }
 
 }  // namespace
+
+std::optional<std::vector<WidgetDevice>> CreateWidgetDevices(
+    absl::Span<const DeviceSpec> specs, std::vector<std::string>* errors) {
+  std::vector<std::string> spec_errors;
+  std::vector<WidgetDevice> widget_devices;
+  widget_devices.reserve(specs.size());
+  for (int i = 0; i < std::ssize(specs); ++i) {
+    const DeviceType* type = ValidateSpec(specs[i], spec_errors);
+    ValidateUnsharedPorts(specs, i, spec_errors);
+    widget_devices.push_back(
+        {.name = specs[i].name,
+         .catalog = type != nullptr ? type->catalog : GetNoCatalog()});
+  }
+  // Validating the widgets of no definitions validates the devices' names.
+  ValidateWidgets({}, widget_devices, &spec_errors);
+  if (spec_errors.empty()) {
+    return widget_devices;
+  }
+  if (errors != nullptr) {
+    errors->insert(errors->end(), std::make_move_iterator(spec_errors.begin()),
+                   std::make_move_iterator(spec_errors.end()));
+  }
+  return std::nullopt;
+}
 
 std::optional<DeviceList> CreateDevices(absl::Span<const DeviceSpec> specs,
                                         MidiPorts& ports,

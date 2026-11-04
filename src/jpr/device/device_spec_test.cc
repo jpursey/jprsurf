@@ -40,6 +40,52 @@ using StripButton = FakeXTouch::StripButton;
 constexpr ControlInput::Type kPress = ControlInput::Type::kPress;
 constexpr ControlInput::Type kDelta = ControlInput::Type::kDelta;
 
+TEST(CreateWidgetDevicesTest, ValidSpecsHaveTheirCatalogsAndNoDevices) {
+  const std::vector<DeviceSpec> specs = {
+      {.name = "xtouch",
+       .type = "XTouch",
+       .input_port = "X-Touch",
+       .output_port = "X-Touch"},
+      {.name = "xtouch_ext",
+       .type = "XTouchExt",
+       .input_port = "X-Touch-Ext",
+       .output_port = "X-Touch-Ext",
+       .overrides = {{.control = "strip[2].fader", .inputs = kPress}}}};
+  std::vector<std::string> errors;
+  std::optional<std::vector<WidgetDevice>> devices =
+      CreateWidgetDevices(specs, &errors);
+  ASSERT_TRUE(devices.has_value());
+  EXPECT_THAT(errors, IsEmpty());
+  ASSERT_THAT(*devices, SizeIs(2));
+  EXPECT_EQ((*devices)[0].name, "xtouch");
+  EXPECT_EQ((*devices)[0].catalog, FindDeviceType("XTouch")->catalog);
+  EXPECT_THAT((*devices)[0].device, IsNull());
+  EXPECT_EQ((*devices)[1].name, "xtouch_ext");
+  EXPECT_EQ((*devices)[1].catalog, FindDeviceType("XTouchExt")->catalog);
+  EXPECT_THAT((*devices)[1].device, IsNull());
+}
+
+TEST(CreateWidgetDevicesTest, EveryProblemIsAnError) {
+  const std::vector<DeviceSpec> specs = {
+      {.name = "xtouch",
+       .type = "XTouh",
+       .input_port = "X-Touch",
+       .output_port = "X-Touch"},
+      {.name = "xtouch",
+       .type = "XTouchExt",
+       .input_port = "X-Touch",
+       .output_port = "X-Touch-Ext",
+       .overrides = {{.control = "play", .inputs = kPress}}}};
+  std::vector<std::string> errors;
+  EXPECT_FALSE(CreateWidgetDevices(specs, &errors).has_value());
+  EXPECT_THAT(errors, ElementsAre("xtouch: type \"XTouh\" isn't a device type",
+                                  "xtouch: play: names nothing",
+                                  "xtouch: input port \"X-Touch\" is also "
+                                  "xtouch's",
+                                  "device \"xtouch\" is repeated"));
+  EXPECT_FALSE(CreateWidgetDevices(specs, nullptr).has_value());
+}
+
 // The fake REAPER's MIDI ports, with an X-Touch on "X-Touch", and an extender
 // on "X-Touch-Ext" once it is added.
 class CreateDevicesTest : public ::testing::Test {
