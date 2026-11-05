@@ -167,6 +167,17 @@ TEST_F(ViewTest, AConditionsPropertyMustExist) {
   EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
 }
 
+TEST_F(ViewTest, AConditionsPropertyMustBeReadable) {
+  GetScene()->AddUserProperty(std::make_unique<TestProperty>(
+      ViewProperty::Type::kToggle, true, 0, "user:write_only", kWriteAccess));
+  EXPECT_EQ(
+      root_->AddChildView(
+          "View",
+          {.condition = ViewCondition::Config{.property = "user:write_only"}}),
+      nullptr);
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(1));
+}
+
 TEST_F(ViewTest, AConditionsValueNameMustBeOneOfItsValues) {
   GetScene()->AddUserProperty(std::make_unique<EnumeratedValueProperty>(
       "user:mode", std::vector<std::string>{"a", "b"}));

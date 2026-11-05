@@ -210,6 +210,11 @@ class ViewProperty {
   // "timeline_position", or "enumerated".
   static std::string_view GetTypeName(Type type);
 
+  // Returns true if a property of the type can ever equal the value (see
+  // Equals()): an empty value never does, and a TimelinePosition only for a
+  // timeline position property.
+  static bool CanEqual(Type type, const Value& value);
+
   // The access is what the property supports: an action is triggered, and
   // anything else is read, written, or both.
   ViewProperty(std::string_view name, Type type, PropertyAccessFlags access);
@@ -231,8 +236,8 @@ class ViewProperty {
   // Returns true if the property's value, read as the value's type with the
   // adapter functions below, equals it. A double is read in the property's own
   // range: GetPan() for a pan property, GetVolume() for a volume property, and
-  // GetNormalized() otherwise. A TimelinePosition is only compared with a
-  // timeline position property, and an empty value is never equal.
+  // GetNormalized() otherwise. It is never equal if it can't be (see
+  // CanEqual()).
   bool Equals(const Value& value) const;
 
   // Adapter functions that read and write the value of the property as a

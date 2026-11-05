@@ -122,6 +122,11 @@ class CommandToggleProperty final : public SceneStateProperty {
 // CreateCommandProperty
 //==============================================================================
 
+// Returns true if the id, after "cmd:", is one REAPER could have: a named
+// command id, which starts with '_', or a positive number. Whether REAPER has
+// it is only known once it is looked up (see CreateCommandProperty()).
+bool IsCommandId(std::string_view id);
+
 // Creates the property for a "cmd:<id>" name (see kCmdName), or returns null if
 // REAPER has no command with that id.
 std::unique_ptr<ViewProperty> CreateCommandProperty(Scene* scene,

@@ -21,12 +21,17 @@ namespace jpr {
 // Each property gets a new name in the const: namespace, unique for the life of
 // the process.
 //
-// The type and value must be one of these, or this returns null:
+// The type and value must be a constant's (see IsConstValue()), or this
+// returns null.
+std::unique_ptr<ViewProperty> CreateConstProperty(ViewProperty::Type type,
+                                                  ViewProperty::Value value);
+
+// Returns true if a constant can have the type and value, which must be one of
+// these:
 // - kToggle, with a bool.
 // - kNormalized, with a double in [0,1].
 // - kText, with a std::string.
 // - kColor, with a Color.
-std::unique_ptr<ViewProperty> CreateConstProperty(ViewProperty::Type type,
-                                                  ViewProperty::Value value);
+bool IsConstValue(ViewProperty::Type type, const ViewProperty::Value& value);
 
 }  // namespace jpr

@@ -11,14 +11,21 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/track.h"
+#include "jpr/scene/modifier_property.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/testing/scene_test.h"
+#include "jpr/scene/track_anchor_property.h"
+#include "jpr/scene/track_pick_property.h"
+#include "jpr/scene/track_reference.h"
+#include "jpr/scene/value_property.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_list.h"
 #include "jpr/scene/view_property.h"
@@ -210,6 +217,31 @@ TEST_F(CatalogTest, ViewPropertiesAreOnTheViewsThatNeedThem) {
       }
     }
   }
+
+  // The needs are those ViewList::GetNeeds() says each list meets, as
+  // checking a config relies on.
+  struct ListCase {
+    View::ListConfig list;
+    bool writable;
+    const Case& view;
+    const Case& item;
+  };
+  const ListCase list_cases[] = {
+      {{.items = View::ChildTracks{}}, true, cases[1], cases[2]},
+      {{.items = View::ChildTracks{}}, false, cases[3], cases[4]},
+      {{.items = View::Routes{}}, true, cases[5], cases[6]},
+      {{.items = View::Routes{}}, false, cases[7], cases[8]},
+  };
+  for (const ListCase& list_case : list_cases) {
+    const ViewList::Needs needs =
+        ViewList::GetNeeds(list_case.list, list_case.writable);
+    EXPECT_EQ(needs.view, list_case.view.needs)
+        << list_case.view.view->GetName();
+    EXPECT_EQ(needs.item.has_value() ? std::vector<ViewNeed>{*needs.item}
+                                     : std::vector<ViewNeed>{},
+              list_case.item.needs)
+        << list_case.view.view->GetName();
+  }
 }
 
 TEST_F(CatalogTest, ComponentKindsAreDescribed) {
@@ -246,6 +278,31 @@ TEST_F(CatalogTest, ComponentKindsAreDescribed) {
   EXPECT_THAT(names,
               ElementsAre("modifier", "enumerated_value", "track_reference",
                           "track_anchor", "track_pick"));
+}
+
+TEST_F(CatalogTest, ComponentKindsHaveTheirPropertysTypeAndAccess) {
+  TrackReference* reference = GetScene()->AddTrackReference("user:reference");
+  ASSERT_NE(reference, nullptr);
+  const ModifierProperty modifier("mod:modifier", kModUserStart);
+  const EnumeratedValueProperty value("user:value", {"a"});
+  const TrackAnchorProperty anchor("user:anchor", {});
+  const TrackPickProperty pick("user:pick", *reference);
+  const absl::flat_hash_map<std::string_view, const ViewProperty*> properties =
+      {{"modifier", &modifier},
+       {"enumerated_value", &value},
+       {"track_reference", nullptr},
+       {"track_anchor", &anchor},
+       {"track_pick", &pick}};
+  for (const ComponentKindInfo& kind : GetComponentKinds()) {
+    auto it = properties.find(kind.name);
+    ASSERT_NE(it, properties.end()) << kind.name;
+    if (it->second == nullptr) {
+      EXPECT_TRUE(kind.access.IsEmpty()) << kind.name;
+      continue;
+    }
+    EXPECT_EQ(it->second->GetType(), kind.type) << kind.name;
+    EXPECT_EQ(it->second->GetAccess(), kind.access) << kind.name;
+  }
 }
 
 TEST_F(CatalogTest, TrackAnchorActionsAreTheTrackToggles) {

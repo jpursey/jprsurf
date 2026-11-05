@@ -8,16 +8,23 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <variant>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "jpr/common/color.h"
 #include "jpr/common/modifiers.h"
+#include "jpr/common/timeline.h"
 #include "jpr/common/track.h"
+#include "jpr/device/control_input.h"
 #include "jpr/scene/catalog.h"
 #include "jpr/scene/view.h"
+#include "jpr/scene/view_condition.h"
+#include "jpr/scene/view_mapping.h"
+#include "jpr/scene/view_property.h"
 
 namespace jpr {
 namespace {
@@ -163,19 +170,87 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
       TrackPickSpec{"user:pick_selected_track", "user:current_track",
                     "state:selected_track"},
   };
+  // A template's paths start with its widget parameters, and its property
+  // parameters stand for the names they are given.
   spec.templates = {
       {.name = "track_strip",
        .widget_params = {"strip"},
-       .property_params = {"anchor"}},
+       .property_params = {"anchor"},
+       .mappings =
+           {{.property = "track:mute",
+             .control = "strip.mute",
+             .type = ViewMapping::kReadWriteControl},
+            {.property = "anchor",
+             .control = "strip.select",
+             .type = ViewMapping::kReadControl,
+             .config = {.read = {.press_release = true}}},
+            {.property = "track:pan",
+             .control = "strip.pot",
+             .type = ViewMapping::kReadWriteControl,
+             .config = {.write = {.mode = "center",
+                                  .mode_overrides = {{"track:exists",
+                                                      {{false, "off"}}}}}}},
+            {.property = "track:pan",
+             .control = "strip.pot_button",
+             .type = ViewMapping::kReadControl,
+             .config = {.read = {.property_min = 0.0, .property_max = 0.0}}},
+            {.property = "track:volume",
+             .control = "strip.fader",
+             .type = ViewMapping::kReadWriteControl},
+            {.property = "track:volume_touched",
+             .control = "strip.fader",
+             .type = ViewMapping::kReadControl,
+             .config = {.read = {.press_release = true, .touch = true}}},
+            {.property = "track:name",
+             .control = "strip.scribble_top",
+             .type = ViewMapping::kWriteControl}}},
       {.name = "anchored_strip",
        .widget_params = {"strip"},
+       .property_params = {"anchor"},
        .uses = {{.name = "track_strip",
                  .widgets = {{"strip", "strip"}},
-                 .properties = {{"anchor", "anchor_select"}}}}},
+                 .properties = {{"anchor", "anchor"}}}}},
+  };
+
+  // Commands are known only to REAPER, so only their ids are checked. A fixed
+  // value is a constant, which can only be written.
+  spec.root.mappings = {
+      {.property = "cmd:40044",
+       .control = "play",
+       .type = ViewMapping::kReadWriteControl},
+      {.property = "cmd:_SWS_ABOUT",
+       .control = "stop",
+       .type = ViewMapping::kReadControl,
+       .config = {.read = {.required_modifiers = {"mod:send_hold"}}}},
+      {.property = "state:timeline_position",
+       .control = "timecode",
+       .type = ViewMapping::kWriteControl,
+       .config = {.write = {.mode = "beats"}}},
+      {.property = "user:surface_mode",
+       .control = "assign_track",
+       .type = ViewMapping::kReadWriteControl,
+       .config = {.read = {.property_min = std::string("track"),
+                           .property_max = 0},
+                  .condition =
+                      ViewCondition::Config{.property = "state:can_redo",
+                                            .value = true}}},
+      {.property =
+           FixedValue{.type = ViewProperty::Type::kToggle, .value = true},
+       .control = "smpte_light",
+       .type = ViewMapping::kWriteControl,
+       .config = {.write = {.mode = "blink"}}},
   };
 
   ViewSpec track_mode =
       ChildTracksView("track_mode", "user:folder", "user:current_track");
+  track_mode.config.condition = ViewCondition::Config{
+      .property = "user:surface_mode", .value = std::string("track")};
+  track_mode.mappings = {{.property = "view:bank_inc",
+                          .control = "function[0]",
+                          .type = ViewMapping::kReadControl},
+                         {.property = "view:track_parent",
+                          .control = "function[1]",
+                          .type = ViewMapping::kReadControl}};
   ViewSpec strip = RepeatedView("strip", "strip");
   strip.components = {
       TrackAnchorSpec{"user:anchor_select", TrackBoolProperty::kSelected,
@@ -184,7 +259,15 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
                       "mod:shift"},
       TrackPickSpec{"user:pick_track", "user:current_track"},
   };
-  strip.uses = {{.name = "anchored_strip", .widgets = {{"strip", "strip"}}}};
+  strip.uses = {{.name = "anchored_strip",
+                 .widgets = {{"strip", "strip"}},
+                 .properties = {{"anchor", "user:anchor_select"}}}};
+  strip.mappings = {{.property = "view:parent_track_child",
+                     .control = "strip.rec",
+                     .type = ViewMapping::kReadControl},
+                    {.property = "user:pick_track",
+                     .control = "strip.solo",
+                     .type = ViewMapping::kReadControl}};
   // A sibling may declare what another does, as neither sees the other's.
   ViewSpec info = {.name = "info",
                    .components = {TrackAnchorSpec{"user:anchor_select"}}};
@@ -194,7 +277,23 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
       BoundView("send_receive_mode", "user:current_track");
   send_receive_mode.config.list =
       View::ListConfig{.items = View::Routes{}, .bank_size = 8};
-  send_receive_mode.children = {RepeatedView("strip", "route_strip")};
+  send_receive_mode.mappings = {{.property = "view:child_route_type_name",
+                                 .control = "strip[7].scribble_bottom",
+                                 .type = ViewMapping::kWriteControl}};
+  ViewSpec route = RepeatedView("strip", "route_strip");
+  route.mappings = {{.property = "route:volume",
+                     .control = "route_strip.fader",
+                     .type = ViewMapping::kReadWriteControl},
+                    {.property = "route:other_track.name",
+                     .control = "route_strip.scribble_top",
+                     .type = ViewMapping::kWriteControl},
+                    {.property = "view:parent_route_other_track",
+                     .control = "route_strip.select",
+                     .type = ViewMapping::kReadControl},
+                    {.property = "state:master_track.volume",
+                     .control = "master_fader",
+                     .type = ViewMapping::kReadWriteControl}};
+  send_receive_mode.children = {route};
   spec.root.children = {track_mode, send_receive_mode};
 
   EXPECT_THAT(Validate(spec), IsEmpty());
@@ -570,7 +669,7 @@ TEST(SurfaceSpecTest, TemplatesHaveUniqueNamesAndParameters) {
 }
 
 TEST(SurfaceSpecTest, AUseGivesExactlyItsTemplatesParameters) {
-  SurfaceSpec spec;
+  SurfaceSpec spec = GetXTouchSpec();
   spec.templates = {
       {.name = "strip",
        .widget_params = {"strip", "button"},
@@ -599,6 +698,329 @@ TEST(SurfaceSpecTest, AUseGivesExactlyItsTemplatesParameters) {
                   "/: uses strip without its property parameter \"anchor\"",
                   "/: uses strip with \"other\", which isn't one of its "
                   "property parameters"));
+}
+
+// Returns a mapping of the property to the control, of the type.
+MappingSpec Mapping(
+    std::string property, std::string control,
+    ViewMapping::TypeFlags type = ViewMapping::kReadWriteControl,
+    ViewMapping::Config config = {}) {
+  return {.property = std::move(property),
+          .control = std::move(control),
+          .type = type,
+          .config = std::move(config)};
+}
+
+// Returns an X-Touch spec, with the components and a view of the master track
+// with the mappings.
+SurfaceSpec MappingSpecs(std::vector<MappingSpec> mappings,
+                         std::vector<ComponentSpec> components = {}) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.components = std::move(components);
+  ViewSpec view = BoundView("view", "state:master_track");
+  view.mappings = std::move(mappings);
+  spec.root.children = {view};
+  return spec;
+}
+
+TEST(SurfaceSpecTest, AMappingIsOfAControl) {
+  EXPECT_THAT(
+      Validate(MappingSpecs(
+          {Mapping("track:mute", "nothing"), Mapping("track:mute", "strip"),
+           Mapping("track:mute", "strip[0]"), Mapping("track:mute", "play[0]"),
+           Mapping("track:mute", "strip["),
+           Mapping("track:mute", "play", {})})),
+      ElementsAre(
+          "/view: nothing: names nothing", "/view: strip: isn't a control",
+          "/view: strip[0]: isn't a control", "/view: play[0]: names nothing",
+          StartsWith("/view: strip[: isn't a path: "),
+          "/view: play: neither reads nor writes its control"));
+}
+
+TEST(SurfaceSpecTest, AMappingsPropertyIsOneWhereItIs) {
+  SurfaceSpec spec = MappingSpecs(
+      {Mapping("track:nothing", "play"), Mapping("route:volume", "play"),
+       Mapping("view:bank_inc", "play"), Mapping("view:nothing", "play"),
+       Mapping("user:track", "play"), Mapping("user:track.nothing", "play"),
+       Mapping("user:nothing.mute", "play"), Mapping("user:nothing", "play"),
+       Mapping("state:nothing", "play"), Mapping("cmd:", "play"),
+       Mapping("cmd:_", "play"), Mapping("cmd:0", "play"),
+       Mapping("cmd:a", "play"), Mapping("nothing", "play"),
+       Mapping("user:anchor", "play")},
+      {TrackReferenceSpec{"user:track"}});
+  // A built in reference can't be moved, so its list has no navigation, nor
+  // do its items, and what a view declares is visible only in it.
+  ViewSpec list =
+      WithChild(ChildTracksView("list"), RepeatedView("strip", "strip"));
+  list.mappings = {Mapping("view:track_parent", "play")};
+  list.children[0].mappings = {Mapping("view:parent_track_child", "play")};
+  ViewSpec anchored = BoundView("anchored", "state:master_track");
+  anchored.components = {TrackAnchorSpec{"user:anchor"}};
+  spec.root.children.push_back(list);
+  spec.root.children.push_back(anchored);
+  spec.root.mappings = {Mapping("track:mute", "play")};
+  EXPECT_THAT(
+      Validate(spec),
+      ElementsAre(
+          "/: play: property \"track:mute\" needs a view with a track subject",
+          "/view: play: property \"track:nothing\" isn't a property",
+          "/view: play: property \"route:volume\" needs a view with a route "
+          "subject",
+          "/view: play: property \"view:bank_inc\" isn't on this view",
+          "/view: play: property \"view:nothing\" isn't a property",
+          "/view: play: property \"user:track\" is a reference, whose fields "
+          "are properties",
+          "/view: play: property \"user:track.nothing\" isn't a property",
+          "/view: play: property \"user:nothing.mute\" isn't a property",
+          "/view: play: property \"user:nothing\" isn't a property",
+          "/view: play: property \"state:nothing\" isn't a property",
+          "/view: play: property \"cmd:\" isn't a command id",
+          "/view: play: property \"cmd:_\" isn't a command id",
+          "/view: play: property \"cmd:0\" isn't a command id",
+          "/view: play: property \"cmd:a\" isn't a command id",
+          "/view: play: property \"nothing\" isn't a property",
+          "/view: play: property \"user:anchor\" isn't a property",
+          "/list: play: property \"view:track_parent\" isn't on this view",
+          "/list/strip[]: play: property \"view:parent_track_child\" isn't on "
+          "this view"));
+}
+
+TEST(SurfaceSpecTest, EachSideOfAMappingNeedsItsAccess) {
+  SurfaceSpec spec = MappingSpecs({Mapping("track:exists", "strip[0].mute"),
+                                   Mapping("user:anchor", "strip[0].mute"),
+                                   Mapping("cmd:40044", "strip[0].mute")},
+                                  {ModifierSpec{"mod:fn"}});
+  spec.root.children[0].components = {TrackAnchorSpec{"user:anchor"}};
+  spec.root.mappings = {{.property = FixedValue{.value = true},
+                         .control = "play",
+                         .type = ViewMapping::kReadWriteControl},
+                        {.property = FixedValue{.value = 1},
+                         .control = "stop",
+                         .type = ViewMapping::kWriteControl}};
+  EXPECT_THAT(
+      Validate(spec),
+      ElementsAre(
+          "/: play: reads into its fixed value, which can't be written "
+          "or triggered",
+          "/: stop: has a fixed value that isn't a toggle constant",
+          "/view: strip[0].mute: reads into \"track:exists\", which "
+          "can't be written or triggered",
+          "/view: strip[0].mute: writes \"user:anchor\", which can't be "
+          "read"));
+}
+
+TEST(SurfaceSpecTest, EachSideOfAMappingNeedsAControlThatSuitsItsType) {
+  EXPECT_THAT(
+      Validate(MappingSpecs(
+          {Mapping("track:name", "strip[0].mute"),
+           Mapping("track:volume", "smpte_light"),
+           Mapping("track:name", "play", ViewMapping::kReadControl),
+           Mapping("track:pan", "play", ViewMapping::kReadControl,
+                   {.read = {.press_release = true}}),
+           Mapping("track:mute", "play", ViewMapping::kReadControl,
+                   {.read = {.input_type = ControlInput::Type::kDelta}}),
+           Mapping("track:mute", "timecode", ViewMapping::kReadControl,
+                   {.read = {.touch = true}}),
+           Mapping("state:timeline_position", "smpte_light",
+                   ViewMapping::kWriteControl)})),
+      ElementsAre(
+          "/view: strip[0].mute: can't read into \"track:name\" (text) from "
+          "the control with its read config",
+          "/view: strip[0].mute: can't write \"track:name\" (text) to the "
+          "control",
+          "/view: smpte_light: can't read into \"track:volume\" (volume) from "
+          "the control with its read config",
+          "/view: play: can't read into \"track:name\" (text) from the control "
+          "with its read config",
+          "/view: play: can't read into \"track:pan\" (pan) from the control "
+          "with its read config",
+          "/view: play: can't read into \"track:mute\" (toggle) from the "
+          "control with its read config",
+          "/view: timecode: can't read into \"track:mute\" (toggle) from the "
+          "control with its read config",
+          "/view: smpte_light: can't write \"state:timeline_position\" "
+          "(timeline_position) to the control"));
+}
+
+TEST(SurfaceSpecTest, AMappingsModesAreItsControls) {
+  EXPECT_THAT(
+      Validate(MappingSpecs(
+          {Mapping("track:mute", "strip[0].mute", ViewMapping::kWriteControl,
+                   {.write = {.mode = "fast",
+                              .mode_overrides = {{"track:exists",
+                                                  {{false, "blink"},
+                                                   {true, "slow"}}}}}}),
+           Mapping("state:timeline_position", "timecode",
+                   ViewMapping::kWriteControl, {.write = {.mode = "blink"}}),
+           Mapping("cmd:40044", "play", ViewMapping::kWriteControl,
+                   {.write = {.mode = "beats"}})})),
+      ElementsAre("/view: strip[0].mute: has no mode \"fast\"",
+                  "/view: strip[0].mute: has no mode \"slow\"",
+                  "/view: timecode: has no mode \"blink\"",
+                  "/view: play: has no mode \"beats\""));
+}
+
+TEST(SurfaceSpecTest, ARangeIsOfValuesOfThePropertysType) {
+  constexpr ViewMapping::TypeFlags kRead = ViewMapping::kReadControl;
+  auto range = [](ViewProperty::Value min, ViewProperty::Value max) {
+    return ViewMapping::Config{.read = {.property_min = std::move(min),
+                                        .property_max = std::move(max)}};
+  };
+  EXPECT_THAT(
+      Validate(MappingSpecs(
+          {Mapping("track:mute", "play", kRead, range(false, true)),
+           Mapping("track:pan", "strip[0].pot", kRead, range(-1.0, 1)),
+           Mapping("track:name", "play", kRead,
+                   range(std::string("a"), Color{})),
+           Mapping("user:mode", "play", kRead,
+                   range(std::string("a"), std::string("c"))),
+           Mapping("user:mode", "play", kRead, range(0, 1.0)),
+           Mapping("state:ruler_mode", "play", kRead,
+                   range(std::string("beats"), 1))},
+          {EnumeratedValueSpec{"user:mode", {"a", "b"}}})),
+      ElementsAre(
+          "/view: play: has a range min, which \"track:mute\" (toggle) "
+          "ignores",
+          "/view: play: has a range max, which \"track:mute\" (toggle) "
+          "ignores",
+          "/view: strip[0].pot: range max isn't a value of \"track:pan\" "
+          "(pan)",
+          "/view: play: range max isn't a value of \"track:name\" (text)",
+          "/view: play: can't read into \"track:name\" (text) from the "
+          "control with its read config",
+          "/view: play: range max \"c\" isn't one of \"user:mode\"'s values",
+          "/view: play: range max isn't a value of \"user:mode\" "
+          "(enumerated)",
+          "/view: play: range min \"beats\" isn't one of "
+          "\"state:ruler_mode\"'s values"));
+}
+
+TEST(SurfaceSpecTest, AConditionReadsAValueOfItsPropertysType) {
+  SurfaceSpec spec = MappingSpecs(
+      {Mapping("track:mute", "play", ViewMapping::kReadWriteControl,
+               {.write = {.mode_overrides = {{"user:mode",
+                                              {{std::string("c"), "blink"}}},
+                                             {"user:anchor", {{true, ""}}},
+                                             {"user:nothing", {}}}},
+                .condition = ViewCondition::Config{.property = "user:mode",
+                                                   .value = std::string("c")}}),
+       Mapping("track:mute", "stop", ViewMapping::kReadWriteControl,
+               {.condition = ViewCondition::Config{.property = "user:anchor"}}),
+       Mapping(
+           "track:mute", "record", ViewMapping::kReadWriteControl,
+           {.condition = ViewCondition::Config{.property = "track:mute",
+                                               .value = TimelinePosition()}}),
+       Mapping(
+           "track:mute", "rewind", ViewMapping::kReadWriteControl,
+           {.condition = ViewCondition::Config{.property = "track:mute",
+                                               .value = std::monostate()}})},
+      {EnumeratedValueSpec{"user:mode", {"a", "b"}}});
+  spec.root.children[0].components = {TrackAnchorSpec{"user:anchor"}};
+
+  // A view's condition is made before its declarations.
+  spec.root.children[0].config.condition =
+      ViewCondition::Config{.property = "user:anchor"};
+  EXPECT_THAT(
+      Validate(spec),
+      ElementsAre(
+          "/view: condition \"user:anchor\" isn't a property",
+          "/view: play: mode override \"c\" isn't one of \"user:mode\"'s "
+          "values",
+          "/view: play: mode override on \"user:anchor\", which can't be read",
+          "/view: play: mode override \"user:nothing\" isn't a property",
+          "/view: play: condition \"c\" isn't one of \"user:mode\"'s values",
+          "/view: stop: condition on \"user:anchor\", which can't be read",
+          "/view: record: condition on \"track:mute\" (toggle) has a value it "
+          "can never equal",
+          "/view: rewind: condition on \"track:mute\" (toggle) has a value it "
+          "can never equal"));
+}
+
+// An item view's view: properties are its list's, added once it is made, so
+// its condition doesn't see them, though its mappings do.
+TEST(SurfaceSpecTest, AnItemsConditionIsMadeBeforeItsListsProperties) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.components = {TrackReferenceSpec{"user:folder"}};
+  ViewSpec list = ListView("list", "user:folder");
+  list.children[0].config.condition =
+      ViewCondition::Config{.property = "view:parent_track_child"};
+  list.children[0].mappings = {Mapping(
+      "view:parent_track_child", "strip.select", ViewMapping::kReadControl)};
+  spec.root.children = {list};
+  EXPECT_THAT(Validate(spec),
+              ElementsAre("/list/strip[]: condition "
+                          "\"view:parent_track_child\" isn't on this view"));
+}
+
+TEST(SurfaceSpecTest, AMappingRequiresModifiers) {
+  EXPECT_THAT(
+      Validate(MappingSpecs(
+          {Mapping(
+              "track:mute", "play", ViewMapping::kReadControl,
+              {.read = {.required_modifiers = {"mod:shift", "mod:fn",
+                                               "mod:nothing", "user:mode"}}})},
+          {ModifierSpec{"mod:fn"}, EnumeratedValueSpec{"user:mode", {"a"}}})),
+      ElementsAre("/view: play: requires \"mod:nothing\", which isn't a "
+                  "modifier",
+                  "/view: play: requires \"user:mode\", which isn't a "
+                  "modifier"));
+}
+
+// A template sees its parameters and the top-level widgets, not the elements
+// of the view that uses it, and its parameters hide the top-level widgets.
+TEST(SurfaceSpecTest, ATemplatesPathsStartAtItsParameters) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.templates = {
+      {.name = "button",
+       .widget_params = {"play"},
+       .property_params = {"toggle"},
+       .mappings = {Mapping("toggle", "play"), Mapping("toggle", "stop"),
+                    Mapping("toggle", "strip.mute")}},
+      {.name = "outer",
+       .widget_params = {"button"},
+       .property_params = {"outer_toggle"},
+       .uses = {{.name = "button",
+                 .widgets = {{"play", "button"}},
+                 .properties = {{"toggle", "outer_toggle"}}}}},
+  };
+  ViewSpec list = ListView("list");
+  list.children[0].uses = {
+      {.name = "button",
+       .widgets = {{"play", "strip.mute"}},
+       .properties = {{"toggle", "track:mute"}}},
+      {.name = "outer",
+       .widgets = {{"button", "strip.fader"}},
+       .properties = {{"outer_toggle", "track:name"}}},
+      {.name = "button", .widgets = {{"play", "strip.nothing"}}}};
+  spec.root.children = {list};
+  EXPECT_THAT(
+      Validate(spec),
+      ElementsAre(
+          "/list/strip[]: uses button without its property parameter "
+          "\"toggle\"",
+          "/list/strip[]: button: strip.mute: names nothing",
+          "/list/strip[]: outer: button: play: can't write \"track:name\" "
+          "(text) to the control",
+          "/list/strip[]: outer: button: stop: can't read into "
+          "\"track:name\" (text) from the control with its read config",
+          "/list/strip[]: outer: button: stop: can't write \"track:name\" "
+          "(text) to the control",
+          "/list/strip[]: outer: button: strip.mute: names nothing",
+          "/list/strip[]: uses button with widget \"play\" as "
+          "\"strip.nothing\", which names nothing",
+          "/list/strip[]: button: strip.mute: names nothing"));
+}
+
+TEST(SurfaceSpecTest, ATemplateThatUsesItselfIsExpandedOnce) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.templates = {{.name = "self",
+                     .mappings = {Mapping("state:can_redo", "play")},
+                     .uses = {{.name = "self"}}}};
+  spec.root.uses = {{.name = "self"}};
+  EXPECT_THAT(Validate(spec),
+              ElementsAre("template self: uses itself",
+                          "/: self: play: reads into \"state:can_redo\", which "
+                          "can't be written or triggered"));
 }
 
 TEST(SurfaceSpecTest, NoTemplateUsesItself) {

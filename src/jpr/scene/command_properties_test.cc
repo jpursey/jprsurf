@@ -45,6 +45,16 @@ class CommandPropertiesTest : public ::testing::Test {
   Scene scene_{"Scene"};
 };
 
+TEST(IsCommandIdTest, IsANamedIdOrAPositiveNumber) {
+  EXPECT_TRUE(IsCommandId("40044"));
+  EXPECT_TRUE(IsCommandId("_SWS_ABOUT"));
+  EXPECT_FALSE(IsCommandId(""));
+  EXPECT_FALSE(IsCommandId("_"));
+  EXPECT_FALSE(IsCommandId("0"));
+  EXPECT_FALSE(IsCommandId("-1"));
+  EXPECT_FALSE(IsCommandId("abc"));
+}
+
 TEST_F(CommandPropertiesTest, CommandsWithoutAToggleStateAreActions) {
   std::unique_ptr<ViewProperty> undo = CreateCommandProperty(&scene_, kCmdUndo);
   ASSERT_NE(undo, nullptr);

@@ -6,16 +6,24 @@
 #include "jpr/scene/surface_spec.h"
 
 #include <algorithm>
+#include <optional>
+#include <string>
 #include <utility>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/types/span.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/device/widget_path.h"
 #include "jpr/device/widget_shape.h"
+#include "jpr/scene/command_properties.h"
+#include "jpr/scene/const_property.h"
 #include "jpr/scene/scene.h"
+#include "jpr/scene/view_condition.h"
+#include "jpr/scene/view_list.h"
 #include "jpr/scene/view_reference.h"
 
 namespace jpr {
@@ -31,6 +39,24 @@ bool IsNameIn(std::string_view name, std::string_view name_space) {
   return name.starts_with(name_space) && IsName(name.substr(name_space.size()));
 }
 
+// Returns the catalog's namespace the name is in, or null if it is in none.
+const PropertyNamespaceInfo* FindNamespace(std::string_view name) {
+  for (const PropertyNamespaceInfo& info : GetPropertyCatalog()) {
+    if (name.starts_with(info.name)) {
+      return &info;
+    }
+  }
+  return nullptr;
+}
+
+// Returns the row with the name, a property's or a reference's, or null if
+// there is none.
+template <typename Info>
+const Info* FindInfo(absl::Span<const Info> rows, std::string_view name) {
+  auto it = std::ranges::find(rows, name, &Info::name);
+  return it != rows.end() ? &*it : nullptr;
+}
+
 // What checking knows of a view, which its contents and children see.
 struct ViewScope {
   std::string path;  // From the root, which is "/".
@@ -41,6 +67,11 @@ struct ViewScope {
 
   // The kind of its list's items, or nullopt if it has no list.
   std::optional<SubjectKind> list;
+
+  // The needs of view: properties it meets, and those an item view of its
+  // list meets (see ViewNeed).
+  std::vector<ViewNeed> needs;
+  std::optional<ViewNeed> item_need;
 };
 
 // The checking of one surface spec.
@@ -62,6 +93,22 @@ class SurfaceSpecValidator {
   struct Reference {
     SubjectKind kind = SubjectKind::kNone;
     bool declared = false;  // Declared ones are writable.
+  };
+
+  // What checking knows of a property a mapping or condition names.
+  struct Property {
+    // How errors name it, such as "\"user:mode\"".
+    std::string label;
+
+    // Its type, or nullopt if it isn't known until the scene is created: a
+    // command's, which REAPER decides, or a field of a subject whose kind
+    // isn't known. Its access is known exactly when its type is.
+    std::optional<ViewProperty::Type> type;
+    PropertyAccessFlags access;
+
+    // Its declaration, if it is a declared enumerated value, whose values have
+    // names.
+    const EnumeratedValueSpec* values = nullptr;
   };
 
   void ValidateDevicesAndWidgets(const SurfaceSpec& spec);
@@ -133,9 +180,66 @@ class SurfaceSpecValidator {
   // Validates the repeated view's array and element, and returns its element.
   Element ValidateRepeat(const RepeatSpec& repeat, const ViewScope& scope);
 
-  // Validates the view's components, uses, and children.
+  // Validates the view's components, uses, mappings, and children.
   void ValidateContents(const ViewSpec& view, const ViewScope& scope);
   void ValidateChildren(const ViewSpec& view, const ViewScope& scope);
+
+  // Validates the mappings of a use in the view, with the template's widget
+  // parameters resolved where the use is, as are the property arguments in a
+  // template, and the mappings of the uses in the template in turn. `where` is
+  // the view's path, followed by the templates the use is in.
+  void ValidateUseMappings(const TemplateUse& use, const ViewScope& scope,
+                           std::string_view where);
+
+  // Validates a mapping in the view, whose error starts with `what`.
+  void ValidateMapping(const MappingSpec& mapping, const ViewScope& scope,
+                       std::string_view what);
+
+  // Validates the mapping's property, its read and write sides, and its
+  // modes, on the control of the shape, or null if it isn't known.
+  void ValidateMappingProperty(const MappingSpec& mapping,
+                               const Property& property,
+                               const WidgetShape* control,
+                               std::string_view what);
+
+  // Validates each side the mapping asks for, of a property whose type is
+  // known, on the control.
+  void ValidateSides(const MappingSpec& mapping, const Property& property,
+                     const WidgetShape& control, std::string_view what);
+
+  // Adds an error unless the control has the mode, for a property of the type.
+  void ValidateMode(ViewProperty::Type type, const WidgetShape& control,
+                    std::string_view mode, std::string_view what);
+
+  // Validates an end of a read mapping's range (its `label`, "min" or "max").
+  void ValidateRangeEnd(const Property& property,
+                        const std::optional<ViewProperty::Value>& end,
+                        std::string_view label, std::string_view what);
+
+  // Validates a condition in the view, of a view or a mapping, whose errors
+  // start with `what`.
+  void ValidateCondition(const ViewCondition::Config& condition,
+                         const ViewScope& scope, std::string_view what);
+
+  // Returns the property the name in the view names, the `label` of its use
+  // (such as "condition"), adding an error if there is none. Returns a
+  // property whose type isn't known if the name is a property parameter
+  // without an argument, which validating the use reports.
+  std::optional<Property> ValidateProperty(std::string_view name,
+                                           const ViewScope& scope,
+                                           std::string_view label,
+                                           std::string_view what);
+
+  // Adds an error unless the property, the `label` of its use, can be read.
+  void ValidateReadable(const Property& property, std::string_view label,
+                        std::string_view what);
+
+  // Adds an error unless the property can equal the value (see
+  // ViewProperty::CanEqual()), naming one of its values if it is a string for
+  // an enumerated property (see ViewProperty::ResolveValue()). `label` is the
+  // value's use.
+  void ValidateValue(const Property& property, const ViewProperty::Value& value,
+                     std::string_view label, std::string_view what);
 
   // Returns the shape of the widget at the path's text, looking up its first
   // name from the inside out (see SurfaceSpec). Returns null, setting `error`
@@ -143,6 +247,23 @@ class SurfaceSpecValidator {
   // empty, if what it names isn't known.
   const WidgetShape* FindWidget(std::string_view path_text,
                                 std::string* error) const;
+
+  // Returns the property the name names in the view, looking it up as View
+  // and Scene do. Returns nullopt, setting `error` to why, if there is none.
+  std::optional<Property> FindProperty(std::string_view name,
+                                       const ViewScope& scope,
+                                       std::string* error) const;
+
+  // Returns the field of a subject of the kind, such as "name" for a track,
+  // or "other_track.name" for a route, as FindProperty() does.
+  std::optional<Property> FindField(SubjectKind kind, std::string_view field,
+                                    std::string* error) const;
+
+  // Returns the name a property name in a template stands for: its argument,
+  // if it is a property parameter, or itself. Returns nullopt if it is a
+  // parameter without an argument.
+  std::optional<std::string_view> ResolvePropertyName(
+      std::string_view name) const;
 
   // Returns true if the name is a reference whose subject is a track, built in
   // or declared so far, or one declared so far.
@@ -162,14 +283,23 @@ class SurfaceSpecValidator {
   // The top-level widgets' shape, if they are valid.
   std::optional<WidgetShape> widgets_;
 
-  // The elements of the repeated views being validated, outermost first.
+  // The elements of the repeated views being validated, outermost first, or
+  // while a template's mappings are, its widget parameters.
   std::vector<Element> elements_;
+
+  // While a template's mappings are validated, the arguments of its property
+  // parameters (see ResolvePropertyName()), and the templates being expanded,
+  // which aren't expanded again inside themselves.
+  absl::flat_hash_map<std::string_view, std::optional<std::string_view>>
+      property_args_;
+  absl::flat_hash_set<std::string_view> expanding_;
 
   // The names declared, or built in, that a new declaration may not have: the
   // built in modifiers, the top-level declarations, and the declarations of
-  // the view being validated and its ancestors. Every name is the spec's, or
-  // the catalog's, which outlive the validator.
-  absl::flat_hash_set<std::string_view> visible_names_;
+  // the view being validated and its ancestors, each with its declaration
+  // (null for a built in modifier). Every name is the spec's, or the
+  // catalog's, which outlive the validator.
+  absl::flat_hash_map<std::string_view, const ComponentSpec*> visible_names_;
   int declared_modifier_count_ = 0;
 
   // References, built in and declared so far.
@@ -182,7 +312,7 @@ class SurfaceSpecValidator {
 SurfaceSpecValidator::SurfaceSpecValidator(std::vector<std::string>* errors)
     : errors_(errors) {
   for (const PropertyInfo& modifier : Scene::GetBuiltInModifierInfo()) {
-    visible_names_.insert(modifier.name);
+    visible_names_.emplace(modifier.name, nullptr);
   }
   for (const ReferenceInfo& reference : Scene::GetBuiltInReferenceInfo()) {
     references_.emplace(reference.name, Reference{.kind = reference.kind});
@@ -232,7 +362,7 @@ bool SurfaceSpecValidator::ValidateComponent(const ComponentSpec& component,
     AddError(where,
              absl::StrCat(kind.name, " name \"", name, "\" isn't \"",
                           kind.name_space, "\" followed by a C identifier"));
-  } else if (!visible_names_.insert(name).second) {
+  } else if (!visible_names_.emplace(name, &component).second) {
     AddError(what, "is already declared where it is visible, or is built in");
   } else {
     declared = true;
@@ -485,6 +615,18 @@ void SurfaceSpecValidator::ValidateView(const ViewSpec& view,
 
   ValidateSubject(view, parent, scope);
   ValidateList(view.config, scope);
+
+  // A view's condition is made with its config, before its own components
+  // are declared.
+  if (view.config.condition.has_value()) {
+    ValidateCondition(*view.config.condition, scope, scope.path);
+  }
+
+  // An item view gets its parent list's view: properties once it is made.
+  if (std::holds_alternative<View::ListItemSubject>(view.config.subject) &&
+      parent.item_need.has_value()) {
+    scope.needs.push_back(*parent.item_need);
+  }
   if (!view.repeat.has_value()) {
     ValidateContents(view, scope);
     return;
@@ -541,16 +683,21 @@ void SurfaceSpecValidator::ValidateList(const View::Config& config,
     AddError(scope.path, absl::StrCat("has a bank size of ", *list.bank_size,
                                       ", which isn't positive"));
   }
+
+  // A view may set the reference it is bound to only if it is declared.
+  const auto* bound = std::get_if<View::ReferenceSubject>(&config.subject);
+  const bool writable = bound != nullptr && IsDeclaredReference(bound->name);
+  ViewList::Needs needs = ViewList::GetNeeds(list, writable);
+  scope.needs = std::move(needs.view);
+  scope.item_need = needs.item;
   if (const auto* child_tracks = std::get_if<View::ChildTracks>(&list.items)) {
     const std::string& reveal = child_tracks->reveal;
     if (!reveal.empty()) {
       // Revealing moves the reference the view is bound to.
-      const auto* bound = std::get_if<View::ReferenceSubject>(&config.subject);
       if (!IsTrackReference(reveal)) {
         AddError(scope.path, absl::StrCat("reveals \"", reveal,
                                           "\", which isn't a track reference"));
-      } else if (bound == nullptr || !IsDeclaredReference(bound->name) ||
-                 bound->name == reveal) {
+      } else if (!writable || bound->name == reveal) {
         AddError(scope.path, absl::StrCat("reveals \"", reveal,
                                           "\", but isn't bound to a declared "
                                           "reference other than it"));
@@ -594,6 +741,13 @@ void SurfaceSpecValidator::ValidateContents(const ViewSpec& view,
   for (const TemplateUse& use : view.uses) {
     ValidateUse(use, scope.path);
   }
+  for (const MappingSpec& mapping : view.mappings) {
+    ValidateMapping(mapping, scope,
+                    absl::StrCat(scope.path, ": ", mapping.control));
+  }
+  for (const TemplateUse& use : view.uses) {
+    ValidateUseMappings(use, scope, scope.path);
+  }
   ValidateChildren(view, scope);
 
   // A view's declarations are visible only in it, and its descendants.
@@ -619,6 +773,293 @@ void SurfaceSpecValidator::ValidateChildren(const ViewSpec& view,
     AddError(scope.path,
              absl::StrCat("has a list, so it has one repeated child, but has ",
                           repeated_count));
+  }
+}
+
+void SurfaceSpecValidator::ValidateUseMappings(const TemplateUse& use,
+                                               const ViewScope& scope,
+                                               std::string_view where) {
+  // A use of a template that isn't one, or that uses itself, was reported by
+  // ValidateUse() or ValidateTemplates().
+  auto it = templates_.find(use.name);
+  if (it == templates_.end() || expanding_.contains(use.name)) {
+    return;
+  }
+  const TemplateSpec& spec = *it->second;
+
+  // The arguments are resolved where the use is. One that is missing was
+  // reported by ValidateUse(), so it isn't known.
+  std::vector<Element> widget_params;
+  for (const std::string& param : spec.widget_params) {
+    const WidgetShape* shape = nullptr;
+    if (auto arg = use.widgets.find(param); arg != use.widgets.end()) {
+      std::string error;
+      shape = FindWidget(arg->second, &error);
+      if (!error.empty()) {
+        AddError(where,
+                 absl::StrCat("uses ", use.name, " with widget \"", param,
+                              "\" as \"", arg->second, "\", which ", error));
+      }
+    }
+    widget_params.push_back({.name = param, .shape = shape});
+  }
+  absl::flat_hash_map<std::string_view, std::optional<std::string_view>>
+      property_args;
+  for (const std::string& param : spec.property_params) {
+    auto arg = use.properties.find(param);
+    property_args[param] = arg != use.properties.end()
+                               ? ResolvePropertyName(arg->second)
+                               : std::nullopt;
+  }
+
+  // A template sees only its own parameters and the top-level widgets.
+  std::swap(elements_, widget_params);
+  std::swap(property_args_, property_args);
+  expanding_.insert(use.name);
+  const std::string what = absl::StrCat(where, ": ", use.name);
+  for (const MappingSpec& mapping : spec.mappings) {
+    ValidateMapping(mapping, scope, absl::StrCat(what, ": ", mapping.control));
+  }
+  for (const TemplateUse& inner : spec.uses) {
+    ValidateUseMappings(inner, scope, what);
+  }
+  expanding_.erase(use.name);
+  std::swap(property_args_, property_args);
+  std::swap(elements_, widget_params);
+}
+
+void SurfaceSpecValidator::ValidateMapping(const MappingSpec& mapping,
+                                           const ViewScope& scope,
+                                           std::string_view what) {
+  if (mapping.type.IsEmpty()) {
+    AddError(what, "neither reads nor writes its control");
+  }
+
+  std::string error;
+  const WidgetShape* control = FindWidget(mapping.control, &error);
+  if (!error.empty()) {
+    AddError(what, error);
+  } else if (control != nullptr && control->GetKind() != WidgetKind::kControl) {
+    AddError(what, "isn't a control");
+    control = nullptr;
+  }
+
+  const ViewMapping::Config& config = mapping.config;
+  std::optional<Property> property;
+  if (const auto* fixed = std::get_if<FixedValue>(&mapping.property)) {
+    if (!IsConstValue(fixed->type, fixed->value)) {
+      AddError(what, absl::StrCat("has a fixed value that isn't a ",
+                                  ViewProperty::GetTypeName(fixed->type),
+                                  " constant"));
+    }
+    property = Property{
+        .label = "its fixed value", .type = fixed->type, .access = kReadAccess};
+  } else {
+    property = ValidateProperty(std::get<std::string>(mapping.property), scope,
+                                "property", what);
+  }
+  if (property.has_value()) {
+    ValidateMappingProperty(mapping, *property, control, what);
+  }
+
+  for (const std::string& modifier : config.read.required_modifiers) {
+    if (!IsModifier(modifier)) {
+      AddError(what, absl::StrCat("requires \"", modifier,
+                                  "\", which isn't a modifier"));
+    }
+  }
+  for (const ViewMapping::ModeOverride& mode_override :
+       config.write.mode_overrides) {
+    std::optional<Property> override_property =
+        ValidateProperty(mode_override.property, scope, "mode override", what);
+    if (!override_property.has_value()) {
+      continue;
+    }
+    ValidateReadable(*override_property, "mode override", what);
+    for (const auto& [value, mode] : mode_override.value_to_mode) {
+      ValidateValue(*override_property, value, "mode override", what);
+    }
+  }
+  if (config.condition.has_value()) {
+    ValidateCondition(*config.condition, scope, what);
+  }
+}
+
+void SurfaceSpecValidator::ValidateMappingProperty(const MappingSpec& mapping,
+                                                   const Property& property,
+                                                   const WidgetShape* control,
+                                                   std::string_view what) {
+  const ViewMapping::Config& config = mapping.config;
+  if (property.type.has_value()) {
+    ValidateRangeEnd(property, config.read.property_min, "min", what);
+    ValidateRangeEnd(property, config.read.property_max, "max", what);
+    if (control != nullptr) {
+      ValidateSides(mapping, property, *control, what);
+    }
+  }
+  if (control == nullptr) {
+    return;
+  }
+
+  // Only a timeline position's modes are formats, and a property whose type
+  // isn't known is never one.
+  const ViewProperty::Type mode_type =
+      property.type.value_or(ViewProperty::Type::kAction);
+  ValidateMode(mode_type, *control, config.write.mode, what);
+  for (const ViewMapping::ModeOverride& mode_override :
+       config.write.mode_overrides) {
+    for (const auto& [value, mode] : mode_override.value_to_mode) {
+      ValidateMode(mode_type, *control, mode, what);
+    }
+  }
+}
+
+void SurfaceSpecValidator::ValidateSides(const MappingSpec& mapping,
+                                         const Property& property,
+                                         const WidgetShape& control,
+                                         std::string_view what) {
+  // Each side the mapping asks for must be one the scene keeps (see
+  // ViewMapping), and access is checked first for its own error. A shape
+  // doesn't say whether a press has a release, which every press in a device
+  // type's catalog has.
+  const std::string_view type_name = ViewProperty::GetTypeName(*property.type);
+  if (mapping.type.IsSet(ViewMapping::kReadControl)) {
+    if (!ViewMapping::CanReadControlInto(property.access)) {
+      AddError(what, absl::StrCat("reads into ", property.label,
+                                  ", which can't be written or triggered"));
+    } else if (!ViewMapping::GetReadInput(
+                    *property.type, property.access, control.GetInputs(),
+                    /*has_press_release=*/true, mapping.config.read)
+                    .has_value()) {
+      AddError(what,
+               absl::StrCat("can't read into ", property.label, " (", type_name,
+                            ") from the control with its read config"));
+    }
+  }
+  if (mapping.type.IsSet(ViewMapping::kWriteControl)) {
+    if (!ViewMapping::CanWriteControlFrom(property.access)) {
+      AddError(what, absl::StrCat("writes ", property.label,
+                                  ", which can't be read"));
+    } else if (!ViewMapping::GetWriteOutput(*property.type, property.access,
+                                            control.GetOutputs())
+                    .has_value()) {
+      AddError(what, absl::StrCat("can't write ", property.label, " (",
+                                  type_name, ") to the control"));
+    }
+  }
+}
+
+void SurfaceSpecValidator::ValidateMode(ViewProperty::Type type,
+                                        const WidgetShape& control,
+                                        std::string_view mode,
+                                        std::string_view what) {
+  if (!ViewMapping::FindMode(type, control, mode).has_value()) {
+    AddError(what, absl::StrCat("has no mode \"", mode, "\""));
+  }
+}
+
+void SurfaceSpecValidator::ValidateRangeEnd(
+    const Property& property, const std::optional<ViewProperty::Value>& end,
+    std::string_view label, std::string_view what) {
+  if (!end.has_value()) {
+    return;
+  }
+  // What a range end of the type is (see ViewMapping::ReadConfig).
+  bool valid = false;
+  switch (*property.type) {
+    case ViewProperty::Type::kPan:
+    case ViewProperty::Type::kVolume:
+    case ViewProperty::Type::kNormalized:
+      valid = std::holds_alternative<double>(*end);
+      break;
+    case ViewProperty::Type::kText:
+      valid = std::holds_alternative<std::string>(*end);
+      break;
+    case ViewProperty::Type::kColor:
+      valid = std::holds_alternative<Color>(*end);
+      break;
+    case ViewProperty::Type::kEnumerated:
+      if (std::holds_alternative<std::string>(*end)) {
+        ValidateValue(property, *end, absl::StrCat("range ", label), what);
+        return;
+      }
+      valid = std::holds_alternative<int>(*end);
+      break;
+    case ViewProperty::Type::kAction:
+    case ViewProperty::Type::kToggle:
+    case ViewProperty::Type::kTimelinePosition:
+      AddError(
+          what,
+          absl::StrCat("has a range ", label, ", which ", property.label, " (",
+                       ViewProperty::GetTypeName(*property.type), ") ignores"));
+      return;
+  }
+  if (!valid) {
+    AddError(what, absl::StrCat(
+                       "range ", label, " isn't a value of ", property.label,
+                       " (", ViewProperty::GetTypeName(*property.type), ")"));
+  }
+}
+
+void SurfaceSpecValidator::ValidateCondition(
+    const ViewCondition::Config& condition, const ViewScope& scope,
+    std::string_view what) {
+  std::optional<Property> property =
+      ValidateProperty(condition.property, scope, "condition", what);
+  if (property.has_value()) {
+    ValidateReadable(*property, "condition", what);
+    ValidateValue(*property, condition.value, "condition", what);
+  }
+}
+
+std::optional<SurfaceSpecValidator::Property>
+SurfaceSpecValidator::ValidateProperty(std::string_view name,
+                                       const ViewScope& scope,
+                                       std::string_view label,
+                                       std::string_view what) {
+  const std::optional<std::string_view> resolved = ResolvePropertyName(name);
+  if (!resolved.has_value()) {
+    return Property{.label = absl::StrCat("\"", name, "\"")};
+  }
+  std::string error;
+  std::optional<Property> property = FindProperty(*resolved, scope, &error);
+  if (!property.has_value()) {
+    AddError(what, absl::StrCat(label, " \"", *resolved, "\" ", error));
+    return std::nullopt;
+  }
+  property->label = absl::StrCat("\"", *resolved, "\"");
+  return property;
+}
+
+void SurfaceSpecValidator::ValidateReadable(const Property& property,
+                                            std::string_view label,
+                                            std::string_view what) {
+  if (property.type.has_value() &&
+      !property.access.IsSet(PropertyAccess::kRead)) {
+    AddError(what, absl::StrCat(label, " on ", property.label,
+                                ", which can't be read"));
+  }
+}
+
+void SurfaceSpecValidator::ValidateValue(const Property& property,
+                                         const ViewProperty::Value& value,
+                                         std::string_view label,
+                                         std::string_view what) {
+  if (!property.type.has_value()) {
+    return;
+  }
+  if (!ViewProperty::CanEqual(*property.type, value)) {
+    AddError(what, absl::StrCat(label, " on ", property.label, " (",
+                                ViewProperty::GetTypeName(*property.type),
+                                ") has a value it can never equal"));
+  } else if (const auto* name = std::get_if<std::string>(&value);
+
+             name != nullptr &&
+             *property.type == ViewProperty::Type::kEnumerated &&
+             (property.values == nullptr ||
+              !absl::c_linear_search(property.values->values, *name))) {
+    AddError(what, absl::StrCat(label, " \"", *name, "\" isn't one of ",
+                                property.label, "'s values"));
   }
 }
 
@@ -658,6 +1099,116 @@ const WidgetShape* SurfaceSpecValidator::FindWidget(std::string_view path_text,
     *error = "names nothing";
   }
   return shape;
+}
+
+std::optional<SurfaceSpecValidator::Property>
+SurfaceSpecValidator::FindProperty(std::string_view name,
+                                   const ViewScope& scope,
+                                   std::string* error) const {
+  // A subject's fields are only on a view with that kind of subject.
+  for (SubjectKind kind : {SubjectKind::kTrack, SubjectKind::kRoute}) {
+    const std::string_view name_space = GetSubjectNamespace(kind);
+    if (!name.starts_with(name_space)) {
+      continue;
+    }
+    if (!scope.subject.has_value()) {
+      return Property{};
+    }
+    if (*scope.subject != kind) {
+      *error =
+          absl::StrCat("needs a view with a ",
+                       name_space.substr(0, name_space.size() - 1), " subject");
+      return std::nullopt;
+    }
+    return FindField(kind, name.substr(name_space.size()), error);
+  }
+
+  // A view: property is only on the views that meet its need.
+  if (name.starts_with(kViewNamespace)) {
+    const PropertyInfo* row = FindInfo(FindNamespace(name)->properties, name);
+    if (row == nullptr) {
+      *error = "isn't a property";
+      return std::nullopt;
+    }
+    if (!absl::c_linear_search(scope.needs, *row->view_need)) {
+      *error = "isn't on this view";
+      return std::nullopt;
+    }
+    return Property{.type = row->type, .access = row->access};
+  }
+
+  // A name with a '.' is a field of a reference.
+  const auto [owner, owner_field] =
+      std::pair<std::string_view, std::string_view>(
+          absl::StrSplit(name, absl::MaxSplits('.', 1)));
+  if (!owner_field.empty()) {
+    auto it = references_.find(owner);
+    if (it == references_.end()) {
+      *error = "isn't a property";
+      return std::nullopt;
+    }
+    return FindField(it->second.kind, owner_field, error);
+  }
+
+  if (auto it = visible_names_.find(name);
+      it != visible_names_.end() && it->second != nullptr) {
+    const ComponentKindInfo& kind = GetComponentKind(*it->second);
+    if (kind.access.IsEmpty()) {
+      *error = "is a reference, whose fields are properties";
+      return std::nullopt;
+    }
+    return Property{.type = kind.type,
+                    .access = kind.access,
+                    .values = std::get_if<EnumeratedValueSpec>(it->second)};
+  }
+
+  // Only REAPER knows which commands exist, and their types.
+  if (name.starts_with(kCmdNamespace)) {
+    if (!IsCommandId(name.substr(kCmdNamespace.size()))) {
+      *error = "isn't a command id";
+      return std::nullopt;
+    }
+    return Property{};
+  }
+  // Any other is a built in property of its namespace, such as state:.
+  if (const PropertyNamespaceInfo* info = FindNamespace(name)) {
+    if (const PropertyInfo* row = FindInfo(info->properties, name)) {
+      return Property{.type = row->type, .access = row->access};
+    }
+  }
+  *error = "isn't a property";
+  return std::nullopt;
+}
+
+std::optional<SurfaceSpecValidator::Property> SurfaceSpecValidator::FindField(
+    SubjectKind kind, std::string_view field, std::string* error) const {
+  // A subject's fields are the properties of its namespace, and the fields of
+  // its references.
+  const PropertyNamespaceInfo* info =
+      kind != SubjectKind::kNone ? FindNamespace(GetSubjectNamespace(kind))
+                                 : nullptr;
+  if (info != nullptr) {
+    const auto [owner, owner_field] =
+        std::pair<std::string_view, std::string_view>(
+            absl::StrSplit(field, absl::MaxSplits('.', 1)));
+    if (!owner_field.empty()) {
+      if (const ReferenceInfo* reference =
+              FindInfo(info->references, absl::StrCat(info->name, owner))) {
+        return FindField(reference->kind, owner_field, error);
+      }
+    } else if (const PropertyInfo* row = FindInfo(
+                   info->properties, absl::StrCat(info->name, field))) {
+      return Property{.type = row->type, .access = row->access};
+    }
+  }
+  *error = "isn't a property";
+  return std::nullopt;
+}
+
+std::optional<std::string_view> SurfaceSpecValidator::ResolvePropertyName(
+    std::string_view name) const {
+  auto it = property_args_.find(name);
+  return it != property_args_.end() ? it->second : name;
 }
 
 bool SurfaceSpecValidator::IsTrackReference(std::string_view name) const {

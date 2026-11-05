@@ -197,8 +197,30 @@ struct SurfaceSpec {
 //   other template has, and parameters that are C identifiers, none repeated.
 //   Each use names a template, and gives exactly its parameters, and no
 //   template uses itself, however indirectly.
+// - Mappings, with each use's expanded into the view that uses it, where its
+//   widget arguments name widgets and its property arguments are names: the
+//   control is a control. The property is one where the mapping is (see
+//   below), or a fixed value that is a constant (see IsConstValue()). Each
+//   side the mapping asks for is one the scene keeps (see ViewMapping), with
+//   the access it needs, and an input or output that suits the property's
+//   type on the control (taking a press to have a release, as every catalog's
+//   does). Its mode and each override's modes are the control's (see
+//   ViewMapping::FindMode()). Its range ends are values of the property's
+//   type, which an action, a toggle, or a timeline position has none of, and
+//   its required modifiers are modifiers. A mapping in a template is about
+//   the view's path, the templates it is expanded through, and its control,
+//   such as "/track_mode/track_list/strip[]: track_strip: strip.mute".
+// - Conditions, of views and mappings, and mode overrides: the property is
+//   one where it is, and can be read, and each value can be read as its type,
+//   naming one of its values if it is a declared enumerated value. A view's
+//   condition is made before its components are declared, so it doesn't see
+//   them.
 //
-// Mappings, and conditions, aren't checked yet.
+// A property is found as View and Scene find it: a subject's field only on a
+// view with that kind of subject, a view: property only on a view that meets
+// its need (see ViewNeed), a reference's field, a declaration visible where it
+// is used, a built in property, or a command, whose id is checked but whose
+// type and access only REAPER knows, so they aren't checked.
 bool ValidateSurfaceSpec(const SurfaceSpec& spec,
                          std::vector<std::string>* errors);
 

@@ -107,7 +107,19 @@ void ViewProperty::NotifyChanged() {
   }
 }
 
+bool ViewProperty::CanEqual(Type type, const Value& value) {
+  if (std::holds_alternative<std::monostate>(value)) {
+    return false;
+  }
+  // Other types read as a zero position, so they are not compared.
+  return !std::holds_alternative<TimelinePosition>(value) ||
+         type == Type::kTimelinePosition;
+}
+
 bool ViewProperty::Equals(const Value& value) const {
+  if (!CanEqual(type_, value)) {
+    return false;
+  }
   return std::visit(
       [this](const auto& other) -> bool {
         using T = std::decay_t<decltype(other)>;
@@ -129,9 +141,7 @@ bool ViewProperty::Equals(const Value& value) const {
         } else if constexpr (std::is_same_v<T, Color>) {
           return GetColor() == other;
         } else if constexpr (std::is_same_v<T, TimelinePosition>) {
-          // Other types read as a zero position, so they are not compared.
-          return type_ == Type::kTimelinePosition &&
-                 GetTimelinePosition() == other;
+          return GetTimelinePosition() == other;
         } else {
           return false;
         }

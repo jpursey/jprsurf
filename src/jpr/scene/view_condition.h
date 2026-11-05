@@ -27,7 +27,8 @@ class ViewCondition final {
   // Configures a condition, with its property by name.
   struct Config {
     // The name of a property, as seen from the view that has the condition,
-    // or that has the mapping with the condition.
+    // or that has the mapping with the condition. It must be one that can
+    // be read.
     std::string property;
 
     // The value the property must equal, such as true for a toggle, or for an

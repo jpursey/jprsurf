@@ -199,7 +199,7 @@ class View final {
   // list is given for a view without a track subject, a list's bank size isn't
   // positive, a list's reveal isn't
   // valid (see ChildTracks::reveal), or the condition's property doesn't exist
-  // (as seen from the child view).
+  // (as seen from the child view) or can't be read.
   View* AddChildView(std::string_view name, const Config& config = {});
 
   int GetChildViewCount() const { return child_views_.size(); }
@@ -266,7 +266,8 @@ class View final {
   // "strip[3].fader" (see Scene::GetControl()).
   //
   // This returns false (logging why) if the mapping is invalid: a property
-  // isn't found, a required modifier isn't a modifier, a name given for an
+  // isn't found, a condition's or mode override's property can't be read, a
+  // required modifier isn't a modifier, a name given for an
   // enumerated property's value isn't one of its values (see
   // ViewProperty::ResolveValue()), the scene's widgets have no control at the
   // path (see WidgetRoot::FindControl()), or the control's shape has no mode a

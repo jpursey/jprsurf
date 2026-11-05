@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -28,11 +29,14 @@ namespace jpr {
 class TestProperty final : public ViewProperty {
  public:
   // `value` must hold the type's underlying value. `max_value` is an
-  // enumerated property's highest value.
+  // enumerated property's highest value. Without an access, an action is
+  // triggered, and any other type is read and written.
   TestProperty(Type type, Value value, int max_value = 0,
-               std::string_view name = "user:value")
+               std::string_view name = "user:value",
+               std::optional<PropertyAccessFlags> access = std::nullopt)
       : ViewProperty(name, type,
-                     type == Type::kAction ? kTriggerAccess : kReadWriteAccess),
+                     access.value_or(type == Type::kAction ? kTriggerAccess
+                                                           : kReadWriteAccess)),
         value_(std::move(value)),
         max_value_(max_value) {}
 

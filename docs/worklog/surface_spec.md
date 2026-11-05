@@ -520,7 +520,7 @@ Depends on: CL1.
 - Standard checks.
 - The catalog test fails when a row's access is wrong.
 
-### CL6 [ ] scene: Checking mappings
+### CL6 [x] scene: Checking mappings
 
 Depends on: CL4, CL5.
 
@@ -534,6 +534,39 @@ Depends on: CL4, CL5.
   paths resolved from the inside out (see Checking).
 - No visible change: no mapping in the default config uses a property against
   its access.
+
+Done as planned, with these details:
+- The rules are `ViewMapping::GetReadInput()` and `GetWriteOutput()`, which
+  return the one input or output a side uses (or none), and `FindMode()`,
+  made public and taking a type. Each `Init*SyncFunction()` now builds its
+  function for the input or output they chose, so the preference order is
+  written once. A side that reads or writes nothing is dropped from
+  `GetType()`. A press release mapping of a timeline position now reads
+  nothing, as `ReadConfig` already said any type but a press would.
+- A widget shape doesn't say whether a press has a release, so checking takes
+  every press to have one, as every catalog's does.
+- A declared component's property is checked by its kind's type and access,
+  which `ComponentKindInfo` now has (no access for a track reference), and
+  the catalog test checks against the classes. A fixed value is checked with
+  `IsConstValue()`, made public from `const_property.cc`.
+- Checking also covers what the scene would refuse or silently ignore around
+  a mapping: view conditions (made before the view's own components, so they
+  don't see them), conditions and mode overrides on a property that can't be
+  read, range ends that aren't values of the type (or on a type that ignores
+  them), required modifiers, and a mapping that neither reads nor writes.
+- More rules are shared rather than written again for checking:
+  `ViewMapping::CanReadControlInto()` and `CanWriteControlFrom()` (the access
+  rule), `ViewProperty::CanEqual()` (which `Equals()` uses), `IsCommandId()`
+  (which looking a command up uses), and `ViewList::GetNeeds()` (which the
+  catalog test checks against the properties lists add). Built in properties
+  are found through `GetPropertyCatalog()`'s namespaces.
+- The scene now refuses a condition or mode override on a property that
+  can't be read, as checking does, so creating the scene backs that rule up.
+- A mapping whose write side is dropped no longer watches its property.
+- Left as they are: a range end the scene ignores for the input it reads
+  (text from a value input, color from a delta) isn't reported, as the rule
+  depends on the input, and the template expansion in checking isn't shared
+  with `CreateScene()`, which CL7 decides.
 
 **Verify**
 - Standard checks.

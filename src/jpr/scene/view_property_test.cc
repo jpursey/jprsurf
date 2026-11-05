@@ -108,6 +108,19 @@ TEST(ViewPropertyTest, EqualsNeverWithoutValue) {
       TestProperty(Type::kAction, std::monostate()).Equals(std::monostate()));
 }
 
+TEST(ViewPropertyTest, OnlyAValueOfTheRightKindCanEqual) {
+  EXPECT_FALSE(ViewProperty::CanEqual(Type::kToggle, std::monostate()));
+  EXPECT_FALSE(ViewProperty::CanEqual(Type::kToggle, TimelinePosition()));
+  EXPECT_TRUE(
+      ViewProperty::CanEqual(Type::kTimelinePosition, TimelinePosition()));
+  for (const ViewProperty::Value& value :
+       {ViewProperty::Value(true), ViewProperty::Value(1),
+        ViewProperty::Value(0.5), ViewProperty::Value(std::string("a")),
+        ViewProperty::Value(Color{})}) {
+    EXPECT_TRUE(ViewProperty::CanEqual(Type::kToggle, value));
+  }
+}
+
 TEST(ViewPropertyTest, FittedVolumeDropsDecimalsThenTheUnit) {
   FakeReaper reaper;
   EXPECT_EQ(TestProperty(Type::kVolume, 0.000000631).GetFittedText(7),

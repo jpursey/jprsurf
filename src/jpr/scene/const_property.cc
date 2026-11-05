@@ -45,7 +45,8 @@ class ConstProperty final : public ViewProperty {
   Value value_;
 };
 
-// Returns true if the value holds what the type reads, in the type's range.
+}  // namespace
+
 bool IsConstValue(ViewProperty::Type type, const ViewProperty::Value& value) {
   switch (type) {
     case ViewProperty::Type::kToggle:
@@ -62,8 +63,6 @@ bool IsConstValue(ViewProperty::Type type, const ViewProperty::Value& value) {
       return false;
   }
 }
-
-}  // namespace
 
 std::unique_ptr<ViewProperty> CreateConstProperty(ViewProperty::Type type,
                                                   ViewProperty::Value value) {

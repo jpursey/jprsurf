@@ -31,6 +31,11 @@ class View;
 //
 // It is responsible for doing the actual synchronization between the view
 // property and control when active, according to its type.
+//
+// A mapping drops a side it can't do, which GetType() then doesn't have: it
+// reads the control only from an input GetReadInput() finds, so only into a
+// property that can be written or triggered, and writes the control only to
+// an output GetWriteOutput() finds, so only from a property that can be read.
 class ViewMapping final {
  public:
   enum class Type {
@@ -194,6 +199,37 @@ class ViewMapping final {
     std::optional<ViewCondition::Config> condition;
   };
 
+  // Returns true if a mapping can read a control into a property with the
+  // access, which is one that can be written or triggered, or write a control
+  // from one, which is one that can be read.
+  static bool CanReadControlInto(PropertyAccessFlags access);
+  static bool CanWriteControlFrom(PropertyAccessFlags access);
+
+  // Returns the input a mapping reads a control with the inputs from, into a
+  // property of the type and access, or nullopt if it reads nothing: it can't
+  // read into the property (see CanReadControlInto()), or none of the inputs
+  // suits the type and the config (see ReadConfig). `has_press_release` is
+  // whether the control's press input has a release (see
+  // Control::HasPressRelease()).
+  static std::optional<ControlInput::Type> GetReadInput(
+      ViewProperty::Type type, PropertyAccessFlags access,
+      Control::Inputs inputs, bool has_press_release, const ReadConfig& config);
+
+  // Returns the output a mapping writes a property of the type and access to,
+  // on a control with the outputs, or nullopt if it writes nothing: it can't
+  // write from the property (see CanWriteControlFrom()), or none of the
+  // outputs suits the type.
+  static std::optional<ControlOutput::Type> GetWriteOutput(
+      ViewProperty::Type type, PropertyAccessFlags access,
+      Control::Outputs outputs);
+
+  // Returns the number of the mode that a mapping of a property of the type to
+  // a control of the shape names (see WriteConfig::mode), or nullopt if there
+  // is none.
+  static std::optional<int> FindMode(ViewProperty::Type type,
+                                     const WidgetShape& shape,
+                                     std::string_view name);
+
   ViewMapping(const ViewMapping&) = delete;
   ViewMapping& operator=(const ViewMapping&) = delete;
   ~ViewMapping();
@@ -242,42 +278,33 @@ class ViewMapping final {
               std::vector<PropertyModes> mode_overrides,
               std::unique_ptr<ViewCondition> condition);
 
-  // Returns the number of the mode that a mapping of the property to a control
-  // of the shape names (see WriteConfig::mode), or nullopt if there is none.
-  static std::optional<int> FindMode(const ViewProperty& property,
-                                     const WidgetShape& shape,
-                                     std::string_view name);
-
-  // Returns true if a mapping of a property of the type to a control with the
-  // outputs writes a timeline position as text, so its mode is a format.
-  static bool WritesTimelineText(ViewProperty::Type type,
-                                 Control::Outputs outputs);
-
   // Refreshes the active state of this mapping, and whether it has its input,
   // based on whether it is enabled, whether its parent view is active, and
   // whether its condition is met.
   void RefreshActive(bool parent_active);
 
+  // Each reads the input GetReadInput() chose, or writes the output
+  // GetWriteOutput() chose.
   void InitReadControl(Modifiers required_modifiers);
-  void InitReadActionSyncFunction(Control::Inputs inputs);
-  void InitReadToggleSyncFunction(Control::Inputs inputs);
-  void InitReadPanSyncFunction(Control::Inputs inputs);
-  void InitReadVolumeSyncFunction(Control::Inputs inputs);
-  void InitReadNormalizedSyncFunction(Control::Inputs inputs);
-  void InitReadTextSyncFunction(Control::Inputs inputs);
-  void InitReadColorSyncFunction(Control::Inputs inputs);
-  void InitReadTimelinePositionSyncFunction(Control::Inputs inputs);
-  void InitReadEnumeratedSyncFunction(Control::Inputs inputs);
+  void InitReadActionSyncFunction();
+  void InitReadToggleSyncFunction(ControlInput::Type input);
+  void InitReadPanSyncFunction(ControlInput::Type input);
+  void InitReadVolumeSyncFunction(ControlInput::Type input);
+  void InitReadNormalizedSyncFunction(ControlInput::Type input);
+  void InitReadTextSyncFunction(ControlInput::Type input);
+  void InitReadColorSyncFunction(ControlInput::Type input);
+  void InitReadTimelinePositionSyncFunction();
+  void InitReadEnumeratedSyncFunction(ControlInput::Type input);
 
   void InitWriteControl();
-  void InitWriteToggleSyncFunction();
-  void InitWritePanSyncFunction();
-  void InitWriteVolumeSyncFunction();
-  void InitWriteNormalizedSyncFunction();
+  void InitWriteToggleSyncFunction(ControlOutput::Type output);
+  void InitWritePanSyncFunction(ControlOutput::Type output);
+  void InitWriteVolumeSyncFunction(ControlOutput::Type output);
+  void InitWriteNormalizedSyncFunction(ControlOutput::Type output);
   void InitWriteTextSyncFunction();
-  void InitWriteColorSyncFunction();
+  void InitWriteColorSyncFunction(ControlOutput::Type output);
   void InitWriteTimelinePositionSyncFunction();
-  void InitWriteEnumeratedSyncFunction();
+  void InitWriteEnumeratedSyncFunction(ControlOutput::Type output);
 
   // Returns the current mode for writing to the control, resolved from the
   // mode overrides if configured, or the mode otherwise.

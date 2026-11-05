@@ -48,18 +48,27 @@ void CommandToggleProperty::WriteBool(bool value) {
 // CreateCommandProperty
 //==============================================================================
 
+bool IsCommandId(std::string_view id) {
+  if (id.starts_with('_')) {
+    return id.size() > 1;
+  }
+  int number = 0;
+  return absl::SimpleAtoi(id, &number) && number > 0;
+}
+
 namespace {
 
 // Returns the command id for the id in a "cmd:<id>" name, or 0 if REAPER has
 // no such command.
 int LookupCommandId(std::string_view id) {
+  if (!IsCommandId(id)) {
+    return 0;
+  }
   if (id.starts_with('_')) {
     return NamedCommandLookup(std::string(id).c_str());
   }
   int command_id = 0;
-  if (!absl::SimpleAtoi(id, &command_id) || command_id <= 0) {
-    return 0;
-  }
+  absl::SimpleAtoi(id, &command_id);
   // REAPER has no text for a numeric id it doesn't know.
   const char* text = kbd_getTextFromCmd(command_id, nullptr);
   if (text == nullptr || text[0] == '\0') {

@@ -81,6 +81,12 @@ std::unique_ptr<ViewCondition> View::CreateCondition(
                << "': condition property '" << config.property << "' not found";
     return nullptr;
   }
+  if (!property->GetAccess().IsSet(PropertyAccess::kRead)) {
+    LOG(ERROR) << "Failed to add " << what << " '" << name_
+               << "': condition property '" << config.property
+               << "' can't be read";
+    return nullptr;
+  }
   std::optional<ViewProperty::Value> value =
       ResolveValue(*property, config.value, what);
   if (!value.has_value()) {
@@ -364,6 +370,12 @@ bool View::AddMapping(ViewMapping::TypeFlags type,
                  << "': mode property '" << override.property << "' not found";
       return false;
     }
+    if (!mode_override.property->GetAccess().IsSet(PropertyAccess::kRead)) {
+      LOG(ERROR) << "Failed to add mapping for view '" << GetName()
+                 << "': mode property '" << override.property
+                 << "' can't be read";
+      return false;
+    }
     for (const auto& [value, mode_name] : override.value_to_mode) {
       std::optional<int> override_mode =
           FindMappingMode(*property, *control->shape, control_path, mode_name);
@@ -400,7 +412,8 @@ std::optional<int> View::FindMappingMode(const ViewProperty& property,
                                          const WidgetShape& shape,
                                          std::string_view control_path,
                                          std::string_view name) const {
-  std::optional<int> mode = ViewMapping::FindMode(property, shape, name);
+  std::optional<int> mode =
+      ViewMapping::FindMode(property.GetType(), shape, name);
   if (!mode.has_value()) {
     LOG(ERROR) << "Failed to add mapping for view '" << GetName()
                << "': widget '" << control_path << "' has no mode '" << name

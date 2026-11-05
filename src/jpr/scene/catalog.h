@@ -101,6 +101,12 @@ struct ComponentKindInfo {
   std::string_view name_space;  // Of the name it declares, such as "user:".
   bool top_level = false;       // Whether it may be declared at the top level,
   bool on_view = false;         // and on a view.
+
+  // The type and access of the property it declares, or no access if it
+  // declares none, as a track reference declares a reference.
+  ViewProperty::Type type = ViewProperty::Type::kAction;
+  PropertyAccessFlags access;
+
   std::string_view description;
   absl::Span<const ParamInfo> params;
 };

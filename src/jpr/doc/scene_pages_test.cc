@@ -107,8 +107,15 @@ TEST(GenerateSceneIndexPageTest, LinksEachNamespaceAndTheComponents) {
       {"state:", "The state."},
   };
   const ComponentKindInfo kinds[] = {
-      {"flag", "user:", true, false, "A flag."},
-      {"pick", "user:", true, true, "A pick."},
+      {.name = "flag",
+       .name_space = "user:",
+       .top_level = true,
+       .description = "A flag."},
+      {.name = "pick",
+       .name_space = "user:",
+       .top_level = true,
+       .on_view = true,
+       .description = "A pick."},
   };
 
   EXPECT_EQ(
@@ -151,10 +158,25 @@ TEST(GenerateComponentKindsPageTest, ListsEachKindAndItsParameters) {
       {"way", ParamKind::kChoice, ParamUse::kRequired, "Which way.", kChoices},
   };
   const ComponentKindInfo kinds[] = {
-      {"flag", "user:", true, false, "A flag."},
-      {"value", "user:", true, false, "A value.", value_params},
-      {"pick", "user:", true, true, "A pick.", pick_params},
-      {"anchor", "user:", false, true, "An anchor."},
+      {.name = "flag",
+       .name_space = "user:",
+       .top_level = true,
+       .description = "A flag."},
+      {.name = "value",
+       .name_space = "user:",
+       .top_level = true,
+       .description = "A value.",
+       .params = value_params},
+      {.name = "pick",
+       .name_space = "user:",
+       .top_level = true,
+       .on_view = true,
+       .description = "A pick.",
+       .params = pick_params},
+      {.name = "anchor",
+       .name_space = "user:",
+       .on_view = true,
+       .description = "An anchor."},
   };
 
   EXPECT_EQ(

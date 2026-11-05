@@ -90,25 +90,30 @@ absl::Span<const ComponentKindInfo> GetComponentKinds() {
   // The modifier kind's description names the limit.
   static_assert(kModUserCount == 60);
   static constexpr ComponentKindInfo kComponentKinds[] = {
-      {"modifier", kModNamespace, true, false,
+      {"modifier", kModNamespace, true, false, ViewProperty::Type::kToggle,
+       kReadWriteAccess,
        "A \"mod:\" toggle backed by a modifier bit, which modifier sets can "
        "require. A scene has up to 60 besides the built in ones."},
       {"enumerated_value", kUserNamespace, true, false,
+       ViewProperty::Type::kEnumerated, kReadWriteAccess,
        "A \"user:\" enumerated property, which is always exactly one of its "
        "values, and whose text is its value's name. Mappings set it, and "
        "conditions on its values enable views and mappings.",
        kEnumeratedValueParams},
       {"track_reference", kUserNamespace, true, false,
+       ViewProperty::Type::kAction, PropertyAccessFlags(),
        "A writable \"user:\" reference to a track, or to nothing, which views "
        "can be bound to, and which navigation and picks set.",
        kTrackReferenceParams},
-      {"track_anchor", kUserNamespace, false, true,
+      {"track_anchor", kUserNamespace, false, true, ViewProperty::Type::kToggle,
+       kWriteAccess,
        "A \"user:\" toggle, for a held mapping. While it is on, it holds its "
        "action's anchor on the view's track, so the action on another track "
        "acts on the range between them. The anchor is released with the "
        "button, or when the view's subject changes.",
        kTrackAnchorParams},
-      {"track_pick", kUserNamespace, true, true,
+      {"track_pick", kUserNamespace, true, true, ViewProperty::Type::kAction,
+       kTriggerAccess,
        "A \"user:\" action that sets a track reference to the source's track, "
        "if it has one.",
        kTrackPickParams},

@@ -121,6 +121,17 @@ class ViewList {
                                           const View::ListConfig& config,
                                           TrackReference* writable_reference);
 
+  // The needs of view: properties (see ViewNeed) that a list meets: those of
+  // its view, and of each of its item views, if any.
+  struct Needs {
+    std::vector<ViewNeed> view;
+    std::optional<ViewNeed> item;
+  };
+
+  // Returns the needs a list of the config meets, on a view with a writable
+  // reference or not (see Create()), which are the view: properties it adds.
+  static Needs GetNeeds(const View::ListConfig& config, bool writable);
+
   ViewList(const ViewList&) = delete;
   ViewList& operator=(const ViewList&) = delete;
   virtual ~ViewList() = default;

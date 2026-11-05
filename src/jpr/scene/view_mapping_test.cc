@@ -1556,6 +1556,22 @@ TEST_F(ViewMappingTest, APressIsReadWhenPressedNotReleased) {
   }
 }
 
+TEST_F(ViewMappingTest, PressReleaseReadsOnlyTypesWithEndsToHold) {
+  for (Type type :
+       {Type::kPan, Type::kVolume, Type::kTimelinePosition, Type::kText}) {
+    SCOPED_TRACE(ViewProperty::GetTypeName(type));
+    EXPECT_EQ(ViewMapping::GetReadInput(type, kReadWriteAccess, kAllInputs,
+                                        true, {.press_release = true}),
+              std::nullopt);
+  }
+
+  // Text needs both ends of its range.
+  EXPECT_EQ(ViewMapping::GetReadInput(
+                Type::kText, kReadWriteAccess, kAllInputs, true,
+                WithTextRange(Type::kText, {.press_release = true})),
+            Input::kPress);
+}
+
 TEST_F(ViewMappingTest, PressReleaseNeedsARelease) {
   FakeDevice::FakeControl pedal =
       AddInputs("Pedal", Input::kPress, /*has_release=*/false);
@@ -1623,6 +1639,87 @@ TEST_F(ViewMappingTest, AControlWithoutInputReadsNoTouch) {
   AddSurface();
   RunUntilShown();
   EXPECT_FALSE(property->GetBool());
+}
+
+//==============================================================================
+// Access
+//==============================================================================
+
+TEST_F(ViewMappingTest, ReadingNeedsWriteOrTriggerAccess) {
+  EXPECT_EQ(ViewMapping::GetReadInput(Type::kToggle, kReadWriteAccess,
+                                      Input::kPress, true, {}),
+            Input::kPress);
+  EXPECT_EQ(ViewMapping::GetReadInput(Type::kToggle, kWriteAccess,
+                                      Input::kPress, true, {}),
+            Input::kPress);
+  EXPECT_EQ(ViewMapping::GetReadInput(Type::kAction, kTriggerAccess,
+                                      Input::kPress, true, {}),
+            Input::kPress);
+  EXPECT_EQ(ViewMapping::GetReadInput(Type::kToggle, kReadAccess, Input::kPress,
+                                      true, {}),
+            std::nullopt);
+  EXPECT_EQ(ViewMapping::GetReadInput(Type::kAction, PropertyAccessFlags(),
+                                      Input::kPress, true, {}),
+            std::nullopt);
+}
+
+TEST_F(ViewMappingTest, WritingNeedsReadAccess) {
+  EXPECT_EQ(ViewMapping::GetWriteOutput(Type::kToggle, kReadWriteAccess,
+                                        Output::kDValue),
+            Output::kDValue);
+  EXPECT_EQ(
+      ViewMapping::GetWriteOutput(Type::kToggle, kReadAccess, Output::kDValue),
+      Output::kDValue);
+  EXPECT_EQ(
+      ViewMapping::GetWriteOutput(Type::kToggle, kWriteAccess, Output::kDValue),
+      std::nullopt);
+}
+
+TEST_F(ViewMappingTest, ConditionsAndModeOverridesNeedReadableProperties) {
+  AddProperty(Type::kToggle, true);
+  GetScene()->AddUserProperty(std::make_unique<TestProperty>(
+      Type::kToggle, true, 0, "user:write_only", kWriteAccess));
+  EXPECT_FALSE(GetView()->AddMapping(
+      ViewMapping::kWriteControl, "user:value", "DValue",
+      {.condition = ViewCondition::Config{.property = "user:write_only"}}));
+  EXPECT_FALSE(GetView()->AddMapping(
+      ViewMapping::kWriteControl, "user:value", "DValue",
+      {.write = {.mode_overrides = {{"user:write_only", {{true, ""}}}}}}));
+  EXPECT_THAT(log_error_guard_.TakeMessages(), SizeIs(2));
+}
+
+TEST_F(ViewMappingTest, APropertyThatCantBeWrittenIsOnlyWritten) {
+  FakeDevice::FakeControl light = device_->AddControl(
+      {.name = "Light",
+       .press_input = std::make_unique<FakePressInput>(),
+       .dvalue_output = std::make_unique<FakeDValueOutput>()});
+  TestProperty* property =
+      GetScene()->AddUserProperty(std::make_unique<TestProperty>(
+          Type::kToggle, true, 0, "user:value", kReadAccess));
+  EXPECT_TRUE(GetView()->AddMapping(ViewMapping::kReadWriteControl,
+                                    "user:value", "Light"));
+  AddSurface();
+  EXPECT_EQ(light.dvalue_output->GetValue(), 1);
+
+  Tap(light);
+  EXPECT_TRUE(property->GetBool());
+}
+
+TEST_F(ViewMappingTest, APropertyThatCantBeReadIsOnlyRead) {
+  FakeDevice::FakeControl light = device_->AddControl(
+      {.name = "Light",
+       .press_input = std::make_unique<FakePressInput>(),
+       .dvalue_output = std::make_unique<FakeDValueOutput>()});
+  TestProperty* property =
+      GetScene()->AddUserProperty(std::make_unique<TestProperty>(
+          Type::kToggle, false, 0, "user:value", kWriteAccess));
+  EXPECT_TRUE(GetView()->AddMapping(ViewMapping::kReadWriteControl,
+                                    "user:value", "Light"));
+  AddSurface();
+  Tap(light);
+  EXPECT_TRUE(property->GetBool());
+  RunUntilShown();
+  EXPECT_EQ(light.dvalue_output->GetValue(), 0);
 }
 
 //==============================================================================

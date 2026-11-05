@@ -327,6 +327,21 @@ void RouteList::CrossRoute(View* item) {
 // ViewList
 //==============================================================================
 
+ViewList::Needs ViewList::GetNeeds(const View::ListConfig& config,
+                                   bool writable) {
+  // Navigation sets the writable reference, so only a list with one has it.
+  if (std::holds_alternative<View::Routes>(config.items)) {
+    return {
+        .view = {ViewNeed::kList, ViewNeed::kRoutesList},
+        .item = writable ? std::optional(ViewNeed::kRoutesItem) : std::nullopt};
+  }
+  if (!writable) {
+    return {.view = {ViewNeed::kList}};
+  }
+  return {.view = {ViewNeed::kList, ViewNeed::kChildTracksList},
+          .item = ViewNeed::kChildTracksItem};
+}
+
 std::unique_ptr<ViewList> ViewList::Create(View* view,
                                            const View::ListConfig& config,
                                            TrackReference* writable_reference) {
