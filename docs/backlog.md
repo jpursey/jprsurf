@@ -33,8 +33,9 @@ CLAUDE.md) has the rest.
 - **Layers:** spec library, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Build the scene from a SurfaceSpec*
-- **Background:** none
+- **Depends on:** nothing
+- **Background:** [surface_spec.md](worklog/surface_spec.md),
+  [config_model.md](config_model.md)
 
 A bespoke language, parsed with `gb/parse` into a `SurfaceSpec`. It is a DSL
 rather than `gb::ReadConfigFromText()` for three reasons: maps in `gb::Config`
@@ -46,6 +47,63 @@ refers to it, and `ShowConfig()` grows a file selector. The design settles how
 errors are reported (log, REAPER console, partial or total failure), and
 includes a schema version. A parity test checks that JPRSurf's own config,
 parsed, equals the in-code spec, so the translation is verified without REAPER.
+
+The design also settles whether a template's parameters can have defaults.
+JPRSurf's five uses of `auto_mode_button` each pass `override_light`, though
+only Latch's differs from its `override_state` (it blinks for Latch Preview),
+which the in-code spec writes out for every button.
+
+## Keep a view's uses and mappings in the order written
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [surface_spec.md](worklog/surface_spec.md)
+
+A `ViewSpec` has its template uses and its mappings in separate lists, and
+`CreateScene()` expands the uses first, so the order a spec writes them in is
+lost. The order doesn't change what a surface does, but it does change its
+REAPER calls: with the automation buttons' mappings (uses) before Group's own,
+turning the automation override on reads the override 58 times rather than 65.
+So the call count bounds depend on how `CreateScene()` orders a view's body,
+and a config loader that keeps uses where they are written would move them for
+no change in behavior. A view's body could be one ordered list of mappings and
+uses (`std::variant<MappingSpec, TemplateUse>`), as a config file reads. Worth
+doing with, or before, *Config file language and loader*. Whether the scene
+should be insensitive to the order instead (why the earlier Group mapping costs
+7 more reads) is worth a look first.
+
+## Specific errors from the scene's add functions
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [surface_spec.md](worklog/surface_spec.md)
+
+`View::AddMapping()`, `View::AddChildView()`, `Scene::AddUserProperty()`, and
+the like log why they refuse something and return null, so `CreateScene()`
+reports anything but a missing command as "the scene refused it". Checking
+should catch all of these first, but where it misses one, the error a config
+author sees says nothing. The add functions could take an errors out-param (or
+return a status), which the scene's own logging and `CreateScene()` both use.
+
+## Refuse a mapping that does nothing
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [surface_spec.md](worklog/surface_spec.md)
+
+A command's type and access are only known once REAPER is asked, so checking
+can't tell that a command doesn't suit its control (an action written to a
+light). The scene then drops the side it can't do, which can leave a mapping
+that neither reads nor writes, and nothing reports it. The scene could refuse
+a mapping left with neither side, which `CreateScene()` would report. Checking
+also doesn't report a range end the scene ignores for the input it reads (text
+from a value input, color from a delta), as the rule depends on the input.
 
 ## Public config spec and user guide split
 
@@ -209,7 +267,7 @@ X-Touch has. Only worth doing for a surface with identical units.
 - **Layers:** device
 - **Size:** medium
 - **Feature workflow:** yes
-- **Depends on:** *Build the scene from a SurfaceSpec*
+- **Depends on:** nothing
 - **Background:** [widgets.md](worklog/widgets.md),
   [config_model.md](config_model.md) (Widgets)
 
@@ -255,7 +313,7 @@ mapping meant to fire with a modifier held "whatever else is held" needs a copy
 for every combination of the other modifiers on the control. Today that is the
 Send/Receive pick on a strip's select button, and the mapping beside it that
 enters the mode, which each need a second copy for Send held along with a
-select anchor (`InitViews()` in `plugin_surface.cc`).
+select anchor (`GetTrackView()` in `plugin/default_spec.cc`).
 
 A mapping could also list modifiers it ignores, so the pick is one mapping that
 requires `mod:send_hold` and ignores `mod:select_anchor`. It is purely
@@ -334,8 +392,10 @@ ruler mode properties spell out their names in `GetText()` switches, and
 enumerated property instead (a names list, or a virtual that names a value),
 with the base `GetText()` and `SetText()` mapping between names and values. A
 config could then refer to any enumerated value by name, rather than by an
-index that has to match the order of the names. Worth doing when a config
-names enumerated values (see *Build the scene from a SurfaceSpec*).
+index that has to match the order of the names. A spec already names a
+declared enumerated value's values (`ViewProperty::FindValue()`, see
+[surface_spec.md](worklog/surface_spec.md)), so this is worth doing when a
+config needs to name a built in one's, such as the ruler mode's.
 
 ## Friendly names for common commands
 
