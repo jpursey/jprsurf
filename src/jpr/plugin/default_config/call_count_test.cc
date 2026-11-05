@@ -352,7 +352,7 @@ TEST_F(CallCountTest, SettingTheSelectedTracksAutomationMode) {
 TEST_F(CallCountTest, TurningTheAutomationOverrideOn) {
   Tap(xtouch_, Button::kAutoGroup);
   EXPECT_EQ(calls_.TakeCounts(),
-            (CallCounts{.cheap = 923, .moderate = 9, .refreshes = 1}));
+            (CallCounts{.cheap = 917, .moderate = 9, .refreshes = 1}));
 }
 
 // Runs Transport: Play/pause (40073).

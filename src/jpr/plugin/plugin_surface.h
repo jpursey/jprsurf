@@ -14,8 +14,6 @@
 #include "jpr/common/midi_ports.h"
 #include "jpr/common/reaper_profiler.h"
 #include "jpr/common/runner.h"
-#include "jpr/device/control_input.h"
-#include "jpr/device/control_output.h"
 #include "jpr/scene/scene.h"
 #include "sdk/reaper_plugin.h"
 
@@ -44,15 +42,12 @@ class PluginSurface final : private ControlSurfaceListener {
   void OnRun(const RunTime& time) override;
   std::string GetConfig() const override;
 
-  // Implementation
-  void InitViews();
-
   // State
   gb::Config config_;
   Runner device_runner_{"Device"};  // Resets device state, sends output.
   Runner scene_runner_{"Scene"};    // Updates the scene.
   MidiPorts midi_ports_;  // Outlives the scene, whose devices use the ports.
-  std::unique_ptr<Scene> scene_;  // Null if the devices weren't created.
+  std::unique_ptr<Scene> scene_;  // Null if it couldn't be created.
 };
 
 }  // namespace jpr

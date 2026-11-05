@@ -1,99 +1,99 @@
 JPRSurf profile
-Build:    9d5ec65 (modified)
-Date:     2026-10-17 12:34, 0s
-Per run:  JPRSurf 6.6us, REAPER 11.7us
+Build:    16a3da8 (modified)
+Date:     2026-11-05 09:50, 0s
+Per run:  JPRSurf 7.3us, REAPER 7.9us
 
 Frames      1000
-Total       18.4ms
-Average     18.4us
-P50         12.2us
-P90         39.8us
-P99         48.8us
-Max         84.4us
-Profiler    1.55us per frame, budget 3.00us
-Point cost  11.8ns
+Total       15.2ms
+Average     15.2us
+P50         9.96us
+P90         32.1us
+P99         37.3us
+Max         82.5us
+Profiler    1.76us per frame, budget 3.00us
+Point cost  13.2ns
 Tick rate   3.19GHz
 
 Core     Frames  Average     Max
-class 1    1000   18.4us  84.4us
+class 1    1000   15.2us  82.5us
 
-Point                            Kind      Count  Count/frame    Self  Self/call  Self/frame
-ControlSurface::Run              frame      1000         1.00   158us      158ns       158ns
-Runner: Device                   scope      1000         1.00  2.43ms     2.43us      2.43us
-Runner: MidiIn                   scope      1000         1.00   102us      102ns       102ns
-Runner: MidiOut                  scope      1000         1.00  85.9us     85.8ns      85.8ns
-Runner: Scene                    scope      1000         1.00  82.7us     82.5ns      82.5ns
-Scene::ApplyViewConditions       scope      1000         1.00  7.42us     7.25ns      7.25ns
-Scene::UpdateReferences          scope      1000         1.00   242us      242ns       242ns
-SceneStateProperty::UpdateState  scope      1000         1.00   330us      330ns       330ns
-TrackCache::RefreshFilters       scope        33         0.03  95.0us     2.88us      94.8ns
-View::SyncMappings               scope      1000         1.00  3.09ms     3.09us      3.09us
-AnyTrackSolo                     call       1000         1.00  83.1us     83.0ns      83.0ns
-CountSelectedMediaItems          call       1000         1.00  36.6us     36.5ns      36.5ns
-GetCursorPosition                call       1000         1.00  32.0us     32.0ns      32.0ns
-GetGlobalAutomationOverride      call       1000         1.00  41.6us     41.5ns      41.5ns
-GetMediaTrackInfo_Value          call       8448         8.45   451us     53.2ns       451ns
-GetPlayState                     call       1000         1.00  28.2us     28.0ns      28.0ns
-GetToggleCommandState            call      13000         13.0   502us     38.5ns       502ns
-GetTrackColor                    call      18100         18.1  1.09ms     60.0ns      1.09us
-GetTrackState                    call      18600         18.6  1.84ms     99.0ns      1.84us
-GetTrackUIVolPan                 call      18100         18.1   801us     44.0ns       801ns
-IsProjectDirty                   call       1000         1.00  30.5us     30.2ns      30.2ns
-PreventUIRefresh                 call       2000         2.00   592us      296ns       592ns
-SetTrackUIMute                   call        400         0.40   360us      900ns       360ns
-Track_GetPeakInfo                call      32000         32.0  1.57ms     49.0ns      1.57us
-Undo_CanRedo2                    call       1000         1.00  39.7us     39.5ns      39.5ns
-Undo_OnStateChangeEx             call        200         0.20  4.02ms     20.1us      4.02us
-midi_Input::GetReadBuf           call       2000         2.00  16.0us     7.75ns      15.8ns
-midi_Input::SwapBufsPrecise      call       2000         2.00  74.7us     37.2ns      74.5ns
-midi_Output::Send                call        801         0.80  24.2us     30.0ns      24.0ns
-mkvolstr                         call        400         0.40  65.7us      164ns      65.5ns
-time_precise                     call       1400         1.40  48.0us     34.2ns      47.8ns
-Device runnables                 counter  145000          145       -          -           -
-MIDI messages in                 counter     400         0.40       -          -           -
-MidiIn runnables                 counter    2000         2.00       -          -           -
-MidiOut runnables                counter    2000         2.00       -          -           -
-Scene runnables                  counter    1000         1.00       -          -           -
-control inputs                   counter     400         0.40       -          -           -
-control outputs                  counter     400         0.40       -          -           -
-mappings synced                  counter  491000          491       -          -           -
-views synced                     counter   20000         20.0       -          -           -
+Point                            Kind      Count  Count/frame    Self  Self/call  Self/frame  Share
+ControlSurface::Run              frame      1000         1.00   220us      220ns       220ns  1.44%
+Runner: Device                   scope      1000         1.00  2.22ms     2.22us      2.22us  14.6%
+Runner: MidiIn                   scope      1000         1.00  87.9us     87.8ns      87.8ns  0.58%
+Runner: MidiOut                  scope      1000         1.00  68.8us     68.8ns      68.8ns  0.45%
+Runner: Scene                    scope      1000         1.00  90.2us     90.0ns      90.0ns  0.59%
+Scene::ApplyViewConditions       scope      1000         1.00  9.95us     9.75ns      9.75ns  0.07%
+Scene::UpdateReferences          scope      1000         1.00   203us      203ns       203ns  1.33%
+SceneStateProperty::UpdateState  scope      1000         1.00   522us      522ns       522ns  3.43%
+TrackCache::RefreshFilters       scope        33         0.03   196us     5.95us       196ns  1.29%
+View::SyncMappings               scope      1000         1.00  3.67ms     3.67us      3.67us  24.1%
+AnyTrackSolo                     call       1000         1.00  77.4us     77.2ns      77.2ns  0.51%
+CountSelectedMediaItems          call       1000         1.00  39.0us     38.8ns      38.8ns  0.26%
+GetCursorPosition                call       1000         1.00  20.6us     20.5ns      20.5ns  0.14%
+GetGlobalAutomationOverride      call       1000         1.00  23.5us     23.2ns      23.2ns  0.15%
+GetMediaTrackInfo_Value          call       8448         8.45   243us     28.5ns       242ns  1.59%
+GetPlayState                     call       1000         1.00  21.6us     21.5ns      21.5ns  0.14%
+GetToggleCommandState            call      13000         13.0   320us     24.5ns       320ns  2.10%
+GetTrackColor                    call      18100         18.1   528us     29.0ns       528ns  3.47%
+GetTrackState                    call      18600         18.6  1.12ms     60.0ns      1.12us  7.34%
+GetTrackUIVolPan                 call      18100         18.1   461us     25.2ns       461ns  3.03%
+IsProjectDirty                   call       1000         1.00  22.2us     22.0ns      22.0ns  0.15%
+PreventUIRefresh                 call       2000         2.00   406us      203ns       406ns  2.66%
+SetTrackUIMute                   call        400         0.40   316us      790ns       316ns  2.08%
+Track_GetPeakInfo                call      32000         32.0   814us     25.2ns       814ns  5.35%
+Undo_CanRedo2                    call       1000         1.00  22.5us     22.2ns      22.2ns  0.15%
+Undo_OnStateChangeEx             call        200         0.20  3.29ms     16.5us      3.29us  21.6%
+midi_Input::GetReadBuf           call       2000         2.00  18.0us     9.00ns      18.0ns  0.12%
+midi_Input::SwapBufsPrecise      call       2000         2.00  88.6us     44.2ns      88.5ns  0.58%
+midi_Output::Send                call        801         0.80  24.4us     30.2ns      24.2ns  0.16%
+mkvolstr                         call        400         0.40  56.0us      140ns      55.8ns  0.37%
+time_precise                     call       1400         1.40  31.8us     22.5ns      31.8ns  0.21%
+Device runnables                 counter  145000          145       -          -           -      -
+MIDI messages in                 counter     400         0.40       -          -           -      -
+MidiIn runnables                 counter    2000         2.00       -          -           -      -
+MidiOut runnables                counter    2000         2.00       -          -           -      -
+Scene runnables                  counter    1000         1.00       -          -           -      -
+control inputs                   counter     400         0.40       -          -           -      -
+control outputs                  counter     400         0.40       -          -           -      -
+mappings synced                  counter  491000          491       -          -           -      -
+views synced                     counter   20000         20.0       -          -           -      -
 
-Slowest frame: 84.4us, core class 1, profiler 1.49us
+Slowest frame: 82.5us, core class 1, profiler 1.70us
 Kind     Self
-frame   191ns
-scope  17.2us
-call   67.0us
+frame   238ns
+scope  22.5us
+call   59.8us
 
 Point                            Kind     Count    Self
-Undo_OnStateChangeEx             call         1  27.5us
-SetTrackUIMute                   call         1  26.4us
-View::SyncMappings               scope        1  12.2us
-PreventUIRefresh                 call         2  3.09us
-mkvolstr                         call         1  2.52us
-Runner: Device                   scope        1  2.45us
-GetTrackState                    call        19  2.03us
-Track_GetPeakInfo                call        32  1.65us
-Runner: MidiIn                   scope        1  1.40us
-GetTrackColor                    call        18  1.11us
-GetTrackUIVolPan                 call        18   826ns
-midi_Input::SwapBufsPrecise      call         2   692ns
-Runner: MidiOut                  scope        1   568ns
-GetToggleCommandState            call        13   506ns
-SceneStateProperty::UpdateState  scope        1   318ns
-midi_Output::Send                call         2   307ns
-Scene::UpdateReferences          scope        1   246ns
-ControlSurface::Run              frame        1   191ns
-Runner: Scene                    scope        1   102ns
-AnyTrackSolo                     call         1  84.0ns
-Undo_CanRedo2                    call         1  39.8ns
-CountSelectedMediaItems          call         1  37.8ns
-time_precise                     call         1  32.2ns
-GetGlobalAutomationOverride      call         1  31.0ns
-GetCursorPosition                call         1  29.8ns
-IsProjectDirty                   call         1  29.8ns
-GetPlayState                     call         1  26.8ns
+SetTrackUIMute                   call         1  26.8us
+Undo_OnStateChangeEx             call         1  24.4us
+View::SyncMappings               scope        1  17.6us
+PreventUIRefresh                 call         2  2.61us
+Runner: Device                   scope        1  2.23us
+Runner: MidiIn                   scope        1  1.33us
+mkvolstr                         call         1  1.31us
+GetTrackState                    call        19  1.23us
+midi_Input::SwapBufsPrecise      call         2  1.00us
+Track_GetPeakInfo                call        32   798ns
+SceneStateProperty::UpdateState  scope        1   536ns
+GetTrackColor                    call        18   522ns
+GetTrackUIVolPan                 call        18   460ns
+Runner: MidiOut                  scope        1   436ns
+GetToggleCommandState            call        13   286ns
+ControlSurface::Run              frame        1   238ns
+midi_Output::Send                call         2   203ns
+Scene::UpdateReferences          scope        1   202ns
+Runner: Scene                    scope        1   106ns
+AnyTrackSolo                     call         1  78.2ns
+CountSelectedMediaItems          call         1  38.2ns
+GetCursorPosition                call         1  34.2ns
+GetGlobalAutomationOverride      call         1  22.2ns
+Undo_CanRedo2                    call         1  22.0ns
+IsProjectDirty                   call         1  20.5ns
+time_precise                     call         1  20.5ns
 midi_Input::GetReadBuf           call         2  17.0ns
+GetPlayState                     call         1  16.8ns
 Scene::ApplyViewConditions       scope        1  8.25ns
 Device runnables                 counter    145       -
 MIDI messages in                 counter      1       -

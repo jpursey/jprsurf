@@ -611,14 +611,36 @@ Done as planned, with these details:
   views and their instances' subjects, and fixed values sharing one `const:`
   property.
 
-### CL8 [ ] plugin, docs: JPRSurf's surface from its spec
+### CL8 [x] plugin, docs: JPRSurf's surface from its spec
 
 Depends on: CL7.
 
 - `GetDefaultSpec()`, and `PluginSurface` creating its scene from it (see The
   plugin).
-- The config model's notes and JPRSurf section, as above.
+- The config model's notes and JPRSurf section, as above. The two rows of its
+  name audit that the spec settles (modifiers declared by the plugin, and
+  generated view names) are gone.
 - No visible change: the surface tests pass unchanged.
+- Found while doing it:
+  - One call count bound falls, and none rises. Turning the automation
+    override on makes 917 cheap calls, not 923 (58 reads of the override, not
+    65, and one more `CountSelectedTracks2`), as a view's uses are expanded
+    before its mappings, so the automation buttons' mappings now come before
+    Group's. Putting Group's mapping first again restores 923, and every other
+    surface test passes unchanged.
+  - A third template, `list_navigation` (Bank and Channel), which both list
+    views use, rather than repeating its four mappings.
+  - The benchmark, run back to back against the commit before CL1 (9a346e5),
+    agrees within the noise. Both are about 10% slower per run than the bar,
+    which is Game Bits' profiler, not JPRSurf: the bar's own commit (9d5ec65)
+    reproduces the bar on the Game Bits of its day (9a9c661), and is as slow
+    as this feature on today's (68a311e), run back to back. Its frames are
+    faster on today's (10.5us, not 12.2us), but about 7ns of each REAPER call
+    is now counted in the scope that makes it, not in the call. The bar is
+    now this CL's run, on today's Game Bits.
+  - `PluginTest` adds REAPER's actions to its fake, as REAPER has them: a
+    surface's scene now isn't created without them, where before it lost the
+    mappings of the missing commands.
 
 **Verify**
 - Standard checks. The surface tests, and the call count bounds, unchanged.

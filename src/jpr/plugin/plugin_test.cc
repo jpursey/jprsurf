@@ -14,6 +14,7 @@
 #include "jpr/common/file_system.h"
 #include "jpr/common/testing/fake_midi.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/testing/test_control_surface.h"
 #include "sdk/reaper_plugin.h"
 
@@ -24,6 +25,10 @@ using ::testing::StartsWith;
 
 class PluginTest : public ::testing::Test {
  protected:
+  // The surface's scene maps REAPER's actions, so a REAPER without them
+  // creates none.
+  PluginTest() { AddReaperActions(&reaper_); }
+
   // Loads the plugin as REAPER does, with `options`.
   bool Load(const Plugin::Options& options = {}) {
     return Plugin::Load(nullptr, reaper_.GetPluginInfo(), options);

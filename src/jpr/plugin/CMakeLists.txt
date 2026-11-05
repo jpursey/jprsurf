@@ -6,6 +6,7 @@
 # The plugin, as a static library that tests link.
 
 set(jpr_plugin_SOURCE
+  default_spec.cc default_spec.h
   plugin.cc plugin.h
   plugin_surface.cc plugin_surface.h
 )
@@ -20,6 +21,7 @@ set(jpr_plugin_DEPS
 )
 
 set(jpr_plugin_TEST_SOURCE
+  default_spec_test.cc
   plugin_test.cc
 )
 

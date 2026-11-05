@@ -7,9 +7,10 @@ deliberately says nothing about syntax, which belongs to the config language
 (*Config file language and loader* in the [backlog](backlog.md)).
 
 It ties together the backlog items that build toward a data driven surface, and
-it seeds the public spec of the config language. Until those items land,
-JPRSurf's surface is still built in C++ by `PluginSurface`, and this doc
-describes what that code turns into.
+it seeds the public spec of the config language. Today the model is a C++
+struct, the `SurfaceSpec`, which `CreateScene()` builds a scene from, and
+JPRSurf's surface is one written in code (`GetDefaultSpec()`). Reading a config
+file will fill in the same struct.
 
 Property names in this doc are the ones the code uses, except for properties
 that components will provide, whose names are illustrative. The **Today** notes
@@ -42,16 +43,16 @@ them are frozen.
 
 ## The model at a glance
 
-| Part       | What it is                                                                   | Today                                              |
-| ---------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `DeviceSpec`, `CreateDevices()`                    |
-| Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `ResolveWidgets()`, which the `Scene` takes        |
-| Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, `Scene::AddUserProperty()` |
-| Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `View`                                             |
-| Mappings   | A property and a control widget, with read and write options and a condition | `View::AddMapping()`                               |
-| Templates  | Named, parameterized sets of mappings                                        | `AddTrackStripMappings()`                          |
-| Components | C++ behavior a config declares: enumerated values, anchors, references, ...  | Classes such as `TrackPickProperty`                |
-| Settings   | Surface-wide values                                                          | `Scene`'s track filter                             |
+| Part       | What it is                                                                   | Today                                                  |
+| ---------- | ---------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Devices    | Hardware units: a device type, MIDI ports, and control overrides             | `DeviceSpec`, `CreateDevices()`                        |
+| Widgets    | Named controls, structs, and arrays, assembled from the devices' controls    | `WidgetStructDefinition`, `ResolveWidgets()`           |
+| Properties | Named, typed values in namespaces: built in, or declared by the config       | `Scene::GetProperty()`, and the catalog                |
+| Views      | A tree of mapping sets, each with an enable condition, a subject, and a list | `ViewSpec`, `View`                                     |
+| Mappings   | A property and a control widget, with read and write options and a condition | `MappingSpec`, `View::AddMapping()`                    |
+| Templates  | Named, parameterized sets of mappings                                        | `TemplateSpec`, `TemplateUse`                          |
+| Components | C++ behavior a config declares: enumerated values, anchors, references, ...  | `ComponentSpec`, classes such as `TrackPickProperty`   |
+| Settings   | Surface-wide values                                                          | `SurfaceSpec::track_filter`                            |
 
 ## Devices
 
@@ -60,12 +61,12 @@ A device is one hardware unit. For each device, the config gives:
 - A **device type**, from the registry of types JPRSurf provides in C++. Today
   these are the X-Touch and the X-Touch Extender, both `DeviceXTouch`.
 - Its **MIDI input and output ports**, by the names REAPER lists them under.
-  Today these are hard coded as "X-Touch" and "X-Touch-Ext".
+  JPRSurf's are "X-Touch" and "X-Touch-Ext".
 - Whether it is **required** or **optional** (see below). A device is required
   unless the config says otherwise.
 - **Control overrides**: inputs or outputs of particular controls that this
-  unit doesn't use, for differences between units of the same type. The only
-  one today is hard coded: the author's extender has lost touch sensing on its
+  unit doesn't use, for differences between units of the same type. JPRSurf's
+  only one is for the author's extender, which has lost touch sensing on its
   third fader, so that fader has no press input. Overrides work the same for
   every device type. The type builds its controls as usual, and `Device` drops
   the overridden inputs and outputs before creating each `Control`. A motorized
@@ -470,11 +471,12 @@ control, or a struct such as a strip) and property names. There are no
 expressions. Using a template on a view adds its mappings to that view, as if
 they were written there.
 
-JPRSurf's `track_strip` template, with a strip as its parameter, is today's
-`AddTrackStripMappings()`. Every Track mode strip uses it, and so does the
-Send/Receive Info strip. The automation buttons are five uses of another,
-whose parameters are a button, a command, and three state properties (today's
-`kAutoModeButtons` table).
+JPRSurf's `track_strip` template has a strip as its parameter. Every Track mode
+strip uses it, and so does the Send/Receive Info strip. The automation buttons
+are five uses of `auto_mode_button`, whose parameters are a button, a command,
+and three state properties (the `kAutoModeButtons` table in
+`plugin/default_spec.cc` gives their arguments). Both list views use
+`list_navigation`, which has no parameters.
 
 Templates and repetition are expanded when the scene is built, so they cost
 nothing at run time.
@@ -576,10 +578,9 @@ with a name and parameters (see [Declared properties](#declared-properties)). It
 owns its state, provides properties (including references, which views can be
 bound to), and enforces its own rules, so a config can't use it wrong.
 
-These are the components needed to express what `PluginSurface` does today.
-All of them exist in `scene` or `device`, and `PluginSurface` composes them
-from C++ until *Build the scene from a SurfaceSpec* (see [Getting
-there](#getting-there)).
+These are the components JPRSurf's surface needs. All of them exist in `scene`
+or `device`, and a spec declares them by kind (`ComponentSpec`, and
+`GetComponentKinds()`).
 
 ### Modifier
 
@@ -604,8 +605,6 @@ there](#getting-there)).
   (`measure`, `beat`, and `marker`), which Marker and Nudge set, and
   `user:surface_mode` (`track` and `send_receive`)
   ([enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)).
-  Values are numbered in the order of their names, which C++ has to match
-  until a config names values.
 
 ### Track anchor
 
@@ -615,7 +614,7 @@ there](#getting-there)).
 - **Provides:** a toggle, for a held mapping. While it is on, it holds the
   action's anchor on the view's track, unless the strip is empty. The anchor is
   released with the button, or when the view's subject changes.
-- **Today:** `TrackAnchorProperty`. JPRSurf's strip views add
+- **Today:** `TrackAnchorProperty`. JPRSurf's strip views declare
   `user:anchor_select` (with `mod:select_anchor`), `user:anchor_mute`,
   `user:anchor_solo`, and `user:anchor_rec_arm`.
 
@@ -712,10 +711,10 @@ These are needed, but a config never names them:
   a component.
 - A command that isn't installed is a config error, so building the scene
   detects it, and the config doesn't load, with an error naming the command. As
-  with a required device, a config never runs half working. Today the mapping
-  fails with its property not found. `NamedCommandLookup()` returns 0 for a
-  name nothing has registered, and `kbd_getTextFromCmd()` returns empty text
-  for a numeric ID REAPER doesn't know.
+  with a required device, a config never runs half working. Today
+  `CreateScene()` reports it, and creates no scene. `NamedCommandLookup()`
+  returns 0 for a name nothing has registered, and `kbd_getTextFromCmd()`
+  returns empty text for a numeric ID REAPER doesn't know.
 - Other extensions and scripts register their commands when REAPER starts,
   before it creates control surfaces, so they are all known by the time the
   scene is built.
@@ -761,6 +760,11 @@ installed), and activates the scene. How
 errors are reported, and whether a config with errors loads partly or not at
 all, is for the config language.
 
+**Today:** `ValidateSurfaceSpec()` checks, and `CreateScene()` checks, then
+builds everything but the activation. Either reports every error it finds, and
+`CreateScene()` creates nothing if there is one: the plugin logs them, and runs
+no surface ([surface_spec.md](worklog/surface_spec.md)).
+
 ## Lifetime
 
 The plugin holds the config, the scene built from it, and the host plumbing.
@@ -804,9 +808,7 @@ identifiers.
 
 | Today                                                                      | Problem                                                                                             | Change                                                                                                         |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `mod:send_hold`, `mod:select_anchor`                                       | Declared by the plugin                                                                              | Declared by the config: `mod:send_hold`, and so on                                                             |
 | `view:track_parent`, `view:track_root`, and the other view properties      | Named before the model had references and lists                                                     | Settled when navigation is reviewed as a component                                                             |
-| `Track1` to `Track16`, `Route1` to `Route15`, `TrackMode`                  | Generated, and mixed case                                                                           | Repeated views need no names. The others follow the conventions.                                               |
 
 ## JPRSurf's surface in the model
 
@@ -833,6 +835,7 @@ templates
   track_strip          mute, solo, rec arm, pan and its ring, pot button,
                        volume, name, color, meter
   auto_mode_button     the command and lights for one automation button
+  list_navigation      Bank and Channel, which scroll the view's list
 views
   root                 no subject. Modifiers, transport, timecode, utility
   │                    buttons, automation buttons, Marker and Nudge
@@ -847,7 +850,7 @@ views
   │   │                state:selected_track.has_routes. Track blinks, and
   │   │                Send is lit from state:selected_track.has_routes
   │   └── track_list   bound to user:folder. Lists its children, revealing
-  │       │            user:current_track. Global, Bank, and Channel
+  │       │            user:current_track. Global, and list_navigation
   │       └── (strip)  repeated over strip. Declares anchors for select (with
   │                    mod:select_anchor), mute, solo, and rec arm, and
   │                    user:pick_track of its track. Maps track_strip, select
@@ -860,7 +863,7 @@ views
   └── send_receive_mode  enabled by user:surface_mode being send_receive, and
       │                bound to user:current_track. Lists its routes (sends,
       │                unless it only has receives), banking by all its
-      │                strips. Bank and Channel. Tapping Send toggles the
+      │                strips. list_navigation. Tapping Send toggles the
       │                direction. Send blinks, and Track is lit. track_strip
       │                on info_strip, and the direction on its line 2
       └── (route)      repeated over route_strip: route volume, pan, and
@@ -873,9 +876,10 @@ Without the X-Touch, the surface does nothing, as the X-Touch is required. The
 extender alone once gave 8 strips with no transport, modes, or navigation,
 which was never a useful surface.
 
-What becomes of the plugin's code:
+This is `GetDefaultSpec()` (`plugin/default_spec.cc`), which `PluginSurface`
+creates its scene from. What became of the plugin's code:
 
-| `PluginSurface` today                                                                     | In the model                                                     |
+| `PluginSurface`, before the spec                                                          | In the model                                                     |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `GetDeviceSpecs()`                                                                        | Devices                                                          |
 | `GetWidgetDefinition()`, and the strip loops                                              | Widgets and repeated views                                       |
@@ -912,8 +916,8 @@ come together:
   common* ([extension_host.md](worklog/extension_host.md), done).
 
 Then, in order:
-1. *Build the scene from a SurfaceSpec*
-   ([surface_spec.md](worklog/surface_spec.md)): this model as a C++ struct,
+1. *Build the scene from a SurfaceSpec* (done,
+   [surface_spec.md](worklog/surface_spec.md)): this model as a C++ struct,
    with checking (against device and property catalogs) separate from
    building.
 2. *Config file language and loader*: the syntax, and reading it into the same
