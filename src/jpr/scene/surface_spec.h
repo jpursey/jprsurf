@@ -82,6 +82,8 @@ std::string_view GetComponentName(const ComponentSpec& component);
 // A value a write mapping always writes, for which creating the scene adds a
 // const: property (see Scene::AddConstProperty()).
 struct FixedValue {
+  bool operator==(const FixedValue&) const = default;
+
   ViewProperty::Type type = ViewProperty::Type::kToggle;
   ViewProperty::Value value;
 };

@@ -7,6 +7,7 @@ set(jpr_scene_SOURCE
   catalog.cc catalog.h
   command_properties.cc command_properties.h
   const_property.cc const_property.h
+  create_scene.cc create_scene.h
   modifier_property.h
   polled_toggle_property.cc polled_toggle_property.h
   route_properties.cc route_properties.h
@@ -48,6 +49,7 @@ set(jpr_scene_TEST_SOURCE
   catalog_test.cc
   command_properties_test.cc
   const_property_test.cc
+  create_scene_test.cc
   polled_toggle_property_test.cc
   route_properties_test.cc
   route_reference_test.cc
@@ -69,6 +71,7 @@ set(jpr_scene_TEST_SOURCE
 )
 
 set(jpr_scene_TEST_DEPS
+  jpr_device_testing
   jpr_scene_testing
 )
 

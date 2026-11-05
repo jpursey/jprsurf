@@ -576,12 +576,32 @@ Done as planned, with these details:
 - `ViewMapping` tests of each side dropped for the property's access, and the
   default config's tests still pass.
 
-### CL7 [ ] scene: Creating a scene from a spec
+### CL7 [x] scene: Creating a scene from a spec
 
 Depends on: CL6.
 
 - `CreateScene()` (see Creating the scene).
 - Unused, so no visible change.
+
+Done as planned, with these details:
+- A command REAPER doesn't have is checked before the mapping, condition, or
+  view that names it is added, so its error names it ("command "cmd:_X"
+  isn't one REAPER has"). Anything else the scene refuses, which checking
+  should have caught, is reported only as "the scene refused it", as `View`
+  and `Scene` log why rather than return it. Each error names the view by its
+  instance ("/tracks/strip[3]"), so a problem in a repeated view is reported
+  for each instance.
+- Template expansion is written again rather than shared with checking:
+  checking walks a repeated view once over its element's shape, and copes
+  with a spec that isn't valid, while creation walks each instance over
+  concrete paths, and assumes a valid spec. Only the lookup rules overlap.
+- The track references a pick may set are the builder's own (the ones the
+  spec declares), as `Scene` gives out only const ones, so nothing else can
+  set a built in reference.
+- Left as they are: a mapping of a command whose type doesn't suit its
+  control (an action written to a light) is checked by neither, and the scene
+  drops the side it can't do, so a mapping that does nothing at all is
+  possible. The scene is named "Scene", as the plugin's is.
 
 **Verify**
 - Standard checks.
