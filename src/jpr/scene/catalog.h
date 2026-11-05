@@ -11,7 +11,6 @@
 #include <string_view>
 
 #include "absl/types/span.h"
-#include "gb/base/flags.h"
 #include "jpr/scene/view_property.h"
 #include "jpr/scene/view_reference.h"
 
@@ -26,27 +25,6 @@ namespace jpr {
 // nothing the scene provides can be missing from the catalog. Checking a
 // config and the user docs read it.
 //==============================================================================
-
-// What a mapping can do with a property.
-enum class PropertyAccess {
-  kRead,     // Show it on a control's outputs.
-  kWrite,    // Set it from a control's inputs.
-  kTrigger,  // Run it from a control's inputs, for an action.
-};
-using PropertyAccessFlags = gb::Flags<PropertyAccess>;
-
-// Every access, in order.
-inline constexpr PropertyAccess kPropertyAccesses[] = {
-    PropertyAccess::kRead, PropertyAccess::kWrite, PropertyAccess::kTrigger};
-
-inline constexpr PropertyAccessFlags kReadAccess = PropertyAccess::kRead;
-inline constexpr PropertyAccessFlags kReadWriteAccess = {
-    PropertyAccess::kRead, PropertyAccess::kWrite};
-inline constexpr PropertyAccessFlags kTriggerAccess = PropertyAccess::kTrigger;
-
-// Returns the access's name, as errors and docs name it: "read", "write", or
-// "trigger".
-std::string_view GetPropertyAccessName(PropertyAccess access);
 
 // What a view: property needs of the view it is used in. A view has the
 // properties of each need it meets.

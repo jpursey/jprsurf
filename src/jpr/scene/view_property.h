@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "absl/container/flat_hash_set.h"
+#include "gb/base/flags.h"
 #include "jpr/common/color.h"
 #include "jpr/common/numbered_name.h"
 #include "jpr/common/prefixed_name.h"
@@ -82,6 +83,32 @@ inline constexpr std::string_view kRouteName =
 template <StringLiteral Name>
 inline constexpr std::string_view kViewName =
     kPrefixedName<kViewNamespace, Name>;
+
+//==============================================================================
+// Property access
+//==============================================================================
+
+// What a mapping can do with a property.
+enum class PropertyAccess {
+  kRead,     // Show it on a control's outputs.
+  kWrite,    // Set it from a control's inputs.
+  kTrigger,  // Run it from a control's inputs, for an action.
+};
+using PropertyAccessFlags = gb::Flags<PropertyAccess>;
+
+// Every access, in order.
+inline constexpr PropertyAccess kPropertyAccesses[] = {
+    PropertyAccess::kRead, PropertyAccess::kWrite, PropertyAccess::kTrigger};
+
+inline constexpr PropertyAccessFlags kReadAccess = PropertyAccess::kRead;
+inline constexpr PropertyAccessFlags kWriteAccess = PropertyAccess::kWrite;
+inline constexpr PropertyAccessFlags kReadWriteAccess = {
+    PropertyAccess::kRead, PropertyAccess::kWrite};
+inline constexpr PropertyAccessFlags kTriggerAccess = PropertyAccess::kTrigger;
+
+// Returns the access's name, as errors and docs name it: "read", "write", or
+// "trigger".
+std::string_view GetPropertyAccessName(PropertyAccess access);
 
 //==============================================================================
 // ViewProperty
@@ -183,7 +210,9 @@ class ViewProperty {
   // "timeline_position", or "enumerated".
   static std::string_view GetTypeName(Type type);
 
-  explicit ViewProperty(std::string_view name, Type type);
+  // The access is what the property supports: an action is triggered, and
+  // anything else is read, written, or both.
+  ViewProperty(std::string_view name, Type type, PropertyAccessFlags access);
   ViewProperty(const ViewProperty&) = delete;
   ViewProperty& operator=(const ViewProperty&) = delete;
   virtual ~ViewProperty() = default;
@@ -193,6 +222,11 @@ class ViewProperty {
 
   // Type of the property.
   Type GetType() const { return type_; }
+
+  // What a mapping can do with the property. A property ignores what it doesn't
+  // support: a write to a property that can't be written changes nothing, and
+  // a property that can't be read reads as its type's default.
+  PropertyAccessFlags GetAccess() const { return access_; }
 
   // Returns true if the property's value, read as the value's type with the
   // adapter functions below, equals it. A double is read in the property's own
@@ -320,6 +354,7 @@ class ViewProperty {
 
   std::string name_;
   Type type_;
+  PropertyAccessFlags access_;
   absl::flat_hash_set<bool*> flags_;
 };
 

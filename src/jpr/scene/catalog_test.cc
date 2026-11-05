@@ -44,9 +44,16 @@ const PropertyNamespaceInfo& GetNamespace(std::string_view name) {
   return kNoNamespace;
 }
 
-// Expects each row's property, which `get` returns, to have the row's type.
+// Expects the property to have the row's type and access.
+void ExpectRow(const ViewProperty& property, const PropertyInfo& row) {
+  EXPECT_EQ(property.GetType(), row.type) << row.name;
+  EXPECT_EQ(property.GetAccess(), row.access) << row.name;
+}
+
+// Expects each row's property, which `get` returns, to match the row (see
+// ExpectRow()).
 template <typename GetProperty>
-void ExpectTypes(absl::Span<const PropertyInfo> rows, GetProperty get) {
+void ExpectRows(absl::Span<const PropertyInfo> rows, GetProperty get) {
   EXPECT_FALSE(rows.empty());
   for (const PropertyInfo& row : rows) {
     const ViewProperty* property = get(row);
@@ -54,17 +61,11 @@ void ExpectTypes(absl::Span<const PropertyInfo> rows, GetProperty get) {
       ADD_FAILURE() << "No property " << row.name;
       continue;
     }
-    EXPECT_EQ(property->GetType(), row.type) << row.name;
+    ExpectRow(*property, row);
   }
 }
 
 using CatalogTest = SceneTest;
-
-TEST_F(CatalogTest, AccessesHaveTheirNames) {
-  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kRead), "read");
-  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kWrite), "write");
-  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kTrigger), "trigger");
-}
 
 TEST_F(CatalogTest, NamespacesAreTheBuiltInOnes) {
   std::vector<std::string_view> names;
@@ -106,12 +107,12 @@ TEST_F(CatalogTest, RowsAreNamedAndDescribed) {
   }
 }
 
-TEST_F(CatalogTest, StateAndModifierPropertiesHaveTheirTypes) {
+TEST_F(CatalogTest, StateAndModifierPropertiesMatchTheirRows) {
   for (std::string_view name_space : {kStateNamespace, kModNamespace}) {
-    ExpectTypes(GetNamespace(name_space).properties,
-                [this](const PropertyInfo& row) {
-                  return GetScene()->GetProperty(row.name);
-                });
+    ExpectRows(GetNamespace(name_space).properties,
+               [this](const PropertyInfo& row) {
+                 return GetScene()->GetProperty(row.name);
+               });
   }
 }
 
@@ -126,9 +127,9 @@ TEST_F(CatalogTest, StateReferencesAreTheScenes) {
   }
 }
 
-TEST_F(CatalogTest, TrackPropertiesHaveTheirTypes) {
+TEST_F(CatalogTest, TrackPropertiesMatchTheirRows) {
   // A track's properties are the fields of a track reference.
-  ExpectTypes(
+  ExpectRows(
       GetNamespace(kTrackNamespace).properties,
       [this](const PropertyInfo& row) {
         return GetScene()->GetProperty(absl::StrCat(
@@ -136,10 +137,10 @@ TEST_F(CatalogTest, TrackPropertiesHaveTheirTypes) {
       });
 }
 
-TEST_F(CatalogTest, RoutePropertiesHaveTheirTypes) {
+TEST_F(CatalogTest, RoutePropertiesMatchTheirRows) {
   const PropertyNamespaceInfo& info = GetNamespace(kRouteNamespace);
   RouteProperties route(&GetScene()->GetTrackActions());
-  ExpectTypes(info.properties, [&route](const PropertyInfo& row) {
+  ExpectRows(info.properties, [&route](const PropertyInfo& row) {
     return route.GetProperty(row.name);
   });
 
@@ -205,7 +206,7 @@ TEST_F(CatalogTest, ViewPropertiesAreOnTheViewsThatNeedThem) {
                 absl::c_linear_search(test_case.needs, *row.view_need))
           << test_case.view->GetName() << " " << row.name;
       if (property != nullptr) {
-        EXPECT_EQ(property->GetType(), row.type) << row.name;
+        ExpectRow(*property, row);
       }
     }
   }

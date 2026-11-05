@@ -21,7 +21,8 @@ class ModifierProperty : public ViewProperty {
   static constexpr std::string_view kOpt = kModName<"opt">;
 
   explicit ModifierProperty(std::string_view name, Modifiers modifier)
-      : ViewProperty(name, Type::kToggle), modifier_(modifier) {}
+      : ViewProperty(name, Type::kToggle, kReadWriteAccess),
+        modifier_(modifier) {}
 
   // Returns the modifier flag the property turns on.
   Modifiers GetModifier() const { return modifier_; }

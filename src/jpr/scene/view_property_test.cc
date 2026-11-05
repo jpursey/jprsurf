@@ -19,6 +19,12 @@ namespace {
 
 using Type = ViewProperty::Type;
 
+TEST(ViewPropertyTest, AccessesHaveTheirNames) {
+  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kRead), "read");
+  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kWrite), "write");
+  EXPECT_EQ(GetPropertyAccessName(PropertyAccess::kTrigger), "trigger");
+}
+
 TEST(ViewPropertyTest, TypesHaveTheirNames) {
   EXPECT_EQ(ViewProperty::GetTypeName(Type::kAction), "action");
   EXPECT_EQ(ViewProperty::GetTypeName(Type::kToggle), "toggle");

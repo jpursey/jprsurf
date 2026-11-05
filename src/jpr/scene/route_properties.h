@@ -31,9 +31,9 @@ class RouteProperties;
 // route it refers to.
 class RouteProperty : public ViewProperty {
  protected:
-  RouteProperty(std::string_view name, Type type,
+  RouteProperty(std::string_view name, Type type, PropertyAccessFlags access,
                 const RouteProperties* route_properties)
-      : ViewProperty(name, type), route_properties_(route_properties) {}
+      : ViewProperty(name, type, access), route_properties_(route_properties) {}
 
   // Returns the RouteProperties that own this property.
   const RouteProperties& GetRouteProperties() const {

@@ -43,6 +43,7 @@ class TrackPickPropertyTest : public ::testing::Test {
 
 TEST_F(TrackPickPropertyTest, PicksTheSourcesTrack) {
   TrackPickProperty pick("user:pick", *picked_, source_);
+  EXPECT_EQ(pick.GetAccess(), kTriggerAccess);
   source_->Set(GetCachedTrack(tracks_[1]));
   pick.RunAction();
   EXPECT_EQ(picked_->GetTrack(), GetCachedTrack(tracks_[1]));

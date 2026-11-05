@@ -26,6 +26,7 @@ TEST(ConstPropertyTest, Toggle) {
       CreateConstProperty(Type::kToggle, true);
   ASSERT_NE(property, nullptr);
   EXPECT_EQ(property->GetType(), Type::kToggle);
+  EXPECT_EQ(property->GetAccess(), kReadAccess);
   EXPECT_EQ(property->GetBool(), true);
 }
 

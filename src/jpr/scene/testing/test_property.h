@@ -31,7 +31,8 @@ class TestProperty final : public ViewProperty {
   // enumerated property's highest value.
   TestProperty(Type type, Value value, int max_value = 0,
                std::string_view name = "user:value")
-      : ViewProperty(name, type),
+      : ViewProperty(name, type,
+                     type == Type::kAction ? kTriggerAccess : kReadWriteAccess),
         value_(std::move(value)),
         max_value_(max_value) {}
 

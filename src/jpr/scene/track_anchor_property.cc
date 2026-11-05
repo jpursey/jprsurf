@@ -13,7 +13,7 @@ namespace jpr {
 
 TrackAnchorProperty::TrackAnchorProperty(std::string_view name,
                                          const Config& config)
-    : ViewProperty(name, Type::kToggle),
+    : ViewProperty(name, Type::kToggle, kWriteAccess),
       action_(config.action),
       modifier_(config.modifier) {}
 

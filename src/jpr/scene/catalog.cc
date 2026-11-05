@@ -14,18 +14,6 @@
 
 namespace jpr {
 
-std::string_view GetPropertyAccessName(PropertyAccess access) {
-  switch (access) {
-    case PropertyAccess::kRead:
-      return "read";
-    case PropertyAccess::kWrite:
-      return "write";
-    case PropertyAccess::kTrigger:
-      return "trigger";
-  }
-  return "unknown";
-}
-
 absl::Span<const PropertyNamespaceInfo> GetPropertyCatalog() {
   static const PropertyNamespaceInfo kCatalog[] = {
       {kCmdNamespace,

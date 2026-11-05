@@ -65,6 +65,7 @@ TEST_F(PolledTogglePropertyTest, UpdatesNotifyOnlyOnChange) {
 TEST_F(PolledTogglePropertyTest, WritesChangeTheState) {
   PolledToggleProperty property(&scene_, "user:polled", &ReadState,
                                 &WriteState);
+  EXPECT_EQ(property.GetAccess(), kReadWriteAccess);
 
   property.SetBool(true);
   EXPECT_TRUE(g_state);
@@ -77,6 +78,7 @@ TEST_F(PolledTogglePropertyTest, WritesChangeTheState) {
 
 TEST_F(PolledTogglePropertyTest, WithoutAWriteFunctionWritesDoNothing) {
   PolledToggleProperty property(&scene_, "user:polled", &ReadState);
+  EXPECT_EQ(property.GetAccess(), kReadAccess);
 
   property.SetBool(true);
   EXPECT_FALSE(g_state);

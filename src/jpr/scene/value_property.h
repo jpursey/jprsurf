@@ -28,7 +28,7 @@ namespace jpr {
 class ToggleValueProperty final : public ViewProperty {
  public:
   explicit ToggleValueProperty(std::string_view name, bool value = false)
-      : ViewProperty(name, Type::kToggle), value_(value) {}
+      : ViewProperty(name, Type::kToggle, kReadWriteAccess), value_(value) {}
   ~ToggleValueProperty() override = default;
 
  protected:
@@ -61,7 +61,7 @@ class EnumeratedValueProperty final : public ViewProperty {
   // it starts as `value` (clamped to them).
   EnumeratedValueProperty(std::string_view name,
                           std::vector<std::string> value_names, int value = 0)
-      : ViewProperty(name, Type::kEnumerated),
+      : ViewProperty(name, Type::kEnumerated, kReadWriteAccess),
         value_names_(value_names.empty() ? std::vector<std::string>{""}
                                          : std::move(value_names)),
         value_(std::clamp(value, 0, GetMaxValue())) {}
@@ -123,7 +123,8 @@ class CallbackActionProperty final : public ViewProperty {
   using Callback = absl::AnyInvocable<void()>;
 
   CallbackActionProperty(std::string_view name, Callback callback)
-      : ViewProperty(name, Type::kAction), callback_(std::move(callback)) {}
+      : ViewProperty(name, Type::kAction, kTriggerAccess),
+        callback_(std::move(callback)) {}
   ~CallbackActionProperty() override = default;
 
  protected:
@@ -154,7 +155,8 @@ class CallbackToggleProperty final : public ViewProperty {
   using Callback = absl::AnyInvocable<void(bool)>;
 
   CallbackToggleProperty(std::string_view name, Callback callback)
-      : ViewProperty(name, Type::kToggle), callback_(std::move(callback)) {}
+      : ViewProperty(name, Type::kToggle, kWriteAccess),
+        callback_(std::move(callback)) {}
   ~CallbackToggleProperty() override = default;
 
  protected:

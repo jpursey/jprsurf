@@ -66,7 +66,9 @@ A config sees three kinds of thing:
 
 The first two are the catalog, which checking and the user docs read. It is
 **scene's own tables**, rather than data kept beside them, so nothing the scene
-provides can be missing from it. It is in `scene/catalog.h`:
+provides can be missing from it. It is in `scene/catalog.h`, except the
+access, which every property declares (CL5), so it is in
+`scene/view_property.h`:
 
 ```
 // What a mapping can do with a property.
@@ -366,7 +368,11 @@ model:
 today inside `ViewMapping`'s `InitRead*()` and `InitWrite*()` functions, and
 how a mode name is found in its private `FindMode()`. Checking calls the same
 functions, made available to it, rather than its own copies, so a mapping that
-checking accepts can't be one the scene silently ignores.
+checking accepts can't be one the scene silently ignores. The same goes for a
+property's access (`GetAccess()`, CL5), which `ViewMapping` uses as well as
+its type: it reads a control into a property only if the property can be
+written or triggered, and writes a property to a control only if it can be
+read.
 
 **Brittleness:** checking resolves property names by the same rules as `View`
 and `Scene` do, written again over the spec rather than over objects. Creating
@@ -495,14 +501,17 @@ Depends on: CL1, CL3.
 - Each component kind's `ParamInfo` matches its spec struct: a parameter for
   each of its fields, with the kind and use checking enforces.
 
-### CL5 [ ] scene: Properties declare their access
+### CL5 [x] scene: Properties declare their access
 
 Depends on: CL1.
 
 - `ViewProperty` takes its access in its constructor, as it does its type, and
   `GetAccess()` returns it. Each property class passes what it supports: a
   `PolledToggleProperty` is writable exactly when it has a write function, an
-  action is triggered, and so on.
+  action is triggered, and so on. `PropertyAccess` moves from `catalog.h` to
+  `view_property.h`, which the constructor needs.
+- A toggle that always reads off is write only (`kWriteAccess`): a track
+  anchor, and a `CallbackToggleProperty`. A constant is read only.
 - The catalog test checks each row's access against its property's, as it does
   its type.
 - No visible change.
@@ -517,15 +526,22 @@ Depends on: CL4, CL5.
 
 - The rules for a type's inputs and outputs, and for finding a mode, are made
   available outside `ViewMapping`, which still uses them.
+- The rule for a property's access joins them (see Shared rules): `ViewMapping`
+  drops the read side of a mapping whose property can't be written or
+  triggered, and the write side of one whose property can't be read, as it
+  does a side the control or type can't use.
 - `ValidateSurfaceSpec()` checks mappings, after expanding uses, with names in
   paths resolved from the inside out (see Checking).
-- No visible change.
+- No visible change: no mapping in the default config uses a property against
+  its access.
 
 **Verify**
 - Standard checks.
 - Tests of each mapping rule, including paths through template parameters and
   elements, and an inner name hiding an outer one. `ViewMapping`'s tests still
   pass.
+- `ViewMapping` tests of each side dropped for the property's access, and the
+  default config's tests still pass.
 
 ### CL7 [ ] scene: Creating a scene from a spec
 

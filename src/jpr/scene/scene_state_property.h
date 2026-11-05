@@ -26,8 +26,9 @@ class SceneStateProperty : public ViewProperty {
   virtual void UpdateState() = 0;
 
  protected:
-  SceneStateProperty(Scene* scene, std::string_view name, Type type)
-      : ViewProperty(name, type), scene_(scene) {}
+  SceneStateProperty(Scene* scene, std::string_view name, Type type,
+                     PropertyAccessFlags access)
+      : ViewProperty(name, type, access), scene_(scene) {}
 
   // Regsiters the property with the scene so it can be updated.
   void OnRegistered() override;

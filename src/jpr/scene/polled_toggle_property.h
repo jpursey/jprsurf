@@ -25,7 +25,8 @@ class PolledToggleProperty final : public SceneStateProperty {
 
   PolledToggleProperty(Scene* scene, std::string_view name, ReadFunction read,
                        WriteFunction write = nullptr)
-      : SceneStateProperty(scene, name, Type::kToggle),
+      : SceneStateProperty(scene, name, Type::kToggle,
+                           write != nullptr ? kReadWriteAccess : kReadAccess),
         read_(read),
         write_(write),
         value_(read()) {}

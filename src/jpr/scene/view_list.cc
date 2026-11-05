@@ -183,7 +183,7 @@ void ChildTrackList::Reveal(Track* track) {
 class RouteTypeProperty final : public ViewProperty {
  public:
   explicit RouteTypeProperty(std::string_view name)
-      : ViewProperty(name, Type::kText) {}
+      : ViewProperty(name, Type::kText, kReadAccess) {}
 
   TrackRouteType GetRouteType() const { return route_type_; }
   void SetRouteType(TrackRouteType route_type) {

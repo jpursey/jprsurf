@@ -1671,7 +1671,7 @@ TEST_F(ViewMappingTest, TouchReleasesWhenItsViewDeactivates) {
 class ViewEnablingProperty final : public ViewProperty {
  public:
   ViewEnablingProperty(std::string_view name, View* view)
-      : ViewProperty(name, Type::kToggle), view_(view) {}
+      : ViewProperty(name, Type::kToggle, kWriteAccess), view_(view) {}
 
  protected:
   void WriteBool(bool value) override {

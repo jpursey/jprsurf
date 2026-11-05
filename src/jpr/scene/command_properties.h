@@ -78,7 +78,8 @@ inline constexpr std::string_view kCmdSoloDefeat = kCmdName<40340>;
 class CommandActionProperty final : public ViewProperty {
  public:
   CommandActionProperty(std::string_view name, int command_id)
-      : ViewProperty(name, Type::kAction), command_id_(command_id) {}
+      : ViewProperty(name, Type::kAction, kTriggerAccess),
+        command_id_(command_id) {}
   ~CommandActionProperty() override = default;
 
  protected:
@@ -99,7 +100,7 @@ class CommandToggleProperty final : public SceneStateProperty {
  public:
   CommandToggleProperty(Scene* scene, std::string_view name, int command_id,
                         bool value)
-      : SceneStateProperty(scene, name, Type::kToggle),
+      : SceneStateProperty(scene, name, Type::kToggle, kReadWriteAccess),
         command_id_(command_id),
         value_(value) {}
   ~CommandToggleProperty() override = default;

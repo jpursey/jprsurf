@@ -31,8 +31,9 @@ class TrackProperty : public ViewProperty {
   Track* GetTrack() const { return track_; }
 
  protected:
-  explicit TrackProperty(std::string_view name, Type type, Track* track)
-      : ViewProperty(name, type), track_(track) {}
+  TrackProperty(std::string_view name, Type type, PropertyAccessFlags access,
+                Track* track)
+      : ViewProperty(name, type, access), track_(track) {}
 
   void SetTrack(Track* track) {
     track_ = track;
@@ -55,7 +56,7 @@ class TrackMeterProperty : public TrackProperty {
   static constexpr std::string_view kMeter = kTrackName<"meter">;
 
   explicit TrackMeterProperty(Track* track)
-      : TrackProperty(kMeter, Type::kNormalized, track) {}
+      : TrackProperty(kMeter, Type::kNormalized, kReadAccess, track) {}
 
  protected:
   double ReadDouble() const override { return peak_; }

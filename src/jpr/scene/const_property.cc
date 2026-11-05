@@ -29,7 +29,7 @@ const TestReset kResetNextConstId([] { g_next_const_id = 1; });
 class ConstProperty final : public ViewProperty {
  public:
   ConstProperty(std::string_view name, Type type, Value value)
-      : ViewProperty(name, type), value_(std::move(value)) {}
+      : ViewProperty(name, type, kReadAccess), value_(std::move(value)) {}
   ~ConstProperty() override = default;
 
  protected:

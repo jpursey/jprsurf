@@ -31,7 +31,7 @@ class TrackPickProperty final : public ViewProperty {
   // `source` is null. Both must outlive the pick.
   TrackPickProperty(std::string_view name, TrackReference& reference,
                     const TrackReference* source = nullptr)
-      : ViewProperty(name, Type::kAction),
+      : ViewProperty(name, Type::kAction, kTriggerAccess),
         reference_(reference),
         source_(source) {}
   ~TrackPickProperty() override = default;

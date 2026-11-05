@@ -45,6 +45,18 @@ std::string FitVolumeText(std::string_view text, int width) {
 
 }  // namespace
 
+std::string_view GetPropertyAccessName(PropertyAccess access) {
+  switch (access) {
+    case PropertyAccess::kRead:
+      return "read";
+    case PropertyAccess::kWrite:
+      return "write";
+    case PropertyAccess::kTrigger:
+      return "trigger";
+  }
+  return "unknown";
+}
+
 std::string_view ViewProperty::GetTypeName(Type type) {
   switch (type) {
     case Type::kAction:
@@ -69,8 +81,9 @@ std::string_view ViewProperty::GetTypeName(Type type) {
   return "unknown";
 }
 
-ViewProperty::ViewProperty(std::string_view name, Type type)
-    : name_(name), type_(type) {}
+ViewProperty::ViewProperty(std::string_view name, Type type,
+                           PropertyAccessFlags access)
+    : name_(name), type_(type), access_(access) {}
 
 void ViewProperty::RegisterFlag(bool* flag) {
   if (flags_.insert(flag).second && flags_.size() == 1) {

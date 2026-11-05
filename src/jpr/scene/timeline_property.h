@@ -34,7 +34,7 @@ class TimelinePositionProperty final : public SceneStateProperty {
   };
 
   TimelinePositionProperty(Scene* scene, std::string_view name, Source source)
-      : SceneStateProperty(scene, name, Type::kTimelinePosition),
+      : SceneStateProperty(scene, name, Type::kTimelinePosition, kReadAccess),
         source_(source) {}
   ~TimelinePositionProperty() override = default;
 
@@ -61,7 +61,8 @@ class TimelinePositionProperty final : public SceneStateProperty {
 class IsRulerModeProperty final : public SceneStateProperty {
  public:
   IsRulerModeProperty(Scene* scene, std::string_view name, TimelineMode mode)
-      : SceneStateProperty(scene, name, Type::kToggle), mode_(mode) {}
+      : SceneStateProperty(scene, name, Type::kToggle, kReadWriteAccess),
+        mode_(mode) {}
   ~IsRulerModeProperty() override = default;
 
   // Overrides from SceneStateProperty.
@@ -88,7 +89,8 @@ class IsSecondaryRulerModeProperty final : public SceneStateProperty {
  public:
   IsSecondaryRulerModeProperty(Scene* scene, std::string_view name,
                                TimelineMode mode)
-      : SceneStateProperty(scene, name, Type::kToggle), mode_(mode) {}
+      : SceneStateProperty(scene, name, Type::kToggle, kReadWriteAccess),
+        mode_(mode) {}
   ~IsSecondaryRulerModeProperty() override = default;
 
   // Overrides from SceneStateProperty.
@@ -114,7 +116,7 @@ class IsSecondaryRulerModeProperty final : public SceneStateProperty {
 class RulerModeProperty final : public SceneStateProperty {
  public:
   RulerModeProperty(Scene* scene, std::string_view name)
-      : SceneStateProperty(scene, name, Type::kEnumerated) {}
+      : SceneStateProperty(scene, name, Type::kEnumerated, kReadWriteAccess) {}
   ~RulerModeProperty() override = default;
 
   // Overrides from ViewProperty.
@@ -143,7 +145,7 @@ class RulerModeProperty final : public SceneStateProperty {
 class SecondaryRulerModeProperty final : public SceneStateProperty {
  public:
   SecondaryRulerModeProperty(Scene* scene, std::string_view name)
-      : SceneStateProperty(scene, name, Type::kEnumerated) {}
+      : SceneStateProperty(scene, name, Type::kEnumerated, kReadWriteAccess) {}
   ~SecondaryRulerModeProperty() override = default;
 
   // Overrides from ViewProperty.

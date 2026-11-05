@@ -49,6 +49,7 @@ TEST_F(CommandPropertiesTest, CommandsWithoutAToggleStateAreActions) {
   std::unique_ptr<ViewProperty> undo = CreateCommandProperty(&scene_, kCmdUndo);
   ASSERT_NE(undo, nullptr);
   EXPECT_EQ(undo->GetType(), Type::kAction);
+  EXPECT_EQ(undo->GetAccess(), kTriggerAccess);
   EXPECT_EQ(undo->GetName(), kCmdUndo);
 
   undo->RunAction();
@@ -61,6 +62,7 @@ TEST_F(CommandPropertiesTest, CommandsWithAToggleStateAreToggles) {
       CreateCommandProperty(&scene_, kCmdMetronome);
   ASSERT_NE(metronome, nullptr);
   EXPECT_EQ(metronome->GetType(), Type::kToggle);
+  EXPECT_EQ(metronome->GetAccess(), kReadWriteAccess);
   EXPECT_TRUE(metronome->GetBool());
 }
 

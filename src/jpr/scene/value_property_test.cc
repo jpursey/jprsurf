@@ -18,6 +18,7 @@ TEST(ToggleValuePropertyTest, HoldsItsValue) {
   ToggleValueProperty property("user:flag", true);
   EXPECT_EQ(property.GetType(), ViewProperty::Type::kToggle);
   EXPECT_TRUE(property.GetBool());
+  EXPECT_EQ(property.GetAccess(), kReadWriteAccess);
   property.SetBool(false);
   EXPECT_FALSE(property.GetBool());
 }
@@ -36,6 +37,7 @@ TEST(ToggleValuePropertyTest, NotifiesOnlyOnChange) {
 TEST(EnumeratedValuePropertyTest, NamesSetTheRange) {
   EnumeratedValueProperty property("user:step", {"measure", "beat", "marker"});
   EXPECT_EQ(property.GetType(), ViewProperty::Type::kEnumerated);
+  EXPECT_EQ(property.GetAccess(), kReadWriteAccess);
   EXPECT_EQ(property.GetMaxValue(), 2);
   EXPECT_EQ(property.GetInt(), 0);
   EXPECT_EQ(property.GetText(), "measure");
@@ -112,6 +114,7 @@ TEST(CallbackActionPropertyTest, RunningItCallsTheCallback) {
   int calls = 0;
   CallbackActionProperty property("user:action", [&calls] { ++calls; });
   EXPECT_EQ(property.GetType(), ViewProperty::Type::kAction);
+  EXPECT_EQ(property.GetAccess(), kTriggerAccess);
   property.RunAction();
   property.RunAction();
   EXPECT_EQ(calls, 2);
@@ -122,6 +125,9 @@ TEST(CallbackTogglePropertyTest, EveryWriteCallsTheCallback) {
   CallbackToggleProperty property(
       "user:toggle", [&writes](bool value) { writes.push_back(value); });
   EXPECT_EQ(property.GetType(), ViewProperty::Type::kToggle);
+
+  // It holds no value, so it can only be written.
+  EXPECT_EQ(property.GetAccess(), kWriteAccess);
   property.SetBool(true);
   EXPECT_FALSE(property.GetBool());
   property.SetBool(true);

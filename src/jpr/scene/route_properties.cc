@@ -20,7 +20,7 @@ using Type = ViewProperty::Type;
 class RouteVolumeProperty final : public RouteProperty {
  public:
   explicit RouteVolumeProperty(const RouteProperties* route_properties)
-      : RouteProperty(RouteProperties::kVolume, Type::kVolume,
+      : RouteProperty(RouteProperties::kVolume, Type::kVolume, kReadWriteAccess,
                       route_properties) {}
 
  protected:
@@ -37,7 +37,8 @@ class RouteVolumeProperty final : public RouteProperty {
 class RoutePanProperty final : public RouteProperty {
  public:
   explicit RoutePanProperty(const RouteProperties* route_properties)
-      : RouteProperty(RouteProperties::kPan, Type::kPan, route_properties) {}
+      : RouteProperty(RouteProperties::kPan, Type::kPan, kReadWriteAccess,
+                      route_properties) {}
 
  protected:
   double ReadDouble() const override {
@@ -53,8 +54,8 @@ class RoutePanProperty final : public RouteProperty {
 class RouteMuteProperty final : public RouteProperty {
  public:
   explicit RouteMuteProperty(const RouteProperties* route_properties)
-      : RouteProperty(RouteProperties::kMute, Type::kToggle, route_properties) {
-  }
+      : RouteProperty(RouteProperties::kMute, Type::kToggle, kReadWriteAccess,
+                      route_properties) {}
 
  protected:
   bool ReadBool() const override {
@@ -70,7 +71,7 @@ class RouteMuteProperty final : public RouteProperty {
 class RouteExistsProperty final : public RouteProperty {
  public:
   explicit RouteExistsProperty(const RouteProperties* route_properties)
-      : RouteProperty(RouteProperties::kExists, Type::kToggle,
+      : RouteProperty(RouteProperties::kExists, Type::kToggle, kReadAccess,
                       route_properties) {}
 
  protected:

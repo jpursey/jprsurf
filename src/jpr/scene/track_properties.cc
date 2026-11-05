@@ -22,7 +22,8 @@ using Type = ViewProperty::Type;
 class TrackNameProperty : public TrackProperty {
  public:
   explicit TrackNameProperty(Track* track)
-      : TrackProperty(TrackProperties::kName, Type::kText, track) {}
+      : TrackProperty(TrackProperties::kName, Type::kText, kReadWriteAccess,
+                      track) {}
 
  protected:
   std::string ReadString() const override {
@@ -36,7 +37,8 @@ class TrackNameProperty : public TrackProperty {
 class TrackColorProperty : public TrackProperty {
  public:
   explicit TrackColorProperty(Track* track)
-      : TrackProperty(TrackProperties::kColor, Type::kColor, track) {}
+      : TrackProperty(TrackProperties::kColor, Type::kColor, kReadAccess,
+                      track) {}
 
  protected:
   Color ReadColor() const override { return GetTrack()->GetColor(); }
@@ -48,7 +50,7 @@ class TrackBoolViewProperty : public TrackProperty {
  public:
   TrackBoolViewProperty(std::string_view name, TrackBoolProperty property,
                         Track* track, TrackActions* actions)
-      : TrackProperty(name, Type::kToggle, track),
+      : TrackProperty(name, Type::kToggle, kReadWriteAccess, track),
         property_(property),
         actions_(actions) {}
 
@@ -74,7 +76,8 @@ class TrackBoolViewProperty : public TrackProperty {
 class TrackPanProperty : public TrackProperty {
  public:
   TrackPanProperty(std::string_view name, Track* track, TrackActions* actions)
-      : TrackProperty(name, Type::kPan, track), actions_(actions) {}
+      : TrackProperty(name, Type::kPan, kReadWriteAccess, track),
+        actions_(actions) {}
 
  protected:
   double ReadDouble() const override { return GetTrack()->GetPan(); }
@@ -96,7 +99,8 @@ class TrackVolumeProperty : public TrackProperty {
  public:
   TrackVolumeProperty(std::string_view name, Track* track,
                       TrackActions* actions)
-      : TrackProperty(name, Type::kVolume, track), actions_(actions) {}
+      : TrackProperty(name, Type::kVolume, kReadWriteAccess, track),
+        actions_(actions) {}
 
  protected:
   double ReadDouble() const override { return GetTrack()->GetVolume(); }
@@ -117,7 +121,8 @@ class TrackVolumeProperty : public TrackProperty {
 class TrackTouchedProperty : public TrackProperty {
  public:
   TrackTouchedProperty(std::string_view name, TrackTouchType type, Track* track)
-      : TrackProperty(name, Type::kToggle, track), type_(type) {}
+      : TrackProperty(name, Type::kToggle, kReadWriteAccess, track),
+        type_(type) {}
 
  protected:
   bool ReadBool() const override { return GetTrack()->IsTouched(type_); }
@@ -141,7 +146,8 @@ class TrackTouchedProperty : public TrackProperty {
 class TrackIsFolderProperty : public TrackProperty {
  public:
   TrackIsFolderProperty(Track* track, TrackFilter filter)
-      : TrackProperty(TrackProperties::kTrackIsFolder, Type::kToggle, track),
+      : TrackProperty(TrackProperties::kTrackIsFolder, Type::kToggle,
+                      kReadAccess, track),
         filter_(filter) {}
 
  protected:
@@ -158,7 +164,8 @@ class TrackIsFolderProperty : public TrackProperty {
 class TrackHasParentProperty : public TrackProperty {
  public:
   explicit TrackHasParentProperty(Track* track)
-      : TrackProperty(TrackProperties::kTrackHasParent, Type::kToggle, track) {}
+      : TrackProperty(TrackProperties::kTrackHasParent, Type::kToggle,
+                      kReadAccess, track) {}
 
  protected:
   bool ReadBool() const override {
@@ -169,7 +176,8 @@ class TrackHasParentProperty : public TrackProperty {
 class TrackExistsProperty : public TrackProperty {
  public:
   explicit TrackExistsProperty(Track* track)
-      : TrackProperty(TrackProperties::kTrackExists, Type::kToggle, track) {}
+      : TrackProperty(TrackProperties::kTrackExists, Type::kToggle, kReadAccess,
+                      track) {}
 
  protected:
   bool ReadBool() const override { return GetTrack()->Exists(); }
@@ -178,7 +186,8 @@ class TrackExistsProperty : public TrackProperty {
 class TrackHasRoutesProperty : public TrackProperty {
  public:
   explicit TrackHasRoutesProperty(Track* track)
-      : TrackProperty(TrackProperties::kTrackHasRoutes, Type::kToggle, track) {}
+      : TrackProperty(TrackProperties::kTrackHasRoutes, Type::kToggle,
+                      kReadAccess, track) {}
 
  protected:
   bool ReadBool() const override {

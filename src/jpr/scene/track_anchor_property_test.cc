@@ -62,8 +62,9 @@ TEST_F(TrackAnchorPropertyTest, HoldsTheAnchorOnItsViewsTrack) {
   EXPECT_TRUE(AreModifiersOn(modifier_));
   EXPECT_EQ(GetAnchorTrack(TrackBoolProperty::kSolo), nullptr);
 
-  // It always reads as off.
+  // It always reads as off, so it can only be written.
   EXPECT_FALSE(anchor_->GetBool());
+  EXPECT_EQ(anchor_->GetAccess(), kWriteAccess);
 
   anchor_->SetBool(false);
   EXPECT_EQ(GetAnchorTrack(), nullptr);
