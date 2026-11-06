@@ -1,0 +1,379 @@
+jprsurf 1
+
+# JPRSurf's own surface: an X-Touch, and an X-Touch Extender to its left if
+# there is one, with two surface modes. In Track mode the strips show the child
+# tracks of a folder, and in Send/Receive mode they show one track's routes (see
+# "JPRSurf's surface in the model" in docs/config_model.md).
+
+#------------------------------------------------------------------------------
+# The hardware
+#------------------------------------------------------------------------------
+
+devices {
+  xtouch = XTouch(input = "X-Touch", output = "X-Touch")
+  xtouch_ext = XTouchExt(input = "X-Touch-Ext", output = "X-Touch-Ext",
+                         optional = true) {
+    # This unit's third fader lost touch sensing, so it falls back on delayed
+    # feedback.
+    without strip[2].fader [press]
+  }
+}
+
+# The X-Touch's controls apart from its strips, and these arrays of strips,
+# each from left to right:
+# - strip: every strip, the extender's and then the X-Touch's.
+# - route_strip: the strips that show routes in Send/Receive mode, which are
+#   all but the X-Touch's last.
+# - info_strip: the X-Touch's last strip, which shows the Send/Receive mode
+#   track itself.
+widgets {
+  include xtouch { except strip }
+  strip = join(xtouch_ext.strip, xtouch.strip)
+  route_strip = join(xtouch_ext.strip, xtouch.strip[0..6])
+  info_strip = xtouch.strip[7]
+}
+
+#------------------------------------------------------------------------------
+# Templates: mappings the scene uses in several places
+#------------------------------------------------------------------------------
+
+# A strip that shows a track the same way in every mode: mute, solo, record
+# arm, pan, volume, name, color, and meter, and the touch of the pot and fader.
+# The select button and the bottom scribble line are left to the view, as their
+# meaning depends on the mode.
+mappings track_strip(widget strip) {
+  strip.mute <-> track:ui_mute
+  strip.solo <-> track:ui_solo
+  strip.rec <-> track:ui_rec_arm
+  strip.pot <-> track:ui_pan {
+    mode center
+    when track:exists = false { mode off }
+    when track:is_folder { mode center_edges }
+  }
+  strip.pot_button -> track:ui_pan { set 0.0 }
+  strip.pot [touch, held] -> track:pan_touched
+  strip.fader <-> track:ui_volume
+  strip.fader [touch, held] -> track:volume_touched
+  strip.scribble_top <- track:name
+  strip.scribble_color <- track:color
+  strip.meter <- track:meter
+}
+
+# An automation mode button.
+#
+# Without an override, it sets the selected tracks' mode, and is lit while any
+# selected track is in its mode: solid if they all are, and blinking if only
+# some are.
+#
+# With an override, it sets the override to its mode (or to Bypass if it
+# already is), and is lit while the override is its mode. There is no Latch
+# Preview button, so Latch blinks for Latch Preview, and pressing it sets Latch.
+# The other override lights are never on during Latch Preview, so the blink
+# only affects Latch.
+mappings auto_mode_button(widget button, property command,
+                          property selected_state, property override_state,
+                          property override_light = override_state) {
+  when state:auto_override_active = false {
+    button -> command
+    button <- selected_state {
+      when state:selected_auto_mixed { mode blink }
+    }
+  }
+  when state:auto_override_active {
+    button -> override_state
+    button <- override_light {
+      when state:auto_override_latch_preview { mode blink }
+    }
+  }
+}
+
+# Scrolls the view's list: Channel by one item, and Bank by its bank size.
+mappings list_navigation {
+  channel_left -> view:child_dec
+  channel_right -> view:child_inc
+  bank_left -> view:bank_dec
+  bank_right -> view:bank_inc
+}
+
+#------------------------------------------------------------------------------
+# The scene: the components and mappings that are always there, and the views
+# below them.
+#------------------------------------------------------------------------------
+
+# - send_hold: on while the Send/Receive mode button is held.
+# - select_anchor: on while a select button is held as the anchor for a range
+#   of tracks.
+# - transport_step: what Rewind and Forward move by.
+# - surface_mode: what the strips control. Each mode has a view that is active
+#   while it is the mode.
+# - folder: the track whose child tracks the track list shows. It starts as,
+#   and returns to, the master track if its track is deleted. A folder that is
+#   only hidden is kept: REAPER hides its tracks with it, so its strips go
+#   blank, and come back as soon as it is shown again.
+# - current_track: the track whose routes Send/Receive mode shows, and which
+#   the track list reveals. It follows the last touched track, and picks and
+#   route navigation also change it.
+# - pick_selected_track: picks the selected track as the current track.
+components {
+  modifier mod:send_hold
+  modifier mod:select_anchor
+  enumerated_value user:transport_step(values = [measure, beat, marker])
+  enumerated_value user:surface_mode(values = [track, send_receive])
+  track_reference user:folder(fallback = state:master_track)
+  track_reference user:current_track(follow = state:last_touched_track)
+  track_pick user:pick_selected_track(reference = user:current_track,
+                                      source = state:selected_track)
+}
+
+# Modifiers
+mappings {
+  shift [held] <-> mod:shift
+  control [held] <-> mod:ctrl
+  alt [held] <-> mod:alt
+  option [held] <-> mod:opt
+}
+
+# Timecode display
+mappings {
+  timecode <- state:timeline_position
+  smpte_light <- state:ruler_frames
+  beats_light <- state:ruler_beats
+  show_time_beats -> state:ruler_mode
+  solo_light <- state:any_track_solo
+}
+
+# Utility buttons
+mappings {
+  undo -> cmd:40029                # Undo
+  undo [mod:shift] -> cmd:40030    # Redo
+  undo <- state:can_redo
+  save -> cmd:40026                # Save project
+  save [mod:shift] -> cmd:41895    # Save new version of project
+  save <- state:project_dirty { mode blink }
+  cancel -> cmd:40289              # Unselect all items
+  cancel <- state:any_item_selected
+  cancel [mod:shift] -> cmd:40020  # Remove time selection
+  enter -> cmd:40214               # Insert new MIDI item
+  enter [mod:shift] -> cmd:40142   # Insert empty item
+  enter [mod:ctrl] -> cmd:40013    # Insert click source
+}
+
+# Automation. Group turns the global automation override on and off, and is
+# lit while it is on. Only Latch gives an override light, as it is lit for
+# Latch Preview too, and the others are lit by their override state.
+mappings {
+  auto_group <-> state:auto_override_active
+  use auto_mode_button(button = auto_trim, command = cmd:40400,
+                       selected_state = state:selected_auto_trim_read,
+                       override_state = state:auto_override_trim_read)
+  use auto_mode_button(button = auto_read, command = cmd:40401,
+                       selected_state = state:selected_auto_read,
+                       override_state = state:auto_override_read)
+  use auto_mode_button(button = auto_touch, command = cmd:40402,
+                       selected_state = state:selected_auto_touch,
+                       override_state = state:auto_override_touch)
+  use auto_mode_button(button = auto_write, command = cmd:40403,
+                       selected_state = state:selected_auto_write,
+                       override_state = state:auto_override_write)
+  use auto_mode_button(button = auto_latch, command = cmd:40404,
+                       selected_state = state:selected_auto_latch,
+                       override_state = state:auto_override_latch,
+                       override_light = state:auto_override_any_latch)
+}
+
+# Misc buttons (above transport), and transport, apart from Marker, Nudge,
+# Rewind, and Forward, below.
+mappings {
+  cycle <-> cmd:1068           # Toggle repeat
+  click <-> cmd:40364          # Toggle metronome
+  solo <-> cmd:40745           # Toggle solo in front
+  solo [long] -> cmd:40340     # Unsolo all tracks
+  stop -> cmd:1016             # Stop
+  play -> cmd:40073            # Play/pause
+  play <- cmd:1007             # Play
+  record <-> cmd:1013          # Record
+}
+
+# Rewind and Forward move by the transport step, which Marker and Nudge pick.
+# It is one value, so turning one on turns the other off. Each toggles between
+# its step and the first (a measure), and is lit while its step is picked.
+mappings {
+  nudge -> user:transport_step { toggle measure .. beat }
+  marker -> user:transport_step { toggle measure .. marker }
+  when user:transport_step = measure {
+    rewind -> cmd:41041   # Previous measure
+    forward -> cmd:41040  # Next measure
+  }
+  when user:transport_step = beat {
+    rewind -> cmd:40230   # Previous beat
+    forward -> cmd:40231  # Next beat
+    nudge <- true
+  }
+  when user:transport_step = marker {
+    rewind -> cmd:40172   # Previous marker
+    forward -> cmd:40173  # Next marker
+    marker <- true
+  }
+}
+
+# Surface modes. Track returns to Track mode, and each mode's view maps what
+# tapping Send does.
+mappings {
+  assign_track -> user:surface_mode { set track }
+  assign_send [held] -> mod:send_hold
+}
+
+view master_fader(subject = state:master_track) {
+  mappings {
+    master_fader <-> track:volume
+    master_fader [touch, held] -> track:volume_touched
+  }
+}
+
+#------------------------------------------------------------------------------
+# Track mode: the strips show the child tracks of the folder.
+#------------------------------------------------------------------------------
+
+when user:surface_mode = track {
+  view track_mode {
+    # Tapping Send enters Send/Receive mode for the selected track, if it has
+    # routes: two mappings on the same press, with the same condition, one
+    # picking the current track, and the other setting the mode. Track blinks,
+    # as it is the current mode, and Send is lit while the selected track has
+    # routes to show.
+    mappings {
+      when state:selected_track.has_routes {
+        assign_send [tap] -> user:pick_selected_track
+        assign_send [tap] -> user:surface_mode { set send_receive }
+      }
+      assign_track <- true { mode blink }
+      assign_send <- state:selected_track.has_routes
+    }
+
+    # The track list has a track view for each strip. Bank pages by 8, a device
+    # at a time. It reveals the current track whenever it changes, and when
+    # returning to Track mode.
+    view track_list(subject = user:folder,
+                    list = child_tracks(reveal = user:current_track,
+                                        bank = 8)) {
+      # Global navigates up one level, or all the way to the root when held.
+      # It is lit while there is a level to go up to.
+      mappings {
+        use list_navigation
+        global -> view:track_parent
+        global [long] -> view:track_root
+        global <- track:has_parent
+      }
+
+      # Each strip shows a track.
+      view strip in strip {
+        components {
+          track_anchor user:anchor_select(action = selected,
+                                          modifier = mod:select_anchor)
+          track_anchor user:anchor_mute(action = mute)
+          track_anchor user:anchor_solo(action = solo)
+          track_anchor user:anchor_rec_arm(action = rec_arm)
+          track_pick user:pick_track(reference = user:current_track)
+        }
+
+        # Holding mute, solo, or record arm anchors the track, so pressing the
+        # same button on another track sets the range between them to the
+        # held track's value. The bottom scribble line shows the volume, and
+        # is blank for an empty strip.
+        mappings {
+          use track_strip(strip = strip)
+          strip.mute [held] -> user:anchor_mute
+          strip.solo [held] -> user:anchor_solo
+          strip.rec [held] -> user:anchor_rec_arm
+          when track:exists { strip.scribble_bottom <- track:ui_volume }
+        }
+
+        # Select selects the track, and double press navigates into it.
+        #
+        # Holding select (a long press) selects the track and anchors it, so
+        # pressing another track's select selects the range between them. The
+        # select anchor turns on a modifier, which puts the other select
+        # buttons in a group with no double press, so the range is selected as
+        # soon as they are pressed.
+        #
+        # The light shows whether the track is selected, or while Send is
+        # held, whether it has routes (below).
+        mappings {
+          strip.select -> track:ui_selected
+          strip.select [double] -> view:parent_track_child
+          strip.select [long] -> track:ui_selected
+          strip.select [long, held] -> user:anchor_select
+          strip.select [mod:select_anchor] -> track:ui_selected
+          when mod:send_hold = false { strip.select <- track:ui_selected }
+        }
+
+        # While Send is held, select instead enters Send/Receive mode for the
+        # track, if it has routes, and otherwise does nothing, and is lit if it
+        # has routes. This uses required modifiers rather than a condition, so
+        # holding Send never resets a pending press. Required modifiers must
+        # match exactly, so this also needs mappings for Send held along with a
+        # select anchor, where picking wins over the range.
+        mappings {
+          when track:has_routes {
+            strip.select [mod:send_hold] -> user:pick_track
+            strip.select [mod:send_hold] -> user:surface_mode {
+              set send_receive
+            }
+            strip.select [mod:send_hold, mod:select_anchor] -> user:pick_track
+            strip.select [mod:send_hold, mod:select_anchor]
+                -> user:surface_mode { set send_receive }
+          }
+          when mod:send_hold { strip.select <- track:has_routes }
+        }
+      }
+    }
+  }
+}
+
+#------------------------------------------------------------------------------
+# Send/Receive mode: the strips show the routes of the current track, its sends
+# unless it only has receives. If the track is deleted, it shows nothing until
+# another track is touched.
+#------------------------------------------------------------------------------
+
+when user:surface_mode = send_receive {
+  view send_receive_mode(subject = user:current_track, list = routes) {
+    # The Info strip shows the current track itself, the same as in Track mode,
+    # except its bottom scribble line, which shows whether sends or receives
+    # are shown, and is blank once the track is deleted.
+    #
+    # Bank pages through all the route strips at once, and tapping Send
+    # switches between showing sends and receives. Send blinks, as it is the
+    # current mode, even if the track no longer has routes, and Track is lit,
+    # as it is always available.
+    mappings {
+      use list_navigation
+      use track_strip(strip = info_strip)
+      when track:exists {
+        info_strip.scribble_bottom <- view:child_route_type_name
+      }
+      assign_send [tap] -> view:child_route_toggle
+      assign_send <- true { mode blink }
+      assign_track <- true
+    }
+
+    # Each route strip shows a send or receive of the current track. Select
+    # navigates across the route to the track at its other end. The bottom
+    # scribble line shows the volume, and is blank for an empty strip.
+    view strip in route_strip {
+      mappings {
+        strip.select -> view:parent_route_other_track
+        strip.mute <-> route:mute
+        strip.pot <-> route:pan {
+          mode center
+          when route:exists = false { mode off }
+        }
+        strip.pot_button -> route:pan { set 0.0 }
+        strip.fader <-> route:volume
+        strip.scribble_top <- route:other_track.name
+        strip.scribble_color <- route:other_track.color
+        when route:exists { strip.scribble_bottom <- route:volume }
+      }
+    }
+  }
+}

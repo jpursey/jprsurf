@@ -777,14 +777,20 @@ Depends on: CL4, CL5.
   a `when`, a `when` around a use, one around an option other than `mode`,
   and one around a block. A config with a checking error reports it at the mapping's line.
 
-### CL7 [ ] config, plugin: JPRSurf's config as a file
+### CL7 [x] config, plugin: JPRSurf's config as a file
 
 Depends on: CL6.
 
-- `config/jprsurf.jprsurf`.
+- `config/jprsurf.jprsurf`, the design's config with `GetDefaultSpec()`'s
+  comments, which CLAUDE.md's directory structure names.
 - A parity test: the file, read, equals `GetDefaultSpec()`, compared part by
   part, and each view's mappings and uses regardless of order, so a difference
-  names the view and the mapping.
+  names the view and the mapping (`line 287: /track_mode/track_list/strip[]:
+  strip.rec -> user:anchor_rec_arm is in the file, but not GetDefaultSpec()`).
+  `jpr_plugin_test` finds the file by its path in the source tree
+  (`JPR_CONFIG_FILE`).
+- The file reads with Windows line endings (as git checks it out), but a UTF-8
+  byte order mark is a syntax error at line 1.
 
 **Verify**
 - Standard checks.

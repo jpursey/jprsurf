@@ -26,11 +26,19 @@ set(jpr_plugin_TEST_SOURCE
 )
 
 set(jpr_plugin_TEST_DEPS
+  absl::strings
   jpr_common_testing
+  jpr_config
 )
 
 gb_add_library(jpr_plugin)
 target_include_directories(jpr_plugin PUBLIC "../..")
+
+# JPRSurf's config, where it is checked in, which the tests read.
+set(JPR_CONFIG_FILE "${PROJECT_SOURCE_DIR}/config/jprsurf.jprsurf")
+target_compile_definitions(jpr_plugin_test PRIVATE
+  "JPR_CONFIG_FILE=\"${JPR_CONFIG_FILE}\""
+)
 
 # jpr/plugin/build_info.h, with the git commit and whether it was modified, for
 # the profile. It is regenerated on every build, but only rewritten when it
