@@ -83,10 +83,17 @@ struct Found {
   std::string path;
 };
 
+// What an error is about: the line it was written on (none for a catalog, which
+// is written in code), and its text, which the error starts with after the line
+// (see GetSpecError()): a device and a path in its catalog, or the path of a
+// struct or field being defined, which is empty at the top.
+struct Subject {
+  SpecLine line;
+  std::string_view text;
+};
+
 // Validates and resolves the widgets of one call to ValidateWidgets() or
-// ResolveWidgets(). Each error's subject is what it is about: a device and a
-// path in its catalog, or the path of a struct or field being defined. Both
-// are empty at the top.
+// ResolveWidgets().
 class WidgetValidator {
  public:
   // Resolves on the devices present if `resolve` is set, or else as if every
@@ -114,30 +121,32 @@ class WidgetValidator {
                            const std::string& struct_path);
   void ValidateInclude(const WidgetInclude& include,
                        const std::string& struct_path, StructFields& fields);
-  void AddField(std::string_view struct_path, std::string_view name,
+
+  // Adds a field to the struct whose subject is `subject`, which is where the
+  // field (or the include it came from) was written, and the struct's path.
+  void AddField(Subject subject, std::string_view name,
                 std::optional<Validated> validated, StructFields& fields);
   std::optional<Validated> ValidateField(
       const WidgetFieldDefinition& definition, const std::string& field_path);
   std::optional<Validated> ValidateJoin(const WidgetJoinDefinition& definition,
-                                        const std::string& field_path);
+                                        Subject subject);
 
   // Returns the widget at the path's text, or nullopt with an error. `what` is
   // what the path is for in errors, such as "include".
   std::optional<Found> Find(std::string_view text, std::string_view what,
-                            std::string_view subject);
+                            Subject subject);
 
   // Adds an error if the name isn't a widget name. `what` is what it names in
   // errors, such as "field".
-  void ValidateWidgetName(std::string_view subject, std::string_view what,
+  void ValidateWidgetName(Subject subject, std::string_view what,
                           std::string_view name);
 
   // Adds the name to `names`, or returns false with an error if it is already
   // there.
-  bool AddName(std::string_view subject, std::string_view what,
-               std::string_view name,
+  bool AddName(Subject subject, std::string_view what, std::string_view name,
                absl::flat_hash_set<std::string_view>& names);
 
-  void AddError(std::string_view subject, std::string_view message);
+  void AddError(Subject subject, std::string_view message);
 
   const bool resolve_;
   std::vector<std::string>* errors_;
@@ -163,18 +172,21 @@ std::optional<Validated> WidgetValidator::Validate(
 void WidgetValidator::ValidateDevices(absl::Span<const WidgetDevice> devices) {
   absl::flat_hash_set<const WidgetShape*> catalogs;
   for (const WidgetDevice& device : devices) {
-    ValidateWidgetName("", "device", device.name);
+    const Subject subject = {.line = device.line};
+    ValidateWidgetName(subject, "device", device.name);
     auto [it, is_new] = devices_.try_emplace(device.name, nullptr);
     if (!is_new) {
-      AddError("", absl::StrCat("device \"", device.name, "\" is repeated"));
+      AddError(subject,
+               absl::StrCat("device \"", device.name, "\" is repeated"));
     }
     if (device.catalog == nullptr) {
-      AddError("", absl::StrCat("device \"", device.name, "\" has no catalog"));
+      AddError(subject,
+               absl::StrCat("device \"", device.name, "\" has no catalog"));
       continue;
     }
     if (device.catalog->GetKind() != WidgetKind::kStruct) {
-      AddError("", absl::StrCat("catalog of device \"", device.name,
-                                "\" isn't a struct"));
+      AddError(subject, absl::StrCat("catalog of device \"", device.name,
+                                     "\" isn't a struct"));
       continue;
     }
     if (is_new) {
@@ -190,9 +202,9 @@ void WidgetValidator::ValidateDevices(absl::Span<const WidgetDevice> devices) {
 void WidgetValidator::ValidateCatalog(std::string_view device_name,
                                       const WidgetShape& shape,
                                       const std::string& path) {
-  const std::string subject = path.empty()
-                                  ? std::string(device_name)
-                                  : absl::StrCat(device_name, ": ", path);
+  const std::string text = path.empty() ? std::string(device_name)
+                                        : absl::StrCat(device_name, ": ", path);
+  const Subject subject = {.text = text};
   absl::flat_hash_set<std::string_view> names;
   switch (shape.GetKind()) {
     case WidgetKind::kControl:
@@ -224,8 +236,9 @@ Validated WidgetValidator::ValidateStruct(
     ValidateInclude(include, struct_path, fields);
   }
   for (const WidgetFieldDefinition& field : definition.fields) {
-    ValidateWidgetName(struct_path, "field", field.name);
-    AddField(struct_path, field.name,
+    const Subject subject = {.line = field.line, .text = struct_path};
+    ValidateWidgetName(subject, "field", field.name);
+    AddField(subject, field.name,
              ValidateField(field, GetFieldPathText(struct_path, field.name)),
              fields);
   }
@@ -236,19 +249,20 @@ Validated WidgetValidator::ValidateStruct(
 void WidgetValidator::ValidateInclude(const WidgetInclude& include,
                                       const std::string& struct_path,
                                       StructFields& fields) {
-  std::optional<Found> included = Find(include.path, "include", struct_path);
+  const Subject subject = {.line = include.line, .text = struct_path};
+  std::optional<Found> included = Find(include.path, "include", subject);
   if (!included.has_value()) {
     return;
   }
   const WidgetShape& shape = *included->shape;
   if (shape.GetKind() != WidgetKind::kStruct) {
-    AddError(struct_path,
+    AddError(subject,
              absl::StrCat("include \"", include.path, "\" isn't a struct"));
     return;
   }
   for (const std::string& excluded : include.excluded) {
     if (shape.GetField(excluded) == nullptr) {
-      AddError(struct_path,
+      AddError(subject,
                absl::StrCat("include \"", include.path, "\" excludes \"",
                             excluded, "\", which it doesn't have"));
     }
@@ -259,7 +273,7 @@ void WidgetValidator::ValidateInclude(const WidgetInclude& include,
     if (shape.GetField(field.name) == &field.shape &&
         !absl::c_linear_search(include.excluded, field.name)) {
       AddField(
-          struct_path, field.name,
+          subject, field.name,
           Validated{field.shape,
                     Instantiate(included->device, field.shape,
                                 GetFieldPathText(included->path, field.name))},
@@ -268,12 +282,10 @@ void WidgetValidator::ValidateInclude(const WidgetInclude& include,
   }
 }
 
-void WidgetValidator::AddField(std::string_view struct_path,
-                               std::string_view name,
+void WidgetValidator::AddField(Subject subject, std::string_view name,
                                std::optional<Validated> validated,
                                StructFields& fields) {
-  if (AddName(struct_path, "field", name, fields.names) &&
-      validated.has_value()) {
+  if (AddName(subject, "field", name, fields.names) && validated.has_value()) {
     fields.shape_fields.push_back(
         {std::string(name), std::move(validated->shape)});
     fields.widget_fields.push_back(
@@ -283,8 +295,9 @@ void WidgetValidator::AddField(std::string_view struct_path,
 
 std::optional<Validated> WidgetValidator::ValidateField(
     const WidgetFieldDefinition& definition, const std::string& field_path) {
+  const Subject subject = {.line = definition.line, .text = field_path};
   if (const std::string* path = std::get_if<std::string>(&definition.widget)) {
-    std::optional<Found> found = Find(*path, "path", field_path);
+    std::optional<Found> found = Find(*path, "path", subject);
     if (!found.has_value()) {
       return std::nullopt;
     }
@@ -297,15 +310,15 @@ std::optional<Validated> WidgetValidator::ValidateField(
   }
   if (const WidgetJoinDefinition* join_definition =
           std::get_if<WidgetJoinDefinition>(&definition.widget)) {
-    return ValidateJoin(*join_definition, field_path);
+    return ValidateJoin(*join_definition, subject);
   }
   return std::nullopt;
 }
 
 std::optional<Validated> WidgetValidator::ValidateJoin(
-    const WidgetJoinDefinition& definition, const std::string& field_path) {
+    const WidgetJoinDefinition& definition, Subject subject) {
   if (definition.slices.empty()) {
-    AddError(field_path, "join has no slices");
+    AddError(subject, "join has no slices");
     return std::nullopt;
   }
   const WidgetShape* element = nullptr;
@@ -313,36 +326,35 @@ std::optional<Validated> WidgetValidator::ValidateJoin(
   int64_t size = 0;
   std::vector<std::unique_ptr<const Widget>> elements;
   for (const WidgetSlice& slice : definition.slices) {
-    std::optional<Found> found = Find(slice.path, "slice", field_path);
+    std::optional<Found> found = Find(slice.path, "slice", subject);
     if (!found.has_value()) {
       continue;
     }
     const WidgetShape& array = *found->shape;
     if (array.GetKind() != WidgetKind::kArray) {
-      AddError(field_path,
-               absl::StrCat(GetSliceText(slice), " isn't an array"));
+      AddError(subject, absl::StrCat(GetSliceText(slice), " isn't an array"));
       continue;
     }
     const int array_size = array.GetSize();
     if (slice.first < 0 || slice.first > array_size ||
         (slice.count.has_value() &&
          int64_t{slice.first} + *slice.count > array_size)) {
-      AddError(field_path, absl::StrCat(GetSliceText(slice), " runs past its ",
-                                        array_size, " elements"));
+      AddError(subject, absl::StrCat(GetSliceText(slice), " runs past its ",
+                                     array_size, " elements"));
       continue;
     }
     const int count = slice.count.value_or(array_size - slice.first);
     if (count <= 0) {
-      AddError(field_path, absl::StrCat(GetSliceText(slice), " is empty"));
+      AddError(subject, absl::StrCat(GetSliceText(slice), " is empty"));
       continue;
     }
     if (element == nullptr) {
       element = array.GetElement();
       element_slice = &slice;
     } else if (*array.GetElement() != *element) {
-      AddError(field_path, absl::StrCat(GetSliceText(slice),
-                                        " has elements of another shape than ",
-                                        GetSliceText(*element_slice)));
+      AddError(subject, absl::StrCat(GetSliceText(slice),
+                                     " has elements of another shape than ",
+                                     GetSliceText(*element_slice)));
       continue;
     }
     size += count;
@@ -358,9 +370,8 @@ std::optional<Validated> WidgetValidator::ValidateJoin(
     return std::nullopt;
   }
   if (size > std::numeric_limits<int>::max()) {
-    AddError(field_path,
-             absl::StrCat("join has ", size, " elements, more than ",
-                          std::numeric_limits<int>::max()));
+    AddError(subject, absl::StrCat("join has ", size, " elements, more than ",
+                                   std::numeric_limits<int>::max()));
     return std::nullopt;
   }
   return Validated{WidgetShape::ForArray(*element, static_cast<int>(size)),
@@ -369,7 +380,7 @@ std::optional<Validated> WidgetValidator::ValidateJoin(
 
 std::optional<Found> WidgetValidator::Find(std::string_view text,
                                            std::string_view what,
-                                           std::string_view subject) {
+                                           Subject subject) {
   std::string error_message;
   std::optional<WidgetPath> path = WidgetPath::Parse(text, &error_message);
   if (!path.has_value()) {
@@ -402,8 +413,7 @@ std::optional<Found> WidgetValidator::Find(std::string_view text,
                catalog_path.ToString()};
 }
 
-void WidgetValidator::ValidateWidgetName(std::string_view subject,
-                                         std::string_view what,
+void WidgetValidator::ValidateWidgetName(Subject subject, std::string_view what,
                                          std::string_view name) {
   if (!IsWidgetName(name)) {
     AddError(subject,
@@ -411,7 +421,7 @@ void WidgetValidator::ValidateWidgetName(std::string_view subject,
   }
 }
 
-bool WidgetValidator::AddName(std::string_view subject, std::string_view what,
+bool WidgetValidator::AddName(Subject subject, std::string_view what,
                               std::string_view name,
                               absl::flat_hash_set<std::string_view>& names) {
   if (!names.insert(name).second) {
@@ -421,13 +431,12 @@ bool WidgetValidator::AddName(std::string_view subject, std::string_view what,
   return true;
 }
 
-void WidgetValidator::AddError(std::string_view subject,
-                               std::string_view message) {
+void WidgetValidator::AddError(Subject subject, std::string_view message) {
   failed_ = true;
-  if (errors_ != nullptr) {
-    errors_->push_back(subject.empty() ? std::string(message)
-                                       : absl::StrCat(subject, ": ", message));
+  if (errors_ == nullptr) {
+    return;
   }
+  errors_->push_back(GetSpecError(subject.line, subject.text, message));
 }
 
 }  // namespace

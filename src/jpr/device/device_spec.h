@@ -15,6 +15,7 @@
 #include "jpr/common/runner.h"
 #include "jpr/device/control_override.h"
 #include "jpr/device/device.h"
+#include "jpr/device/spec_line.h"
 #include "jpr/device/widget_definition.h"
 
 namespace jpr {
@@ -26,6 +27,8 @@ namespace jpr {
 // One device of the surface. Nothing is inferred from its type or from the
 // ports that exist, so several units of one type are several entries.
 struct DeviceSpec {
+  friend bool operator==(const DeviceSpec&, const DeviceSpec&) = default;
+
   std::string name;  // As widget paths start with it, such as "xtouch_ext".
   std::string type;  // A device type, such as "XTouchExt".
 
@@ -39,6 +42,8 @@ struct DeviceSpec {
 
   // The inputs and outputs of its controls that the unit doesn't use.
   std::vector<ControlOverride> overrides;
+
+  SpecLine line;  // Where it was written, for errors.
 };
 
 // The devices created from a device list.
@@ -59,9 +64,10 @@ struct DeviceList {
 // override isn't valid for the type's catalog (see ValidateControlOverrides()),
 // a port is also an earlier spec's, or its name isn't a widget name or is
 // repeated. For each problem, an error is added to `errors` (if provided),
-// starting with the device's name, such as `xtouch: type "XTouh" isn't a
-// device type`, except that an error about the name names it in its message
-// instead.
+// starting with the device's line (see GetSpecError()), then its name, such
+// as `xtouch: type "XTouh" isn't a device type`, except that an error about the
+// name names it in its message instead. An error about an override starts with
+// the override's line.
 std::optional<std::vector<WidgetDevice>> CreateWidgetDevices(
     absl::Span<const DeviceSpec> specs, std::vector<std::string>* errors);
 
@@ -75,7 +81,7 @@ std::optional<std::vector<WidgetDevice>> CreateWidgetDevices(
 // CreateWidgetDevices()) or a required device is absent, and nullopt, with
 // every port it opened closed again, if a required device's ports fail to
 // open. For each problem, an error is added to `errors` (if provided),
-// starting with the device's name.
+// starting with the device's line, then its name.
 std::optional<DeviceList> CreateDevices(absl::Span<const DeviceSpec> specs,
                                         MidiPorts& ports,
                                         RunRegistry& run_registry,

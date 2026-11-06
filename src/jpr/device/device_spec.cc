@@ -33,15 +33,12 @@ const DeviceType* ValidateSpec(const DeviceSpec& spec,
                                std::vector<std::string>& errors) {
   const DeviceType* type = FindDeviceType(spec.type);
   if (type == nullptr) {
-    errors.push_back(absl::StrCat(spec.name, ": type \"", spec.type,
-                                  "\" isn't a device type"));
+    errors.push_back(GetSpecError(
+        spec.line, spec.name,
+        absl::StrCat("type \"", spec.type, "\" isn't a device type")));
     return nullptr;
   }
-  std::vector<std::string> override_errors;
-  ValidateControlOverrides(*type->catalog, spec.overrides, &override_errors);
-  for (const std::string& error : override_errors) {
-    errors.push_back(absl::StrCat(spec.name, ": ", error));
-  }
+  ValidateControlOverrides(*type->catalog, spec.overrides, spec.name, &errors);
   return type;
 }
 
@@ -52,14 +49,16 @@ void ValidateUnsharedPorts(absl::Span<const DeviceSpec> specs, int index,
   const DeviceSpec& spec = specs[index];
   for (int i = 0; i < index; ++i) {
     if (specs[i].input_port == spec.input_port) {
-      errors.push_back(absl::StrCat(spec.name, ": input port \"",
-                                    spec.input_port, "\" is also ",
-                                    specs[i].name, "'s"));
+      errors.push_back(
+          GetSpecError(spec.line, spec.name,
+                       absl::StrCat("input port \"", spec.input_port,
+                                    "\" is also ", specs[i].name, "'s")));
     }
     if (specs[i].output_port == spec.output_port) {
-      errors.push_back(absl::StrCat(spec.name, ": output port \"",
-                                    spec.output_port, "\" is also ",
-                                    specs[i].name, "'s"));
+      errors.push_back(
+          GetSpecError(spec.line, spec.name,
+                       absl::StrCat("output port \"", spec.output_port,
+                                    "\" is also ", specs[i].name, "'s")));
     }
   }
 }
@@ -114,8 +113,8 @@ std::optional<DeviceList> DeviceListCreator::Create(
     MidiOutHandle output = ports_.OpenOutput(spec.output_port);
     if (!input.IsOpen() || !output.IsOpen()) {
       if (spec.required) {
-        AddError(absl::StrCat(spec.name,
-                              ": is required, but its ports failed to open"));
+        AddError(GetSpecError(spec.line, spec.name,
+                              "is required, but its ports failed to open"));
       }
       continue;
     }
@@ -136,12 +135,14 @@ void DeviceListCreator::ValidatePorts(const DeviceSpec& spec) {
     return;
   }
   if (!ports_.HasInput(spec.input_port)) {
-    AddError(absl::StrCat(spec.name, ": is required, but its input port \"",
-                          spec.input_port, "\" isn't found"));
+    AddError(GetSpecError(spec.line, spec.name,
+                          absl::StrCat("is required, but its input port \"",
+                                       spec.input_port, "\" isn't found")));
   }
   if (!ports_.HasOutput(spec.output_port)) {
-    AddError(absl::StrCat(spec.name, ": is required, but its output port \"",
-                          spec.output_port, "\" isn't found"));
+    AddError(GetSpecError(spec.line, spec.name,
+                          absl::StrCat("is required, but its output port \"",
+                                       spec.output_port, "\" isn't found")));
   }
 }
 
@@ -168,7 +169,8 @@ std::optional<std::vector<WidgetDevice>> CreateWidgetDevices(
     ValidateUnsharedPorts(specs, i, spec_errors);
     widget_devices.push_back(
         {.name = specs[i].name,
-         .catalog = type != nullptr ? type->catalog : GetNoCatalog()});
+         .catalog = type != nullptr ? type->catalog : GetNoCatalog(),
+         .line = specs[i].line});
   }
   // Validating the widgets of no definitions validates the devices' names.
   ValidateWidgets({}, widget_devices, &spec_errors);

@@ -17,6 +17,7 @@ set(jpr_device_SOURCE
   device_xtouch.cc device_xtouch.h
   device_xtouch_doc.cc
   device_types.cc device_types.h
+  spec_line.cc spec_line.h
   widget.cc widget.h
   widget_definition.cc widget_definition.h
   widget_doc.cc widget_doc.h
@@ -53,6 +54,7 @@ set(jpr_device_TEST_SOURCE
   device_spec_test.cc
   device_types_test.cc
   device_xtouch_test.cc
+  spec_line_test.cc
   widget_definition_test.cc
   widget_doc_test.cc
   widget_path_test.cc

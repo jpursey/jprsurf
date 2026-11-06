@@ -23,9 +23,9 @@ namespace {
 // The validation of one list of overrides.
 class OverrideValidator {
  public:
-  OverrideValidator(const WidgetShape& catalog,
+  OverrideValidator(const WidgetShape& catalog, std::string_view device_name,
                     std::vector<std::string>* errors)
-      : catalog_(catalog), errors_(errors) {}
+      : catalog_(catalog), device_name_(device_name), errors_(errors) {}
 
   bool IsValid() const { return valid_; }
 
@@ -36,6 +36,7 @@ class OverrideValidator {
                 std::string_view message);
 
   const WidgetShape& catalog_;
+  const std::string_view device_name_;
   std::vector<std::string>* const errors_;
   absl::flat_hash_set<std::string> controls_;  // By path text.
   bool valid_ = true;
@@ -78,7 +79,9 @@ void OverrideValidator::AddError(const ControlOverride& control_override,
                                  std::string_view message) {
   valid_ = false;
   if (errors_ != nullptr) {
-    errors_->push_back(absl::StrCat(control_override.control, ": ", message));
+    errors_->push_back(GetSpecError(
+        control_override.line,
+        absl::StrCat(device_name_, ": ", control_override.control), message));
   }
 }
 
@@ -86,8 +89,9 @@ void OverrideValidator::AddError(const ControlOverride& control_override,
 
 bool ValidateControlOverrides(const WidgetShape& catalog,
                               absl::Span<const ControlOverride> overrides,
+                              std::string_view device_name,
                               std::vector<std::string>* errors) {
-  OverrideValidator validator(catalog, errors);
+  OverrideValidator validator(catalog, device_name, errors);
   for (const ControlOverride& control_override : overrides) {
     validator.Validate(control_override);
   }
@@ -104,7 +108,11 @@ absl::flat_hash_map<std::string, ControlOverride> GetOverridesByControl(
       continue;
     }
     std::string control = path->ToString();
-    ControlOverride& combined = by_control[control];
+    auto [it, is_new] = by_control.try_emplace(control);
+    ControlOverride& combined = it->second;
+    if (is_new) {
+      combined.line = control_override.line;
+    }
     combined.control = std::move(control);
     combined.inputs += control_override.inputs;
     combined.outputs += control_override.outputs;

@@ -175,7 +175,7 @@ TEST_P(DeviceTypeTest, OverriddenControlsMatchTheCatalog) {
       {.control = with_outputs->path,
        .outputs = with_outputs->shape->GetOutputs()},
   };
-  ASSERT_TRUE(ValidateControlOverrides(catalog, overrides, nullptr));
+  ASSERT_TRUE(ValidateControlOverrides(catalog, overrides, "test", nullptr));
   std::unique_ptr<Device> device = Create(overrides);
   ASSERT_NE(device, nullptr);
   const Control* without_inputs = device->GetControl(with_inputs->path);

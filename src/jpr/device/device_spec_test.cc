@@ -86,6 +86,50 @@ TEST(CreateWidgetDevicesTest, EveryProblemIsAnError) {
   EXPECT_FALSE(CreateWidgetDevices(specs, nullptr).has_value());
 }
 
+TEST(CreateWidgetDevicesTest, ErrorsStartWithWhereTheirPartWasWritten) {
+  const std::vector<DeviceSpec> specs = {
+      {.name = "xtouch",
+       .type = "XTouh",
+       .input_port = "X-Touch",
+       .output_port = "X-Touch",
+       .line = {3}},
+      {.name = "xtouch",
+       .type = "XTouchExt",
+       .input_port = "X-Touch",
+       .output_port = "X-Touch-Ext",
+       .overrides = {{.control = "play", .inputs = kPress, .line = {5}}},
+       .line = {4}}};
+  std::vector<std::string> errors;
+  EXPECT_FALSE(CreateWidgetDevices(specs, &errors).has_value());
+  EXPECT_THAT(errors, ElementsAre("line 3: xtouch: type \"XTouh\" isn't a "
+                                  "device type",
+                                  "line 5: xtouch: play: names nothing",
+                                  "line 4: xtouch: input port \"X-Touch\" is "
+                                  "also xtouch's",
+                                  "line 4: device \"xtouch\" is repeated"));
+}
+
+TEST(DeviceSpecTest, SpecsAreEqualWhereverTheyWereWritten) {
+  const DeviceSpec spec = {
+      .name = "xtouch_ext",
+      .type = "XTouchExt",
+      .input_port = "X-Touch-Ext",
+      .output_port = "X-Touch-Ext",
+      .required = false,
+      .overrides = {{.control = "strip[2].fader", .inputs = kPress}}};
+  DeviceSpec written = spec;
+  written.line = {3};
+  written.overrides[0].line = {4};
+  EXPECT_EQ(written, spec);
+
+  DeviceSpec other = spec;
+  other.required = true;
+  EXPECT_NE(other, spec);
+  other = spec;
+  other.overrides[0].inputs = kDelta;
+  EXPECT_NE(other, spec);
+}
+
 // The fake REAPER's MIDI ports, with an X-Touch on "X-Touch", and an extender
 // on "X-Touch-Ext" once it is added.
 class CreateDevicesTest : public ::testing::Test {
@@ -227,6 +271,19 @@ TEST_F(CreateDevicesTest, RequiredDeviceAbsentCreatesNone) {
   EXPECT_FALSE(xtouch_.GetOutputPort()->IsOpen());
 }
 
+TEST_F(CreateDevicesTest, RequiredDeviceAbsentErrorsStartWithItsLine) {
+  DeviceSpec required_ext = xtouch_ext_spec_;
+  required_ext.required = true;
+  required_ext.line = {4};
+  EXPECT_FALSE(Create({xtouch_spec_, required_ext}).has_value());
+  EXPECT_THAT(errors_, ElementsAre("line 4: xtouch_ext: is required, "
+                                   "but its input port \"X-Touch-Ext\" isn't "
+                                   "found",
+                                   "line 4: xtouch_ext: is required, "
+                                   "but its output port \"X-Touch-Ext\" isn't "
+                                   "found"));
+}
+
 TEST_F(CreateDevicesTest, OptionalDeviceWhosePortFailsToOpenHasNoDevice) {
   AddExtender();
   xtouch_ext_->GetOutputPort()->SetOpenFails(true);
@@ -251,6 +308,17 @@ TEST_F(CreateDevicesTest, RequiredDeviceWhosePortFailsToOpenCreatesNone) {
   EXPECT_FALSE(xtouch_.GetInputPort()->IsOpen());
   EXPECT_FALSE(xtouch_.GetOutputPort()->IsOpen());
   EXPECT_FALSE(xtouch_ext_->GetOutputPort()->IsOpen());
+}
+
+TEST_F(CreateDevicesTest, RequiredDeviceWhosePortFailsErrorStartsWithLine) {
+  AddExtender();
+  xtouch_ext_->GetInputPort()->SetOpenFails(true);
+  DeviceSpec required_ext = xtouch_ext_spec_;
+  required_ext.required = true;
+  required_ext.line = {4};
+  EXPECT_FALSE(Create({xtouch_spec_, required_ext}).has_value());
+  EXPECT_THAT(errors_, ElementsAre("line 4: xtouch_ext: is required, "
+                                   "but its ports failed to open"));
 }
 
 TEST_F(CreateDevicesTest, SharedPortsCreateNone) {

@@ -362,6 +362,83 @@ TEST_F(WidgetDefinitionTest, ReportsBadJoins) {
           "slice \"xtouch.strip\" from 0"));
 }
 
+// Returns the line of a config.
+SpecLine At(int number) { return {number}; }
+
+TEST_F(WidgetDefinitionTest, ErrorsStartWithWhereTheirPartWasWritten) {
+  devices_ = {{.name = "xtouch", .catalog = &xtouch_, .line = At(1)},
+              {.name = "xtouch", .catalog = &ext_, .line = At(2)}};
+  EXPECT_FALSE(
+      Validate(
+          {.includes = {{.path = "xtouch.nope", .line = At(10)}},
+           .fields =
+               {
+                   {.name = "1st", .widget = "xtouch.play", .line = At(11)},
+                   {.name = "x", .widget = "xtouch.nope", .line = At(12)},
+                   {.name = "t",
+                    .widget =
+                        WidgetStructDefinition{
+                            .includes = {{.path = "xtouch",
+                                          .excluded = {"strip", "jog"},
+                                          .line = At(17)},
+                                         {.path = "xtouch",
+                                          .excluded = {"strip", "jog", "stop"},
+                                          .line = At(18)}},
+                            .fields = {{.name = "play",
+                                        .widget = "xtouch.play",
+                                        .line = At(14)},
+                                       {.name = "play",
+                                        .widget = "xtouch.stop",
+                                        .line = At(15)}}},
+                    .line = At(13)},
+                   {.name = "j",
+                    .widget = WidgetJoinDefinition{{{"xtouch.play"}}},
+                    .line = At(16)},
+               }})
+          .has_value());
+  EXPECT_THAT(
+      errors_,
+      ElementsAre("line 2: device \"xtouch\" is repeated",
+                  "line 10: include \"xtouch.nope\" names nothing",
+                  "line 11: field name \"1st\" isn't a widget name",
+                  "line 12: x: path \"xtouch.nope\" names nothing",
+                  "line 18: t: field \"play\" is repeated",
+                  "line 14: t: field \"play\" is repeated",
+                  "line 15: t: field \"play\" is repeated",
+                  "line 16: j: slice \"xtouch.play\" from 0 isn't an array"));
+}
+
+TEST(WidgetStructDefinitionTest, DefinitionsAreEqualWhereverTheyWereWritten) {
+  const WidgetStructDefinition definition = {
+      .includes = {{.path = "xtouch", .excluded = {"strip"}}},
+      .fields = {
+          {.name = "transport",
+           .widget =
+               WidgetStructDefinition{.fields = {{"play", "xtouch.play"}}}},
+          {.name = "strip",
+           .widget =
+               WidgetJoinDefinition{{{"ext.strip"}, {"xtouch.strip", 0, 7}}}},
+      }};
+  WidgetStructDefinition written = definition;
+  written.includes[0].line = At(1);
+  written.fields[0].line = At(2);
+  std::get<WidgetStructDefinition>(written.fields[0].widget).fields[0].line =
+      At(3);
+  written.fields[1].line = At(4);
+  EXPECT_EQ(written, definition);
+
+  WidgetStructDefinition other = definition;
+  other.includes[0].excluded.clear();
+  EXPECT_NE(other, definition);
+  other = definition;
+  std::get<WidgetStructDefinition>(other.fields[0].widget).fields[0].widget =
+      "xtouch.stop";
+  EXPECT_NE(other, definition);
+  other = definition;
+  std::get<WidgetJoinDefinition>(other.fields[1].widget).slices[1].count = 8;
+  EXPECT_NE(other, definition);
+}
+
 TEST_F(WidgetDefinitionTest, ReportsEveryProblemInOneValidation) {
   devices_.push_back({"none", nullptr});
   EXPECT_FALSE(Validate({.fields =

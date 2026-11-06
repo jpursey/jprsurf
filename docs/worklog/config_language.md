@@ -480,16 +480,22 @@ an enumerated value's values.
 
 ### Errors
 
-- **Every error starts with where it is**: `<file>:<line>: `, then what it is
-  about and what is wrong, as `ValidateSurfaceSpec()` words it today, such as
-  `jprsurf.jprsurf:61: /track_mode/track_list/strip[]: track_strip:
-  strip.mute: ...`. A mapping in named mappings is on its own line, and the
-  view path says where it was used.
+- **Every error starts with where it is**: the file, then `line <n>: `, then
+  what it is about and what is wrong, as `ValidateSurfaceSpec()` words it
+  today, such as `jprsurf.jprsurf: line 61: /track_mode/track_list/strip[]:
+  track_strip: strip.mute: ...`. A mapping in named mappings is on its own
+  line, and the view path says where it was used.
 - **Where each part of the spec was written** is kept in the spec itself: each
-  `DeviceSpec`, widget field, component, template, use, view, and mapping has a
-  `SpecLocation` (the file and line), which checking adds to the start of its
-  errors. A spec written in C++ has none. A location always compares equal, as
-  it isn't part of what the spec says.
+  `DeviceSpec`, control override, widget include and field, component,
+  template, use, view, and mapping has a `SpecLine` (`device/spec_line.h`), the
+  line it was written on, counting from 1, which checking adds to the start of
+  its errors (`GetSpecError()`). A spec written in C++ has line 0, which
+  errors leave out. A line always compares equal, as it isn't part of what the
+  spec says.
+- **Only the plugin knows the file.** It opens the file, so it adds the file's
+  path to the start of every error it logs, from reading and checking alike.
+  Neither the spec nor `config` holds a file name, as only a config needs one,
+  and the plugin has it.
 - **Reading reports every error it can.** A syntax error stops reading, as
   `gb::Parser` doesn't recover from one, but the rest (a component kind or
   parameter that doesn't exist, a parameter given twice, a block missing or
@@ -508,11 +514,10 @@ language, and keeps `gb_parse` out of `scene`.
 
 ```
 // Reads a config's text into a spec, which is null if there is an error, each
-// added to `errors` (if provided), starting with `file_name` and the line it is
-// on. The spec isn't checked (see ValidateSurfaceSpec()), but each part of it
-// has its location, so checking's errors start with it too.
-std::optional<SurfaceSpec> ReadSurfaceConfig(std::string_view file_name,
-                                             std::string text,
+// added to `errors` (if provided), starting with the line it is on (see
+// GetSpecError()). The spec isn't checked (see ValidateSurfaceSpec()), but each
+// part of it has its line, so checking's errors start with it too.
+std::optional<SurfaceSpec> ReadSurfaceConfig(std::string text,
                                              std::vector<std::string>* errors);
 ```
 
@@ -529,7 +534,8 @@ std::optional<SurfaceSpec> ReadSurfaceConfig(std::string_view file_name,
 
 - `PluginSurface` reads its config string: empty (or `null`) is
   `jprsurf.jprsurf` in the folder the DLL is in, and anything else a path. It
-  reads the file with `gb/file`, then creates the scene, logging every error.
+  reads the file with `gb/file`, then creates the scene, logging every error
+  with the file's path in front (`<path>: line 61: ...`).
 - `GetConfig()` returns the config string it was given.
 - `GetDefaultSpec()` and `default_spec.cc` go. `DefaultSpecTest` becomes a test
   that `config/jprsurf.jprsurf` reads and is valid, and the surface tests build
@@ -567,7 +573,7 @@ asks for one (a file filter in `ControlSurface::Type`). It is Win32, in a
 | The library | `config`, `spec`, `surface_file` | `config`: it is what the docs call the file. `spec` would suggest `SurfaceSpec` lives there. It collides only with Game Bits' `gb_config`, whose one use (the old config string) goes away. |
 | The file extension | `.jprsurf`, `.surf`, `.jprs` | `.jprsurf`: unmistakably JPRSurf's, and matches the version statement. |
 | The reader | `ReadSurfaceConfig()`, `ParseSurfaceConfig()`, `LoadSurfaceConfig()` | `ReadSurfaceConfig()`, as Game Bits' `ReadConfigFromText()`. "Load" suggests a file, which it doesn't open. |
-| Where a part was written | `SpecLocation`, `SourceLine`, `WrittenAt` | `SpecLocation`: a part of a spec, as `*Spec` is. Avoids `std::source_location` and `gb::LexerLocation`. |
+| Where a part was written | `SpecLine`, `SpecLocation`, `SourceLine` | `SpecLine`: a part of a spec, as `*Spec` is, and only its line, as only the plugin needs the file. `SpecLocation` would suggest the file too. |
 | A template parameter's default | `default_value`, `fallback`, `default_arg` | `default_value`: plain, and `default` alone is a C++ keyword. `fallback` is already a track reference's parameter. |
 | Track filter values | `mixer`, `track_panel`, `all`; or `mcp`, `tcp`, `all` | `mixer` and `track_panel`: REAPER's own words for the panels, rather than its abbreviations. |
 
@@ -584,9 +590,9 @@ Keywords are the config model's words where it has one: `when` (condition),
   `ComponentSpec` from its parameters' text. A test reads one of each kind in
   `GetComponentKinds()`, with every parameter, so a kind added without them
   fails.
-- A location that always compares equal is easy to forget when debugging a
-  parity failure, but the alternative (clearing locations before comparing)
-  is a step every comparison has to remember.
+- A line that always compares equal is easy to forget when debugging a
+  parity failure, but the alternative (clearing lines before comparing) is a
+  step every comparison has to remember.
 - A named `mappings` block that nothing uses does nothing, silently, like a
   template today.
 
@@ -623,6 +629,9 @@ them:
 - **Not compiled into the DLL**: the file is deployed beside it, and
   `reaper.ini` is edited by hand until the dialog picks one.
 - **A config with an error** is logged, and rejected whole.
+- **A spec keeps lines, not files:** each part has the line it was written on
+  (0 if it wasn't read from a config), and only the plugin, which opens the
+  file, names it in errors, so a file name isn't pushed into every spec.
 - **Order doesn't matter**, for uses as for mappings, so the spec keeps its two
   lists. The few cheap calls the order moves are *Mapping order changes
   REAPER calls*, low in the backlog (reworded from *Keep a view's uses and
@@ -665,32 +674,35 @@ Depends on: nothing.
 **Verify**
 - The user edits `reaper.ini`, runs REAPER, and reports what the log shows.
 
-### CL2 [ ] device: Where device and widget specs were written
+### CL2 [x] device: Where device and widget specs were written
 
 Depends on: nothing.
 
-- `SpecLocation` (`common`), which always compares equal.
-- `DeviceSpec`, `ControlOverride`, and the widget definitions gain one, and
-  `operator==`. Their errors start with the location, where there is one.
+- `SpecLine` (`device`), which always compares equal, and `GetSpecError()`,
+  which writes an error as `line <n>: <subject>: <message>`, leaving out what
+  is missing.
+- `DeviceSpec`, `ControlOverride`, the widget includes and fields, and
+  `WidgetDevice` gain one, and the specs `operator==`. Their errors start with
+  the line, where there is one.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
-- Tests that an error starts with its part's location, and that a spec with
-  none reads as today.
+- Tests that an error starts with its part's line, and that a spec with none
+  reads as today.
 
 ### CL3 [ ] scene: Where spec parts were written
 
 Depends on: CL2.
 
-- Components, templates, uses, views, and mappings gain a `SpecLocation`, and
+- Components, templates, uses, views, and mappings gain a `SpecLine`, and
   every spec struct (and the configs they hold) `operator==`.
-  `ValidateSurfaceSpec()` and `CreateScene()` start each error with the
-  location of the part it is about.
+  `ValidateSurfaceSpec()` and `CreateScene()` start each error with the line
+  of the part it is about (`GetSpecError()`).
 
 **Verify**
 - Standard checks.
 - Tests of errors about a mapping, a mapping in a template, a component, a
-  view, and a use, with and without locations.
+  view, and a use, with and without lines.
 
 ### CL4 [ ] scene: Template parameter defaults
 
@@ -714,7 +726,9 @@ Depends on: CL3.
 - The `jpr_config` library, with `gb_parse`: the grammar, the version, the
   top-level blocks but named mappings, and the top level's `components`
   blocks. CLAUDE.md's library order and directory structure name it.
-- `ReadSurfaceConfig()`, with every error at its line.
+- `ReadSurfaceConfig()`, with every error at its line, written by
+  `GetSpecError()`, so `gb_parse`'s errors read as checking's do. Its lines
+  count from 0, so the reader adds 1.
 
 **Verify**
 - Standard checks.
