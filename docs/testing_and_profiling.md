@@ -497,10 +497,19 @@ REAPER's calls on the surface follow these.
   `Extended(CSURF_EXT_SETMIXERSCROLL)`, three rounds of `SetTrackListChange()`
   each followed by every track's state, and `SetRepeatState()` and
   `SetPlayState()`. `GetTypeString()`, `GetDescString()`, and
-  `GetConfigString()` weren't called during the session. The config string
-  is the rest of the surface's `csurf_<n>` line in `reaper.ini` after the
-  type (2026-11-05): a path with spaces came whole, unquoted, with the spaces
-  inside it kept and those after it dropped.
+  `GetConfigString()` weren't called during the session, nor on exit. The
+  config string is the rest of the surface's `csurf_<n>` line in `reaper.ini`
+  after the type (2026-11-05): a path with spaces came whole, unquoted, with
+  the spaces inside it kept and those after it dropped.
+- **Editing the surface's settings** (2026-11-05, a log of Edit in
+  Preferences > Control/OSC/web, then OK or Cancel): opening the dialog calls
+  `GetConfigString()`, then `ShowConfig(type_string, parent,
+  initConfigString)` with that string. REAPER shows the `WS_CHILD` window it
+  returns. On OK, it sends the window `WM_USER + 1024` (`wParam` 1024, the
+  buffer's size, and `lParam` the buffer), destroys the window, destroys the
+  surface, and creates a new one with the string the window wrote, even when
+  it is unchanged, then calls `GetConfigString()` on it. On Cancel, it only
+  destroys the window.
 - **Touch is asked of every track, between every run** (2026-10-17, a
   7-track project with tracks in Touch, Latch, and Read). Once the surface had
   changed a track's volume while playing, REAPER called, before every run

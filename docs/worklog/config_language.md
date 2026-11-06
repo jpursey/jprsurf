@@ -615,10 +615,26 @@ them:
    control surface dialog, and on OK sends it `WM_USER + 1024` (`wParam` the
    buffer's size, `lParam` the buffer) for the config string, as the SDK's
    `reaper_csurf` examples handle. Needed before CL10.
+   - **Confirmed** (2026-11-05, CL9): opening the dialog on the surface,
+     REAPER calls `GetConfigString()`, then `ShowConfig()` with that string as
+     `initConfigString` and the dialog's panel as the parent. A window created
+     `WS_CHILD`, not visible, as the examples' dialogs are, is shown by REAPER
+     (`WM_SHOWWINDOW`, 1). On OK, REAPER
+     sends it `WM_USER + 1024` with `wParam` 1024 and `lParam` the buffer, then
+     hides and destroys it. On Cancel, it only destroys it. Nothing else at or
+     above `WM_USER` came. Each opening creates a new window.
 3. **Recreating the surface:** on OK, REAPER destroys the surface and creates
    it with the new config string, and whether it does so when the string
    hasn't changed (which decides whether picking the same file again reloads
    it). Needed before CL10.
+   - **Confirmed** (2026-11-05, CL9): on OK, after destroying the window,
+     REAPER destroys the surface and then creates one with the string the
+     window answered, whether or not it changed, so OK always reloads the
+     file. It then calls `GetConfigString()` on the new surface. Cancel leaves
+     the surface as it is. Both are in "Seen in traces" in
+     `docs/testing_and_profiling.md`. The fake has no dialog: CL10's tests send
+     the window `WM_USER + 1024` as REAPER does, and creating the surface with
+     a config string is already tested.
 
 ## Decisions
 
@@ -825,7 +841,7 @@ Depends on: CL1, CL7.
   a file with errors (which logs them, and creates no scene).
 - Load check.
 
-### CL9 [ ] plugin: Check REAPER's config dialog
+### CL9 [x] plugin: Check REAPER's config dialog
 
 Depends on: nothing.
 
