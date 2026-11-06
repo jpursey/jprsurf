@@ -690,7 +690,7 @@ Depends on: nothing.
 - Tests that an error starts with its part's line, and that a spec with none
   reads as today.
 
-### CL3 [ ] scene: Where spec parts were written
+### CL3 [x] scene: Where spec parts were written
 
 Depends on: CL2.
 
@@ -698,6 +698,8 @@ Depends on: CL2.
   every spec struct (and the configs they hold) `operator==`.
   `ValidateSurfaceSpec()` and `CreateScene()` start each error with the line
   of the part it is about (`GetSpecError()`).
+- `SpecPart` (`device`), a line and the text an error starts with, which
+  `GetSpecError()` takes, so the device, widget, and scene checks share it.
 
 **Verify**
 - Standard checks.

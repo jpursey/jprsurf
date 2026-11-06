@@ -66,6 +66,8 @@ class ViewMapping final {
       {"samples", TimelineMode::kSamples}};
 
   struct ReadConfig {
+    friend bool operator==(const ReadConfig&, const ReadConfig&) = default;
+
     // The type of physical input to use for reading the control. If not set,
     // the mapping will automatically choose the best input type based on the
     // property type and available inputs.
@@ -153,6 +155,8 @@ class ViewMapping final {
   // ViewProperty::Equals()), the corresponding mode is used for the control
   // output.
   struct ModeOverride {
+    friend bool operator==(const ModeOverride&, const ModeOverride&) = default;
+
     // The name of a property in the same view scope whose value determines
     // the output mode.
     std::string property;
@@ -165,6 +169,8 @@ class ViewMapping final {
   };
 
   struct WriteConfig {
+    friend bool operator==(const WriteConfig&, const WriteConfig&) = default;
+
     // The name of the output mode to write to the control in: one of the
     // control's mode names in its shape (such as "blink"), or empty for its
     // first mode. A timeline position written to text names its format
@@ -182,6 +188,8 @@ class ViewMapping final {
   };
 
   struct Config {
+    friend bool operator==(const Config&, const Config&) = default;
+
     ReadConfig read;
     WriteConfig write;
 

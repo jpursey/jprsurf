@@ -50,16 +50,25 @@ class View final {
   // Where a view's subject comes from (see Config::subject).
 
   // The parent's subject. The root view has none.
-  struct ParentSubject {};
+  struct ParentSubject {
+    friend bool operator==(const ParentSubject&,
+                           const ParentSubject&) = default;
+  };
 
   // A reference the view is bound to (see Scene::GetReference()).
   struct ReferenceSubject {
+    friend bool operator==(const ReferenceSubject&,
+                           const ReferenceSubject&) = default;
+
     std::string name;
   };
 
   // An item of the parent's list, which the view is a list item view of. The
   // parent must already have its list.
-  struct ListItemSubject {};
+  struct ListItemSubject {
+    friend bool operator==(const ListItemSubject&,
+                           const ListItemSubject&) = default;
+  };
 
   // Picks the route type of a routes list when its track changes.
   enum class RouteTypeRule {
@@ -70,6 +79,8 @@ class View final {
 
   // A list of the child tracks of the view's track that are on the surface.
   struct ChildTracks {
+    friend bool operator==(const ChildTracks&, const ChildTracks&) = default;
+
     // If set, the name of a track reference whose track the list reveals when
     // it changes while the view is active, and when the view becomes active
     // (see Reveal()). The view must be bound to a writable reference, other
@@ -79,6 +90,8 @@ class View final {
 
   // A list of the sends or receives of the view's track.
   struct Routes {
+    friend bool operator==(const Routes&, const Routes&) = default;
+
     RouteTypeRule route_type_rule = RouteTypeRule::kSendsUnlessOnlyReceives;
   };
 
@@ -91,6 +104,8 @@ class View final {
   // to the start of the list, picking the route type by its rule), or the
   // track list changes (keeping the scroll position in range).
   struct ListConfig {
+    friend bool operator==(const ListConfig&, const ListConfig&) = default;
+
     std::variant<ChildTracks, Routes> items;
 
     // How far kBankInc and kBankDec scroll, which must be positive. Defaults to
@@ -100,6 +115,8 @@ class View final {
 
   // Configures a new view (see AddChildView()).
   struct Config {
+    friend bool operator==(const Config&, const Config&) = default;
+
     // If set, the view is only active while the condition is met. The scene
     // applies changes to the condition between runs, so the condition's
     // property may change at any time.

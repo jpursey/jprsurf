@@ -23,10 +23,16 @@ struct SpecLine {
   int number = 0;
 };
 
-// Returns an error about a part of a spec: its line (if it has one), then what
-// it is about (if not empty), then the message, such as `line 12: xtouch: type
+// A part of a spec that an error is about: the line it was written on, and how
+// errors name it, such as a device's name or a view's path, or empty for none.
+struct SpecPart {
+  SpecLine line;
+  std::string_view text;
+};
+
+// Returns an error about a part of a spec: its line (if it has one), then its
+// text (if not empty), then the message, such as `line 12: xtouch: type
 // "XTouh" isn't a device type`.
-std::string GetSpecError(SpecLine line, std::string_view subject,
-                         std::string_view message);
+std::string GetSpecError(SpecPart part, std::string_view message);
 
 }  // namespace jpr

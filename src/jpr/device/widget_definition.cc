@@ -83,15 +83,6 @@ struct Found {
   std::string path;
 };
 
-// What an error is about: the line it was written on (none for a catalog, which
-// is written in code), and its text, which the error starts with after the line
-// (see GetSpecError()): a device and a path in its catalog, or the path of a
-// struct or field being defined, which is empty at the top.
-struct Subject {
-  SpecLine line;
-  std::string_view text;
-};
-
 // Validates and resolves the widgets of one call to ValidateWidgets() or
 // ResolveWidgets().
 class WidgetValidator {
@@ -124,29 +115,32 @@ class WidgetValidator {
 
   // Adds a field to the struct whose subject is `subject`, which is where the
   // field (or the include it came from) was written, and the struct's path.
-  void AddField(Subject subject, std::string_view name,
+  void AddField(SpecPart subject, std::string_view name,
                 std::optional<Validated> validated, StructFields& fields);
   std::optional<Validated> ValidateField(
       const WidgetFieldDefinition& definition, const std::string& field_path);
   std::optional<Validated> ValidateJoin(const WidgetJoinDefinition& definition,
-                                        Subject subject);
+                                        SpecPart subject);
 
   // Returns the widget at the path's text, or nullopt with an error. `what` is
   // what the path is for in errors, such as "include".
   std::optional<Found> Find(std::string_view text, std::string_view what,
-                            Subject subject);
+                            SpecPart subject);
 
   // Adds an error if the name isn't a widget name. `what` is what it names in
   // errors, such as "field".
-  void ValidateWidgetName(Subject subject, std::string_view what,
+  void ValidateWidgetName(SpecPart subject, std::string_view what,
                           std::string_view name);
 
   // Adds the name to `names`, or returns false with an error if it is already
   // there.
-  bool AddName(Subject subject, std::string_view what, std::string_view name,
+  bool AddName(SpecPart subject, std::string_view what, std::string_view name,
                absl::flat_hash_set<std::string_view>& names);
 
-  void AddError(Subject subject, std::string_view message);
+  // Adds an error about the subject: a device and a path in its catalog, which
+  // has no line, as it is written in code, or the path of a struct or field
+  // being defined, which is empty at the top.
+  void AddError(SpecPart subject, std::string_view message);
 
   const bool resolve_;
   std::vector<std::string>* errors_;
@@ -172,7 +166,7 @@ std::optional<Validated> WidgetValidator::Validate(
 void WidgetValidator::ValidateDevices(absl::Span<const WidgetDevice> devices) {
   absl::flat_hash_set<const WidgetShape*> catalogs;
   for (const WidgetDevice& device : devices) {
-    const Subject subject = {.line = device.line};
+    const SpecPart subject = {.line = device.line};
     ValidateWidgetName(subject, "device", device.name);
     auto [it, is_new] = devices_.try_emplace(device.name, nullptr);
     if (!is_new) {
@@ -204,7 +198,7 @@ void WidgetValidator::ValidateCatalog(std::string_view device_name,
                                       const std::string& path) {
   const std::string text = path.empty() ? std::string(device_name)
                                         : absl::StrCat(device_name, ": ", path);
-  const Subject subject = {.text = text};
+  const SpecPart subject = {.text = text};
   absl::flat_hash_set<std::string_view> names;
   switch (shape.GetKind()) {
     case WidgetKind::kControl:
@@ -236,7 +230,7 @@ Validated WidgetValidator::ValidateStruct(
     ValidateInclude(include, struct_path, fields);
   }
   for (const WidgetFieldDefinition& field : definition.fields) {
-    const Subject subject = {.line = field.line, .text = struct_path};
+    const SpecPart subject = {.line = field.line, .text = struct_path};
     ValidateWidgetName(subject, "field", field.name);
     AddField(subject, field.name,
              ValidateField(field, GetFieldPathText(struct_path, field.name)),
@@ -249,7 +243,7 @@ Validated WidgetValidator::ValidateStruct(
 void WidgetValidator::ValidateInclude(const WidgetInclude& include,
                                       const std::string& struct_path,
                                       StructFields& fields) {
-  const Subject subject = {.line = include.line, .text = struct_path};
+  const SpecPart subject = {.line = include.line, .text = struct_path};
   std::optional<Found> included = Find(include.path, "include", subject);
   if (!included.has_value()) {
     return;
@@ -282,7 +276,7 @@ void WidgetValidator::ValidateInclude(const WidgetInclude& include,
   }
 }
 
-void WidgetValidator::AddField(Subject subject, std::string_view name,
+void WidgetValidator::AddField(SpecPart subject, std::string_view name,
                                std::optional<Validated> validated,
                                StructFields& fields) {
   if (AddName(subject, "field", name, fields.names) && validated.has_value()) {
@@ -295,7 +289,7 @@ void WidgetValidator::AddField(Subject subject, std::string_view name,
 
 std::optional<Validated> WidgetValidator::ValidateField(
     const WidgetFieldDefinition& definition, const std::string& field_path) {
-  const Subject subject = {.line = definition.line, .text = field_path};
+  const SpecPart subject = {.line = definition.line, .text = field_path};
   if (const std::string* path = std::get_if<std::string>(&definition.widget)) {
     std::optional<Found> found = Find(*path, "path", subject);
     if (!found.has_value()) {
@@ -316,7 +310,7 @@ std::optional<Validated> WidgetValidator::ValidateField(
 }
 
 std::optional<Validated> WidgetValidator::ValidateJoin(
-    const WidgetJoinDefinition& definition, Subject subject) {
+    const WidgetJoinDefinition& definition, SpecPart subject) {
   if (definition.slices.empty()) {
     AddError(subject, "join has no slices");
     return std::nullopt;
@@ -380,7 +374,7 @@ std::optional<Validated> WidgetValidator::ValidateJoin(
 
 std::optional<Found> WidgetValidator::Find(std::string_view text,
                                            std::string_view what,
-                                           Subject subject) {
+                                           SpecPart subject) {
   std::string error_message;
   std::optional<WidgetPath> path = WidgetPath::Parse(text, &error_message);
   if (!path.has_value()) {
@@ -413,7 +407,8 @@ std::optional<Found> WidgetValidator::Find(std::string_view text,
                catalog_path.ToString()};
 }
 
-void WidgetValidator::ValidateWidgetName(Subject subject, std::string_view what,
+void WidgetValidator::ValidateWidgetName(SpecPart subject,
+                                         std::string_view what,
                                          std::string_view name) {
   if (!IsWidgetName(name)) {
     AddError(subject,
@@ -421,7 +416,7 @@ void WidgetValidator::ValidateWidgetName(Subject subject, std::string_view what,
   }
 }
 
-bool WidgetValidator::AddName(Subject subject, std::string_view what,
+bool WidgetValidator::AddName(SpecPart subject, std::string_view what,
                               std::string_view name,
                               absl::flat_hash_set<std::string_view>& names) {
   if (!names.insert(name).second) {
@@ -431,12 +426,12 @@ bool WidgetValidator::AddName(Subject subject, std::string_view what,
   return true;
 }
 
-void WidgetValidator::AddError(Subject subject, std::string_view message) {
+void WidgetValidator::AddError(SpecPart subject, std::string_view message) {
   failed_ = true;
   if (errors_ == nullptr) {
     return;
   }
-  errors_->push_back(GetSpecError(subject.line, subject.text, message));
+  errors_->push_back(GetSpecError(subject, message));
 }
 
 }  // namespace

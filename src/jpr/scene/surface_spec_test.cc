@@ -116,21 +116,23 @@ TEST(SurfaceSpecTest, ComponentKindsAreTheSpecsAlternatives) {
   EXPECT_EQ(GetComponentName(TrackPickSpec{.name = "user:pick"}), "user:pick");
 }
 
-// A spec's fields are its name, then its kind's parameters, in order: binding
-// them doesn't compile once a field is added, until its parameter is added
-// here. The kinds and uses are what the tests below show checking enforces.
+// A spec's fields are its name, its kind's parameters in order, then its line:
+// binding them doesn't compile once a field is added, until its parameter is
+// added here. The kinds and uses are what the tests below show checking
+// enforces.
 TEST(SurfaceSpecTest, EachSpecHasItsKindsParameters) {
-  [[maybe_unused]] auto [modifier_name] = ModifierSpec{};
+  [[maybe_unused]] auto [modifier_name, modifier_line] = ModifierSpec{};
   EXPECT_THAT(GetParams<ModifierSpec>(), IsEmpty());
 
-  [[maybe_unused]] auto [value_name, values, initial] = EnumeratedValueSpec{};
+  [[maybe_unused]] auto [value_name, values, initial, value_line] =
+      EnumeratedValueSpec{};
   EXPECT_THAT(
       GetParams<EnumeratedValueSpec>(),
       ElementsAre(
           Param("values", ParamKind::kNewNameList, ParamUse::kRequired),
           Param("initial", ParamKind::kValueName, ParamUse::kOptional)));
 
-  [[maybe_unused]] auto [reference_name, fallback, follow] =
+  [[maybe_unused]] auto [reference_name, fallback, follow, reference_line] =
       TrackReferenceSpec{};
   EXPECT_THAT(
       GetParams<TrackReferenceSpec>(),
@@ -138,14 +140,16 @@ TEST(SurfaceSpecTest, EachSpecHasItsKindsParameters) {
           Param("fallback", ParamKind::kTrackReference, ParamUse::kOptional),
           Param("follow", ParamKind::kTrackReference, ParamUse::kOptional)));
 
-  [[maybe_unused]] auto [anchor_name, action, modifier] = TrackAnchorSpec{};
+  [[maybe_unused]] auto [anchor_name, action, modifier, anchor_line] =
+      TrackAnchorSpec{};
   EXPECT_THAT(
       GetParams<TrackAnchorSpec>(),
       ElementsAre(
           Param("action", ParamKind::kChoice, ParamUse::kRequired),
           Param("modifier", ParamKind::kModifier, ParamUse::kOptional)));
 
-  [[maybe_unused]] auto [pick_name, reference, source] = TrackPickSpec{};
+  [[maybe_unused]] auto [pick_name, reference, source, pick_line] =
+      TrackPickSpec{};
   EXPECT_THAT(GetParams<TrackPickSpec>(),
               ElementsAre(Param("reference", ParamKind::kTrackReference,
                                 ParamUse::kRequired),
@@ -1038,6 +1042,82 @@ TEST(SurfaceSpecTest, NoTemplateUsesItself) {
                           "template a: uses itself, through b, c",
                           "template b: uses itself, through c, a",
                           "template c: uses itself, through a, b"));
+}
+
+// Returns the line, as a config's reader sets it.
+SpecLine At(int number) { return {.number = number}; }
+
+TEST(SurfaceSpecTest, ErrorsStartWithTheLineOfWhatTheyAreAbout) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.components = {ModifierSpec{.name = "bad", .line = At(3)}};
+  MappingSpec in_template = Mapping("state:can_redo", "button");
+  in_template.line = At(7);
+  spec.templates = {{.name = "a b",
+                     .uses = {{.name = "nothing", .line = At(8)}},
+                     .line = At(5)},
+                    {.name = "strip",
+                     .widget_params = {"button"},
+                     .mappings = {in_template},
+                     .line = At(6)}};
+  ViewSpec view = BoundView("view", "state:master_track");
+  view.line = At(11);
+  view.components = {ModifierSpec{.name = "mod:on_view", .line = At(12)}};
+  view.uses = {
+      {.name = "strip", .line = At(13)},
+      {.name = "strip", .widgets = {{"button", "play"}}, .line = At(14)}};
+  MappingSpec in_view = Mapping("track:mute", "nothing");
+  in_view.line = At(15);
+  view.mappings = {in_view, Mapping("track:mute", "nowhere")};
+  spec.root.children = {
+      {.name = "a b", .line = At(10)}, view, {.name = "view", .line = At(16)}};
+
+  // A mapping in a template is on its own line, with the path of the view
+  // that uses it, and one without a line is as it was.
+  EXPECT_THAT(
+      Validate(spec),
+      ElementsAre(
+          "line 3: modifier name \"bad\" isn't \"mod:\" followed by a C "
+          "identifier",
+          "line 5: template name \"a b\" isn't a C identifier",
+          "line 8: template a b: uses \"nothing\", which isn't a template",
+          "line 10: /: view name \"a b\" isn't a C identifier",
+          "line 12: /view: mod:on_view: is of kind \"modifier\", which can't "
+          "be declared on a view",
+          "line 13: /view: uses strip without its widget parameter "
+          "\"button\"",
+          "line 15: /view: nothing: names nothing",
+          "/view: nowhere: names nothing",
+          "line 7: /view: strip: button: reads into \"state:can_redo\", which "
+          "can't be written or triggered",
+          "line 16: /: has more than one child view named \"view\""));
+}
+
+TEST(SurfaceSpecTest, SpecsAreEqualWhereverTheyWereWritten) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.components = {ModifierSpec{.name = "mod:a"}};
+  spec.templates = {
+      {.name = "strip", .mappings = {Mapping("track:mute", "play")}}};
+  spec.root.children = {BoundView("view", "state:master_track")};
+  spec.root.children[0].uses = {{.name = "strip"}};
+
+  SurfaceSpec written = spec;
+  std::get<ModifierSpec>(written.components[0]).line = At(1);
+  written.templates[0].line = At(2);
+  written.templates[0].mappings[0].line = At(3);
+  written.root.children[0].line = At(4);
+  written.root.children[0].uses[0].line = At(5);
+  EXPECT_EQ(written, spec);
+
+  // What a spec says is compared, down to its views' and mappings' configs.
+  SurfaceSpec other = written;
+  other.root.children[0].uses[0].name = "other";
+  EXPECT_NE(other, spec);
+  other = written;
+  other.templates[0].mappings[0].config.read.press_toggles = true;
+  EXPECT_NE(other, spec);
+  other = written;
+  other.root.children[0].config.subject = View::ParentSubject{};
+  EXPECT_NE(other, spec);
 }
 
 }  // namespace

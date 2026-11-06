@@ -34,7 +34,7 @@ const DeviceType* ValidateSpec(const DeviceSpec& spec,
   const DeviceType* type = FindDeviceType(spec.type);
   if (type == nullptr) {
     errors.push_back(GetSpecError(
-        spec.line, spec.name,
+        {.line = spec.line, .text = spec.name},
         absl::StrCat("type \"", spec.type, "\" isn't a device type")));
     return nullptr;
   }
@@ -50,13 +50,13 @@ void ValidateUnsharedPorts(absl::Span<const DeviceSpec> specs, int index,
   for (int i = 0; i < index; ++i) {
     if (specs[i].input_port == spec.input_port) {
       errors.push_back(
-          GetSpecError(spec.line, spec.name,
+          GetSpecError({.line = spec.line, .text = spec.name},
                        absl::StrCat("input port \"", spec.input_port,
                                     "\" is also ", specs[i].name, "'s")));
     }
     if (specs[i].output_port == spec.output_port) {
       errors.push_back(
-          GetSpecError(spec.line, spec.name,
+          GetSpecError({.line = spec.line, .text = spec.name},
                        absl::StrCat("output port \"", spec.output_port,
                                     "\" is also ", specs[i].name, "'s")));
     }
@@ -113,7 +113,7 @@ std::optional<DeviceList> DeviceListCreator::Create(
     MidiOutHandle output = ports_.OpenOutput(spec.output_port);
     if (!input.IsOpen() || !output.IsOpen()) {
       if (spec.required) {
-        AddError(GetSpecError(spec.line, spec.name,
+        AddError(GetSpecError({.line = spec.line, .text = spec.name},
                               "is required, but its ports failed to open"));
       }
       continue;
@@ -135,12 +135,12 @@ void DeviceListCreator::ValidatePorts(const DeviceSpec& spec) {
     return;
   }
   if (!ports_.HasInput(spec.input_port)) {
-    AddError(GetSpecError(spec.line, spec.name,
+    AddError(GetSpecError({.line = spec.line, .text = spec.name},
                           absl::StrCat("is required, but its input port \"",
                                        spec.input_port, "\" isn't found")));
   }
   if (!ports_.HasOutput(spec.output_port)) {
-    AddError(GetSpecError(spec.line, spec.name,
+    AddError(GetSpecError({.line = spec.line, .text = spec.name},
                           absl::StrCat("is required, but its output port \"",
                                        spec.output_port, "\" isn't found")));
   }

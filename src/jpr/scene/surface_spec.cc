@@ -59,7 +59,11 @@ const Info* FindInfo(absl::Span<const Info> rows, std::string_view name) {
 
 // What checking knows of a view, which its contents and children see.
 struct ViewScope {
+  // Returns the view, as errors about it start.
+  SpecPart GetPart() const { return {.line = line, .text = path}; }
+
   std::string path;  // From the root, which is "/".
+  SpecLine line;     // The view's.
 
   // The kind of its subject, or nullopt if it isn't known, as the reference
   // it is bound to isn't one.
@@ -117,30 +121,30 @@ class SurfaceSpecValidator {
   // the view otherwise. Returns true if it declared its name, which is then
   // visible until it is removed from `visible_names_`.
   bool ValidateComponent(const ComponentSpec& component, const ViewScope* view);
-  void ValidateParams(const ModifierSpec& modifier, std::string_view what,
+  void ValidateParams(const ModifierSpec& modifier, SpecPart what,
                       const ViewScope* view);
-  void ValidateParams(const EnumeratedValueSpec& value, std::string_view what,
+  void ValidateParams(const EnumeratedValueSpec& value, SpecPart what,
                       const ViewScope* view);
-  void ValidateParams(const TrackReferenceSpec& reference,
-                      std::string_view what, const ViewScope* view);
-  void ValidateParams(const TrackAnchorSpec& anchor, std::string_view what,
+  void ValidateParams(const TrackReferenceSpec& reference, SpecPart what,
                       const ViewScope* view);
-  void ValidateParams(const TrackPickSpec& pick, std::string_view what,
+  void ValidateParams(const TrackAnchorSpec& anchor, SpecPart what,
+                      const ViewScope* view);
+  void ValidateParams(const TrackPickSpec& pick, SpecPart what,
                       const ViewScope* view);
 
   // Adds an error unless the parameter, a track reference, is empty or a
   // track reference, built in or declared before it.
   void ValidateTrackReference(std::string_view param, std::string_view name,
-                              std::string_view what);
+                              SpecPart what);
 
   // Adds an error if the component, on a view, isn't on one with a track
   // subject.
-  void ValidateTrackSubject(std::string_view what, const ViewScope* view);
+  void ValidateTrackSubject(SpecPart what, const ViewScope* view);
 
   // Adds an error about `what` unless the name, the `label` of something new
   // (such as "value"), is a C identifier, not already in `names`, which it is
   // added to.
-  void ValidateNewName(std::string_view what, std::string_view label,
+  void ValidateNewName(SpecPart what, std::string_view label,
                        std::string_view name,
                        absl::flat_hash_set<std::string_view>& names);
 
@@ -148,7 +152,7 @@ class SurfaceSpecValidator {
 
   // Validates a template's parameters of a kind ("widget" or "property").
   void ValidateTemplateParams(absl::Span<const std::string> params,
-                              std::string_view kind, std::string_view what);
+                              std::string_view kind, SpecPart what);
 
   // Returns true if the template uses the target, directly or through other
   // templates, adding the templates it uses it through to `through`. The
@@ -157,15 +161,16 @@ class SurfaceSpecValidator {
                     absl::flat_hash_set<std::string_view>& visited,
                     std::vector<std::string_view>& through) const;
 
-  // Validates a use, in the template or view `what` is about.
-  void ValidateUse(const TemplateUse& use, std::string_view what);
+  // Validates a use, in the template or view `where` names, whose errors have
+  // the use's line.
+  void ValidateUse(const TemplateUse& use, std::string_view where);
 
   // Validates a use's arguments for the template's parameters of a kind
   // ("widget" or "property").
   void ValidateArgs(absl::Span<const std::string> params,
                     const absl::flat_hash_map<std::string, std::string>& args,
                     std::string_view kind, std::string_view template_name,
-                    std::string_view what);
+                    SpecPart what);
 
   void ValidateRoot(const ViewSpec& root);
   void ValidateView(const ViewSpec& view, const ViewScope& parent);
@@ -191,35 +196,35 @@ class SurfaceSpecValidator {
   void ValidateUseMappings(const TemplateUse& use, const ViewScope& scope,
                            std::string_view where);
 
-  // Validates a mapping in the view, whose error starts with `what`.
+  // Validates a mapping in the view, whose errors have its line, and start
+  // with `text` after it.
   void ValidateMapping(const MappingSpec& mapping, const ViewScope& scope,
-                       std::string_view what);
+                       std::string_view text);
 
   // Validates the mapping's property, its read and write sides, and its
   // modes, on the control of the shape, or null if it isn't known.
   void ValidateMappingProperty(const MappingSpec& mapping,
                                const Property& property,
-                               const WidgetShape* control,
-                               std::string_view what);
+                               const WidgetShape* control, SpecPart what);
 
   // Validates each side the mapping asks for, of a property whose type is
   // known, on the control.
   void ValidateSides(const MappingSpec& mapping, const Property& property,
-                     const WidgetShape& control, std::string_view what);
+                     const WidgetShape& control, SpecPart what);
 
   // Adds an error unless the control has the mode, for a property of the type.
   void ValidateMode(ViewProperty::Type type, const WidgetShape& control,
-                    std::string_view mode, std::string_view what);
+                    std::string_view mode, SpecPart what);
 
   // Validates an end of a read mapping's range (its `label`, "min" or "max").
   void ValidateRangeEnd(const Property& property,
                         const std::optional<ViewProperty::Value>& end,
-                        std::string_view label, std::string_view what);
+                        std::string_view label, SpecPart what);
 
   // Validates a condition in the view, of a view or a mapping, whose errors
   // start with `what`.
   void ValidateCondition(const ViewCondition::Config& condition,
-                         const ViewScope& scope, std::string_view what);
+                         const ViewScope& scope, SpecPart what);
 
   // Returns the property the name in the view names, the `label` of its use
   // (such as "condition"), adding an error if there is none. Returns a
@@ -228,18 +233,18 @@ class SurfaceSpecValidator {
   std::optional<Property> ValidateProperty(std::string_view name,
                                            const ViewScope& scope,
                                            std::string_view label,
-                                           std::string_view what);
+                                           SpecPart what);
 
   // Adds an error unless the property, the `label` of its use, can be read.
   void ValidateReadable(const Property& property, std::string_view label,
-                        std::string_view what);
+                        SpecPart what);
 
   // Adds an error unless the property can equal the value (see
   // ViewProperty::CanEqual()), naming one of its values if it is a string for
   // an enumerated property (see ViewProperty::ResolveValue()). `label` is the
   // value's use.
   void ValidateValue(const Property& property, const ViewProperty::Value& value,
-                     std::string_view label, std::string_view what);
+                     std::string_view label, SpecPart what);
 
   // Returns the shape of the widget at the path's text, looking up its first
   // name from the inside out (see SurfaceSpec). Returns null, setting `error`
@@ -274,8 +279,8 @@ class SurfaceSpecValidator {
   // are declared only at the top level, so they are always visible.
   bool IsModifier(std::string_view name) const;
 
-  // Adds an error about `what`, which starts the error if it isn't empty.
-  void AddError(std::string_view what, std::string_view message);
+  // Adds an error about `what` (see SpecPart).
+  void AddError(SpecPart what, std::string_view message);
 
   std::vector<std::string>* const errors_;
   bool valid_ = true;
@@ -346,10 +351,11 @@ bool SurfaceSpecValidator::ValidateComponent(const ComponentSpec& component,
                                              const ViewScope* view) {
   const ComponentKindInfo& kind = GetComponentKind(component);
   const std::string_view name = GetComponentName(component);
-  const std::string_view where = view != nullptr ? view->path : "";
-  const std::string what = view != nullptr
+  const SpecLine line = GetComponentLine(component);
+  const std::string text = view != nullptr
                                ? absl::StrCat(view->path, ": ", name)
                                : std::string(name);
+  const SpecPart what = {.line = line, .text = text};
   if (view == nullptr ? !kind.top_level : !kind.on_view) {
     AddError(
         what,
@@ -359,7 +365,7 @@ bool SurfaceSpecValidator::ValidateComponent(const ComponentSpec& component,
 
   bool declared = false;
   if (!IsNameIn(name, kind.name_space)) {
-    AddError(where,
+    AddError({.line = line, .text = view != nullptr ? view->path : ""},
              absl::StrCat(kind.name, " name \"", name, "\" isn't \"",
                           kind.name_space, "\" followed by a C identifier"));
   } else if (!visible_names_.emplace(name, &component).second) {
@@ -374,20 +380,20 @@ bool SurfaceSpecValidator::ValidateComponent(const ComponentSpec& component,
              absl::StrCat("is modifier ", declared_modifier_count_, ", of the ",
                           kModUserCount, " a config can declare"));
   }
-  std::visit([this, &what,
+  std::visit([this, what,
               view](const auto& spec) { ValidateParams(spec, what, view); },
              component);
   return declared;
 }
 
 void SurfaceSpecValidator::ValidateParams(const ModifierSpec& modifier,
-                                          std::string_view what,
+                                          SpecPart what,
                                           const ViewScope* view) {
   // A modifier has no parameters (see ValidateComponent()).
 }
 
 void SurfaceSpecValidator::ValidateParams(const EnumeratedValueSpec& value,
-                                          std::string_view what,
+                                          SpecPart what,
                                           const ViewScope* view) {
   if (value.values.empty()) {
     AddError(what, "has no values");
@@ -403,7 +409,7 @@ void SurfaceSpecValidator::ValidateParams(const EnumeratedValueSpec& value,
 }
 
 void SurfaceSpecValidator::ValidateParams(const TrackReferenceSpec& reference,
-                                          std::string_view what,
+                                          SpecPart what,
                                           const ViewScope* view) {
   ValidateTrackReference("fallback", reference.fallback, what);
   ValidateTrackReference("follow", reference.follow, what);
@@ -412,7 +418,7 @@ void SurfaceSpecValidator::ValidateParams(const TrackReferenceSpec& reference,
 }
 
 void SurfaceSpecValidator::ValidateParams(const TrackAnchorSpec& anchor,
-                                          std::string_view what,
+                                          SpecPart what,
                                           const ViewScope* view) {
   if (!anchor.modifier.empty() && !IsModifier(anchor.modifier)) {
     AddError(what, absl::StrCat("modifier \"", anchor.modifier,
@@ -422,7 +428,7 @@ void SurfaceSpecValidator::ValidateParams(const TrackAnchorSpec& anchor,
 }
 
 void SurfaceSpecValidator::ValidateParams(const TrackPickSpec& pick,
-                                          std::string_view what,
+                                          SpecPart what,
                                           const ViewScope* view) {
   if (pick.reference.empty()) {
     AddError(what, "has no reference");
@@ -445,7 +451,7 @@ void SurfaceSpecValidator::ValidateParams(const TrackPickSpec& pick,
 
 void SurfaceSpecValidator::ValidateTrackReference(std::string_view param,
                                                   std::string_view name,
-                                                  std::string_view what) {
+                                                  SpecPart what) {
   if (!name.empty() && !IsTrackReference(name)) {
     AddError(what, absl::StrCat(param, " \"", name,
                                 "\" isn't a track reference, built in or "
@@ -453,7 +459,7 @@ void SurfaceSpecValidator::ValidateTrackReference(std::string_view param,
   }
 }
 
-void SurfaceSpecValidator::ValidateTrackSubject(std::string_view what,
+void SurfaceSpecValidator::ValidateTrackSubject(SpecPart what,
                                                 const ViewScope* view) {
   if (view != nullptr && view->subject.has_value() &&
       *view->subject != SubjectKind::kTrack) {
@@ -462,7 +468,7 @@ void SurfaceSpecValidator::ValidateTrackSubject(std::string_view what,
 }
 
 void SurfaceSpecValidator::ValidateNewName(
-    std::string_view what, std::string_view label, std::string_view name,
+    SpecPart what, std::string_view label, std::string_view name,
     absl::flat_hash_set<std::string_view>& names) {
   if (!IsName(name)) {
     AddError(what, absl::StrCat(label, " \"", name, "\" isn't a C identifier"));
@@ -474,10 +480,11 @@ void SurfaceSpecValidator::ValidateNewName(
 void SurfaceSpecValidator::ValidateTemplates(
     absl::Span<const TemplateSpec> templates) {
   for (const TemplateSpec& spec : templates) {
-    const std::string what = absl::StrCat("template ", spec.name);
+    const std::string text = absl::StrCat("template ", spec.name);
+    const SpecPart what = {.line = spec.line, .text = text};
     if (!IsName(spec.name)) {
-      AddError("", absl::StrCat("template name \"", spec.name,
-                                "\" isn't a C identifier"));
+      AddError({.line = spec.line}, absl::StrCat("template name \"", spec.name,
+                                                 "\" isn't a C identifier"));
     }
     if (!templates_.emplace(spec.name, &spec).second) {
       AddError(what, "has the name of another template");
@@ -489,9 +496,10 @@ void SurfaceSpecValidator::ValidateTemplates(
   // Uses can name any template, so they are validated once every template is
   // known.
   for (const TemplateSpec& spec : templates) {
-    const std::string what = absl::StrCat("template ", spec.name);
+    const std::string text = absl::StrCat("template ", spec.name);
+    const SpecPart what = {.line = spec.line, .text = text};
     for (const TemplateUse& use : spec.uses) {
-      ValidateUse(use, what);
+      ValidateUse(use, text);
     }
     absl::flat_hash_set<std::string_view> visited;
     std::vector<std::string_view> through;
@@ -506,7 +514,7 @@ void SurfaceSpecValidator::ValidateTemplates(
 
 void SurfaceSpecValidator::ValidateTemplateParams(
     absl::Span<const std::string> params, std::string_view kind,
-    std::string_view what) {
+    SpecPart what) {
   const std::string label = absl::StrCat(kind, " parameter");
   absl::flat_hash_set<std::string_view> names;
   for (const std::string& param : params) {
@@ -536,7 +544,8 @@ bool SurfaceSpecValidator::UsesTemplate(
 }
 
 void SurfaceSpecValidator::ValidateUse(const TemplateUse& use,
-                                       std::string_view what) {
+                                       std::string_view where) {
+  const SpecPart what = {.line = use.line, .text = where};
   auto it = templates_.find(use.name);
   if (it == templates_.end()) {
     AddError(what,
@@ -552,8 +561,7 @@ void SurfaceSpecValidator::ValidateUse(const TemplateUse& use,
 void SurfaceSpecValidator::ValidateArgs(
     absl::Span<const std::string> params,
     const absl::flat_hash_map<std::string, std::string>& args,
-    std::string_view kind, std::string_view template_name,
-    std::string_view what) {
+    std::string_view kind, std::string_view template_name, SpecPart what) {
   for (const std::string& param : params) {
     if (!args.contains(param)) {
       AddError(what, absl::StrCat("uses ", template_name, " without its ", kind,
@@ -576,21 +584,21 @@ void SurfaceSpecValidator::ValidateArgs(
 }
 
 void SurfaceSpecValidator::ValidateRoot(const ViewSpec& root) {
-  const ViewScope scope = {.path = "/"};
+  const ViewScope scope = {.path = "/", .line = root.line};
   if (!root.name.empty()) {
-    AddError(scope.path, "the root view has no name");
+    AddError(scope.GetPart(), "the root view has no name");
   }
   if (root.config.condition.has_value()) {
-    AddError(scope.path, "the root view has no condition");
+    AddError(scope.GetPart(), "the root view has no condition");
   }
   if (!std::holds_alternative<View::ParentSubject>(root.config.subject)) {
-    AddError(scope.path, "the root view has no subject");
+    AddError(scope.GetPart(), "the root view has no subject");
   }
   if (root.config.list.has_value()) {
-    AddError(scope.path, "the root view has no list");
+    AddError(scope.GetPart(), "the root view has no list");
   }
   if (root.repeat.has_value()) {
-    AddError(scope.path, "the root view isn't repeated");
+    AddError(scope.GetPart(), "the root view isn't repeated");
   }
   ValidateContents(root, scope);
 }
@@ -602,15 +610,18 @@ void SurfaceSpecValidator::ValidateView(const ViewSpec& view,
                             view.repeat.has_value()
                                 ? absl::StrCat(view.repeat->element, "[]")
                                 : view.name);
+  scope.line = view.line;
   if (view.repeat.has_value()) {
     if (!view.name.empty()) {
-      AddError(scope.path, absl::StrCat("is repeated, so it has no name, but "
-                                        "is named \"",
-                                        view.name, "\""));
+      AddError(scope.GetPart(),
+               absl::StrCat("is repeated, so it has no name, but "
+                            "is named \"",
+                            view.name, "\""));
     }
   } else if (!IsName(view.name)) {
-    AddError(parent.path, absl::StrCat("view name \"", view.name,
-                                       "\" isn't a C identifier"));
+    AddError(
+        {.line = view.line, .text = parent.path},
+        absl::StrCat("view name \"", view.name, "\" isn't a C identifier"));
   }
 
   ValidateSubject(view, parent, scope);
@@ -619,7 +630,7 @@ void SurfaceSpecValidator::ValidateView(const ViewSpec& view,
   // A view's condition is made with its config, before its own components
   // are declared.
   if (view.config.condition.has_value()) {
-    ValidateCondition(*view.config.condition, scope, scope.path);
+    ValidateCondition(*view.config.condition, scope, scope.GetPart());
   }
 
   // An item view gets its parent list's view: properties once it is made.
@@ -642,14 +653,15 @@ void SurfaceSpecValidator::ValidateSubject(const ViewSpec& view,
   const bool is_item =
       std::holds_alternative<View::ListItemSubject>(view.config.subject);
   if (view.repeat.has_value() != is_item) {
-    AddError(scope.path, view.repeat.has_value()
-                             ? "is repeated, but its subject isn't an item "
-                               "of its parent's list"
-                             : "shows an item of its parent's list, but isn't "
-                               "repeated");
+    AddError(scope.GetPart(),
+             view.repeat.has_value()
+                 ? "is repeated, but its subject isn't an item "
+                   "of its parent's list"
+                 : "shows an item of its parent's list, but isn't "
+                   "repeated");
   }
   if ((view.repeat.has_value() || is_item) && !parent.list.has_value()) {
-    AddError(scope.path,
+    AddError(scope.GetPart(),
              "shows an item of its parent's list, but its parent has no list");
   }
 
@@ -659,8 +671,8 @@ void SurfaceSpecValidator::ValidateSubject(const ViewSpec& view,
                  std::get_if<View::ReferenceSubject>(&view.config.subject)) {
     auto it = references_.find(subject->name);
     if (it == references_.end()) {
-      AddError(scope.path, absl::StrCat("is bound to \"", subject->name,
-                                        "\", which isn't a reference"));
+      AddError(scope.GetPart(), absl::StrCat("is bound to \"", subject->name,
+                                             "\", which isn't a reference"));
       scope.subject = std::nullopt;
     } else {
       scope.subject = it->second.kind;
@@ -677,11 +689,12 @@ void SurfaceSpecValidator::ValidateList(const View::Config& config,
   }
   const View::ListConfig& list = *config.list;
   if (scope.subject.has_value() && *scope.subject != SubjectKind::kTrack) {
-    AddError(scope.path, "has a list, but no track subject");
+    AddError(scope.GetPart(), "has a list, but no track subject");
   }
   if (list.bank_size.has_value() && *list.bank_size <= 0) {
-    AddError(scope.path, absl::StrCat("has a bank size of ", *list.bank_size,
-                                      ", which isn't positive"));
+    AddError(scope.GetPart(),
+             absl::StrCat("has a bank size of ", *list.bank_size,
+                          ", which isn't positive"));
   }
 
   // A view may set the reference it is bound to only if it is declared.
@@ -695,12 +708,14 @@ void SurfaceSpecValidator::ValidateList(const View::Config& config,
     if (!reveal.empty()) {
       // Revealing moves the reference the view is bound to.
       if (!IsTrackReference(reveal)) {
-        AddError(scope.path, absl::StrCat("reveals \"", reveal,
-                                          "\", which isn't a track reference"));
+        AddError(scope.GetPart(),
+                 absl::StrCat("reveals \"", reveal,
+                              "\", which isn't a track reference"));
       } else if (!writable || bound->name == reveal) {
-        AddError(scope.path, absl::StrCat("reveals \"", reveal,
-                                          "\", but isn't bound to a declared "
-                                          "reference other than it"));
+        AddError(scope.GetPart(),
+                 absl::StrCat("reveals \"", reveal,
+                              "\", but isn't bound to a declared "
+                              "reference other than it"));
       }
     }
     scope.list = SubjectKind::kTrack;
@@ -712,15 +727,16 @@ void SurfaceSpecValidator::ValidateList(const View::Config& config,
 SurfaceSpecValidator::Element SurfaceSpecValidator::ValidateRepeat(
     const RepeatSpec& repeat, const ViewScope& scope) {
   if (!IsName(repeat.element)) {
-    AddError(scope.path, absl::StrCat("element \"", repeat.element,
-                                      "\" isn't a C identifier"));
+    AddError(scope.GetPart(), absl::StrCat("element \"", repeat.element,
+                                           "\" isn't a C identifier"));
   }
   std::string error;
   const WidgetShape* array = FindWidget(repeat.array, &error);
   if (!error.empty()) {
-    AddError(scope.path, absl::StrCat("array \"", repeat.array, "\" ", error));
+    AddError(scope.GetPart(),
+             absl::StrCat("array \"", repeat.array, "\" ", error));
   } else if (array != nullptr && array->GetKind() != WidgetKind::kArray) {
-    AddError(scope.path,
+    AddError(scope.GetPart(),
              absl::StrCat("array \"", repeat.array, "\" isn't an array"));
     array = nullptr;
   }
@@ -764,13 +780,14 @@ void SurfaceSpecValidator::ValidateChildren(const ViewSpec& view,
     if (child.repeat.has_value()) {
       ++repeated_count;
     } else if (IsName(child.name) && !names.insert(child.name).second) {
-      AddError(scope.path, absl::StrCat("has more than one child view named \"",
-                                        child.name, "\""));
+      AddError({.line = child.line, .text = scope.path},
+               absl::StrCat("has more than one child view named \"", child.name,
+                            "\""));
     }
     ValidateView(child, scope);
   }
   if (scope.list.has_value() && repeated_count != 1) {
-    AddError(scope.path,
+    AddError(scope.GetPart(),
              absl::StrCat("has a list, so it has one repeated child, but has ",
                           repeated_count));
   }
@@ -796,7 +813,7 @@ void SurfaceSpecValidator::ValidateUseMappings(const TemplateUse& use,
       std::string error;
       shape = FindWidget(arg->second, &error);
       if (!error.empty()) {
-        AddError(where,
+        AddError({.line = use.line, .text = where},
                  absl::StrCat("uses ", use.name, " with widget \"", param,
                               "\" as \"", arg->second, "\", which ", error));
       }
@@ -830,7 +847,8 @@ void SurfaceSpecValidator::ValidateUseMappings(const TemplateUse& use,
 
 void SurfaceSpecValidator::ValidateMapping(const MappingSpec& mapping,
                                            const ViewScope& scope,
-                                           std::string_view what) {
+                                           std::string_view text) {
+  const SpecPart what = {.line = mapping.line, .text = text};
   if (mapping.type.IsEmpty()) {
     AddError(what, "neither reads nor writes its control");
   }
@@ -888,7 +906,7 @@ void SurfaceSpecValidator::ValidateMapping(const MappingSpec& mapping,
 void SurfaceSpecValidator::ValidateMappingProperty(const MappingSpec& mapping,
                                                    const Property& property,
                                                    const WidgetShape* control,
-                                                   std::string_view what) {
+                                                   SpecPart what) {
   const ViewMapping::Config& config = mapping.config;
   if (property.type.has_value()) {
     ValidateRangeEnd(property, config.read.property_min, "min", what);
@@ -917,7 +935,7 @@ void SurfaceSpecValidator::ValidateMappingProperty(const MappingSpec& mapping,
 void SurfaceSpecValidator::ValidateSides(const MappingSpec& mapping,
                                          const Property& property,
                                          const WidgetShape& control,
-                                         std::string_view what) {
+                                         SpecPart what) {
   // Each side the mapping asks for must be one the scene keeps (see
   // ViewMapping), and access is checked first for its own error. A shape
   // doesn't say whether a press has a release, which every press in a device
@@ -951,8 +969,7 @@ void SurfaceSpecValidator::ValidateSides(const MappingSpec& mapping,
 
 void SurfaceSpecValidator::ValidateMode(ViewProperty::Type type,
                                         const WidgetShape& control,
-                                        std::string_view mode,
-                                        std::string_view what) {
+                                        std::string_view mode, SpecPart what) {
   if (!ViewMapping::FindMode(type, control, mode).has_value()) {
     AddError(what, absl::StrCat("has no mode \"", mode, "\""));
   }
@@ -960,7 +977,7 @@ void SurfaceSpecValidator::ValidateMode(ViewProperty::Type type,
 
 void SurfaceSpecValidator::ValidateRangeEnd(
     const Property& property, const std::optional<ViewProperty::Value>& end,
-    std::string_view label, std::string_view what) {
+    std::string_view label, SpecPart what) {
   if (!end.has_value()) {
     return;
   }
@@ -1003,7 +1020,7 @@ void SurfaceSpecValidator::ValidateRangeEnd(
 
 void SurfaceSpecValidator::ValidateCondition(
     const ViewCondition::Config& condition, const ViewScope& scope,
-    std::string_view what) {
+    SpecPart what) {
   std::optional<Property> property =
       ValidateProperty(condition.property, scope, "condition", what);
   if (property.has_value()) {
@@ -1015,8 +1032,7 @@ void SurfaceSpecValidator::ValidateCondition(
 std::optional<SurfaceSpecValidator::Property>
 SurfaceSpecValidator::ValidateProperty(std::string_view name,
                                        const ViewScope& scope,
-                                       std::string_view label,
-                                       std::string_view what) {
+                                       std::string_view label, SpecPart what) {
   const std::optional<std::string_view> resolved = ResolvePropertyName(name);
   if (!resolved.has_value()) {
     return Property{.label = absl::StrCat("\"", name, "\"")};
@@ -1033,7 +1049,7 @@ SurfaceSpecValidator::ValidateProperty(std::string_view name,
 
 void SurfaceSpecValidator::ValidateReadable(const Property& property,
                                             std::string_view label,
-                                            std::string_view what) {
+                                            SpecPart what) {
   if (property.type.has_value() &&
       !property.access.IsSet(PropertyAccess::kRead)) {
     AddError(what, absl::StrCat(label, " on ", property.label,
@@ -1044,7 +1060,7 @@ void SurfaceSpecValidator::ValidateReadable(const Property& property,
 void SurfaceSpecValidator::ValidateValue(const Property& property,
                                          const ViewProperty::Value& value,
                                          std::string_view label,
-                                         std::string_view what) {
+                                         SpecPart what) {
   if (!property.type.has_value()) {
     return;
   }
@@ -1225,12 +1241,10 @@ bool SurfaceSpecValidator::IsModifier(std::string_view name) const {
   return name.starts_with(kModNamespace) && visible_names_.contains(name);
 }
 
-void SurfaceSpecValidator::AddError(std::string_view what,
-                                    std::string_view message) {
+void SurfaceSpecValidator::AddError(SpecPart what, std::string_view message) {
   valid_ = false;
   if (errors_ != nullptr) {
-    errors_->push_back(what.empty() ? std::string(message)
-                                    : absl::StrCat(what, ": ", message));
+    errors_->push_back(GetSpecError(what, message));
   }
 }
 
@@ -1244,6 +1258,10 @@ std::string_view GetComponentName(const ComponentSpec& component) {
   return std::visit(
       [](const auto& spec) -> std::string_view { return spec.name; },
       component);
+}
+
+SpecLine GetComponentLine(const ComponentSpec& component) {
+  return std::visit([](const auto& spec) { return spec.line; }, component);
 }
 
 bool ValidateSurfaceSpec(const SurfaceSpec& spec,

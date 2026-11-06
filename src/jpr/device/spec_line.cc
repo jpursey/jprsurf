@@ -9,14 +9,13 @@
 
 namespace jpr {
 
-std::string GetSpecError(SpecLine line, std::string_view subject,
-                         std::string_view message) {
+std::string GetSpecError(SpecPart part, std::string_view message) {
   std::string error;
-  if (line.number > 0) {
-    absl::StrAppend(&error, "line ", line.number, ": ");
+  if (part.line.number > 0) {
+    absl::StrAppend(&error, "line ", part.line.number, ": ");
   }
-  if (!subject.empty()) {
-    absl::StrAppend(&error, subject, ": ");
+  if (!part.text.empty()) {
+    absl::StrAppend(&error, part.text, ": ");
   }
   absl::StrAppend(&error, message);
   return error;

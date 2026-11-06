@@ -265,6 +265,34 @@ TEST_F(CreateSceneTest, ACommandREAPERDoesntHaveCreatesNothing) {
                   "/mode: command \"cmd:_NOR_THAT\" isn't one REAPER has"));
 }
 
+TEST_F(CreateSceneTest, ErrorsStartWithTheLineOfWhatTheyAreAbout) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.templates = {{.name = "button",
+                     .mappings = {{.property = "cmd:_NOT_INSTALLED",
+                                   .control = "play",
+                                   .type = ViewMapping::kReadControl,
+                                   .line = {.number = 4}}},
+                     .line = {.number = 3}}};
+  spec.root.uses = {{.name = "button", .line = {.number = 9}}};
+  spec.root.mappings = {{.property = "cmd:_NOR_THIS",
+                         .control = "stop",
+                         .type = ViewMapping::kReadControl,
+                         .line = {.number = 8}}};
+  spec.root.children = {
+      {.name = "mode",
+       .config = {.condition =
+                      ViewCondition::Config{.property = "cmd:_NOR_THAT"}},
+       .line = {.number = 10}}};
+  EXPECT_THAT(Create(spec), IsNull());
+  EXPECT_THAT(errors_,
+              ElementsAre("line 4: /: button: play: command "
+                          "\"cmd:_NOT_INSTALLED\" isn't one REAPER has",
+                          "line 8: /: stop: command \"cmd:_NOR_THIS\" isn't "
+                          "one REAPER has",
+                          "line 10: /mode: command \"cmd:_NOR_THAT\" isn't "
+                          "one REAPER has"));
+}
+
 TEST_F(CreateSceneTest, ComponentsAreDeclaredWhereTheyAre) {
   std::vector<FakeTrack*> tracks = reaper_.GetProject().AddTracks(4);
   SurfaceSpec spec = GetXTouchSpec();

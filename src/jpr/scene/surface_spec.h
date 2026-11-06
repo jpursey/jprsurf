@@ -14,6 +14,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "jpr/common/track.h"
 #include "jpr/device/device_spec.h"
+#include "jpr/device/spec_line.h"
 #include "jpr/device/widget_definition.h"
 #include "jpr/scene/catalog.h"
 #include "jpr/scene/view.h"
@@ -27,40 +28,58 @@ namespace jpr {
 //
 // A config declares components by kind (see GetComponentKinds()), each with a
 // name and its kind's parameters, at the top level or on a view. Each spec's
-// fields after its name are its kind's parameters, in order.
+// fields after its name, up to its line, are its kind's parameters, in order.
 //==============================================================================
 
 // A modifier, at the top level: a "mod:" name, such as "mod:send_hold".
 struct ModifierSpec {
+  friend bool operator==(const ModifierSpec&, const ModifierSpec&) = default;
+
   std::string name;
+  SpecLine line;  // Where it was written, for errors.
 };
 
 // An enumerated value, at the top level, such as "user:surface_mode".
 struct EnumeratedValueSpec {
+  friend bool operator==(const EnumeratedValueSpec&,
+                         const EnumeratedValueSpec&) = default;
+
   std::string name;
   std::vector<std::string> values;  // Such as "track" and "send_receive".
   std::string initial;  // One of the values, or empty for the first.
+  SpecLine line;        // Where it was written, for errors.
 };
 
 // A track reference, at the top level, such as "user:folder".
 struct TrackReferenceSpec {
+  friend bool operator==(const TrackReferenceSpec&,
+                         const TrackReferenceSpec&) = default;
+
   std::string name;
   std::string fallback;  // A track reference, such as "state:master_track".
   std::string follow;    // A track reference.
+  SpecLine line;         // Where it was written, for errors.
 };
 
 // A track anchor, on a view, such as "user:anchor_select".
 struct TrackAnchorSpec {
+  friend bool operator==(const TrackAnchorSpec&,
+                         const TrackAnchorSpec&) = default;
+
   std::string name;
   TrackBoolProperty action = TrackBoolProperty::kSelected;
   std::string modifier;  // A modifier, such as "mod:select_anchor".
+  SpecLine line;         // Where it was written, for errors.
 };
 
 // A track pick, at the top level or on a view, such as "user:pick_track".
 struct TrackPickSpec {
+  friend bool operator==(const TrackPickSpec&, const TrackPickSpec&) = default;
+
   std::string name;
   std::string reference;  // The track reference it sets.
   std::string source;     // A track reference, at the top level only.
+  SpecLine line;          // Where it was written, for errors.
 };
 
 // A component, of the kind each alternative is: the kinds of
@@ -72,8 +91,9 @@ using ComponentSpec =
 // Returns the component's kind, from GetComponentKinds().
 const ComponentKindInfo& GetComponentKind(const ComponentSpec& component);
 
-// Returns the name the component declares.
+// Returns the name the component declares, and where it was written.
 std::string_view GetComponentName(const ComponentSpec& component);
+SpecLine GetComponentLine(const ComponentSpec& component);
 
 //==============================================================================
 // Mappings and templates
@@ -82,7 +102,7 @@ std::string_view GetComponentName(const ComponentSpec& component);
 // A value a write mapping always writes, for which creating the scene adds a
 // const: property (see Scene::AddConstProperty()).
 struct FixedValue {
-  bool operator==(const FixedValue&) const = default;
+  friend bool operator==(const FixedValue&, const FixedValue&) = default;
 
   ViewProperty::Type type = ViewProperty::Type::kToggle;
   ViewProperty::Value value;
@@ -91,17 +111,23 @@ struct FixedValue {
 // A mapping of a property, or a fixed value, to a control (see
 // View::AddMapping()).
 struct MappingSpec {
+  friend bool operator==(const MappingSpec&, const MappingSpec&) = default;
+
   std::variant<std::string, FixedValue> property;
   std::string control;  // A widget path (see Names in paths, below).
   ViewMapping::TypeFlags type;
   ViewMapping::Config config;
+  SpecLine line;  // Where it was written, for errors.
 };
 
 // A use of a template, with an argument for each of its parameters.
 struct TemplateUse {
+  friend bool operator==(const TemplateUse&, const TemplateUse&) = default;
+
   std::string name;                                          // The template's.
   absl::flat_hash_map<std::string, std::string> widgets;     // To paths.
   absl::flat_hash_map<std::string, std::string> properties;  // To names.
+  SpecLine line;  // Where it was written, for errors.
 };
 
 // A named set of mappings, with parameters, which any number of views can use,
@@ -109,11 +135,14 @@ struct TemplateUse {
 // of the paths that use it, and a property parameter is a property name
 // without a namespace, which a use replaces with its argument.
 struct TemplateSpec {
+  friend bool operator==(const TemplateSpec&, const TemplateSpec&) = default;
+
   std::string name;
   std::vector<std::string> widget_params;
   std::vector<std::string> property_params;
   std::vector<MappingSpec> mappings;
   std::vector<TemplateUse> uses;
+  SpecLine line;  // Where it was written, for errors.
 };
 
 //==============================================================================
@@ -124,6 +153,8 @@ struct TemplateSpec {
 // showing an item of its parent's list. `element` is the first name of the
 // paths that use the instance's element, here and in its descendants.
 struct RepeatSpec {
+  friend bool operator==(const RepeatSpec&, const RepeatSpec&) = default;
+
   std::string array;    // A widget path, such as "strip".
   std::string element;  // Such as "strip".
 };
@@ -131,6 +162,8 @@ struct RepeatSpec {
 // A view, and its descendants. Its components are declared, then its uses
 // expanded, then its mappings added, then its children built.
 struct ViewSpec {
+  friend bool operator==(const ViewSpec&, const ViewSpec&) = default;
+
   std::string name;  // Unique among siblings, and empty for a repeated view.
   View::Config config;
   std::optional<RepeatSpec> repeat;  // Exactly when the subject is a list item.
@@ -138,6 +171,7 @@ struct ViewSpec {
   std::vector<TemplateUse> uses;
   std::vector<MappingSpec> mappings;
   std::vector<ViewSpec> children;
+  SpecLine line;  // Where it was written, for errors.
 };
 
 //==============================================================================
@@ -154,6 +188,8 @@ struct ViewSpec {
 // top-level widgets. A template sees only its own parameters and the top-level
 // widgets.
 struct SurfaceSpec {
+  friend bool operator==(const SurfaceSpec&, const SurfaceSpec&) = default;
+
   std::vector<DeviceSpec> devices;
   WidgetStructDefinition widgets;
   std::vector<ComponentSpec> components;  // Declared at the top level.
@@ -164,14 +200,16 @@ struct SurfaceSpec {
 
 // Returns true if the spec is valid, adding an error for each problem found
 // to `errors` (if provided). Checking doesn't stop at the first problem, and
-// each error starts with what it is about: a device or a widget (see
+// each error starts with the line of the part it is about, if it has one (see
+// GetSpecError()), then what it is about: a device or a widget (see
 // CreateWidgetDevices() and ValidateWidgets()), a top-level component by its
 // name, a template (such as "template track_strip"), or a view by its path
 // from the root, which is "/" (such as "/track_mode/track_list/strip[]", where
 // a repeated view is its element, and "[]"), and a component on a view by its
 // name after that. A problem that makes others impossible to check, such as a
 // device that isn't valid, skips them rather than adding errors that follow
-// from it.
+// from it. An error about a use's arguments has the use's line, and one about
+// a mapping in a template the mapping's, with the use's view in its path.
 //
 // It checks:
 // - Devices and widgets: the device specs (see CreateWidgetDevices()), then

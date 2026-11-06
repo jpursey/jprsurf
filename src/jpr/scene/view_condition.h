@@ -26,6 +26,8 @@ class ViewCondition final {
  public:
   // Configures a condition, with its property by name.
   struct Config {
+    friend bool operator==(const Config&, const Config&) = default;
+
     // The name of a property, as seen from the view that has the condition,
     // or that has the mapping with the condition. It must be one that can
     // be read.

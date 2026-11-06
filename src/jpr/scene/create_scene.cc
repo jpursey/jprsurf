@@ -15,6 +15,7 @@
 #include "absl/strings/str_cat.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/device/device_spec.h"
+#include "jpr/device/spec_line.h"
 #include "jpr/device/widget.h"
 #include "jpr/device/widget_definition.h"
 #include "jpr/device/widget_path.h"
@@ -80,9 +81,10 @@ class SceneBuilder {
   void AddUseMappings(const TemplateUse& use, View* view,
                       std::string_view where);
 
-  // Adds a mapping to the view, whose errors start with `what`.
+  // Adds a mapping to the view, whose errors have its line, and start with
+  // `text` after it.
   void AddMapping(const MappingSpec& mapping, View* view,
-                  std::string_view what);
+                  std::string_view text);
 
   // Returns the name of the const: property for the fixed value, adding it the
   // first time, or nullopt if the scene refuses it.
@@ -97,12 +99,12 @@ class SceneBuilder {
   // if it is a property parameter, or itself.
   std::string_view ResolvePropertyName(std::string_view name) const;
 
-  // Returns true if the name isn't a command, or is one REAPER has, adding
-  // an error about `what` otherwise.
-  bool ValidateCommand(std::string_view name, std::string_view what);
+  // Returns true if the name isn't a command, or is one REAPER has, adding an
+  // error about `what` otherwise.
+  bool ValidateCommand(std::string_view name, SpecPart what);
 
-  // Adds an error about `what`, which starts the error.
-  void AddError(std::string_view what, std::string_view message);
+  // Adds an error about `what` (see GetSpecError()).
+  void AddError(SpecPart what, std::string_view message);
 
   std::vector<std::string>* const errors_;
   bool valid_ = true;
@@ -163,7 +165,9 @@ void SceneBuilder::AddComponent(const ComponentSpec& component, View* view,
           },
           component)) {
     const std::string_view name = GetComponentName(component);
-    AddError(path.empty() ? std::string(name) : absl::StrCat(path, ": ", name),
+    const std::string text =
+        path.empty() ? std::string(name) : absl::StrCat(path, ": ", name);
+    AddError({.line = GetComponentLine(component), .text = text},
              "the scene refused it");
   }
 }
@@ -279,12 +283,13 @@ void SceneBuilder::AddView(const ViewSpec& spec, std::string_view name,
   // A view's condition is made with it, so a command it names is checked
   // first.
   if (spec.config.condition.has_value() &&
-      !ValidateCommand(spec.config.condition->property, path)) {
+      !ValidateCommand(spec.config.condition->property,
+                       {.line = spec.line, .text = path})) {
     return;
   }
   View* view = parent->AddChildView(name, spec.config);
   if (view == nullptr) {
-    AddError(path, "the scene refused it");
+    AddError({.line = spec.line, .text = path}, "the scene refused it");
     return;
   }
   BuildView(spec, view, path);
@@ -320,7 +325,8 @@ void SceneBuilder::AddUseMappings(const TemplateUse& use, View* view,
 }
 
 void SceneBuilder::AddMapping(const MappingSpec& mapping, View* view,
-                              std::string_view what) {
+                              std::string_view text) {
+  const SpecPart what = {.line = mapping.line, .text = text};
   std::string property;
   if (const auto* fixed = std::get_if<FixedValue>(&mapping.property)) {
     std::optional<std::string> name = GetFixedValueName(*fixed);
@@ -400,8 +406,7 @@ std::string_view SceneBuilder::ResolvePropertyName(
   return it != property_args_.end() ? it->second : name;
 }
 
-bool SceneBuilder::ValidateCommand(std::string_view name,
-                                   std::string_view what) {
+bool SceneBuilder::ValidateCommand(std::string_view name, SpecPart what) {
   if (!name.starts_with(kCmdNamespace) ||
       scene_->GetProperty(name) != nullptr) {
     return true;
@@ -410,10 +415,10 @@ bool SceneBuilder::ValidateCommand(std::string_view name,
   return false;
 }
 
-void SceneBuilder::AddError(std::string_view what, std::string_view message) {
+void SceneBuilder::AddError(SpecPart what, std::string_view message) {
   valid_ = false;
   if (errors_ != nullptr) {
-    errors_->push_back(absl::StrCat(what, ": ", message));
+    errors_->push_back(GetSpecError(what, message));
   }
 }
 

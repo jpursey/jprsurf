@@ -79,9 +79,10 @@ void OverrideValidator::AddError(const ControlOverride& control_override,
                                  std::string_view message) {
   valid_ = false;
   if (errors_ != nullptr) {
-    errors_->push_back(GetSpecError(
-        control_override.line,
-        absl::StrCat(device_name_, ": ", control_override.control), message));
+    const std::string text =
+        absl::StrCat(device_name_, ": ", control_override.control);
+    errors_->push_back(
+        GetSpecError({.line = control_override.line, .text = text}, message));
   }
 }
 

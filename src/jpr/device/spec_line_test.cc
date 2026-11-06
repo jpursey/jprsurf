@@ -10,16 +10,18 @@
 namespace jpr {
 namespace {
 
-TEST(SpecLineTest, ErrorStartsWithTheLineThenTheSubject) {
-  EXPECT_EQ(GetSpecError({12}, "xtouch", "type \"XTouh\" isn't a device type"),
+TEST(SpecLineTest, ErrorStartsWithTheLineThenTheText) {
+  EXPECT_EQ(GetSpecError({.line = {12}, .text = "xtouch"},
+                         "type \"XTouh\" isn't a device type"),
             "line 12: xtouch: type \"XTouh\" isn't a device type");
 }
 
 TEST(SpecLineTest, ErrorLeavesOutWhatIsMissing) {
-  EXPECT_EQ(GetSpecError({}, "xtouch", "is required"), "xtouch: is required");
-  EXPECT_EQ(GetSpecError({12}, "", "device \"xtouch\" is repeated"),
+  EXPECT_EQ(GetSpecError({.text = "xtouch"}, "is required"),
+            "xtouch: is required");
+  EXPECT_EQ(GetSpecError({.line = {12}}, "device \"xtouch\" is repeated"),
             "line 12: device \"xtouch\" is repeated");
-  EXPECT_EQ(GetSpecError({}, "", "device \"xtouch\" is repeated"),
+  EXPECT_EQ(GetSpecError({}, "device \"xtouch\" is repeated"),
             "device \"xtouch\" is repeated");
 }
 
