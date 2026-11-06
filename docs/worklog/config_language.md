@@ -796,17 +796,26 @@ Depends on: CL6.
 - Standard checks.
 - The parity test.
 
-### CL8 [ ] plugin: The surface from its config file
+### CL8 [x] plugin: The surface from its config file
 
 Depends on: CL1, CL7.
 
-- `PluginSurface` reads its config string as a path (empty or `null` for the
-  deployed file), reads the file, and creates the scene from it, logging every
-  error. `GetConfig()` returns the config string.
+- `PluginSurface` reads its config string as a path in `GetFileSystem()`
+  (empty or `null` for the deployed file), reads the file, and creates the
+  scene from it, logging every error with the path in front, and which file
+  it reads. `GetConfig()` returns the config string.
+- `Plugin::Options::config_path` is the deployed file, which `dll_main.cc`
+  finds beside the DLL. It registers the operating system's files
+  (`gb::LocalFileProtocol::CreateOsRoot()`), so a path opens as Windows
+  writes it. `ControlSurface::Type::create_listener` is a `std::function`, so
+  `PluginSurface` can be given the path.
 - The deploy copies the file beside the DLL.
-- `GetDefaultSpec()` goes; `DefaultSpecTest` and the surface tests use
-  `config/jprsurf.jprsurf`. The parity test goes with it. Any call count bound
-  the file's order moves is updated, saying why.
+- `GetDefaultSpec()` goes, with the parity test. `ConfigFileTest` checks
+  that `config/jprsurf.jprsurf` reads and is valid, and `SurfaceTest` takes a
+  config file's path, which `DefaultConfigTest` gives as the checked-in file
+  (`GetConfigFilePath()`). No call count bound moved.
+- `PluginTest` fails on any error logged, as the surface tests do, so the
+  tests of loading that fails now check the error they log.
 - The user guide gets a page on config files (`docs/user/config_files.md`):
   setting one, the language by example, and errors.
 

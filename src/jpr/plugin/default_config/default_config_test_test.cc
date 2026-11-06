@@ -127,6 +127,8 @@ TEST_F(XTouchAloneTest, TheXTouchShowsTheFirstTracks) {
 // The extender alone, without the X-Touch the surface needs.
 class ExtenderAloneTest : public SurfaceTest {
  protected:
+  ExtenderAloneTest() : SurfaceTest(GetConfigFilePath()) {}
+
   FakeXTouch xtouch_ext_{reaper_, FakeXTouch::Type::kExtender, "X-Touch-Ext"};
 };
 

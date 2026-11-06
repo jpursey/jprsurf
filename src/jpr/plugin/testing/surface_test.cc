@@ -5,7 +5,12 @@
 
 #include "jpr/plugin/testing/surface_test.h"
 
+#include <string>
+#include <utility>
+
 #include "absl/time/time.h"
+#include "gb/file/local_file_protocol.h"
+#include "jpr/common/file_system.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/device/control.h"
 #include "jpr/plugin/plugin.h"
@@ -22,12 +27,17 @@ absl::Duration GetLongPressTime() {
 
 }  // namespace
 
-SurfaceTest::SurfaceTest() { AddReaperActions(&reaper_); }
+SurfaceTest::SurfaceTest(std::string config_path)
+    : config_path_(std::move(config_path)) {
+  AddReaperActions(&reaper_);
+  EXPECT_TRUE(GetFileSystem()->Register(gb::LocalFileProtocol::CreateOsRoot()));
+}
 
 void SurfaceTest::TearDown() { RemoveSurface(); }
 
 void SurfaceTest::AddSurface() {
-  ASSERT_TRUE(Plugin::Load(nullptr, reaper_.GetPluginInfo(), {}));
+  ASSERT_TRUE(Plugin::Load(nullptr, reaper_.GetPluginInfo(),
+                           {.config_path = config_path_}));
   surface_ = reaper_.AddSurface();
   ASSERT_NE(surface_, nullptr);
   surface_->SetTrackListChange();

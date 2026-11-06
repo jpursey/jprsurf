@@ -13,6 +13,7 @@ set(jpr_plugin_testing_SOURCE
 set(jpr_plugin_testing_DEPS
   absl::strings
   absl::time
+  gb_file
   gb_test
   gtest
   jpr_common_testing

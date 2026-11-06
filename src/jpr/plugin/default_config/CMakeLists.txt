@@ -3,8 +3,8 @@
 ## Use of this source code is governed by an MIT-style License that can be found
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-# Tests of the config PluginSurface builds, and their fixture. Only tests link
-# this, never the plugin's DLL.
+# Tests of JPRSurf's own config, and their fixture. Only tests link this, never
+# the plugin's DLL.
 
 set(jpr_default_config_SOURCE
   default_config_test.cc default_config_test.h
@@ -18,6 +18,7 @@ set(jpr_default_config_DEPS
 
 set(jpr_default_config_TEST_SOURCE
   call_count_test.cc
+  config_file_test.cc
   default_config_test_test.cc
   global_test.cc
   send_mode_test.cc
@@ -25,7 +26,18 @@ set(jpr_default_config_TEST_SOURCE
   track_strip_test.cc
 )
 
+set(jpr_default_config_TEST_DEPS
+  jpr_config
+  jpr_scene
+)
+
 gb_add_library(jpr_default_config)
+
+# JPRSurf's config, which the fixture and the tests read where it is checked
+# in.
+target_compile_definitions(jpr_default_config PRIVATE
+  "JPR_CONFIG_FILE=\"${JPR_CONFIG_FILE}\""
+)
 
 # The benchmarks under the fake, and the target that runs them, writing to
 # benchmark/ in the build tree (see "Benchmarks" in

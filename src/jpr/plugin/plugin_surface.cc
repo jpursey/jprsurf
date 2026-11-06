@@ -5,15 +5,19 @@
 
 #include "jpr/plugin/plugin_surface.h"
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/log/log.h"
-#include "gb/config/text_config.h"
-#include "jpr/plugin/default_spec.h"
+#include "jpr/common/file_system.h"
+#include "jpr/config/surface_config.h"
 #include "jpr/scene/create_scene.h"
+#include "jpr/scene/surface_spec.h"
 
 namespace jpr {
 
@@ -29,41 +33,57 @@ constexpr const char kDescString[] = "Jovian Path Control Surface";
 //------------------------------------------------------------------------------
 
 bool PluginSurface::Register(reaper_plugin_info_t& plugin_info,
+                             std::string_view default_config_path,
                              const ReaperProfiler::Options& profile) {
-  return ControlSurface::Register(plugin_info,
-                                  {.type_string = kTypeString,
-                                   .description = kDescString,
-                                   .create_listener = PluginSurface::Create,
-                                   .profile = profile});
+  return ControlSurface::Register(
+      plugin_info,
+      {.type_string = kTypeString,
+       .description = kDescString,
+       .create_listener = std::bind_front(&PluginSurface::Create,
+                                          std::string(default_config_path)),
+       .profile = profile});
 }
 
 std::unique_ptr<ControlSurfaceListener> PluginSurface::Create(
-    std::string_view config) {
+    std::string_view default_config_path, std::string_view config) {
   // The listener is a private base, so convert the pointer here, where it is
   // accessible.
-  return std::unique_ptr<ControlSurfaceListener>(new PluginSurface(config));
+  return std::unique_ptr<ControlSurfaceListener>(
+      new PluginSurface(default_config_path, config));
 }
 
-PluginSurface::PluginSurface(std::string_view config) {
-  if (!config.empty()) {
-    auto parsed_config = gb::ReadConfigFromText(std::string(config));
-    if (!parsed_config.ok()) {
-      LOG(ERROR) << "Failed to parse control surface config: "
-                 << parsed_config.status();
-      LOG(ERROR) << config;
-    }
-  }
+PluginSurface::PluginSurface(std::string_view default_config_path,
+                             std::string_view config)
+    : config_(config) {
   LOG(INFO) << "PluginSurface created";
 
   // Without the scene, as when the X-Touch is absent, the surface does nothing.
-  std::vector<std::string> errors;
-  scene_ = CreateScene(GetDefaultSpec(), midi_ports_, device_runner_, &errors);
-  for (const std::string& error : errors) {
-    LOG(ERROR) << "Failed to create the scene: " << error;
-  }
+  // "null" is the config string earlier versions wrote (an empty gb::Config),
+  // which REAPER still saves for their surfaces.
+  scene_ = ReadScene(config.empty() || config == "null" ? default_config_path
+                                                        : config);
   if (scene_ != nullptr) {
     scene_->Activate(scene_runner_);
   }
+}
+
+std::unique_ptr<Scene> PluginSurface::ReadScene(std::string_view path) {
+  LOG(INFO) << "Reading the config file " << path;
+  std::string text;
+  if (!GetFileSystem()->ReadFile(path, &text)) {
+    LOG(ERROR) << path << ": the config file can't be read";
+    return nullptr;
+  }
+  std::vector<std::string> errors;
+  std::unique_ptr<Scene> scene;
+  if (std::optional<SurfaceSpec> spec =
+          ReadSurfaceConfig(std::move(text), &errors)) {
+    scene = CreateScene(*spec, midi_ports_, device_runner_, &errors);
+  }
+  for (const std::string& error : errors) {
+    LOG(ERROR) << path << ": " << error;
+  }
+  return scene;
 }
 
 PluginSurface::~PluginSurface() {
@@ -91,8 +111,6 @@ void PluginSurface::OnRun(const RunTime& time) {
   midi_ports_.RunOutput(time);
 }
 
-std::string PluginSurface::GetConfig() const {
-  return gb::WriteConfigToText(config_, gb::kCompactTextConfig);
-}
+std::string PluginSurface::GetConfig() const { return config_; }
 
 }  // namespace jpr

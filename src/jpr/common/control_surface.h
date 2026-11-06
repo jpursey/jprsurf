@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -98,8 +99,9 @@ class ControlSurface final : private IReaperControlSurface {
 
     // Creates the listener for a new control surface, from the config string
     // REAPER saved for it. This must not return null.
-    std::unique_ptr<ControlSurfaceListener> (*create_listener)(
-        std::string_view config);
+    std::function<std::unique_ptr<ControlSurfaceListener>(
+        std::string_view config)>
+        create_listener;
 
     // The profile each surface writes when it is destroyed (see
     // ReaperProfiler), replacing the last one. An empty path is no profiling.

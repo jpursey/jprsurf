@@ -29,6 +29,11 @@ class Plugin final {
     // Where each surface writes its profile (see ReaperProfiler), as a path in
     // GetFileSystem().
     std::string profile_path;
+
+    // The config file a surface reads when REAPER gives it no config string
+    // (see PluginSurface), as a path in GetFileSystem(): jprsurf.jprsurf,
+    // beside the DLL.
+    std::string config_path;
   };
 
   // Loads the plugin from what REAPER passes its entry point: loads the REAPER

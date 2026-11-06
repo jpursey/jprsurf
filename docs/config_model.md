@@ -8,10 +8,10 @@ deliberately says nothing about syntax, which belongs to the config language
 [config_language.md](worklog/config_language.md)).
 
 It ties together the backlog items that build toward a data driven surface, and
-it seeds the public spec of the config language. Today the model is a C++
-struct, the `SurfaceSpec`, which `CreateScene()` builds a scene from, and
-JPRSurf's surface is one written in code (`GetDefaultSpec()`). Reading a config
-file will fill in the same struct.
+it seeds the public spec of the config language. The model is a C++ struct, the
+`SurfaceSpec`, which `CreateScene()` builds a scene from, and which reading a
+config file fills in. JPRSurf's surface is its config file,
+`config/jprsurf.jprsurf`.
 
 Property names in this doc are the ones the code uses, except for properties
 that components will provide, whose names are illustrative. The **Today** notes
@@ -475,8 +475,8 @@ they were written there.
 JPRSurf's `track_strip` template has a strip as its parameter. Every Track mode
 strip uses it, and so does the Send/Receive Info strip. The automation buttons
 are five uses of `auto_mode_button`, whose parameters are a button, a command,
-and three state properties (the `kAutoModeButtons` table in
-`plugin/default_spec.cc` gives their arguments). Both list views use
+and three state properties (its uses in
+`config/jprsurf.jprsurf` give their arguments). Both list views use
 `list_navigation`, which has no parameters.
 
 Templates and repetition are expanded when the scene is built, so they cost
@@ -877,8 +877,8 @@ Without the X-Touch, the surface does nothing, as the X-Touch is required. The
 extender alone once gave 8 strips with no transport, modes, or navigation,
 which was never a useful surface.
 
-This is `GetDefaultSpec()` (`plugin/default_spec.cc`), which `PluginSurface`
-creates its scene from. What became of the plugin's code:
+This is `config/jprsurf.jprsurf`, which `PluginSurface` creates its scene from.
+What became of the plugin's code:
 
 | `PluginSurface`, before the spec                                                          | In the model                                                     |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |

@@ -13,8 +13,11 @@
 
 namespace jpr {
 
+const char* GetConfigFilePath() { return JPR_CONFIG_FILE; }
+
 DefaultConfigTest::DefaultConfigTest(bool extender)
-    : xtouch_(reaper_, FakeXTouch::Type::kFull, "X-Touch") {
+    : SurfaceTest(GetConfigFilePath()),
+      xtouch_(reaper_, FakeXTouch::Type::kFull, "X-Touch") {
   if (extender) {
     xtouch_ext_.emplace(reaper_, FakeXTouch::Type::kExtender, "X-Touch-Ext");
   }

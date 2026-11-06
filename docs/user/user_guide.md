@@ -39,7 +39,8 @@ pages list every control on each unit, by the names JPRSurf gives them.
 ### Installing the extension
 
 1. Close REAPER.
-2. Copy `reaper_jprsurf.dll` into REAPER's user plugins folder:
+2. Copy `reaper_jprsurf.dll`, and its config file, `jprsurf.jprsurf`, into
+   REAPER's user plugins folder:
    `%APPDATA%\REAPER\UserPlugins`
    (typically `C:\Users\<you>\AppData\Roaming\REAPER\UserPlugins`).
 3. Start REAPER.
@@ -69,8 +70,10 @@ Control Surface** from the control surface mode list:
 
 ![Adding the Jovian Path Control Surface in REAPER's control surface preferences](images/add-control-surface.png)
 
-There is nothing to configure - JPRSurf has no settings in this dialog. It finds
-the hardware itself, and the surface should light up as soon as you click OK.
+There is nothing to set in this dialog. The surface reads `jprsurf.jprsurf`
+beside the DLL, which this guide describes, finds the hardware itself, and
+should light up as soon as you click OK. To change what it does, see
+[Config files](config_files.md).
 
 It can only be added once. Adding it again shows a message in REAPER's console
 saying it is already running, and nothing is added.
@@ -84,13 +87,16 @@ JPRSurf locates the units by their MIDI port names, which must be exactly:
 
 These are the names the units report by default. If you have renamed them in
 Windows, or you have more than one interface presenting a similar name, JPRSurf
-will not find them.
+will not find them, unless its config file's `devices` names them (see
+[Config files](config_files.md)).
 
 ### If something doesn't work
 
 JPRSurf writes a log to `%APPDATA%\jprsurf.log`, which is cleared each time
 REAPER starts. It lists every MIDI port it found and which ones it opened,
 which is the fastest way to tell whether a naming or port problem is the cause.
+It also lists every error in the config file, as a config with an error does
+nothing at all (see [Config files](config_files.md#errors)).
 
 If everything works except the **Save** button's light, check REAPER's undo
 settings. REAPER only tracks whether a project has unsaved changes when
@@ -537,10 +543,11 @@ other, it does nothing.
 ## Reference
 
 JPRSurf's surface maps the devices' controls to the properties the scene
-provides. These pages list both, by the names JPRSurf gives them, and are
-generated from JPRSurf's code. They are what a surface config will name, though
-the surface can't be configured yet.
+provides, in its config file. These pages list both, by the names JPRSurf gives
+them, and are generated from JPRSurf's code. They are what a config names.
 
+- **[Config files](config_files.md):** which file the surface reads, the
+  language, and its errors.
 - **[Device types](devices/README.md):** each one's widgets.
 - **[The scene](scene/README.md):** its properties, by namespace, such as
   REAPER's state and a track's, and the components a config can declare, such

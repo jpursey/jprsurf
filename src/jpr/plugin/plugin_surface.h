@@ -9,7 +9,6 @@
 #include <string>
 #include <string_view>
 
-#include "gb/config/config.h"
 #include "jpr/common/control_surface.h"
 #include "jpr/common/midi_ports.h"
 #include "jpr/common/reaper_profiler.h"
@@ -19,12 +18,22 @@
 
 namespace jpr {
 
+// A JPRSurf control surface, whose config string is the path of its config
+// file, in GetFileSystem(). An empty config string, or "null", is the default
+// config file, which Register() names.
+//
+// The surface reads its config file once, as it is created. Each error, from
+// reading the file to creating the scene, is logged with the file's path in
+// front (`<path>: line 61: ...`), and the whole config is rejected: the surface
+// then does nothing.
 class PluginSurface final : private ControlSurfaceListener {
  public:
   // Registers JPRSurf as a control surface type with REAPER, whose surfaces
-  // write `profile`, or none if its path is empty. Returns false (and logs an
-  // error) if registration fails.
+  // read `default_config_path` when given no config string, and write
+  // `profile`, or none if its path is empty. Returns false (and logs an error)
+  // if registration fails.
   static bool Register(reaper_plugin_info_t& plugin_info,
+                       std::string_view default_config_path,
                        const ReaperProfiler::Options& profile);
 
   PluginSurface(const PluginSurface&) = delete;
@@ -34,16 +43,20 @@ class PluginSurface final : private ControlSurfaceListener {
  private:
   // Creates the listener for a new JPRSurf control surface.
   static std::unique_ptr<ControlSurfaceListener> Create(
-      std::string_view config);
+      std::string_view default_config_path, std::string_view config);
 
-  explicit PluginSurface(std::string_view config);
+  PluginSurface(std::string_view default_config_path, std::string_view config);
+
+  // Returns the scene the config file at `path` describes, or null, logging
+  // each error.
+  std::unique_ptr<Scene> ReadScene(std::string_view path);
 
   // ControlSurfaceListener overrides
   void OnRun(const RunTime& time) override;
   std::string GetConfig() const override;
 
   // State
-  gb::Config config_;
+  std::string config_;              // The config string, as REAPER gave it.
   Runner device_runner_{"Device"};  // Resets device state, sends output.
   Runner scene_runner_{"Scene"};    // Updates the scene.
   MidiPorts midi_ports_;  // Outlives the scene, whose devices use the ports.

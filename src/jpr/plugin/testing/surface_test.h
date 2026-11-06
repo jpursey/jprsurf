@@ -6,6 +6,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "gb/test/log_error_guard.h"
@@ -41,7 +42,10 @@ namespace jpr {
 
 class SurfaceTest : public ::testing::Test {
  protected:
-  SurfaceTest();
+  // The surface reads the config file at `config_path`, a local path (the
+  // fixture registers the local file system, as dll_main.cc does), or none for
+  // a test that adds no surface.
+  explicit SurfaceTest(std::string config_path = {});
 
   // Calls RemoveSurface(), before any fixture's members go, so the surface
   // goes before the fake devices a fixture derived from this holds.
@@ -130,6 +134,8 @@ class SurfaceTest : public ::testing::Test {
  private:
   // Runs until whatever a button press started is done, and shown.
   void Settle();
+
+  std::string config_path_;
 };
 
 }  // namespace jpr
