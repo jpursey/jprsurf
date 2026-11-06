@@ -64,7 +64,7 @@ from a value input, color from a delta), as the rule depends on the input.
 - **Layers:** none (docs)
 - **Size:** medium
 - **Feature workflow:** no
-- **Depends on:** *Config file language and loader*
+- **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md)
 
 The config model doc becomes a public specification of the config language. The
@@ -162,7 +162,7 @@ is the design work.
 - **Layers:** plugin
 - **Size:** small
 - **Feature workflow:** no
-- **Depends on:** *Config file language and loader*
+- **Depends on:** nothing
 - **Background:** none
 
 Tear down the scene and build a new one from the config file, from a REAPER
@@ -171,12 +171,76 @@ recreates the surface, which reads the file again), but an action makes
 iterating on a config much faster. It should be cheap if nothing in the plugin
 outlives the scene.
 
+## Read a config with a byte order mark
+
+- **Layers:** config
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [config_language.md](worklog/config_language.md)
+
+A config saved with a UTF-8 byte order mark (as some editors, and
+PowerShell's `Set-Content`, write one) is a syntax error at line 1, as
+`ReadSurfaceConfig()` reads the mark as a token. It could skip one at the start
+of the text.
+
+## Include other config files
+
+- **Layers:** config, plugin
+- **Size:** medium
+- **Feature workflow:** yes
+- **Depends on:** nothing
+- **Background:** [config_language.md](worklog/config_language.md)
+
+A config is one file. An `include` of another file, such as shared templates
+or one device's widgets, would let configs share parts. Errors would need the
+file as well as the line, which only the plugin knows today (a spec keeps
+lines, not files).
+
+## Template parameters that are values
+
+- **Layers:** scene, config
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [config_language.md](worklog/config_language.md)
+
+A template's parameters are widgets and properties, so the transport steps,
+which differ only in the value each sets, are written out three times in
+`config/jprsurf.jprsurf`. A value parameter (a number or a name, for a `set`,
+a `range` end, or a condition's value) would let one template cover them.
+
+## Conditions around a use
+
+- **Layers:** scene, config
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [config_language.md](worklog/config_language.md)
+
+A `when` around a `use` is an error, as a `TemplateUse` has no condition. One
+would apply to each mapping the use adds, combined with any condition the
+template's own mappings have, which needs a mapping to have more than one
+condition, or a component that combines them.
+
+## Devices with only an input or an output
+
+- **Layers:** device, config
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [config_language.md](worklog/config_language.md)
+
+Every device type uses both of its ports today, so a device names both, and
+one with no input or no output is an error. A device type that only listens,
+or only lights up, would leave the other out.
+
 ## Generic MIDI devices defined in config
 
 - **Layers:** device, spec library
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Config file language and loader*
+- **Depends on:** nothing
 - **Background:** none
 
 Devices are C++ today, which suits the X-Touch (scribble strip sysex, meters,
@@ -190,7 +254,7 @@ device controls, not widgets (see [config_model.md](config_model.md)).
 - **Layers:** spec library, plugin
 - **Size:** large
 - **Feature workflow:** yes
-- **Depends on:** *Config file language and loader*
+- **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (Devices)
 
 A direction rather than a plan. Each device in a config is required or
@@ -357,7 +421,7 @@ config needs to name a built in one's, such as the ruler mode's.
 - **Layers:** spec library
 - **Size:** small
 - **Feature workflow:** no
-- **Depends on:** *Config file language and loader*
+- **Depends on:** nothing
 - **Background:** [config_model.md](config_model.md) (The escape hatch)
 
 REAPER's built in actions only have numbers, so a config that maps Undo says

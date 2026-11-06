@@ -4,7 +4,7 @@ JPRSurf is heading toward a surface that is entirely described by a config
 file, with the plugin as a thin host that loads it. This doc defines what such
 a config says: its concepts, and the named components it composes. It
 deliberately says nothing about syntax, which belongs to the config language
-(*Config file language and loader*,
+(*Config file language and loader*, done,
 [config_language.md](worklog/config_language.md)).
 
 It ties together the backlog items that build toward a data driven surface, and
@@ -921,8 +921,9 @@ Then, in order:
    [surface_spec.md](worklog/surface_spec.md)): this model as a C++ struct,
    with checking (against device and property catalogs) separate from
    building.
-2. *Config file language and loader*: the syntax, and reading it into the same
-   struct.
+2. *Config file language and loader* (done,
+   [config_language.md](worklog/config_language.md)): the syntax, and reading
+   it into the same struct, with the file picked in REAPER's dialog.
 3. *Public config spec and user guide split*: this doc becomes the spec.
 
 Meanwhile, a new feature is a component below `plugin`, plus its use in
