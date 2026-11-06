@@ -28,52 +28,6 @@ own `docs/worklog/<feature>.md` plan and comes out of this list. Any other item
 comes out of this list in the commit that does it. The workflow (imported by
 CLAUDE.md) has the rest.
 
-## Config file language and loader
-
-- **Layers:** spec library, plugin
-- **Size:** large
-- **Feature workflow:** yes
-- **Depends on:** nothing
-- **Background:** [surface_spec.md](worklog/surface_spec.md),
-  [config_model.md](config_model.md)
-
-A bespoke language, parsed with `gb/parse` into a `SurfaceSpec`. It is a DSL
-rather than `gb::ReadConfigFromText()` for three reasons: maps in `gb::Config`
-are unordered, it keeps no source locations for errors, and mappings are too
-dense to be one object each.
-
-The config is its own file (or set of files). REAPER's config string only
-refers to it, and `ShowConfig()` grows a file selector. The design settles how
-errors are reported (log, REAPER console, partial or total failure), and
-includes a schema version. A parity test checks that JPRSurf's own config,
-parsed, equals the in-code spec, so the translation is verified without REAPER.
-
-The design also settles whether a template's parameters can have defaults.
-JPRSurf's five uses of `auto_mode_button` each pass `override_light`, though
-only Latch's differs from its `override_state` (it blinks for Latch Preview),
-which the in-code spec writes out for every button.
-
-## Keep a view's uses and mappings in the order written
-
-- **Layers:** scene
-- **Size:** small
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [surface_spec.md](worklog/surface_spec.md)
-
-A `ViewSpec` has its template uses and its mappings in separate lists, and
-`CreateScene()` expands the uses first, so the order a spec writes them in is
-lost. The order doesn't change what a surface does, but it does change its
-REAPER calls: with the automation buttons' mappings (uses) before Group's own,
-turning the automation override on reads the override 58 times rather than 65.
-So the call count bounds depend on how `CreateScene()` orders a view's body,
-and a config loader that keeps uses where they are written would move them for
-no change in behavior. A view's body could be one ordered list of mappings and
-uses (`std::variant<MappingSpec, TemplateUse>`), as a config file reads. Worth
-doing with, or before, *Config file language and loader*. Whether the scene
-should be insensitive to the order instead (why the earlier Group mapping costs
-7 more reads) is worth a look first.
-
 ## Specific errors from the scene's add functions
 
 - **Layers:** scene
@@ -338,23 +292,22 @@ value to mode map today, and could become conditions with it. The config model
 keeps a condition to one property equal to a value, with combining states left
 to components, so it needs updating too.
 
-## Share a condition across mappings
+## Watch a shared condition once
 
 - **Layers:** scene
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:**
-  [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)
+  [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md),
+  [config_language.md](worklog/config_language.md)
 
 When one press does two things, each is its own mapping with the same
 condition, such as the pick and the mapping that sets `user:surface_mode` to
-enter Send/Receive mode, both requiring `has_routes`. The condition is written, and
-watched, once per mapping, and the copies must be kept the same by hand. A
-mapping could instead name a condition declared once on its view, shared by
-every mapping that uses it and watched once, for less to write (ergonomics)
-and fewer watches (performance). Worth doing once a config has several such
-groups, or a measurement shows the extra watches matter.
+enter Send/Receive mode, both requiring `has_routes`. A config writes the
+condition once, in a `when` block around both, but the scene still watches it
+once per mapping. Mappings with the same condition in a view could share one
+watch. Worth doing once a measurement shows the extra watches matter.
 
 ## Short track names on narrow displays
 
@@ -704,6 +657,25 @@ nothing for it, so surface tests of a fader moved under the override miss a
 track list refresh. Whether a track's own automation mode, or a pan, does the
 same, and how the fake should hold envelopes, are still to check, with a
 contract test.
+
+## Mapping order changes REAPER calls
+
+- **Layers:** scene
+- **Size:** small
+- **Feature workflow:** no
+- **Depends on:** nothing
+- **Background:** [surface_spec.md](worklog/surface_spec.md),
+  [config_language.md](worklog/config_language.md)
+
+The order of a view's mappings and uses doesn't change what a surface does, so
+a config may write them in any order, but it moves a few cheap REAPER calls. A
+view syncs its mappings in order each run, so a read that changes a property
+is seen by the mappings after it in the same run, and by those before it in
+the next, once the polled state has caught up. With Group's mapping before the
+automation buttons', turning the automation override on costs 6 more cheap
+calls (923 rather than 917): the buttons react at once, and again when the
+override's lights are polled. With it after, they react a run later, once.
+Only worth looking at if a measurement shows it matters.
 
 ## Profile snapshots on demand
 

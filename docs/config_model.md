@@ -4,7 +4,8 @@ JPRSurf is heading toward a surface that is entirely described by a config
 file, with the plugin as a thin host that loads it. This doc defines what such
 a config says: its concepts, and the named components it composes. It
 deliberately says nothing about syntax, which belongs to the config language
-(*Config file language and loader* in the [backlog](backlog.md)).
+(*Config file language and loader*,
+[config_language.md](worklog/config_language.md)).
 
 It ties together the backlog items that build toward a data driven surface, and
 it seeds the public spec of the config language. Today the model is a C++

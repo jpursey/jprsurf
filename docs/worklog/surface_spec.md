@@ -207,9 +207,9 @@ installed having no property (`NamedCommandLookup()` returns 0, and
 ## Left for later
 
 In the backlog:
-- *Keep a view's uses and mappings in the order written*: a view's uses are
-  expanded before its mappings, so the order a spec writes them in is lost,
-  and call counts depend on it.
+- *Mapping order changes REAPER calls*: a view's uses are expanded before its
+  mappings, so the order a spec writes them in is lost, and call counts depend
+  on it.
 - *Specific errors from the scene's add functions*, so creating the scene
   reports why it refused something, rather than "the scene refused it".
 - *Refuse a mapping that does nothing*: a command whose type doesn't suit its
