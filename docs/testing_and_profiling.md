@@ -497,7 +497,10 @@ REAPER's calls on the surface follow these.
   `Extended(CSURF_EXT_SETMIXERSCROLL)`, three rounds of `SetTrackListChange()`
   each followed by every track's state, and `SetRepeatState()` and
   `SetPlayState()`. `GetTypeString()`, `GetDescString()`, and
-  `GetConfigString()` weren't called during the session.
+  `GetConfigString()` weren't called during the session. The config string
+  is the rest of the surface's `csurf_<n>` line in `reaper.ini` after the
+  type (2026-11-05): a path with spaces came whole, unquoted, with the spaces
+  inside it kept and those after it dropped.
 - **Touch is asked of every track, between every run** (2026-10-17, a
   7-track project with tracks in Touch, Latch, and Read). Once the surface had
   changed a track's volume while playing, REAPER called, before every run
@@ -518,7 +521,9 @@ REAPER's calls on the surface follow these.
   `Extended(CSURF_EXT_SETRECVPAN)` for the receive before every run, for the
   rest of the session.
 - **Exiting:** REAPER destroys the surface, then unloads the plugin, so the
-  profiler's snapshot can be written when the surface is destroyed.
+  profiler's snapshot can be written when the surface is destroyed. Then
+  REAPER writes each surface's config string back to `reaper.ini`, as it was
+  created with it, without calling `GetConfigString()` (2026-11-05).
 - **Text:** `mkvolstr` writes `-14.2dB`, `-5.10dB`, `+4.23dB`, and `-inf dB`
   (two decimals below 10dB, and one from there), and 0dB as `0.00dB`.
   `kbd_getTextFromCmd` names commands with their section, such as

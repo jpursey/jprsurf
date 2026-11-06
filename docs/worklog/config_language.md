@@ -597,6 +597,14 @@ them:
 1. **Paths in the config string:** a path with spaces, written into
    `reaper.ini` by hand (`csurf_0=JPRSurf <path>`), reaches the surface whole.
    Needed before CL8.
+   - **Confirmed** (2026-11-05, CL1): `csurf_0=JPRSurf E:\...\my  test
+     surface.jprsurf`, with spaces after it, reached `Create()` as the path
+     alone, unquoted, its double space kept and the spaces after it dropped,
+     so the reader trims nothing. On exit, REAPER wrote the same line back to
+     `reaper.ini` without calling `GetConfigString()`, so that is only for the
+     dialog (3, below). Both are in "Seen in traces" in
+     `docs/testing_and_profiling.md`. The fake has no `reaper.ini`, and tests
+     give the config string directly, so nothing changes in it.
 2. **The dialog:** REAPER shows the window `ShowConfig()` returns in its
    control surface dialog, and on OK sends it `WM_USER + 1024` (`wParam` the
    buffer's size, `lParam` the buffer) for the config string, as the SDK's
@@ -646,7 +654,7 @@ watching it once.
 
 ## CLs
 
-### CL1 [ ] plugin: Check paths in REAPER's config string
+### CL1 [x] plugin: Check paths in REAPER's config string
 
 Depends on: nothing.
 
