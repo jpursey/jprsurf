@@ -745,12 +745,29 @@ Depends on: CL3.
   error: syntax, an unknown kind or parameter, a parameter given twice, a
   block missing or given twice, an unknown version.
 
-### CL6 [ ] config: Reading mappings and views
+### CL6 [x] config: Reading mappings and views
 
 Depends on: CL4, CL5.
 
 - Named mappings and their parameters, uses, the top level's mappings and
   views, repeated views, a view's components, mappings, and `when` around views, mappings, and modes.
+- A use's arguments are sorted into widgets and properties by its template's
+  parameters, which reading reads first, as a use may come before its
+  template. An argument the template doesn't have, or of a template that
+  doesn't exist, goes by how it is written, for checking to report, as it
+  does an argument its parameter can't be (a path for a property).
+  `ValidateSurfaceSpec()` now reports a widget and a property parameter with
+  the same name, which a use couldn't tell apart, and a modifier a mapping
+  requires twice, which the spec can hold.
+- `true` and `false` are keywords. A plain name as a mapping's property is a
+  template's property parameter, which checking finds isn't one outside a
+  template. A number keeps its type (an integer or a float), as checking
+  reports one of the wrong type, except as a fixed value, which is
+  normalized. Floats may be negative (`set -0.5`), and integers may not, as
+  they are widget path indexes.
+- Errors are about the view's path, as checking's are (`GetViewPath()`), and a
+  mapping's about its control too (`/track_mode: assign_send: ...`).
+- The design's whole config, above, reads and passes checking.
 
 **Verify**
 - Standard checks.

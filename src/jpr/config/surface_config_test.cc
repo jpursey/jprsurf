@@ -269,6 +269,421 @@ TEST(ReadSurfaceConfigTest, ReadsEveryParameterOfEveryComponentKind) {
 }
 
 //------------------------------------------------------------------------------
+// Mappings
+//------------------------------------------------------------------------------
+
+// Returns the mappings of a config of one "mappings" block, with `body`.
+std::vector<MappingSpec> ReadMappings(std::string_view body) {
+  return ReadValid(
+             absl::StrCat(kVersion, kEmptyBlocks, "mappings {\n", body, "\n}"))
+      .root.mappings;
+}
+
+// Returns the mapping a config of one "mappings" block with it has.
+MappingSpec ReadMapping(std::string_view text) {
+  std::vector<MappingSpec> mappings = ReadMappings(text);
+  EXPECT_EQ(mappings.size(), 1);
+  return mappings.empty() ? MappingSpec() : std::move(mappings[0]);
+}
+
+TEST(ReadSurfaceConfigTest, ReadsEachArrow) {
+  EXPECT_THAT(ReadMappings("a -> cmd:1\n"
+                           "b <- state:can_redo\n"
+                           "c.d[2] <-> track:ui_mute"),
+              ElementsAre(MappingSpec{.property = "cmd:1",
+                                      .control = "a",
+                                      .type = ViewMapping::kReadControl},
+                          MappingSpec{.property = "state:can_redo",
+                                      .control = "b",
+                                      .type = ViewMapping::kWriteControl},
+                          MappingSpec{.property = "track:ui_mute",
+                                      .control = "c.d[2]",
+                                      .type = ViewMapping::kReadWriteControl}));
+}
+
+TEST(ReadSurfaceConfigTest, ReadsHowAControlIsRead) {
+  using Behavior = InputConfig::PressBehavior;
+  const std::pair<std::string_view, ViewMapping::ReadConfig> kCases[] = {
+      {"", {}},
+      {"[press]", {.input_type = ControlInput::Type::kPress}},
+      {"[value]", {.input_type = ControlInput::Type::kValue}},
+      {"[delta]", {.input_type = ControlInput::Type::kDelta}},
+      {"[long]", {.press_behavior = Behavior::kLongPress}},
+      {"[double]", {.press_behavior = Behavior::kDoublePress}},
+      {"[tap]", {.press_behavior = Behavior::kTap}},
+      {"[held]", {.press_release = true}},
+      {"[touch, held]", {.press_release = true, .touch = true}},
+      {"[mod:a, mod:b]", {.required_modifiers = {"mod:a", "mod:b"}}},
+      {"[long, held, mod:a]",
+       {.required_modifiers = {"mod:a"},
+        .press_behavior = Behavior::kLongPress,
+        .press_release = true}},
+  };
+  for (const auto& [how, read] : kCases) {
+    SCOPED_TRACE(how);
+    EXPECT_EQ(ReadMapping(absl::StrCat("a.b ", how, " -> cmd:1")).config.read,
+              read);
+  }
+}
+
+TEST(ReadSurfaceConfigTest, ReadsFixedValuesOfEachType) {
+  const std::pair<std::string_view, FixedValue> kCases[] = {
+      {"true", {.type = ViewProperty::Type::kToggle, .value = true}},
+      {"false", {.type = ViewProperty::Type::kToggle, .value = false}},
+      {"1", {.type = ViewProperty::Type::kNormalized, .value = 1.0}},
+      {"0.25", {.type = ViewProperty::Type::kNormalized, .value = 0.25}},
+      {"\"Hi\"",
+       {.type = ViewProperty::Type::kText, .value = std::string("Hi")}},
+      {"rgb(255, 0, 16)",
+       {.type = ViewProperty::Type::kColor, .value = Color{255, 0, 16}}},
+  };
+  for (const auto& [text, value] : kCases) {
+    SCOPED_TRACE(text);
+    EXPECT_EQ(ReadMapping(absl::StrCat("a <- ", text)).property,
+              (std::variant<std::string, FixedValue>(value)));
+  }
+}
+
+TEST(ReadSurfaceConfigTest, ReadsOptions) {
+  using Value = ViewProperty::Value;
+  const std::pair<std::string_view, ViewMapping::Config> kCases[] = {
+      {"{ set 0.0 }",
+       {.read = {.property_min = Value(0.0), .property_max = Value(0.0)}}},
+      {"{ set -0.5 }",
+       {.read = {.property_min = Value(-0.5), .property_max = Value(-0.5)}}},
+      {"{ set send_receive }",
+       {.read = {.property_min = Value(std::string("send_receive")),
+                 .property_max = Value(std::string("send_receive"))}}},
+      {"{ range 1 .. 3 }",
+       {.read = {.property_min = Value(1), .property_max = Value(3)}}},
+      {"{ range \"a\" .. \"b\" }",
+       {.read = {.property_min = Value(std::string("a")),
+                 .property_max = Value(std::string("b"))}}},
+      {"{ range rgb(1, 2, 3) .. rgb(4, 5, 6) }",
+       {.read = {.property_min = Value(Color{1, 2, 3}),
+                 .property_max = Value(Color{4, 5, 6})}}},
+      {"{ toggle measure .. beat }",
+       {.read = {.property_min = Value(std::string("measure")),
+                 .property_max = Value(std::string("beat")),
+                 .press_toggles = true}}},
+      {"{ mode blink }", {.write = {.mode = "blink"}}},
+      {"{ set true mode blink }",
+       {.read = {.property_min = Value(true), .property_max = Value(true)},
+        .write = {.mode = "blink"}}},
+  };
+  for (const auto& [options, config] : kCases) {
+    SCOPED_TRACE(options);
+    EXPECT_EQ(ReadMapping(absl::StrCat("a <-> user:x ", options)).config,
+              config);
+  }
+}
+
+TEST(ReadSurfaceConfigTest, AWhenAroundAModeIsAModeOverride) {
+  EXPECT_EQ(
+      ReadMapping(R"(strip.pot <-> track:ui_pan {
+    mode center
+    when track:exists = false { mode off }
+    when user:step = beat { mode blink }
+    when track:is_folder { mode center_edges }
+    when user:x = 2 { }
+  })")
+          .config.write,
+      (ViewMapping::WriteConfig{
+          .mode = "center",
+          .mode_overrides = {
+              {.property = "track:exists", .value_to_mode = {{false, "off"}}},
+              {.property = "user:step",
+               .value_to_mode = {{std::string("beat"), "blink"}}},
+              {.property = "track:is_folder",
+               .value_to_mode = {{true, "center_edges"}}}}}));
+}
+
+TEST(ReadSurfaceConfigTest, AWhenAroundMappingsIsEachOnesCondition) {
+  EXPECT_THAT(
+      ReadMappings(R"(a -> cmd:1
+when user:step = measure { b -> cmd:2 }
+when state:any_track_solo {
+  c -> cmd:3
+  d <- true
+}
+when user:x = 0.5 { e -> cmd:4 }
+when user:x = "x" { f -> cmd:5 }
+)"),
+      ElementsAre(
+          MappingSpec{.property = "cmd:1",
+                      .control = "a",
+                      .type = ViewMapping::kReadControl},
+          MappingSpec{
+              .property = "cmd:2",
+              .control = "b",
+              .type = ViewMapping::kReadControl,
+              .config = {.condition = {{.property = "user:step",
+                                        .value = std::string("measure")}}}},
+          MappingSpec{
+              .property = "cmd:3",
+              .control = "c",
+              .type = ViewMapping::kReadControl,
+              .config = {.condition = {{.property = "state:any_track_solo"}}}},
+          MappingSpec{
+              .property = FixedValue{.value = true},
+              .control = "d",
+              .type = ViewMapping::kWriteControl,
+              .config = {.condition = {{.property = "state:any_track_solo"}}}},
+          MappingSpec{
+              .property = "cmd:4",
+              .control = "e",
+              .type = ViewMapping::kReadControl,
+              .config = {.condition = {{.property = "user:x", .value = 0.5}}}},
+          MappingSpec{.property = "cmd:5",
+                      .control = "f",
+                      .type = ViewMapping::kReadControl,
+                      .config = {.condition = {{.property = "user:x",
+                                                .value = std::string("x")}}}}));
+}
+
+TEST(ReadSurfaceConfigTest, MappingsHaveTheirLines) {
+  const std::vector<MappingSpec> mappings = ReadMappings(R"(a -> cmd:1
+when user:x {
+
+  b -> cmd:2
+}
+c
+  -> cmd:3)");
+  ASSERT_EQ(mappings.size(), 3);
+  EXPECT_EQ(mappings[0].line.number, 5);
+  EXPECT_EQ(mappings[1].line.number, 8);
+  EXPECT_EQ(mappings[2].line.number, 10);
+}
+
+//------------------------------------------------------------------------------
+// Templates and uses
+//------------------------------------------------------------------------------
+
+TEST(ReadSurfaceConfigTest, ReadsTemplates) {
+  const SurfaceSpec spec = ReadValid(R"(jprsurf 1
+devices {}
+widgets {}
+mappings list_navigation {
+  channel_left -> view:child_dec
+}
+mappings button(widget button, property command, property light = command,
+                property other = state:can_redo) {
+  button -> command
+  when state:x { button <- light }
+  use list_navigation
+}
+)");
+  EXPECT_THAT(
+      spec.templates,
+      ElementsAre(
+          TemplateSpec{.name = "list_navigation",
+                       .mappings = {{.property = "view:child_dec",
+                                     .control = "channel_left",
+                                     .type = ViewMapping::kReadControl}}},
+          TemplateSpec{
+              .name = "button",
+              .widget_params = {"button"},
+              .property_params = {{.name = "command"},
+                                  {.name = "light", .default_value = "command"},
+                                  {.name = "other",
+                                   .default_value = "state:can_redo"}},
+              .mappings = {{.property = "command",
+                            .control = "button",
+                            .type = ViewMapping::kReadControl},
+                           {.property = "light",
+                            .control = "button",
+                            .type = ViewMapping::kWriteControl,
+                            .config = {.condition = {{.property =
+                                                          "state:x"}}}}},
+              .uses = {{.name = "list_navigation"}}}));
+  ASSERT_EQ(spec.templates.size(), 2);
+  EXPECT_EQ(spec.templates[0].line.number, 4);
+  EXPECT_EQ(spec.templates[1].line.number, 7);
+  EXPECT_EQ(spec.templates[1].mappings[1].line.number, 10);
+  EXPECT_EQ(spec.templates[1].uses[0].line.number, 11);
+}
+
+TEST(ReadSurfaceConfigTest, AUseSortsItsArgumentsByItsTemplate) {
+  // The uses are before the template, as order doesn't matter, and an
+  // argument a template doesn't have goes by how it is written. One its
+  // parameter can't be is left to checking.
+  const SurfaceSpec spec = ReadValid(R"(jprsurf 1
+devices {}
+widgets {}
+mappings {
+  use button(button = auto_trim, command = cmd:40400, light = mod:x)
+  use button(button = strip[2].select, command = state:a, other = b,
+             another = mod:y)
+  use unknown(a = b.c, d = user:e)
+  use button(button = cmd:1, command = a.b)
+}
+mappings button(widget button, property command, property light = command) {
+  use inner(widget = button, property = command)
+}
+mappings inner(widget widget, property property) {
+  widget -> property
+}
+)");
+  EXPECT_THAT(
+      spec.root.uses,
+      ElementsAre(
+          TemplateUse{
+              .name = "button",
+              .widgets = {{"button", "auto_trim"}},
+              .properties = {{"command", "cmd:40400"}, {"light", "mod:x"}}},
+          TemplateUse{
+              .name = "button",
+              .widgets = {{"button", "strip[2].select"}, {"other", "b"}},
+              .properties = {{"command", "state:a"}, {"another", "mod:y"}}},
+          TemplateUse{.name = "unknown",
+                      .widgets = {{"a", "b.c"}},
+                      .properties = {{"d", "user:e"}}},
+          TemplateUse{.name = "button",
+                      .widgets = {{"button", "cmd:1"}},
+                      .properties = {{"command", "a.b"}}}));
+  ASSERT_EQ(spec.templates.size(), 2);
+  EXPECT_THAT(
+      spec.templates[0].uses,
+      ElementsAre(TemplateUse{.name = "inner",
+                              .widgets = {{"widget", "button"}},
+                              .properties = {{"property", "command"}}}));
+  ASSERT_EQ(spec.root.uses.size(), 4);
+  EXPECT_EQ(spec.root.uses[1].line.number, 6);
+}
+
+//------------------------------------------------------------------------------
+// Views
+//------------------------------------------------------------------------------
+
+TEST(ReadSurfaceConfigTest, ReadsViews) {
+  const SurfaceSpec spec = ReadValid(R"(jprsurf 1
+devices {}
+widgets {}
+view master(subject = state:master_track) {
+  mappings { master_fader <-> track:volume }
+}
+view folder(subject = user:folder,
+            list = child_tracks(reveal = user:current_track, bank = 8)) {
+  view strip in xtouch.strip {
+    components { track_pick user:pick(reference = user:current_track) }
+    mappings { strip.select -> track:ui_selected }
+    components { track_anchor user:anchor(action = mute) }
+    mappings { use strip(strip = strip) }
+  }
+}
+view routes(list = routes) {}
+view sends(list = routes(type = sends)) {}
+view receives(list = routes(bank = 4, type = receives)) {}
+view tracks(list = child_tracks) {}
+)");
+  EXPECT_THAT(
+      spec.root.children,
+      ElementsAre(
+          ViewSpec{.name = "master",
+                   .config = {.subject =
+                                  View::ReferenceSubject{"state:master_track"}},
+                   .mappings = {{.property = "track:volume",
+                                 .control = "master_fader",
+                                 .type = ViewMapping::kReadWriteControl}}},
+          ViewSpec{
+              .name = "folder",
+              .config = {.subject = View::ReferenceSubject{"user:folder"},
+                         .list = View::ListConfig{.items =
+                                                      View::ChildTracks{
+                                                          "user:current_track"},
+                                                  .bank_size = 8}},
+              .children = {ViewSpec{
+                  .config = {.subject = View::ListItemSubject{}},
+                  .repeat =
+                      RepeatSpec{.array = "xtouch.strip", .element = "strip"},
+                  .components =
+                      {TrackPickSpec{.name = "user:pick",
+                                     .reference = "user:current_track"},
+                       TrackAnchorSpec{.name = "user:anchor",
+                                       .action = TrackBoolProperty::kMute}},
+                  .uses = {{.name = "strip", .widgets = {{"strip", "strip"}}}},
+                  .mappings = {{.property = "track:ui_selected",
+                                .control = "strip.select",
+                                .type = ViewMapping::kReadControl}}}}},
+          ViewSpec{
+              .name = "routes",
+              .config = {.list = View::ListConfig{.items = View::Routes{}}}},
+          ViewSpec{
+              .name = "sends",
+              .config = {.list = View::ListConfig{.items =
+                                                      View::Routes{
+                                                          View::RouteTypeRule::
+                                                              kSends}}}},
+          ViewSpec{
+              .name = "receives",
+              .config = {.list = View::ListConfig{.items =
+                                                      View::Routes{
+                                                          View::RouteTypeRule::
+                                                              kReceives},
+                                                  .bank_size = 4}}},
+          ViewSpec{.name = "tracks",
+                   .config = {.list = View::ListConfig{
+                                  .items = View::ChildTracks{}}}}));
+  EXPECT_THAT(spec.components, IsEmpty());
+  ASSERT_EQ(spec.root.children.size(), 6);
+  EXPECT_EQ(spec.root.children[1].line.number, 7);
+  ASSERT_EQ(spec.root.children[1].children.size(), 1);
+  const ViewSpec& strip = spec.root.children[1].children[0];
+  EXPECT_EQ(strip.line.number, 9);
+  ASSERT_EQ(strip.components.size(), 2);
+  EXPECT_EQ(GetComponentLine(strip.components[1]).number, 12);
+}
+
+TEST(ReadSurfaceConfigTest, AWhenAroundViewsIsEachOnesCondition) {
+  const SurfaceSpec spec = ReadValid(R"(jprsurf 1
+devices {}
+widgets {}
+when user:mode = track {
+  view a {
+    when state:x { view b {} }
+  }
+  view c(subject = user:folder) {}
+}
+)");
+  const ViewCondition::Config track = {.property = "user:mode",
+                                       .value = std::string("track")};
+  EXPECT_THAT(
+      spec.root.children,
+      ElementsAre(
+          ViewSpec{.name = "a",
+                   .config = {.condition = track},
+                   .children = {ViewSpec{
+                       .name = "b",
+                       .config = {.condition = {{.property = "state:x"}}}}}},
+          ViewSpec{
+              .name = "c",
+              .config = {.condition = track,
+                         .subject = View::ReferenceSubject{"user:folder"}}}));
+}
+
+// A config's views, components, mappings, and uses, all in one place.
+TEST(ReadSurfaceConfigTest, ReadsTheTopLevelAsTheRootView) {
+  const SurfaceSpec spec = ReadValid(R"(jprsurf 1
+devices {}
+mappings { a -> cmd:1 }
+components { modifier mod:a }
+view b {}
+widgets {}
+mappings { use c }
+mappings c {}
+)");
+  EXPECT_EQ(
+      spec,
+      (SurfaceSpec{.components = {ModifierSpec{.name = "mod:a"}},
+                   .templates = {{.name = "c"}},
+                   .root = {.uses = {{.name = "c"}},
+                            .mappings = {{.property = "cmd:1",
+                                          .control = "a",
+                                          .type = ViewMapping::kReadControl}},
+                            .children = {ViewSpec{.name = "b"}}}}));
+}
+
+//------------------------------------------------------------------------------
 // Errors
 //------------------------------------------------------------------------------
 
@@ -420,6 +835,132 @@ components {
                   "line 10: user:f: fallback isn't a name with a namespace",
                   "line 11: user:g: action \"muted\" isn't one of: selected, "
                   "mute, solo, rec_arm"));
+}
+
+TEST(ReadSurfaceConfigTest, StatementErrors) {
+  EXPECT_THAT(
+      ReadErrors(R"(jprsurf 1
+devices {}
+widgets {}
+view a {
+  devices {}
+  settings {}
+  mappings b {}
+  when user:x {
+    components {}
+    mappings {}
+    when user:y {}
+    view c {}
+  }
+}
+when user:x {
+  devices {}
+}
+)"),
+      ElementsAre(
+          "line 5: \"devices\" is only at the top level",
+          "line 6: \"settings\" is only at the top level",
+          "line 7: named mappings are only at the top level",
+          "line 9: \"components\" can't be in a \"when\" here, which holds "
+          "only views",
+          "line 10: \"mappings\" can't be in a \"when\" here, which holds "
+          "only views",
+          "line 11: a \"when\" can't be in another \"when\"",
+          "line 16: \"devices\" can't be in a \"when\" here, which holds only "
+          "views"));
+}
+
+TEST(ReadSurfaceConfigTest, MappingErrors) {
+  EXPECT_THAT(
+      ReadErrors(R"(jprsurf 1
+devices {}
+widgets {}
+mappings {
+  a [held, held, long, tap, value, press, mod:a, mod:a, hold] -> cmd:1
+  b <- rgb(256, 0, 0)
+  c -> user:x { set 1 range 0 .. 1 mode a mode b }
+  when user:x {
+    when user:y { d -> cmd:1 }
+    use t
+  }
+  e <-> user:x {
+    when user:y { set 1 mode a mode b when user:z { mode c } }
+  }
+}
+)"),
+      ElementsAre(
+          "line 5: /: a: \"held\" is given twice",
+          "line 5: /: a: has more than one press behavior",
+          "line 5: /: a: has more than one input",
+          "line 5: /: a: \"hold\" isn't an input, a press behavior, \"held\", "
+          "\"touch\", or a modifier",
+          "line 6: /: b: rgb(256, 0, 0) has a value over 255",
+          "line 7: /: c: has more than one of \"set\", \"range\", and "
+          "\"toggle\"",
+          "line 7: /: c: \"mode\" is given twice",
+          "line 9: a \"when\" can't be in another \"when\"",
+          "line 10: a \"use\" can't be in a \"when\", as a use has no "
+          "condition",
+          "line 13: /: e: \"set\" can't be in a \"when\": only a mode can",
+          "line 13: /: e: \"mode\" is given twice",
+          "line 13: /: e: a \"when\" can't be in another \"when\""));
+}
+
+TEST(ReadSurfaceConfigTest, AUseGivesEachArgumentOnce) {
+  EXPECT_THAT(ReadErrors(R"(jprsurf 1
+devices {}
+widgets {}
+mappings t(widget w, property p) {}
+view v {
+  mappings { use t(p = mod:x, w = a, p = mod:y, w = b) }
+}
+)"),
+              ElementsAre("line 6: /v: uses t with \"p\" given twice",
+                          "line 6: /v: uses t with \"w\" given twice"));
+}
+
+TEST(ReadSurfaceConfigTest, ViewErrors) {
+  EXPECT_THAT(
+      ReadErrors(R"(jprsurf 1
+devices {}
+widgets {}
+view a(subject = folder, lists = routes) {}
+view b(list = tracks) {}
+view c(list = routes(reveal = user:x, bank = "8", type = all)) {}
+view d(list = child_tracks(type = sends)) {
+  view e(list = [a]) {}
+}
+)"),
+      ElementsAre(
+          "line 4: /a: subject isn't a name with a namespace",
+          "line 4: /a: \"lists\" isn't a parameter",
+          "line 5: /b: list \"tracks\" isn't one of: child_tracks, routes",
+          "line 6: /c: \"reveal\" isn't a parameter",
+          "line 6: /c: bank isn't an integer",
+          "line 6: /c: type \"all\" isn't one of: sends, receives",
+          "line 7: /d: \"type\" isn't a parameter",
+          "line 8: /d/e: list isn't a name, with or without parameters"));
+}
+
+TEST(ReadSurfaceConfigTest, CheckingErrorsAreAtTheirMappingsAndUsesLines) {
+  const SurfaceSpec spec = ReadValid(R"(jprsurf 1
+devices {}
+widgets {}
+mappings t(widget w) {
+  w -> cmd:1
+}
+view v {
+  mappings {
+    nothing -> cmd:1
+    use t(w = missing)
+  }
+}
+)");
+  std::vector<std::string> errors;
+  EXPECT_FALSE(ValidateSurfaceSpec(spec, &errors));
+  EXPECT_THAT(errors, ElementsAre("line 9: /v: nothing: names nothing",
+                                  "line 10: /v: uses t with widget \"w\" as "
+                                  "\"missing\", which names nothing"));
 }
 
 }  // namespace

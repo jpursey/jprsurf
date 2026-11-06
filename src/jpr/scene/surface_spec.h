@@ -201,6 +201,11 @@ struct ViewSpec {
   SpecLine line;  // Where it was written, for errors.
 };
 
+// Returns the path of the view, whose parent's is `parent_path`, as errors
+// name it (see ValidateSurfaceSpec()): its name, or for a repeated view its
+// element and "[]", after its parent's path, which is "/" for the root.
+std::string GetViewPath(std::string_view parent_path, const ViewSpec& view);
+
 //==============================================================================
 // SurfaceSpec
 //==============================================================================
@@ -261,7 +266,8 @@ struct SurfaceSpec {
 //   other than that one. A view with a list has exactly one repeated child,
 //   whose array is an array widget, and element a C identifier.
 // - Templates and uses: each template has a name, a C identifier, that no
-//   other template has, and parameters that are C identifiers, none repeated.
+//   other template has, and parameters that are C identifiers, none repeated,
+//   among its widget and property parameters alike.
 //   A property parameter's default doesn't name the parameter or a later one.
 //   Each use names a template, and gives an argument for each of its
 //   parameters without a default, and none for anything else, and no template
@@ -277,9 +283,10 @@ struct SurfaceSpec {
 //   does). Its mode and each override's modes are the control's (see
 //   ViewMapping::FindMode()). Its range ends are values of the property's
 //   type, which an action, a toggle, or a timeline position has none of, and
-//   its required modifiers are modifiers. A mapping in a template is about
-//   the view's path, the templates it is expanded through, and its control,
-//   such as "/track_mode/track_list/strip[]: track_strip: strip.mute".
+//   its required modifiers are modifiers, none repeated. A mapping in a
+//   template is about the view's path, the templates it is expanded through,
+//   and its control, such as
+//   "/track_mode/track_list/strip[]: track_strip: strip.mute".
 // - Conditions, of views and mappings, and mode overrides: the property is
 //   one where it is, and can be read, and each value can be read as its type,
 //   naming one of its values if it is a declared enumerated value. A view's

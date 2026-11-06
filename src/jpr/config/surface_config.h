@@ -24,11 +24,16 @@ inline constexpr int kSurfaceConfigVersion = 1;
 //
 // A syntax error stops reading, as does a version other than
 // kSurfaceConfigVersion, but reading reports every other error it finds: a
-// block missing or given more often than it may be, a component kind,
-// parameter, or setting that doesn't exist, a parameter or setting given
-// twice, a value of the wrong form, and a required choice (such as a track
-// anchor's action) left out, as a spec has no value for none of its choices.
-// Checking the spec finds any other parameter left out.
+// block missing or given more often than it may be, a statement where it
+// can't be (such as named mappings in a view, or anything but a view in a
+// "when" around statements), a "when" in a "when", or around a use or an
+// option other than "mode", a component kind, parameter, or setting that
+// doesn't exist, a parameter, setting, or how a control is read given twice,
+// more than one press behavior, input, mode, or range on a mapping, a value of
+// the wrong form, a color over 255, a use's argument given twice, and a
+// required choice (such as a track anchor's
+// action) left out, as a spec has no value for none of its choices. Checking
+// the spec finds any other parameter left out, and everything else.
 std::optional<SurfaceSpec> ReadSurfaceConfig(std::string text,
                                              std::vector<std::string>* errors);
 

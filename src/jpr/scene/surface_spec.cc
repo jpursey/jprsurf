@@ -160,10 +160,12 @@ class SurfaceSpecValidator {
 
   void ValidateTemplates(absl::Span<const TemplateSpec> templates);
 
-  // Validates a template's parameters of a kind ("widget" or "property").
+  // Validates a template's parameters of a kind ("widget" or "property"),
+  // whose names are new among `names`, which this adds them to.
   template <typename Param>
   void ValidateTemplateParams(const std::vector<Param>& params,
-                              std::string_view kind, SpecPart what);
+                              std::string_view kind, SpecPart what,
+                              absl::flat_hash_set<std::string_view>& names);
 
   // Validates the defaults of a template's property parameters.
   void ValidateDefaults(const std::vector<PropertyParam>& params,
@@ -505,8 +507,11 @@ void SurfaceSpecValidator::ValidateTemplates(
     if (!templates_.emplace(spec.name, &spec).second) {
       AddError(what, "has the name of another template");
     }
-    ValidateTemplateParams(spec.widget_params, "widget", what);
-    ValidateTemplateParams(spec.property_params, "property", what);
+    // A use names its arguments by their parameters, so a widget parameter
+    // and a property parameter don't share a name.
+    absl::flat_hash_set<std::string_view> names;
+    ValidateTemplateParams(spec.widget_params, "widget", what, names);
+    ValidateTemplateParams(spec.property_params, "property", what, names);
     ValidateDefaults(spec.property_params, what);
   }
 
@@ -531,9 +536,9 @@ void SurfaceSpecValidator::ValidateTemplates(
 
 template <typename Param>
 void SurfaceSpecValidator::ValidateTemplateParams(
-    const std::vector<Param>& params, std::string_view kind, SpecPart what) {
+    const std::vector<Param>& params, std::string_view kind, SpecPart what,
+    absl::flat_hash_set<std::string_view>& names) {
   const std::string label = absl::StrCat(kind, " parameter");
-  absl::flat_hash_set<std::string_view> names;
   for (const Param& param : params) {
     ValidateNewName(what, label, GetParamName(param), names);
   }
@@ -639,10 +644,7 @@ void SurfaceSpecValidator::ValidateRoot(const ViewSpec& root) {
 void SurfaceSpecValidator::ValidateView(const ViewSpec& view,
                                         const ViewScope& parent) {
   ViewScope scope;
-  scope.path = absl::StrCat(parent.path, parent.path == "/" ? "" : "/",
-                            view.repeat.has_value()
-                                ? absl::StrCat(view.repeat->element, "[]")
-                                : view.name);
+  scope.path = GetViewPath(parent.path, view);
   scope.line = view.line;
   if (view.repeat.has_value()) {
     if (!view.name.empty()) {
@@ -918,10 +920,13 @@ void SurfaceSpecValidator::ValidateMapping(const MappingSpec& mapping,
     ValidateMappingProperty(mapping, *property, control, what);
   }
 
+  absl::flat_hash_set<std::string_view> modifiers;
   for (const std::string& modifier : config.read.required_modifiers) {
     if (!IsModifier(modifier)) {
       AddError(what, absl::StrCat("requires \"", modifier,
                                   "\", which isn't a modifier"));
+    } else if (!modifiers.insert(modifier).second) {
+      AddError(what, absl::StrCat("requires \"", modifier, "\" twice"));
     }
   }
   for (const ViewMapping::ModeOverride& mode_override :
@@ -1300,6 +1305,13 @@ std::string_view GetComponentName(const ComponentSpec& component) {
 
 SpecLine GetComponentLine(const ComponentSpec& component) {
   return std::visit([](const auto& spec) { return spec.line; }, component);
+}
+
+std::string GetViewPath(std::string_view parent_path, const ViewSpec& view) {
+  const std::string_view separator = parent_path == "/" ? "" : "/";
+  return view.repeat.has_value()
+             ? absl::StrCat(parent_path, separator, view.repeat->element, "[]")
+             : absl::StrCat(parent_path, separator, view.name);
 }
 
 std::vector<std::optional<PropertyArg>> GetPropertyArgs(

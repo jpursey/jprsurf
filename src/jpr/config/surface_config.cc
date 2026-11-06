@@ -18,6 +18,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -30,8 +31,10 @@
 #include "gb/parse/parser_program.h"
 #include "gb/parse/symbol.h"
 #include "gb/parse/token.h"
+#include "jpr/common/color.h"
 #include "jpr/common/track.h"
 #include "jpr/device/control_input.h"
+#include "jpr/device/control_input_handle.h"
 #include "jpr/device/control_output.h"
 #include "jpr/device/control_override.h"
 #include "jpr/device/device_spec.h"
@@ -39,6 +42,11 @@
 #include "jpr/device/widget_definition.h"
 #include "jpr/device/widget_path.h"
 #include "jpr/scene/catalog.h"
+#include "jpr/scene/surface_spec.h"
+#include "jpr/scene/view.h"
+#include "jpr/scene/view_condition.h"
+#include "jpr/scene/view_mapping.h"
+#include "jpr/scene/view_property.h"
 
 namespace jpr {
 namespace {
@@ -55,8 +63,8 @@ constexpr gb::TokenType kTokenQualifiedName = gb::kTokenUser;
 // A superset of kWidgetPathLexerConfig, as the grammar includes
 // kWidgetPathRules: its symbols are among these, and it reads identifiers and
 // integers the same way.
-constexpr gb::Symbol kSymbols[] = {'{', '}', '(', ')', '[',
-                                   ']', '=', ',', '.', ".."};
+constexpr gb::Symbol kSymbols[] = {'{', '}', '(',  ')',  '[',  ']',  '=',
+                                   ',', '.', "..", "->", "<-", "<->"};
 constexpr std::string_view kLineComments[] = {"#"};
 constexpr gb::LexerConfig::UserToken kUserTokens[] = {
     {.name = "name with a namespace",
@@ -67,8 +75,8 @@ constexpr gb::LexerConfig::UserToken kUserTokens[] = {
 constexpr gb::LexerConfig kLexerConfig = {
     .flags = {gb::LexerFlag::kInt32, gb::LexerFlag::kDecimalIntegers,
               gb::LexerFlag::kFloat64, gb::LexerFlag::kDecimalFloats,
-              gb::kLexerFlags_CStrings, gb::LexerFlag::kDecodeEscape,
-              gb::kLexerFlags_CIdentifiers},
+              gb::LexerFlag::kNegativeFloats, gb::kLexerFlags_CStrings,
+              gb::LexerFlag::kDecodeEscape, gb::kLexerFlags_CIdentifiers},
     .escape = '\\',
     .escape_newline = 'n',
     .escape_tab = 't',
@@ -98,6 +106,11 @@ constexpr std::string_view kGrammar = R"---(
     $settings=("settings" "{" $items=setting* "}":"Expected a setting");
     $components=("components" "{" $items=component*
                  "}":"Expected a component");
+    $mappings=("mappings" [$name=%ident ["(" $params=template_param,* ")"]]
+               "{" $items=mapping_item* "}":"Expected a mapping");
+    $view=view;
+    $when=("when" $condition=condition "{" $items=statement*
+           "}":"Expected a statement");
   }
 
   device {
@@ -127,7 +140,80 @@ constexpr std::string_view kGrammar = R"---(
     $string=%string;
     $int=%int;
     $float=%float;
+    $call=($name=%ident "(" $params=param,* ")");
     $name=%ident;
+  }
+
+  view {
+    "view" ($element=%ident "in" $array=WidgetPath |
+            $name=%ident ["(" $params=param,* ")"])
+    "{" $items=statement* "}":"Expected a statement";
+  }
+
+  template_param {
+    $widget=("widget" $name=%ident);
+    $property=("property" $name=%ident
+               ["=" ($default=%qualified_name | $default=%ident)]);
+  }
+
+  mapping_item {
+    $use=("use" $name=%ident ["(" $args=arg,* ")"]);
+    $when=("when" $condition=condition "{" $items=mapping_item*
+           "}":"Expected a mapping");
+    $mapping=mapping;
+  }
+
+  arg {
+    $name=%ident "=" ($qualified_name=%qualified_name | $path=WidgetPath);
+  }
+
+  mapping {
+    $control=WidgetPath ["[" $reads=read_option,+ "]"] $arrow=arrow
+    $target=target ["{" $options=option* "}":"Expected an option"];
+  }
+
+  read_option {
+    $modifier=%qualified_name;
+    $name=%ident;
+  }
+
+  arrow {
+    $read="->";
+    $write="<-";
+    $both="<->";
+  }
+
+  target {
+    $property=%qualified_name;
+    $fixed=fixed;
+    $param=%ident;
+  }
+
+  constant {
+    $fixed=fixed;
+    $name=%ident;
+  }
+
+  fixed {
+    $color=("rgb" "(" $r=%int "," $g=%int "," $b=%int ")");
+    $true="true";
+    $false="false";
+    $string=%string;
+    $int=%int;
+    $float=%float;
+  }
+
+  option {
+    $set=("set" $value=constant);
+    $range=("range" $min=constant ".." $max=constant);
+    $toggle=("toggle" $min=constant ".." $max=constant);
+    $mode=("mode" $name=%ident);
+    $when=("when" $condition=condition "{" $items=option*
+           "}":"Expected an option");
+  }
+
+  condition {
+    ($property=%qualified_name | $property=%ident) ["=" $value=constant];
   }
 
   widget_struct {
@@ -202,6 +288,8 @@ enum class ValueForm {
   kName,           // A name, without a namespace.
   kNames,          // A list of names.
   kQualifiedName,  // A name with a namespace, such as "user:folder".
+  kInt,            // An integer.
+  kCall,           // A name, with or without parameters, such as a list.
 };
 
 // A parameter that a statement may give, or a setting.
@@ -216,39 +304,31 @@ struct ParamSyntax {
   absl::Span<const std::string_view> choices;  // A name's, if it is limited.
 };
 
-// A parameter's value, as text: one string, or one for each name of a list. A
-// name among the parameter's choices also has its index. It is empty if its
-// value isn't valid.
+// A parameter's value, as text: one string, or one for each name of a list,
+// which is empty if its value isn't valid. A name among the parameter's
+// choices also has its index, a call its parameters, and an integer only its
+// number.
 struct ParamValue {
   std::vector<std::string> text;
-  int choice = -1;
+  std::optional<int> choice;
+  std::optional<int> number;
+  absl::Span<const gb::ParsedItem> params;
 };
 
 // The values of the parameters a statement gives, by their names.
 using ParamValues = absl::flat_hash_map<std::string_view, ParamValue>;
 
+// Returns the parameter's value, which is empty if it isn't given.
+const ParamValue& GetValue(const ParamValues& values, std::string_view name) {
+  static const absl::NoDestructor<ParamValue> s_empty;
+  const auto it = values.find(name);
+  return it == values.end() ? *s_empty : it->second;
+}
+
 // Returns the parameter's text, or empty if it isn't given.
 std::string GetText(const ParamValues& values, std::string_view name) {
-  const auto it = values.find(name);
-  return it == values.end() || it->second.text.empty()
-             ? std::string()
-             : it->second.text.front();
-}
-
-// Returns the names of the parameter's list, or none if it isn't given.
-std::vector<std::string> GetNames(const ParamValues& values,
-                                  std::string_view name) {
-  const auto it = values.find(name);
-  return it == values.end() ? std::vector<std::string>() : it->second.text;
-}
-
-// Returns the index of the parameter's choice, or nullopt if it isn't given.
-std::optional<int> GetChoice(const ParamValues& values, std::string_view name) {
-  const auto it = values.find(name);
-  if (it == values.end() || it->second.choice < 0) {
-    return std::nullopt;
-  }
-  return it->second.choice;
+  const ParamValue& value = GetValue(values, name);
+  return value.text.empty() ? std::string() : value.text.front();
 }
 
 // Returns true if the value is written in the form.
@@ -267,6 +347,10 @@ bool IsForm(const gb::ParsedItem& value, ValueForm form) {
                             });
     case ValueForm::kQualifiedName:
       return match == "qualified_name";
+    case ValueForm::kInt:
+      return match == "int";
+    case ValueForm::kCall:
+      return match == "call" || match == "name";
   }
   return false;
 }
@@ -282,6 +366,10 @@ std::string_view GetFormName(ValueForm form) {
       return "a list of names";
     case ValueForm::kQualifiedName:
       return "a name with a namespace";
+    case ValueForm::kInt:
+      return "an integer";
+    case ValueForm::kCall:
+      return "a name, with or without parameters";
   }
   return {};
 }
@@ -308,6 +396,80 @@ constexpr TrackFilter kTrackFilters[] = {TrackFilter::kMcp, TrackFilter::kTcp,
 constexpr ParamSyntax kSettings[] = {
     {"track_filter", ValueForm::kName, false, kTrackFilterNames},
 };
+
+//------------------------------------------------------------------------------
+// Views and mappings
+//------------------------------------------------------------------------------
+
+// A list's kinds, in the order of View::ListConfig::items' alternatives.
+constexpr std::string_view kListNames[] = {"child_tracks", "routes"};
+
+constexpr ParamSyntax kViewParams[] = {
+    {"subject", ValueForm::kQualifiedName},
+    {"list", ValueForm::kCall, false, kListNames},
+};
+
+constexpr ParamSyntax kChildTracksParams[] = {
+    {"reveal", ValueForm::kQualifiedName},
+    {"bank", ValueForm::kInt},
+};
+
+// A routes list's types, and the rule each is, in the same order. Leaving it
+// out is kSendsUnlessOnlyReceives.
+constexpr std::string_view kRouteTypeNames[] = {"sends", "receives"};
+constexpr View::RouteTypeRule kRouteTypeRules[] = {
+    View::RouteTypeRule::kSends, View::RouteTypeRule::kReceives};
+
+constexpr ParamSyntax kRoutesParams[] = {
+    {"type", ValueForm::kName, false, kRouteTypeNames},
+    {"bank", ValueForm::kInt},
+};
+
+// The press behaviors a mapping may read its control with, and the behavior
+// each is, in the same order.
+constexpr std::string_view kPressBehaviorNames[] = {"long", "double", "tap"};
+constexpr InputConfig::PressBehavior kPressBehaviors[] = {
+    InputConfig::PressBehavior::kLongPress,
+    InputConfig::PressBehavior::kDoublePress, InputConfig::PressBehavior::kTap};
+
+constexpr std::string_view kWhenInWhen =
+    "a \"when\" can't be in another \"when\"";
+
+// Returns the input or output type with the name, or nullopt if there is none.
+std::optional<ControlInput::Type> FindInputType(std::string_view name) {
+  for (ControlInput::Type type : ControlInput::kTypes) {
+    if (ControlInput::GetTypeName(type) == name) {
+      return type;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<ControlOutput::Type> FindOutputType(std::string_view name) {
+  for (ControlOutput::Type type : ControlOutput::kTypes) {
+    if (ControlOutput::GetTypeName(type) == name) {
+      return type;
+    }
+  }
+  return std::nullopt;
+}
+
+// Returns the fixed value a mapping writes for a constant: true or false is a
+// toggle, a number normalized, a string text, and a color a color.
+FixedValue GetFixedValue(ViewProperty::Value value) {
+  if (const int* number = std::get_if<int>(&value)) {
+    value = static_cast<double>(*number);
+  }
+  ViewProperty::Type type = ViewProperty::Type::kToggle;
+  if (std::holds_alternative<double>(value)) {
+    type = ViewProperty::Type::kNormalized;
+  } else if (std::holds_alternative<std::string>(value)) {
+    type = ViewProperty::Type::kText;
+  } else if (std::holds_alternative<Color>(value)) {
+    type = ViewProperty::Type::kColor;
+  }
+  return {.type = type, .value = std::move(value)};
+}
 
 //------------------------------------------------------------------------------
 // Components
@@ -357,7 +519,7 @@ ComponentSpec MakeComponent(int index) {
 void SetParams(ModifierSpec&, const ParamValues&) {}
 
 void SetParams(EnumeratedValueSpec& spec, const ParamValues& values) {
-  spec.values = GetNames(values, "values");
+  spec.values = GetValue(values, "values").text;
   spec.initial = GetText(values, "initial");
 }
 
@@ -368,7 +530,7 @@ void SetParams(TrackReferenceSpec& spec, const ParamValues& values) {
 
 void SetParams(TrackAnchorSpec& spec, const ParamValues& values) {
   // The choices are in the order of kTrackBoolProperties.
-  if (std::optional<int> action = GetChoice(values, "action")) {
+  if (std::optional<int> action = GetValue(values, "action").choice) {
     spec.action = kTrackBoolProperties[*action];
   }
   spec.modifier = GetText(values, "modifier");
@@ -403,7 +565,63 @@ class ConfigReader final {
   // have only one of, or adds an error.
   bool IsFirstBlock(std::string_view keyword, SpecLine line);
 
-  void ReadStatement(const gb::ParsedItem& statement);
+  // Reads a statement at the top level, where a template's parameters are
+  // already read (see Read()). One that a view's body may have too is the
+  // root view's.
+  void ReadTopLevelStatement(const gb::ParsedItem& statement);
+
+  // Reads a statement into the body of the view at `path`.
+  void ReadStatement(const gb::ParsedItem& statement, ViewSpec& view,
+                     std::string_view path);
+
+  // Reads a "when" around views, into the view at `path`.
+  void ReadViewsWhen(const gb::ParsedItem& when, ViewSpec& view,
+                     std::string_view path);
+  ViewSpec ReadView(const gb::ParsedItem& item, std::string_view parent_path,
+                    std::optional<ViewCondition::Config> condition);
+  void ReadViewParams(absl::Span<const gb::ParsedItem> params, SpecPart what,
+                      View::Config& config);
+  View::ListConfig ReadList(int kind, absl::Span<const gb::ParsedItem> params,
+                            SpecPart what);
+
+  // Returns a template with the parameters of the named "mappings" block, but
+  // none of its mappings or uses.
+  TemplateSpec ReadTemplateParams(const gb::ParsedItem& block);
+
+  // Returns the first template with the name, or null if there is none.
+  const TemplateSpec* FindTemplate(std::string_view name) const;
+
+  // Reads a "mappings" block's mappings and uses, in `scope` (a view's path,
+  // or a template), each with the condition, if any.
+  void ReadMappings(absl::Span<const gb::ParsedItem> items,
+                    std::string_view scope,
+                    const std::optional<ViewCondition::Config>& condition,
+                    std::vector<MappingSpec>& mappings,
+                    std::vector<TemplateUse>& uses);
+  TemplateUse ReadUse(const gb::ParsedItem& item, std::string_view scope);
+  MappingSpec ReadMapping(const gb::ParsedItem& item, std::string_view scope,
+                          std::optional<ViewCondition::Config> condition);
+
+  // Reads how a mapping reads its control, about `what`.
+  void ReadHow(absl::Span<const gb::ParsedItem> reads, SpecPart what,
+               ViewMapping::ReadConfig& read);
+  std::variant<std::string, FixedValue> ReadTarget(const gb::ParsedItem& target,
+                                                   SpecPart what);
+
+  // Each reads a mapping's options, or a "when" around its modes, about
+  // `what`.
+  void ReadOptions(absl::Span<const gb::ParsedItem> options, SpecPart what,
+                   ViewMapping::Config& config);
+  void ReadModeWhen(const gb::ParsedItem& when, SpecPart what,
+                    ViewMapping::WriteConfig& write);
+
+  ViewCondition::Config ReadCondition(const gb::ParsedItem& item);
+
+  // Each returns the value of a "constant" or "fixed" match, or none if it
+  // isn't valid, adding an error about `what`.
+  ViewProperty::Value ReadConstant(const gb::ParsedItem& constant,
+                                   SpecPart what);
+  ViewProperty::Value ReadFixed(const gb::ParsedItem& fixed, SpecPart what);
 
   // Returns the values of the parameters, each of which `syntax` must have,
   // given at most once, in its form. Adds an error for each problem, about
@@ -440,6 +658,8 @@ class ConfigReader final {
   // The line of each block the top level may have only one of, by its
   // keyword.
   absl::flat_hash_map<std::string, SpecLine> block_lines_;
+
+  int next_template_ = 0;  // The template whose mappings are read next.
 };
 
 std::optional<SurfaceSpec> ConfigReader::Read(gb::LexerContentId content) {
@@ -461,8 +681,18 @@ std::optional<SurfaceSpec> ConfigReader::Read(gb::LexerContentId content) {
     AddParseError(top_level.GetError());
     return std::nullopt;
   }
-  for (const gb::ParsedItem& statement : top_level->GetItems("statements")) {
-    ReadStatement(statement);
+  // Templates' parameters are read first, so that a use can sort its
+  // arguments by them, wherever it is.
+  const absl::Span<const gb::ParsedItem> statements =
+      top_level->GetItems("statements");
+  for (const gb::ParsedItem& statement : statements) {
+    const gb::ParsedItem* block = statement.GetItem("mappings");
+    if (block != nullptr && block->GetItem("name") != nullptr) {
+      spec_.templates.push_back(ReadTemplateParams(*block));
+    }
+  }
+  for (const gb::ParsedItem& statement : statements) {
+    ReadTopLevelStatement(statement);
   }
   for (std::string_view keyword : {"devices", "widgets"}) {
     if (!block_lines_.contains(keyword)) {
@@ -501,27 +731,387 @@ bool ConfigReader::IsFirstBlock(std::string_view keyword, SpecLine line) {
   return added;
 }
 
-void ConfigReader::ReadStatement(const gb::ParsedItem& statement) {
+void ConfigReader::ReadTopLevelStatement(const gb::ParsedItem& statement) {
   const std::string_view keyword = statement.GetMatchName();
-  if (keyword != "components" && !IsFirstBlock(keyword, GetLine(statement))) {
-    return;
-  }
   const gb::ParsedItem& block = *statement.GetItem(keyword);
-  if (keyword == "devices") {
-    for (const gb::ParsedItem& device : block.GetItems("items")) {
-      spec_.devices.push_back(ReadDevice(device));
-    }
-  } else if (keyword == "widgets") {
-    spec_.widgets = ReadWidgetStruct(*block.GetItem("struct"), {});
-  } else if (keyword == "settings") {
-    ReadSettings(block);
+  if (keyword == "mappings" && block.GetItem("name") != nullptr) {
+    // The templates are in the order of their blocks.
+    TemplateSpec& spec = spec_.templates[next_template_++];
+    ReadMappings(block.GetItems("items"), absl::StrCat("template ", spec.name),
+                 std::nullopt, spec.mappings, spec.uses);
   } else if (keyword == "components") {
+    // The top level's components are the surface's, rather than the root
+    // view's.
     for (const gb::ParsedItem& item : block.GetItems("items")) {
       if (std::optional<ComponentSpec> component = ReadComponent(item)) {
         spec_.components.push_back(*std::move(component));
       }
     }
+  } else if (keyword != "devices" && keyword != "widgets" &&
+             keyword != "settings") {
+    ReadStatement(statement, spec_.root, "/");
+  } else if (IsFirstBlock(keyword, GetLine(statement))) {
+    if (keyword == "devices") {
+      for (const gb::ParsedItem& device : block.GetItems("items")) {
+        spec_.devices.push_back(ReadDevice(device));
+      }
+    } else if (keyword == "widgets") {
+      spec_.widgets = ReadWidgetStruct(*block.GetItem("struct"), {});
+    } else {
+      ReadSettings(block);
+    }
   }
+}
+
+void ConfigReader::ReadStatement(const gb::ParsedItem& statement,
+                                 ViewSpec& view, std::string_view path) {
+  const std::string_view keyword = statement.GetMatchName();
+  const gb::ParsedItem& block = *statement.GetItem(keyword);
+  if (keyword == "components") {
+    for (const gb::ParsedItem& item : block.GetItems("items")) {
+      if (std::optional<ComponentSpec> component = ReadComponent(item)) {
+        view.components.push_back(*std::move(component));
+      }
+    }
+  } else if (keyword == "mappings") {
+    if (block.GetItem("name") != nullptr) {
+      AddError({.line = GetLine(statement)},
+               "named mappings are only at the top level");
+    } else {
+      ReadMappings(block.GetItems("items"), path, std::nullopt, view.mappings,
+                   view.uses);
+    }
+  } else if (keyword == "view") {
+    view.children.push_back(ReadView(block, path, std::nullopt));
+  } else if (keyword == "when") {
+    ReadViewsWhen(block, view, path);
+  } else {
+    AddError({.line = GetLine(statement)},
+             absl::StrCat("\"", keyword, "\" is only at the top level"));
+  }
+}
+
+void ConfigReader::ReadViewsWhen(const gb::ParsedItem& when, ViewSpec& view,
+                                 std::string_view path) {
+  const ViewCondition::Config condition =
+      ReadCondition(*when.GetItem("condition"));
+  for (const gb::ParsedItem& statement : when.GetItems("items")) {
+    const std::string_view keyword = statement.GetMatchName();
+    if (keyword == "view") {
+      view.children.push_back(
+          ReadView(*statement.GetItem("view"), path, condition));
+    } else {
+      AddError({.line = GetLine(statement)},
+               keyword == "when"
+                   ? kWhenInWhen
+                   : absl::StrCat("\"", keyword, "\" can't be in a \"when\" ",
+                                  "here, which holds only views"));
+    }
+  }
+}
+
+ViewSpec ConfigReader::ReadView(
+    const gb::ParsedItem& item, std::string_view parent_path,
+    std::optional<ViewCondition::Config> condition) {
+  ViewSpec view = {.config = {.condition = std::move(condition)},
+                   .line = GetLine(item)};
+  if (const gb::ParsedItem* array = item.GetItem("array")) {
+    view.config.subject = View::ListItemSubject{};
+    view.repeat = RepeatSpec{.array = GetPathText(*array),
+                             .element = std::string(item.GetString("element"))};
+  } else {
+    view.name = item.GetString("name");
+  }
+  const std::string path = GetViewPath(parent_path, view);
+  ReadViewParams(item.GetItems("params"), {.line = view.line, .text = path},
+                 view.config);
+  for (const gb::ParsedItem& statement : item.GetItems("items")) {
+    ReadStatement(statement, view, path);
+  }
+  return view;
+}
+
+void ConfigReader::ReadViewParams(absl::Span<const gb::ParsedItem> params,
+                                  SpecPart what, View::Config& config) {
+  const ParamValues values = ReadParams(params, kViewParams, "parameter", what);
+  if (std::string subject = GetText(values, "subject"); !subject.empty()) {
+    config.subject = View::ReferenceSubject{.name = std::move(subject)};
+  }
+  const ParamValue& list = GetValue(values, "list");
+  if (list.choice.has_value()) {
+    config.list = ReadList(*list.choice, list.params, what);
+  }
+}
+
+View::ListConfig ConfigReader::ReadList(int kind,
+                                        absl::Span<const gb::ParsedItem> params,
+                                        SpecPart what) {
+  const bool child_tracks = kListNames[kind] == "child_tracks";
+  const ParamValues values =
+      ReadParams(params, child_tracks ? kChildTracksParams : kRoutesParams,
+                 "parameter", what);
+  View::ListConfig list = {.bank_size = GetValue(values, "bank").number};
+  if (child_tracks) {
+    list.items = View::ChildTracks{.reveal = GetText(values, "reveal")};
+  } else {
+    View::Routes routes;
+    if (std::optional<int> type = GetValue(values, "type").choice) {
+      routes.route_type_rule = kRouteTypeRules[*type];
+    }
+    list.items = routes;
+  }
+  return list;
+}
+
+TemplateSpec ConfigReader::ReadTemplateParams(const gb::ParsedItem& block) {
+  TemplateSpec spec = {.name = std::string(block.GetString("name")),
+                       .line = GetLine(block)};
+  for (const gb::ParsedItem& param : block.GetItems("params")) {
+    if (const gb::ParsedItem* widget = param.GetItem("widget")) {
+      spec.widget_params.emplace_back(widget->GetString("name"));
+    } else {
+      const gb::ParsedItem& property = *param.GetItem("property");
+      spec.property_params.push_back(
+          {.name = std::string(property.GetString("name")),
+           .default_value = std::string(property.GetString("default"))});
+    }
+  }
+  return spec;
+}
+
+const TemplateSpec* ConfigReader::FindTemplate(std::string_view name) const {
+  const auto it = absl::c_find_if(
+      spec_.templates,
+      [name](const TemplateSpec& spec) { return spec.name == name; });
+  return it == spec_.templates.end() ? nullptr : &*it;
+}
+
+void ConfigReader::ReadMappings(
+    absl::Span<const gb::ParsedItem> items, std::string_view scope,
+    const std::optional<ViewCondition::Config>& condition,
+    std::vector<MappingSpec>& mappings, std::vector<TemplateUse>& uses) {
+  for (const gb::ParsedItem& item : items) {
+    const std::string_view kind = item.GetMatchName();
+    if (kind == "mapping") {
+      mappings.push_back(ReadMapping(*item.GetItem(kind), scope, condition));
+    } else if (condition.has_value()) {
+      AddError({.line = GetLine(item)},
+               kind == "when" ? kWhenInWhen
+                              : "a \"use\" can't be in a \"when\", as a use "
+                                "has no condition");
+    } else if (kind == "use") {
+      uses.push_back(ReadUse(*item.GetItem(kind), scope));
+    } else {
+      const gb::ParsedItem& when = *item.GetItem(kind);
+      ReadMappings(when.GetItems("items"), scope,
+                   ReadCondition(*when.GetItem("condition")), mappings, uses);
+    }
+  }
+}
+
+TemplateUse ConfigReader::ReadUse(const gb::ParsedItem& item,
+                                  std::string_view scope) {
+  TemplateUse use = {.name = std::string(item.GetString("name")),
+                     .line = GetLine(item)};
+  const TemplateSpec* spec = FindTemplate(use.name);
+  for (const gb::ParsedItem& arg : item.GetItems("args")) {
+    const std::string_view name = arg.GetString("name");
+    if (use.widgets.contains(name) || use.properties.contains(name)) {
+      AddError(
+          {.line = GetLine(arg), .text = scope},
+          absl::StrCat("uses ", use.name, " with \"", name, "\" given twice"));
+      continue;
+    }
+    // An argument is sorted by the template's parameter, or for one the
+    // template doesn't have, which checking reports, by how it is written: a
+    // widget path, or a name with a namespace for a property. Checking also
+    // reports an argument the parameter can't be, such as a path for a
+    // property.
+    const gb::ParsedItem* path = arg.GetItem("path");
+    bool is_widget = path != nullptr;
+    if (spec != nullptr) {
+      if (absl::c_linear_search(spec->widget_params, name)) {
+        is_widget = true;
+      } else if (absl::c_any_of(spec->property_params,
+                                [name](const PropertyParam& param) {
+                                  return param.name == name;
+                                })) {
+        is_widget = false;
+      }
+    }
+    (is_widget ? use.widgets : use.properties)
+        .emplace(name, path != nullptr
+                           ? GetPathText(*path)
+                           : std::string(arg.GetString("qualified_name")));
+  }
+  return use;
+}
+
+MappingSpec ConfigReader::ReadMapping(
+    const gb::ParsedItem& item, std::string_view scope,
+    std::optional<ViewCondition::Config> condition) {
+  MappingSpec mapping = {.control = GetPathText(*item.GetItem("control")),
+                         .config = {.condition = std::move(condition)},
+                         .line = GetLine(item)};
+  const std::string subject = absl::StrCat(scope, ": ", mapping.control);
+  const SpecPart what = {.line = mapping.line, .text = subject};
+  const std::string_view arrow = item.GetItem("arrow")->GetMatchName();
+  mapping.type = arrow == "read"    ? ViewMapping::kReadControl
+                 : arrow == "write" ? ViewMapping::kWriteControl
+                                    : ViewMapping::kReadWriteControl;
+  ReadHow(item.GetItems("reads"), what, mapping.config.read);
+  mapping.property = ReadTarget(*item.GetItem("target"), what);
+  ReadOptions(item.GetItems("options"), what, mapping.config);
+  return mapping;
+}
+
+void ConfigReader::ReadHow(absl::Span<const gb::ParsedItem> reads,
+                           SpecPart what, ViewMapping::ReadConfig& read) {
+  absl::flat_hash_set<std::string_view> given;
+  for (const gb::ParsedItem& item : reads) {
+    const SpecPart part = {.line = GetLine(item), .text = what.text};
+    // Checking reports a modifier given twice, as the spec holds a list.
+    if (const gb::ParsedItem* modifier = item.GetItem("modifier")) {
+      read.required_modifiers.emplace_back(modifier->GetToken().GetString());
+      continue;
+    }
+    const std::string_view name = item.GetString("name");
+    if (!given.insert(name).second) {
+      AddError(part, absl::StrCat("\"", name, "\" is given twice"));
+      continue;
+    }
+    if (name == "held") {
+      read.press_release = true;
+    } else if (name == "touch") {
+      read.touch = true;
+    } else if (const auto behavior = absl::c_find(kPressBehaviorNames, name);
+               behavior != std::end(kPressBehaviorNames)) {
+      if (read.press_behavior != InputConfig::PressBehavior::kNormal) {
+        AddError(part, "has more than one press behavior");
+      }
+      read.press_behavior =
+          kPressBehaviors[behavior - std::begin(kPressBehaviorNames)];
+    } else if (std::optional<ControlInput::Type> input = FindInputType(name)) {
+      if (read.input_type.has_value()) {
+        AddError(part, "has more than one input");
+      }
+      read.input_type = input;
+    } else {
+      AddError(part, absl::StrCat("\"", name,
+                                  "\" isn't an input, a press behavior, "
+                                  "\"held\", \"touch\", or a modifier"));
+    }
+  }
+}
+
+std::variant<std::string, FixedValue> ConfigReader::ReadTarget(
+    const gb::ParsedItem& target, SpecPart what) {
+  // A plain name is a property parameter of the template the mapping is in.
+  if (const gb::ParsedItem* fixed = target.GetItem("fixed")) {
+    return GetFixedValue(ReadFixed(*fixed, what));
+  }
+  return std::string(target.GetString(target.GetMatchName()));
+}
+
+void ConfigReader::ReadOptions(absl::Span<const gb::ParsedItem> options,
+                               SpecPart what, ViewMapping::Config& config) {
+  for (const gb::ParsedItem& option : options) {
+    const SpecPart part = {.line = GetLine(option), .text = what.text};
+    const std::string_view keyword = option.GetMatchName();
+    const gb::ParsedItem& body = *option.GetItem(keyword);
+    if (keyword == "mode") {
+      // A mode name is never empty, so an empty one is none given.
+      if (!config.write.mode.empty()) {
+        AddError(part, "\"mode\" is given twice");
+      } else {
+        config.write.mode = body.GetString("name");
+      }
+    } else if (keyword == "when") {
+      ReadModeWhen(body, part, config.write);
+    } else if (config.read.property_min.has_value()) {
+      AddError(part, "has more than one of \"set\", \"range\", and \"toggle\"");
+    } else if (keyword == "set") {
+      config.read.property_min = ReadConstant(*body.GetItem("value"), part);
+      config.read.property_max = config.read.property_min;
+    } else {
+      config.read.property_min = ReadConstant(*body.GetItem("min"), part);
+      config.read.property_max = ReadConstant(*body.GetItem("max"), part);
+      config.read.press_toggles = keyword == "toggle";
+    }
+  }
+}
+
+void ConfigReader::ReadModeWhen(const gb::ParsedItem& when, SpecPart what,
+                                ViewMapping::WriteConfig& write) {
+  const ViewCondition::Config condition =
+      ReadCondition(*when.GetItem("condition"));
+  bool has_mode = false;
+  for (const gb::ParsedItem& option : when.GetItems("items")) {
+    const SpecPart part = {.line = GetLine(option), .text = what.text};
+    const std::string_view keyword = option.GetMatchName();
+    if (keyword == "when") {
+      AddError(part, kWhenInWhen);
+    } else if (keyword != "mode") {
+      AddError(part,
+               absl::StrCat("\"", keyword,
+                            "\" can't be in a \"when\": only a mode can"));
+    } else if (has_mode) {
+      AddError(part, "\"mode\" is given twice");
+    } else {
+      has_mode = true;
+      write.mode_overrides.push_back(
+          {.property = condition.property,
+           .value_to_mode = {
+               {condition.value,
+                std::string(option.GetItem("mode")->GetString("name"))}}});
+    }
+  }
+}
+
+ViewCondition::Config ConfigReader::ReadCondition(const gb::ParsedItem& item) {
+  ViewCondition::Config condition = {
+      .property = std::string(item.GetString("property"))};
+  if (const gb::ParsedItem* value = item.GetItem("value")) {
+    condition.value = ReadConstant(*value, {.line = GetLine(item)});
+  }
+  return condition;
+}
+
+ViewProperty::Value ConfigReader::ReadConstant(const gb::ParsedItem& constant,
+                                               SpecPart what) {
+  // A name is one of an enumerated property's values.
+  if (const gb::ParsedItem* fixed = constant.GetItem("fixed")) {
+    return ReadFixed(*fixed, what);
+  }
+  return std::string(constant.GetString("name"));
+}
+
+ViewProperty::Value ConfigReader::ReadFixed(const gb::ParsedItem& fixed,
+                                            SpecPart what) {
+  if (const gb::ParsedItem* color = fixed.GetItem("color")) {
+    const int64_t r = color->GetInt("r");
+    const int64_t g = color->GetInt("g");
+    const int64_t b = color->GetInt("b");
+    if (r > 255 || g > 255 || b > 255) {
+      AddError(what, absl::StrCat("rgb(", r, ", ", g, ", ", b,
+                                  ") has a value over 255"));
+      return {};
+    }
+    return Color{.r = static_cast<uint8_t>(r),
+                 .g = static_cast<uint8_t>(g),
+                 .b = static_cast<uint8_t>(b)};
+  }
+  const std::string_view form = fixed.GetMatchName();
+  if (form == "true" || form == "false") {
+    return form == "true";
+  }
+  if (form == "int") {
+    return static_cast<int>(fixed.GetInt("int"));
+  }
+  if (form == "float") {
+    return fixed.GetFloat("float");
+  }
+  return std::string(fixed.GetString("string"));
 }
 
 ParamValues ConfigReader::ReadParams(absl::Span<const gb::ParsedItem> params,
@@ -568,7 +1158,17 @@ void ConfigReader::ReadValue(const gb::ParsedItem& value,
     }
     return;
   }
-  const std::string_view text = value.GetString(value.GetMatchName());
+  if (param.form == ValueForm::kInt) {
+    result.number = static_cast<int>(value.GetInt("int"));
+    return;
+  }
+  std::string_view text;
+  if (const gb::ParsedItem* call = value.GetItem("call")) {
+    text = call->GetString("name");
+    result.params = call->GetItems("params");
+  } else {
+    text = value.GetString(value.GetMatchName());
+  }
   if (!param.choices.empty()) {
     const auto choice = absl::c_find(param.choices, text);
     if (choice == param.choices.end()) {
@@ -603,17 +1203,10 @@ ControlOverride ConfigReader::ReadOverride(const gb::ParsedItem& item,
                              .line = GetLine(item)};
   for (const gb::ParsedItem& flow : item.GetItems("flows")) {
     const std::string_view name = flow.GetToken().GetString();
-    const auto input =
-        absl::c_find_if(ControlInput::kTypes, [name](ControlInput::Type type) {
-          return ControlInput::GetTypeName(type) == name;
-        });
-    const auto output = absl::c_find_if(
-        ControlOutput::kTypes, [name](ControlOutput::Type type) {
-          return ControlOutput::GetTypeName(type) == name;
-        });
-    if (input != std::end(ControlInput::kTypes)) {
+    if (std::optional<ControlInput::Type> input = FindInputType(name)) {
       control.inputs.Set(*input);
-    } else if (output != std::end(ControlOutput::kTypes)) {
+    } else if (std::optional<ControlOutput::Type> output =
+                   FindOutputType(name)) {
       control.outputs.Set(*output);
     } else {
       const std::string subject =
@@ -668,7 +1261,7 @@ WidgetFieldDefinition ConfigReader::ReadWidgetField(const gb::ParsedItem& item,
 void ConfigReader::ReadSettings(const gb::ParsedItem& block) {
   const ParamValues values =
       ReadParams(block.GetItems("items"), kSettings, "setting", {});
-  if (std::optional<int> filter = GetChoice(values, "track_filter")) {
+  if (std::optional<int> filter = GetValue(values, "track_filter").choice) {
     spec_.track_filter = kTrackFilters[*filter];
   }
 }

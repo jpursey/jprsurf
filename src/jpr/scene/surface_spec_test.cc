@@ -661,7 +661,8 @@ TEST(SurfaceSpecTest, TemplatesHaveUniqueNamesAndParameters) {
        .widget_params = {"strip", "", "strip"},
        .property_params = {{.name = "a.b"},
                            {.name = "anchor"},
-                           {.name = "anchor"}}},
+                           {.name = "anchor"},
+                           {.name = "strip"}}},
       {.name = "strip"},
   };
   EXPECT_THAT(
@@ -672,6 +673,7 @@ TEST(SurfaceSpecTest, TemplatesHaveUniqueNamesAndParameters) {
                   "template strip: property parameter \"a.b\" isn't a C "
                   "identifier",
                   "template strip: property parameter \"anchor\" is repeated",
+                  "template strip: property parameter \"strip\" is repeated",
                   "template strip: has the name of another template"));
 }
 
@@ -962,15 +964,16 @@ TEST(SurfaceSpecTest, AnItemsConditionIsMadeBeforeItsListsProperties) {
 TEST(SurfaceSpecTest, AMappingRequiresModifiers) {
   EXPECT_THAT(
       Validate(MappingSpecs(
-          {Mapping(
-              "track:mute", "play", ViewMapping::kReadControl,
-              {.read = {.required_modifiers = {"mod:shift", "mod:fn",
-                                               "mod:nothing", "user:mode"}}})},
+          {Mapping("track:mute", "play", ViewMapping::kReadControl,
+                   {.read = {.required_modifiers = {"mod:shift", "mod:fn",
+                                                    "mod:nothing", "user:mode",
+                                                    "mod:shift"}}})},
           {ModifierSpec{"mod:fn"}, EnumeratedValueSpec{"user:mode", {"a"}}})),
       ElementsAre("/view: play: requires \"mod:nothing\", which isn't a "
                   "modifier",
                   "/view: play: requires \"user:mode\", which isn't a "
-                  "modifier"));
+                  "modifier",
+                  "/view: play: requires \"mod:shift\" twice"));
 }
 
 // A template sees its parameters and the top-level widgets, not the elements

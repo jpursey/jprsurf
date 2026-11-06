@@ -9,6 +9,7 @@ set(jpr_config_SOURCE
 
 set(jpr_config_DEPS
   absl::flat_hash_map
+  absl::flat_hash_set
   absl::log
   absl::no_destructor
   absl::span
