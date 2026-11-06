@@ -120,7 +120,8 @@ struct MappingSpec {
   SpecLine line;  // Where it was written, for errors.
 };
 
-// A use of a template, with an argument for each of its parameters.
+// A use of a template, with an argument for each of its parameters without a
+// default, and for any with one that it doesn't use the default of.
 struct TemplateUse {
   friend bool operator==(const TemplateUse&, const TemplateUse&) = default;
 
@@ -130,20 +131,46 @@ struct TemplateUse {
   SpecLine line;  // Where it was written, for errors.
 };
 
+// A property parameter of a template: a property name without a namespace,
+// which a use replaces with its argument, or with the default where it gives
+// none. A default is a property name, found where the template is used, or an
+// earlier property parameter, which stands for what that one does.
+struct PropertyParam {
+  friend bool operator==(const PropertyParam&, const PropertyParam&) = default;
+
+  std::string name;
+  std::string default_value;  // Empty for none, so a use must give it.
+};
+
 // A named set of mappings, with parameters, which any number of views can use,
 // as if its mappings were written there. A widget parameter is the first name
-// of the paths that use it, and a property parameter is a property name
-// without a namespace, which a use replaces with its argument.
+// of the paths that use it (see PropertyParam for a property parameter).
 struct TemplateSpec {
   friend bool operator==(const TemplateSpec&, const TemplateSpec&) = default;
 
   std::string name;
   std::vector<std::string> widget_params;
-  std::vector<std::string> property_params;
+  std::vector<PropertyParam> property_params;
   std::vector<MappingSpec> mappings;
   std::vector<TemplateUse> uses;
   SpecLine line;  // Where it was written, for errors.
 };
+
+// What a use gives a template's property parameter: its argument, which is
+// resolved where the use is, as one in a template may be that template's
+// parameter, or a default, which is a name as the template wrote it.
+struct PropertyArg {
+  std::string_view name;
+  bool is_default = false;
+};
+
+// Returns what the use gives each of the template's property parameters, in
+// their order, or nullopt for one it gives nothing: one with neither an
+// argument nor a default, or whose default names it or a later parameter,
+// which isn't valid (see ValidateSurfaceSpec()). A default that names an
+// earlier parameter gives what that one is given.
+std::vector<std::optional<PropertyArg>> GetPropertyArgs(
+    const TemplateSpec& spec, const TemplateUse& use);
 
 //==============================================================================
 // Views
@@ -235,12 +262,15 @@ struct SurfaceSpec {
 //   whose array is an array widget, and element a C identifier.
 // - Templates and uses: each template has a name, a C identifier, that no
 //   other template has, and parameters that are C identifiers, none repeated.
-//   Each use names a template, and gives exactly its parameters, and no
-//   template uses itself, however indirectly.
+//   A property parameter's default doesn't name the parameter or a later one.
+//   Each use names a template, and gives an argument for each of its
+//   parameters without a default, and none for anything else, and no template
+//   uses itself, however indirectly.
 // - Mappings, with each use's expanded into the view that uses it, where its
-//   widget arguments name widgets and its property arguments are names: the
-//   control is a control. The property is one where the mapping is (see
-//   below), or a fixed value that is a constant (see IsConstValue()). Each
+//   widget arguments name widgets, and its property arguments, and the
+//   defaults of the parameters it gives none for, are names: the control is a
+//   control. The property is one where the mapping is (see below), or a fixed
+//   value that is a constant (see IsConstValue()). Each
 //   side the mapping asks for is one the scene keeps (see ViewMapping), with
 //   the access it needs, and an input or output that suits the property's
 //   type on the control (taking a press to have a release, as every catalog's

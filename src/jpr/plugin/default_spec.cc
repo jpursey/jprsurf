@@ -100,6 +100,8 @@ constexpr TransportStep kTransportSteps[] = {
 };
 
 // An automation mode button: the arguments of the auto_mode_button template.
+// Only Latch gives an override light, as it is lit for Latch Preview too, and
+// the others are lit by their override state, the default.
 struct AutoModeButton {
   std::string_view button;
   std::string_view command;
@@ -109,13 +111,13 @@ struct AutoModeButton {
 };
 constexpr AutoModeButton kAutoModeButtons[] = {
     {"auto_trim", kCmdAutoModeTrim, kStateSelectedAutoTrimRead,
-     kStateAutoOverrideTrimRead, kStateAutoOverrideTrimRead},
+     kStateAutoOverrideTrimRead},
     {"auto_read", kCmdAutoModeRead, kStateSelectedAutoRead,
-     kStateAutoOverrideRead, kStateAutoOverrideRead},
+     kStateAutoOverrideRead},
     {"auto_touch", kCmdAutoModeTouch, kStateSelectedAutoTouch,
-     kStateAutoOverrideTouch, kStateAutoOverrideTouch},
+     kStateAutoOverrideTouch},
     {"auto_write", kCmdAutoModeWrite, kStateSelectedAutoWrite,
-     kStateAutoOverrideWrite, kStateAutoOverrideWrite},
+     kStateAutoOverrideWrite},
     {"auto_latch", kCmdAutoModeLatch, kStateSelectedAutoLatch,
      kStateAutoOverrideLatch, kStateAutoOverrideAnyLatch},
 };
@@ -292,7 +294,7 @@ TemplateSpec GetTrackStripTemplate() {
 }
 
 // Returns the auto_mode_button template, which maps an automation mode button
-// (see GetRootView()).
+// (see GetRootView()). Its override light is its override state by default.
 TemplateSpec GetAutoModeButtonTemplate() {
   const ViewCondition::Config no_override =
       When(kStateAutoOverrideActive, false);
@@ -300,8 +302,11 @@ TemplateSpec GetAutoModeButtonTemplate() {
   return {
       .name = "auto_mode_button",
       .widget_params = {"button"},
-      .property_params = {"command", "selected_state", "override_state",
-                          "override_light"},
+      .property_params = {{.name = "command"},
+                          {.name = "selected_state"},
+                          {.name = "override_state"},
+                          {.name = "override_light",
+                           .default_value = "override_state"}},
       .mappings = {
           Read("command", "button", {.condition = no_override}),
           Write("selected_state", "button",
@@ -625,13 +630,15 @@ ViewSpec GetRootView() {
   // is no Latch Preview button, so Latch blinks for Latch Preview, and pressing
   // it sets Latch.
   for (const AutoModeButton& info : kAutoModeButtons) {
-    root.uses.push_back(
-        {.name = "auto_mode_button",
-         .widgets = {{"button", std::string(info.button)}},
-         .properties = {{"command", std::string(info.command)},
-                        {"selected_state", std::string(info.selected_state)},
-                        {"override_state", std::string(info.override_state)},
-                        {"override_light", std::string(info.override_light)}}});
+    TemplateUse& use = root.uses.emplace_back(TemplateUse{
+        .name = "auto_mode_button",
+        .widgets = {{"button", std::string(info.button)}},
+        .properties = {{"command", std::string(info.command)},
+                       {"selected_state", std::string(info.selected_state)},
+                       {"override_state", std::string(info.override_state)}}});
+    if (!info.override_light.empty()) {
+      use.properties.emplace("override_light", info.override_light);
+    }
   }
 
   // Rewind and Forward move by the transport step, which Marker and Nudge pick.

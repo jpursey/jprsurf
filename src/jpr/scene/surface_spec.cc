@@ -57,6 +57,16 @@ const Info* FindInfo(absl::Span<const Info> rows, std::string_view name) {
   return it != rows.end() ? &*it : nullptr;
 }
 
+// Returns the name of a template's parameter, a widget's or a property's.
+std::string_view GetParamName(const std::string& param) { return param; }
+std::string_view GetParamName(const PropertyParam& param) { return param.name; }
+
+// Returns true if a use of the template may leave out the parameter.
+bool HasDefault(const std::string&) { return false; }
+bool HasDefault(const PropertyParam& param) {
+  return !param.default_value.empty();
+}
+
 // What checking knows of a view, which its contents and children see.
 struct ViewScope {
   // Returns the view, as errors about it start.
@@ -151,8 +161,13 @@ class SurfaceSpecValidator {
   void ValidateTemplates(absl::Span<const TemplateSpec> templates);
 
   // Validates a template's parameters of a kind ("widget" or "property").
-  void ValidateTemplateParams(absl::Span<const std::string> params,
+  template <typename Param>
+  void ValidateTemplateParams(const std::vector<Param>& params,
                               std::string_view kind, SpecPart what);
+
+  // Validates the defaults of a template's property parameters.
+  void ValidateDefaults(const std::vector<PropertyParam>& params,
+                        SpecPart what);
 
   // Returns true if the template uses the target, directly or through other
   // templates, adding the templates it uses it through to `through`. The
@@ -167,7 +182,8 @@ class SurfaceSpecValidator {
 
   // Validates a use's arguments for the template's parameters of a kind
   // ("widget" or "property").
-  void ValidateArgs(absl::Span<const std::string> params,
+  template <typename Param>
+  void ValidateArgs(const std::vector<Param>& params,
                     const absl::flat_hash_map<std::string, std::string>& args,
                     std::string_view kind, std::string_view template_name,
                     SpecPart what);
@@ -491,6 +507,7 @@ void SurfaceSpecValidator::ValidateTemplates(
     }
     ValidateTemplateParams(spec.widget_params, "widget", what);
     ValidateTemplateParams(spec.property_params, "property", what);
+    ValidateDefaults(spec.property_params, what);
   }
 
   // Uses can name any template, so they are validated once every template is
@@ -512,13 +529,26 @@ void SurfaceSpecValidator::ValidateTemplates(
   }
 }
 
+template <typename Param>
 void SurfaceSpecValidator::ValidateTemplateParams(
-    absl::Span<const std::string> params, std::string_view kind,
-    SpecPart what) {
+    const std::vector<Param>& params, std::string_view kind, SpecPart what) {
   const std::string label = absl::StrCat(kind, " parameter");
   absl::flat_hash_set<std::string_view> names;
-  for (const std::string& param : params) {
-    ValidateNewName(what, label, param, names);
+  for (const Param& param : params) {
+    ValidateNewName(what, label, GetParamName(param), names);
+  }
+}
+
+void SurfaceSpecValidator::ValidateDefaults(
+    const std::vector<PropertyParam>& params, SpecPart what) {
+  for (auto param = params.begin(); param != params.end(); ++param) {
+    if (HasDefault(*param) &&
+        std::ranges::find(param, params.end(), param->default_value,
+                          &PropertyParam::name) != params.end()) {
+      AddError(what, absl::StrCat("property parameter \"", param->name,
+                                  "\" defaults to \"", param->default_value,
+                                  "\", which isn't an earlier parameter"));
+    }
   }
 }
 
@@ -558,20 +588,23 @@ void SurfaceSpecValidator::ValidateUse(const TemplateUse& use,
                use.name, what);
 }
 
+template <typename Param>
 void SurfaceSpecValidator::ValidateArgs(
-    absl::Span<const std::string> params,
+    const std::vector<Param>& params,
     const absl::flat_hash_map<std::string, std::string>& args,
     std::string_view kind, std::string_view template_name, SpecPart what) {
-  for (const std::string& param : params) {
-    if (!args.contains(param)) {
+  for (const Param& param : params) {
+    if (!HasDefault(param) && !args.contains(GetParamName(param))) {
       AddError(what, absl::StrCat("uses ", template_name, " without its ", kind,
-                                  " parameter \"", param, "\""));
+                                  " parameter \"", GetParamName(param), "\""));
     }
   }
   // The arguments are in no order, so they are sorted for errors to be.
   std::vector<std::string_view> others;
   for (const auto& [arg, value] : args) {
-    if (std::ranges::find(params, arg) == params.end()) {
+    if (std::ranges::none_of(params, [&](const Param& param) {
+          return GetParamName(param) == arg;
+        })) {
       others.push_back(arg);
     }
   }
@@ -820,13 +853,18 @@ void SurfaceSpecValidator::ValidateUseMappings(const TemplateUse& use,
     }
     widget_params.push_back({.name = param, .shape = shape});
   }
+  // So is a default that isn't valid, which ValidateTemplates() reported.
   absl::flat_hash_map<std::string_view, std::optional<std::string_view>>
       property_args;
-  for (const std::string& param : spec.property_params) {
-    auto arg = use.properties.find(param);
-    property_args[param] = arg != use.properties.end()
-                               ? ResolvePropertyName(arg->second)
-                               : std::nullopt;
+  const std::vector<std::optional<PropertyArg>> args =
+      GetPropertyArgs(spec, use);
+  for (int i = 0; i < std::ssize(args); ++i) {
+    std::optional<std::string_view>& name =
+        property_args[spec.property_params[i].name];
+    if (args[i].has_value()) {
+      name = args[i]->is_default ? args[i]->name
+                                 : ResolvePropertyName(args[i]->name);
+    }
   }
 
   // A template sees only its own parameters and the top-level widgets.
@@ -1262,6 +1300,29 @@ std::string_view GetComponentName(const ComponentSpec& component) {
 
 SpecLine GetComponentLine(const ComponentSpec& component) {
   return std::visit([](const auto& spec) { return spec.line; }, component);
+}
+
+std::vector<std::optional<PropertyArg>> GetPropertyArgs(
+    const TemplateSpec& spec, const TemplateUse& use) {
+  const std::vector<PropertyParam>& params = spec.property_params;
+  std::vector<std::optional<PropertyArg>> args(params.size());
+  for (int i = 0; i < std::ssize(params); ++i) {
+    const PropertyParam& param = params[i];
+    if (auto arg = use.properties.find(param.name);
+        arg != use.properties.end()) {
+      args[i] = PropertyArg{.name = arg->second};
+    } else if (HasDefault(param)) {
+      const int other = static_cast<int>(
+          std::ranges::find(params, param.default_value, &PropertyParam::name) -
+          params.begin());
+      if (other == std::ssize(params)) {
+        args[i] = PropertyArg{.name = param.default_value, .is_default = true};
+      } else if (other < i) {
+        args[i] = args[other];
+      }
+    }
+  }
+  return args;
 }
 
 bool ValidateSurfaceSpec(const SurfaceSpec& spec,

@@ -306,8 +306,13 @@ void SceneBuilder::AddUseMappings(const TemplateUse& use, View* view,
         {.name = param, .path = ResolvePath(use.widgets.at(param))});
   }
   absl::flat_hash_map<std::string_view, std::string_view> property_args;
-  for (const std::string& param : spec.property_params) {
-    property_args.emplace(param, ResolvePropertyName(use.properties.at(param)));
+  const std::vector<std::optional<PropertyArg>> args =
+      GetPropertyArgs(spec, use);
+  for (int i = 0; i < std::ssize(args); ++i) {
+    const PropertyArg& arg = *args[i];
+    property_args.emplace(
+        spec.property_params[i].name,
+        arg.is_default ? arg.name : ResolvePropertyName(arg.name));
   }
 
   // A template sees only its own parameters and the top-level widgets.

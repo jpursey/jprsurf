@@ -706,7 +706,7 @@ Depends on: CL2.
 - Tests of errors about a mapping, a mapping in a template, a component, a
   view, and a use, with and without lines.
 
-### CL4 [ ] scene: Template parameter defaults
+### CL4 [x] scene: Template parameter defaults
 
 Depends on: CL3.
 

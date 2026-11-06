@@ -5,6 +5,7 @@
 
 #include "jpr/scene/surface_spec.h"
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -179,7 +180,7 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
   spec.templates = {
       {.name = "track_strip",
        .widget_params = {"strip"},
-       .property_params = {"anchor"},
+       .property_params = {{.name = "anchor"}},
        .mappings =
            {{.property = "track:mute",
              .control = "strip.mute",
@@ -210,7 +211,7 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
              .type = ViewMapping::kWriteControl}}},
       {.name = "anchored_strip",
        .widget_params = {"strip"},
-       .property_params = {"anchor"},
+       .property_params = {{.name = "anchor"}},
        .uses = {{.name = "track_strip",
                  .widgets = {{"strip", "strip"}},
                  .properties = {{"anchor", "anchor"}}}}},
@@ -658,7 +659,9 @@ TEST(SurfaceSpecTest, TemplatesHaveUniqueNamesAndParameters) {
       {.name = "a b"},
       {.name = "strip",
        .widget_params = {"strip", "", "strip"},
-       .property_params = {"a.b", "anchor", "anchor"}},
+       .property_params = {{.name = "a.b"},
+                           {.name = "anchor"},
+                           {.name = "anchor"}}},
       {.name = "strip"},
   };
   EXPECT_THAT(
@@ -672,12 +675,12 @@ TEST(SurfaceSpecTest, TemplatesHaveUniqueNamesAndParameters) {
                   "template strip: has the name of another template"));
 }
 
-TEST(SurfaceSpecTest, AUseGivesExactlyItsTemplatesParameters) {
+TEST(SurfaceSpecTest, AUseGivesItsTemplatesParametersWithoutDefaults) {
   SurfaceSpec spec = GetXTouchSpec();
   spec.templates = {
       {.name = "strip",
        .widget_params = {"strip", "button"},
-       .property_params = {"anchor"}},
+       .property_params = {{.name = "anchor"}}},
       {.name = "user",
        .uses = {{.name = "strip",
                  .widgets = {{"strip", "strip"}, {"z", "a"}, {"y", "b"}},
@@ -977,12 +980,12 @@ TEST(SurfaceSpecTest, ATemplatesPathsStartAtItsParameters) {
   spec.templates = {
       {.name = "button",
        .widget_params = {"play"},
-       .property_params = {"toggle"},
+       .property_params = {{.name = "toggle"}},
        .mappings = {Mapping("toggle", "play"), Mapping("toggle", "stop"),
                     Mapping("toggle", "strip.mute")}},
       {.name = "outer",
        .widget_params = {"button"},
-       .property_params = {"outer_toggle"},
+       .property_params = {{.name = "outer_toggle"}},
        .uses = {{.name = "button",
                  .widgets = {{"play", "button"}},
                  .properties = {{"toggle", "outer_toggle"}}}}},
@@ -1013,6 +1016,114 @@ TEST(SurfaceSpecTest, ATemplatesPathsStartAtItsParameters) {
           "/list/strip[]: uses button with widget \"play\" as "
           "\"strip.nothing\", which names nothing",
           "/list/strip[]: button: strip.mute: names nothing"));
+}
+
+// A default is an earlier parameter, which stands for its argument, or a name,
+// which is checked as an argument is, where a use gives none.
+TEST(SurfaceSpecTest, AUseThatGivesNoArgumentGetsTheDefault) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.templates = {
+      {.name = "lit",
+       .widget_params = {"button"},
+       .property_params = {{.name = "toggle"},
+                           {.name = "light", .default_value = "toggle"},
+                           {.name = "label", .default_value = "track:name"},
+                           {.name = "other", .default_value = "track:nothing"}},
+       .mappings = {Mapping("toggle", "button", ViewMapping::kWriteControl),
+                    Mapping("light", "button", ViewMapping::kWriteControl),
+                    Mapping("label", "button", ViewMapping::kWriteControl),
+                    Mapping("other", "button", ViewMapping::kWriteControl)}},
+  };
+  ViewSpec list = ListView("list");
+  list.children[0].uses = {
+      {.name = "lit",
+       .widgets = {{"button", "strip.mute"}},
+       .properties = {{"toggle", "track:name"}}},
+      {.name = "lit",
+       .widgets = {{"button", "strip.solo"}},
+       .properties = {{"toggle", "track:mute"},
+                      {"light", "track:solo"},
+                      {"label", "track:solo"},
+                      {"other", "track:solo"}}},
+      {.name = "lit", .widgets = {{"button", "strip.rec"}}}};
+  spec.root.children = {list};
+  EXPECT_THAT(
+      Validate(spec),
+      ElementsAre(
+          "/list/strip[]: uses lit without its property parameter \"toggle\"",
+          // The first use's toggle, its light (the toggle), and its label.
+          "/list/strip[]: lit: button: can't write \"track:name\" (text) to "
+          "the control",
+          "/list/strip[]: lit: button: can't write \"track:name\" (text) to "
+          "the control",
+          "/list/strip[]: lit: button: can't write \"track:name\" (text) to "
+          "the control",
+          "/list/strip[]: lit: button: property \"track:nothing\" isn't a "
+          "property",
+          // The third use's label. Its toggle, and so its light, isn't known.
+          "/list/strip[]: lit: button: can't write \"track:name\" (text) to "
+          "the control",
+          "/list/strip[]: lit: button: property \"track:nothing\" isn't a "
+          "property"));
+}
+
+TEST(SurfaceSpecTest, ADefaultIsAnEarlierParameterOrAName) {
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.templates = {
+      {.name = "lit",
+       .widget_params = {"button"},
+       .property_params = {{.name = "light", .default_value = "toggle"},
+                           {.name = "toggle"},
+                           {.name = "self", .default_value = "self"}},
+       .mappings = {Mapping("light", "button", ViewMapping::kWriteControl),
+                    Mapping("self", "button", ViewMapping::kWriteControl)}},
+  };
+  spec.root.uses = {{.name = "lit",
+                     .widgets = {{"button", "play"}},
+                     .properties = {{"toggle", "mod:shift"}}}};
+  EXPECT_THAT(Validate(spec),
+              ElementsAre("template lit: property parameter \"light\" "
+                          "defaults to \"toggle\", which isn't an earlier "
+                          "parameter",
+                          "template lit: property parameter \"self\" defaults "
+                          "to \"self\", which isn't an earlier parameter"));
+}
+
+// Returns true if the use gives a parameter the name, as an argument or a
+// default.
+bool IsArg(const std::optional<PropertyArg>& arg, std::string_view name,
+           bool is_default) {
+  return arg.has_value() && arg->name == name && arg->is_default == is_default;
+}
+
+TEST(SurfaceSpecTest, AUseGivesEachPropertyParameterItsArgumentOrDefault) {
+  const TemplateSpec spec = {
+      .name = "lit",
+      .property_params = {
+          {.name = "given", .default_value = "track:solo"},
+          {.name = "name", .default_value = "track:mute"},
+          {.name = "earlier_given", .default_value = "given"},
+          {.name = "earlier_name", .default_value = "name"},
+          {.name = "missing"},
+          {.name = "earlier_missing", .default_value = "missing"},
+          {.name = "self", .default_value = "self"},
+          {.name = "later", .default_value = "last"},
+          {.name = "last"}}};
+  const TemplateUse use = {
+      .name = "lit",
+      .properties = {{"given", "outer"}, {"last", "track:name"}}};
+  const std::vector<std::optional<PropertyArg>> args =
+      GetPropertyArgs(spec, use);
+  ASSERT_EQ(args.size(), spec.property_params.size());
+  EXPECT_TRUE(IsArg(args[0], "outer", false));
+  EXPECT_TRUE(IsArg(args[1], "track:mute", true));
+  EXPECT_TRUE(IsArg(args[2], "outer", false));
+  EXPECT_TRUE(IsArg(args[3], "track:mute", true));
+  EXPECT_FALSE(args[4].has_value());
+  EXPECT_FALSE(args[5].has_value());
+  EXPECT_FALSE(args[6].has_value());
+  EXPECT_FALSE(args[7].has_value());
+  EXPECT_TRUE(IsArg(args[8], "track:name", false));
 }
 
 TEST(SurfaceSpecTest, ATemplateThatUsesItselfIsExpandedOnce) {

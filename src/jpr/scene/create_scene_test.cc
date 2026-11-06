@@ -367,13 +367,13 @@ TEST_F(CreateSceneTest, TemplatesAreExpandedWithTheirArguments) {
   spec.templates = {
       {.name = "toggle_button",
        .widget_params = {"button"},
-       .property_params = {"toggle"},
+       .property_params = {{.name = "toggle"}},
        .mappings = {{.property = "toggle",
                      .control = "button",
                      .type = ViewMapping::kReadWriteControl}}},
       {.name = "strip_buttons",
        .widget_params = {"buttons"},
-       .property_params = {"mute"},
+       .property_params = {{.name = "mute"}},
        .mappings = {{.property = "mute",
                      .control = "buttons.mute",
                      .type = ViewMapping::kReadWriteControl},
@@ -417,6 +417,53 @@ TEST_F(CreateSceneTest, TemplatesAreExpandedWithTheirArguments) {
   EXPECT_EQ(xtouch_.GetLight(StripButton::kSolo, 2), Light::kOn);
   EXPECT_FALSE(tracks[0]->mute);
   EXPECT_FALSE(tracks[0]->solo);
+}
+
+TEST_F(CreateSceneTest, AUseThatGivesNoArgumentGetsTheDefault) {
+  std::vector<FakeTrack*> tracks = reaper_.GetProject().AddTracks(3);
+  SurfaceSpec spec = GetXTouchSpec();
+  spec.templates = {
+      {.name = "lit_button",
+       .widget_params = {"button"},
+       .property_params = {{.name = "toggle", .default_value = "track:ui_mute"},
+                           {.name = "light", .default_value = "toggle"}},
+       .mappings = {{.property = "toggle",
+                     .control = "button",
+                     .type = ViewMapping::kReadControl},
+                    {.property = "light",
+                     .control = "button",
+                     .type = ViewMapping::kWriteControl}}},
+  };
+  spec.root.children = {ListView(
+      "tracks", "state:master_track",
+      {.uses = {{.name = "lit_button", .widgets = {{"button", "strip.mute"}}},
+                {.name = "lit_button",
+                 .widgets = {{"button", "strip.solo"}},
+                 .properties = {{"toggle", "track:ui_solo"}}},
+                {.name = "lit_button",
+                 .widgets = {{"button", "strip.select"}},
+                 .properties = {{"toggle", "track:ui_solo"},
+                                {"light", "track:ui_mute"}}}}})};
+
+  ASSERT_THAT(Create(spec), NotNull());
+  EXPECT_THAT(errors_, IsEmpty());
+  AddSurface();
+
+  // A default that is a name stands for it.
+  Tap(StripButton::kMute, 1);
+  EXPECT_TRUE(tracks[1]->mute);
+  EXPECT_EQ(xtouch_.GetLight(StripButton::kMute, 1), Light::kOn);
+
+  // A default that is an earlier parameter stands for its argument.
+  Tap(StripButton::kSolo, 2);
+  EXPECT_TRUE(tracks[2]->solo);
+  EXPECT_EQ(xtouch_.GetLight(StripButton::kSolo, 2), Light::kOn);
+
+  // An argument replaces the default.
+  Tap(StripButton::kSelect, 0);
+  EXPECT_TRUE(tracks[0]->solo);
+  EXPECT_EQ(xtouch_.GetLight(StripButton::kSelect, 0), Light::kOff);
+  EXPECT_EQ(xtouch_.GetLight(StripButton::kSelect, 1), Light::kOn);
 }
 
 TEST_F(CreateSceneTest, FixedValuesShareAConstProperty) {
