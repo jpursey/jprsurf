@@ -62,8 +62,8 @@ struct DeviceList {
 //
 // Returns nullopt if a spec isn't valid: its type isn't a device type, an
 // override isn't valid for the type's catalog (see ValidateControlOverrides()),
-// a port is also an earlier spec's, or its name isn't a widget name or is
-// repeated. For each problem, an error is added to `errors` (if provided),
+// a port is empty or also an earlier spec's, or its name isn't a widget name or
+// is repeated. For each problem, an error is added to `errors` (if provided),
 // starting with the device's line (see GetSpecError()), then its name, such
 // as `xtouch: type "XTouh" isn't a device type`, except that an error about the
 // name names it in its message instead. An error about an override starts with

@@ -28,10 +28,11 @@ This is a CMake project, starting at the root. The directory structure is as fol
                       and can get deleted at any time.
 ```
 
-Libraries depend strictly in the order `common` → `device` → `scene` → `plugin` (each may use only those before it):
+Libraries depend strictly in the order `common` → `device` → `scene` → `config` → `plugin` (each may use only those before it):
 - `common`: Common types and general utilities for working within the REAPER SDK and managing generic REAPER state (MIDI ports, project tracks, etc). Not specific to JPRSurf; it could be useful for any REAPER extension.
 - `device`: An interface and concrete implementations for the hardware devices JPRSurf supports. Handles all communication with the device and tracks its current state, with no knowledge of REAPER behavior. Primary classes: `Device` (the generic interface for a hardware device) and `Control` (a logical control on that device that may be read and/or written to).
 - `scene`: Defines how device controls may be mapped to REAPER actions and properties. It knows REAPER properties and abstractions, but does not hard code mappings; they must be configured. Primary classes: `Scene` (the top level mapping between one or more devices and REAPER state) and `View` (a hierarchical set of mappings that may be enabled or disabled independently by configuration or explicit application control).
+- `config`: Reads a config file, written in JPRSurf's own language (see `docs/worklog/config_language.md`), into the `SurfaceSpec` that `scene` creates a scene from, with each part's line for errors. Primary function: `ReadSurfaceConfig()`.
 - `plugin`: The entry point for the REAPER extension, which configures the Control Surface Integration (CSI) for the connected devices. Primary class: `PluginSurface`, the `ControlSurfaceListener` (see `common/control_surface.h`) that defines the actual mappings and business logic.
 
 Outside that order, as the `testing/` libraries are, `doc` generates documentation from the code (`GenerateUserDocPages()`): each device type's page in `docs/user/devices/` from its catalog, and the scene's pages in `docs/user/scene/` from its catalog of properties and component kinds. It may use any library, and nothing uses it. Every `.md` file in a directory of `docs/user/` is a generated page, so a hand-written page goes in `docs/user/` itself. The pages are checked in: after changing a catalog or its doc, build the `update_user_docs` target, as `jpr_doc_test` fails when a page is out of date.
@@ -174,7 +175,7 @@ JPRSurf is moving toward a surface that is entirely driven by a config file, des
 
 The `scene` layer aims to be flexible and composable, not just simple: few concepts, each as small as it can be, so that a new feature in a new config comes from composing existing pieces rather than adding new ones. Before adding a runtime concept or option, check whether existing pieces already combine to do the job. If they do, use the combination and document it, and leave any friendlier shorthand to the config file (or SurfaceSpec), which can expand it to the runtime form. Performance is the trade-off: when a composition would put the realtime budget at risk (see Performance), a dedicated piece is justified.
 
-A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `plugin`. Its plan starts with what it relies on that nobody has checked (its To confirm), which is checked before the CLs that rely on it (see Testing in the user's REAPER). The CLs' **Verify** steps start from the checks in Checking a change, and the user reviews each CL, but tests the feature in their REAPER only at its end.
+A feature follows the feature workflow, with its CLs in library order: `common`, then `device`, then `scene`, then `config`, then `plugin`. Its plan starts with what it relies on that nobody has checked (its To confirm), which is checked before the CLs that rely on it (see Testing in the user's REAPER). The CLs' **Verify** steps start from the checks in Checking a change, and the user reviews each CL, but tests the feature in their REAPER only at its end.
 
 ## Parallel sessions
 

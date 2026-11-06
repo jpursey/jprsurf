@@ -42,19 +42,32 @@ const DeviceType* ValidateSpec(const DeviceSpec& spec,
   return type;
 }
 
+// Adds an error to `errors` for each port the spec doesn't name.
+void ValidateHasPorts(const DeviceSpec& spec,
+                      std::vector<std::string>& errors) {
+  if (spec.input_port.empty()) {
+    errors.push_back(GetSpecError({.line = spec.line, .text = spec.name},
+                                  "has no input port"));
+  }
+  if (spec.output_port.empty()) {
+    errors.push_back(GetSpecError({.line = spec.line, .text = spec.name},
+                                  "has no output port"));
+  }
+}
+
 // Adds an error to `errors` for each port of the spec at `index` that an
-// earlier spec already has.
+// earlier spec already has. An empty port is no port, so isn't shared.
 void ValidateUnsharedPorts(absl::Span<const DeviceSpec> specs, int index,
                            std::vector<std::string>& errors) {
   const DeviceSpec& spec = specs[index];
   for (int i = 0; i < index; ++i) {
-    if (specs[i].input_port == spec.input_port) {
+    if (!spec.input_port.empty() && specs[i].input_port == spec.input_port) {
       errors.push_back(
           GetSpecError({.line = spec.line, .text = spec.name},
                        absl::StrCat("input port \"", spec.input_port,
                                     "\" is also ", specs[i].name, "'s")));
     }
-    if (specs[i].output_port == spec.output_port) {
+    if (!spec.output_port.empty() && specs[i].output_port == spec.output_port) {
       errors.push_back(
           GetSpecError({.line = spec.line, .text = spec.name},
                        absl::StrCat("output port \"", spec.output_port,
@@ -166,6 +179,7 @@ std::optional<std::vector<WidgetDevice>> CreateWidgetDevices(
   widget_devices.reserve(specs.size());
   for (int i = 0; i < std::ssize(specs); ++i) {
     const DeviceType* type = ValidateSpec(specs[i], spec_errors);
+    ValidateHasPorts(specs[i], spec_errors);
     ValidateUnsharedPorts(specs, i, spec_errors);
     widget_devices.push_back(
         {.name = specs[i].name,

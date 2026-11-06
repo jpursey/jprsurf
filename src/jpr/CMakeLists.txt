@@ -4,6 +4,7 @@
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 add_subdirectory(common)
+add_subdirectory(config)
 add_subdirectory(device)
 add_subdirectory(doc)
 add_subdirectory(plugin)

@@ -721,7 +721,7 @@ Depends on: CL3.
   property that doesn't exist; and a use that leaves out one without a
   default.
 
-### CL5 [ ] config: Reading devices, widgets, settings, and components
+### CL5 [x] config: Reading devices, widgets, settings, and components
 
 Depends on: CL3.
 
@@ -731,6 +731,13 @@ Depends on: CL3.
 - `ReadSurfaceConfig()`, with every error at its line, written by
   `GetSpecError()`, so `gb_parse`'s errors read as checking's do. Its lines
   count from 0, so the reader adds 1.
+- Widget paths are read with `device`'s `kWidgetPathRules`, so there is one
+  path grammar.
+- Reading checks only what a spec can't hold: a parameter left out is found
+  by checking the spec, which knows where each component is, apart from a
+  required choice (a track anchor's action). So `CreateWidgetDevices()` now
+  reports a device with no input or output port, and `ValidateWidgets()` a
+  slice that ends before it starts, as it is empty.
 
 **Verify**
 - Standard checks.

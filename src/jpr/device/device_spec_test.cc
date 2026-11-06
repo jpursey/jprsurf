@@ -75,13 +75,19 @@ TEST(CreateWidgetDevicesTest, EveryProblemIsAnError) {
        .type = "XTouchExt",
        .input_port = "X-Touch",
        .output_port = "X-Touch-Ext",
-       .overrides = {{.control = "play", .inputs = kPress}}}};
+       .overrides = {{.control = "play", .inputs = kPress}}},
+      {.name = "portless", .type = "XTouch"},
+      {.name = "portless_too", .type = "XTouch"}};
   std::vector<std::string> errors;
   EXPECT_FALSE(CreateWidgetDevices(specs, &errors).has_value());
   EXPECT_THAT(errors, ElementsAre("xtouch: type \"XTouh\" isn't a device type",
                                   "xtouch: play: names nothing",
                                   "xtouch: input port \"X-Touch\" is also "
                                   "xtouch's",
+                                  "portless: has no input port",
+                                  "portless: has no output port",
+                                  "portless_too: has no input port",
+                                  "portless_too: has no output port",
                                   "device \"xtouch\" is repeated"));
   EXPECT_FALSE(CreateWidgetDevices(specs, nullptr).has_value());
 }
