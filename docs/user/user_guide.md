@@ -70,9 +70,9 @@ Control Surface** from the control surface mode list:
 
 ![Adding the Jovian Path Control Surface in REAPER's control surface preferences](images/add-control-surface.png)
 
-There is nothing to set in this dialog. The surface reads `jprsurf.jprsurf`
-beside the DLL, which this guide describes, finds the hardware itself, and
-should light up as soon as you click OK. To change what it does, see
+Leave **Config file** empty. The surface then reads `jprsurf.jprsurf` beside
+the DLL, which this guide describes, finds the hardware itself, and should
+light up as soon as you click OK. To change what it does, see
 [Config files](config_files.md).
 
 It can only be added once. Adding it again shows a message in REAPER's console

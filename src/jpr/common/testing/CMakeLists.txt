@@ -55,6 +55,7 @@ set(jpr_common_testing_SOURCE
   reaper_actions.cc reaper_actions.h
   surface_notifier.cc surface_notifier.h
   test_control_surface.cc test_control_surface.h
+  test_dialog.cc test_dialog.h
 )
 
 set(jpr_common_testing_DEPS

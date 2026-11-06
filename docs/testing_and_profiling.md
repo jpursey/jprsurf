@@ -504,7 +504,9 @@ REAPER's calls on the surface follow these.
 - **Editing the surface's settings** (2026-11-05, a log of Edit in
   Preferences > Control/OSC/web, then OK or Cancel): opening the dialog calls
   `GetConfigString()`, then `ShowConfig(type_string, parent,
-  initConfigString)` with that string. REAPER shows the `WS_CHILD` window it
+  initConfigString)` with that string: the surface's, not the one saved in
+  `reaper.ini` (a surface saved as `null` that gave back an empty string
+  showed an empty path). REAPER shows the `WS_CHILD` window it
   returns. On OK, it sends the window `WM_USER + 1024` (`wParam` 1024, the
   buffer's size, and `lParam` the buffer), destroys the window, destroys the
   surface, and creates a new one with the string the window wrote, even when

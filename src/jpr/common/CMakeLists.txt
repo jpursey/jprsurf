@@ -31,6 +31,7 @@ set(jpr_common_SOURCE
   track_cache.cc track_cache.h
   undo.cc undo.h
   volume_utils.h
+  win_config_panel.cc win_config_panel.h
 )
 
 set(jpr_common_DEPS
@@ -42,6 +43,10 @@ set(jpr_common_DEPS
   gb_file
   gb_profile
   reaper_sdk
+)
+
+set(jpr_common_LIBS
+  comdlg32
 )
 
 set(jpr_common_TEST_SOURCE
@@ -63,6 +68,7 @@ set(jpr_common_TEST_SOURCE
   track_cache_test.cc
   track_test.cc
   undo_test.cc
+  win_config_panel_test.cc
 )
 
 set(jpr_common_TEST_DEPS

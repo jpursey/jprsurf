@@ -166,7 +166,7 @@ These add to the C++ style in the workflow.
 - All extension code is in the "jpr" namespace, except for required C extension points of the REAPER SDK.
 - Every file starts with the four line MIT copyright comment used everywhere in the tree, with the year the file was created.
 - Headers use `#pragma once` include guards (not `#ifndef` include guards).
-- Include order: the file's own header first, then C/C++ standard headers in angle brackets, then third-party, Game Bits, and JPRSurf headers in quotes (`"absl/..."`, `"gb/..."`, `"jpr/..."`), with blank lines between groups.
+- Include order: the file's own header first, then C/C++ standard headers in angle brackets, then third-party, Game Bits, and JPRSurf headers in quotes (`"absl/..."`, `"gb/..."`, `"jpr/..."`), with blank lines between groups. `<windows.h>` goes last, as its macros break code included after it, after a comment saying so (`// Last, as its macros break code included after it.`), which keeps clang-format from moving it up with the standard headers. Windows headers that need it (such as `<commdlg.h>`) follow it, after a comment of their own.
 - REAPER API functions come from `jpr/common/reaper_api.h`, never from the SDK's `reaper_plugin_functions.h` directly (`sdk/reaper_plugin.h`, which has only types, is fine). It declares only the functions JPRSurf calls, so calling a new one means adding it to both of its lists: a `REAPERAPI_WANT_` line and an entry in `JPR_REAPER_API`.
 - Game Bits' libraries are in `$GB_DIR/src/gb/` (such as `gb/base` and `gb/container`), and the third-party libraries it vendors are in `$GB_DIR/third_party/`.
 - C++20, built with both MSVC and clang-cl.

@@ -7,8 +7,6 @@
 // its environment, which no unit test runs. check_load_in_reaper runs them in
 // the test install of REAPER (see check_load_in_reaper.cmake).
 
-#include <windows.h>
-
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -26,6 +24,9 @@
 #include "jpr/common/log_path.h"
 #include "jpr/plugin/plugin.h"
 #include "sdk/reaper_plugin.h"
+
+// Last, as its macros break code included after it.
+#include <windows.h>
 
 namespace jpr {
 namespace {

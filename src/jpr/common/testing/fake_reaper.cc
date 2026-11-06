@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -35,6 +36,10 @@
 #include "jpr/common/timeline.h"
 #include "jpr/common/track_state.h"
 #include "jpr/common/volume_utils.h"
+#include "jpr/common/win_config_panel.h"
+
+// Last, as its macros break code included after it.
+#include <windows.h>
 
 namespace jpr {
 
@@ -1064,6 +1069,32 @@ std::unique_ptr<TestControlSurface> FakeReaper::AddSurface(
   auto test_surface = absl::WrapUnique(new TestControlSurface(this, surface));
   surface_ = test_surface.get();
   return test_surface;
+}
+
+HWND FakeReaper::ShowSurfaceConfig(HWND parent, TestControlSurface* surface) {
+  if (surface_reg_ == nullptr) {
+    ADD_FAILURE() << "No control surface type is registered";
+    return nullptr;
+  }
+  // GetConfigString() is an entry point of its own.
+  const std::string config =
+      surface != nullptr ? surface->GetConfigString() : "";
+  HWND panel = surface_reg_->ShowConfig(surface_reg_->type_string, parent,
+                                        config.c_str());
+  EndEntryPoint();
+  return panel;
+}
+
+std::unique_ptr<TestControlSurface> FakeReaper::ConfirmSurfaceConfig(
+    HWND panel, std::unique_ptr<TestControlSurface> surface) {
+  std::string config(kConfigBufferSize, '\0');
+  SendMessageW(panel, kWriteConfigMessage, config.size(),
+               reinterpret_cast<LPARAM>(config.data()));
+  config.resize(std::strlen(config.c_str()));
+  DestroyWindow(panel);
+  EndEntryPoint();
+  surface.reset();
+  return AddSurface(config);
 }
 
 void FakeReaper::RemoveSurface(TestControlSurface* surface) {

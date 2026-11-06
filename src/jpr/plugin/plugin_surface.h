@@ -19,8 +19,10 @@
 namespace jpr {
 
 // A JPRSurf control surface, whose config string is the path of its config
-// file, in GetFileSystem(). An empty config string, or "null", is the default
-// config file, which Register() names.
+// file, in GetFileSystem(), which REAPER's control surface dialog shows, with a
+// Browse button (see CreateConfigPanel()). An empty config string is the
+// default config file, which Register() names. So is "null", which earlier
+// versions wrote, and which the surface gives back to REAPER as empty.
 //
 // The surface reads its config file once, as it is created. Each error, from
 // reading the file to creating the scene, is logged with the file's path in
@@ -56,7 +58,7 @@ class PluginSurface final : private ControlSurfaceListener {
   std::string GetConfig() const override;
 
   // State
-  std::string config_;              // The config string, as REAPER gave it.
+  std::string config_;              // The config string, empty for "null".
   Runner device_runner_{"Device"};  // Resets device state, sends output.
   Runner scene_runner_{"Scene"};    // Updates the scene.
   MidiPorts midi_ports_;  // Outlives the scene, whose devices use the ports.

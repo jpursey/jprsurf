@@ -632,9 +632,8 @@ them:
      window answered, whether or not it changed, so OK always reloads the
      file. It then calls `GetConfigString()` on the new surface. Cancel leaves
      the surface as it is. Both are in "Seen in traces" in
-     `docs/testing_and_profiling.md`. The fake has no dialog: CL10's tests send
-     the window `WM_USER + 1024` as REAPER does, and creating the surface with
-     a config string is already tested.
+     `docs/testing_and_profiling.md`. The fake does the same (`FakeReaper::ShowSurfaceConfig()` and
+     `ConfirmSurfaceConfig()`, CL10).
 
 ## Decisions
 
@@ -855,12 +854,36 @@ Depends on: nothing.
 - The user opens the dialog, picks OK with and without a changed string, and
   reports what the log shows.
 
-### CL10 [ ] common: Picking the config file in REAPER's dialog
+### CL10 [x] common: Picking the config file in REAPER's dialog
 
 Depends on: CL8, CL9.
 
 - `ControlSurface::ShowConfig()` shows the path and a Browse button when the
-  type gives a file filter, and answers `WM_USER + 1024` with the path.
+  type gives a file filter (`ControlSurface::Type::config_file`), and answers
+  `WM_USER + 1024` (`kWriteConfigMessage`) with the path.
+- The panel is `CreateConfigPanel()`, in `win_config_panel`: a dialog from an
+  in-memory template, with REAPER's examples' style and font (`DS_CONTROL`,
+  `WS_CHILD`, 8 point MS Shell Dlg), so its controls are sized in dialog
+  units. Its one seam is the file picker (`PickFile`), which tests replace,
+  and `PickFileToOpen()`, Windows' own Open dialog, is checked only in the
+  user's REAPER. A path too long for REAPER's buffer is written truncated,
+  logging an error.
+- The fake does what CL9 found REAPER does: `FakeReaper::ShowSurfaceConfig()`
+  asks the surface for its config string and gives it to the type's
+  `ShowConfig`, and `ConfirmSurfaceConfig()` (OK) asks the panel for the
+  string, destroys it and the surface, and creates one with the string.
+  `TestDialog` (in `common/testing`) stands in for REAPER's dialog. A plugin
+  test edits the file, then clicks OK, and the surface reads it again.
+- The panel says nothing of what an empty path means, which is the plugin's
+  rule: the user docs say it.
+- `PluginSurface` gives REAPER `null` back as empty (`GetConfig()`), which
+  REAPER asks for just before `ShowConfig()`, so the panel shows the default
+  as an empty path. Confirmed in the user's REAPER (2026-11-05): a surface
+  saved as `null` showed an empty box, so `initConfigString` is the surface's
+  string, not the saved one. After OK with it empty, REAPER saved
+  `csurf_0=JPRSurf` with only spaces after it.
+- The user docs set the file in the dialog, and reload it with Edit, then OK.
+  *Reload the config without restarting REAPER* is narrowed to an action.
 
 **Verify**
 - Standard checks.

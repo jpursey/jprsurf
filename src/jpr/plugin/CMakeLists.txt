@@ -25,6 +25,7 @@ set(jpr_plugin_TEST_SOURCE
 )
 
 set(jpr_plugin_TEST_DEPS
+  absl::strings
   gb_test
   jpr_common_testing
 )

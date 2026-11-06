@@ -7,8 +7,10 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/strings/str_replace.h"
 #include "gb/file/local_file_protocol.h"
 #include "gb/file/memory_file_protocol.h"
 #include "gb/test/log_error_guard.h"
@@ -20,7 +22,11 @@
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/reaper_actions.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/testing/test_dialog.h"
 #include "sdk/reaper_plugin.h"
+
+// Last, as its macros break code included after it.
+#include <windows.h>
 
 namespace jpr {
 namespace {
@@ -95,7 +101,7 @@ TEST_F(PluginTest, NullIsTheDefaultConfig) {
   std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface("null");
   ASSERT_NE(surface, nullptr);
   EXPECT_TRUE(xtouch_in_->IsOpen());
-  EXPECT_STREQ(surface->GetConfigString(), "null");
+  EXPECT_STREQ(surface->GetConfigString(), "");
   surface.reset();
   Plugin::Unload();
 }
@@ -108,6 +114,55 @@ TEST_F(PluginTest, AConfigStringIsTheConfigFilesPath) {
   ASSERT_NE(surface, nullptr);
   EXPECT_TRUE(xtouch_in_->IsOpen());
   EXPECT_STREQ(surface->GetConfigString(), JPR_CONFIG_FILE);
+  surface.reset();
+  Plugin::Unload();
+}
+
+TEST_F(PluginTest, REAPERsDialogShowsNullAsTheDefault) {
+  ASSERT_TRUE(Load());
+  std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface("null");
+  ASSERT_NE(surface, nullptr);
+  {
+    TestDialog dialog;
+    HWND panel = reaper_.ShowSurfaceConfig(dialog.GetHwnd(), surface.get());
+    ASSERT_NE(panel, nullptr);
+    surface = reaper_.ConfirmSurfaceConfig(panel, std::move(surface));
+  }
+  ASSERT_NE(surface, nullptr);
+  EXPECT_STREQ(surface->GetConfigString(), "");
+  EXPECT_TRUE(xtouch_in_->IsOpen());
+  surface.reset();
+  Plugin::Unload();
+}
+
+TEST_F(PluginTest, OKInREAPERsDialogReadsTheConfigFileAgain) {
+  constexpr char kConfig[] = R"(jprsurf 1
+devices { xtouch = XTouch(input = "X-Touch", output = "X-Touch") }
+widgets { include xtouch }
+mappings { play -> cmd:1007 }
+)";
+  ASSERT_TRUE(GetFileSystem()->WriteFile("test:/surface.jprsurf", kConfig));
+  ASSERT_TRUE(Load());
+  std::unique_ptr<TestControlSurface> surface =
+      reaper_.AddSurface("test:/surface.jprsurf");
+  ASSERT_NE(surface, nullptr);
+  EXPECT_TRUE(xtouch_in_->IsOpen());
+
+  // The user breaks the file, then clicks OK without changing the path.
+  ASSERT_TRUE(GetFileSystem()->WriteFile(
+      "test:/surface.jprsurf",
+      absl::StrReplaceAll(kConfig, {{"cmd:1007", "state:nothing"}})));
+  {
+    TestDialog dialog;
+    HWND panel = reaper_.ShowSurfaceConfig(dialog.GetHwnd(), surface.get());
+    ASSERT_NE(panel, nullptr);
+    surface = reaper_.ConfirmSurfaceConfig(panel, std::move(surface));
+  }
+  ASSERT_NE(surface, nullptr);
+  EXPECT_FALSE(xtouch_in_->IsOpen());
+  EXPECT_THAT(TakeErrors(),
+              ElementsAre("test:/surface.jprsurf: line 4: /: play: property "
+                          "\"state:nothing\" isn't a property"));
   surface.reset();
   Plugin::Unload();
 }

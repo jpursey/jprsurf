@@ -17,6 +17,7 @@
 #include "jpr/common/reaper_profiler.h"
 #include "jpr/common/runner.h"
 #include "jpr/common/test_reset.h"
+#include "jpr/common/win_config_panel.h"
 #include "sdk/reaper_plugin.h"
 
 namespace jpr {
@@ -106,6 +107,12 @@ class ControlSurface final : private IReaperControlSurface {
     // The profile each surface writes when it is destroyed (see
     // ReaperProfiler), replacing the last one. An empty path is no profiling.
     ReaperProfiler::Options profile;
+
+    // If set, the config string is a file's path, which REAPER's control
+    // surface dialog shows, with a Browse button that picks a file this
+    // matches (see CreateConfigPanel()). Otherwise, the dialog shows nothing
+    // for the surface.
+    std::optional<FileFilter> config_file;
   };
 
   // Registers the control surface type with REAPER. Only one type may be

@@ -165,9 +165,11 @@ is the design work.
 - **Depends on:** *Config file language and loader*
 - **Background:** none
 
-Tear down the scene and build a new one from the config file, perhaps from a
-REAPER action. This makes iterating on a config much faster. It should be cheap
-if nothing in the plugin outlives the scene.
+Tear down the scene and build a new one from the config file, from a REAPER
+action. REAPER's control surface dialog already does this (Edit, then OK
+recreates the surface, which reads the file again), but an action makes
+iterating on a config much faster. It should be cheap if nothing in the plugin
+outlives the scene.
 
 ## Generic MIDI devices defined in config
 

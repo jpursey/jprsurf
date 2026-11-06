@@ -7,8 +7,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
@@ -23,8 +25,13 @@
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/surface_notifier.h"
 #include "jpr/common/testing/test_control_surface.h"
+#include "jpr/common/testing/test_dialog.h"
 #include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/common/win_config_panel.h"
+
+// Last, as its macros break code included after it.
+#include <windows.h>
 
 namespace jpr {
 namespace {
@@ -32,10 +39,11 @@ namespace {
 using ::testing::ElementsAre;
 using ::testing::HasSubstr;
 
-// A listener that records the runs its surface passes it.
+// A listener that records the runs its surface passes it, and gives back its
+// config string.
 class TestListener final : public ControlSurfaceListener {
  public:
-  TestListener();
+  explicit TestListener(std::string_view config);
   ~TestListener() override;
 
   void OnRun(const RunTime& time) override {
@@ -45,6 +53,9 @@ class TestListener final : public ControlSurfaceListener {
     }
   }
 
+  std::string GetConfig() const override { return config; }
+
+  std::string config;
   std::vector<double> run_times_secs;
 
   // Called on each run, after it is recorded, if set.
@@ -54,20 +65,29 @@ class TestListener final : public ControlSurfaceListener {
 // The listener that exists, if any.
 TestListener* g_listener = nullptr;
 
-TestListener::TestListener() { g_listener = this; }
+TestListener::TestListener(std::string_view config) : config(config) {
+  g_listener = this;
+}
 
 TestListener::~TestListener() { g_listener = nullptr; }
 
 std::unique_ptr<ControlSurfaceListener> CreateTestListener(
     std::string_view config) {
-  return std::make_unique<TestListener>();
+  return std::make_unique<TestListener>(config);
 }
 
-ControlSurface::Type MakeType(std::string profile_path = {}) {
+// The test type's config file, for tests of its panel in REAPER's dialog.
+const FileFilter kConfigFile = {.description = "Test config",
+                                .pattern = "*.test"};
+
+ControlSurface::Type MakeType(
+    std::string profile_path = {},
+    std::optional<FileFilter> config_file = std::nullopt) {
   return {.type_string = "TEST",
           .description = "Test surface",
           .create_listener = &CreateTestListener,
-          .profile = {.path = std::move(profile_path)}};
+          .profile = {.path = std::move(profile_path)},
+          .config_file = std::move(config_file)};
 }
 
 class ControlSurfaceTest : public ::testing::Test {
@@ -238,6 +258,42 @@ TEST_F(ControlSurfaceTest, WritesItsProfileWhenTheTypeHasAPath) {
 
   surface.reset();
   EXPECT_TRUE(GetFileSystem()->IsValidFile("profile:/test.txt"));
+}
+
+TEST_F(ControlSurfaceTest, HasNoConfigPanelWithoutAConfigFile) {
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  TestDialog dialog;
+  EXPECT_EQ(reaper_.ShowSurfaceConfig(dialog.GetHwnd(), surface.get()),
+            nullptr);
+}
+
+TEST_F(ControlSurfaceTest, ConfigPanelEditsTheConfigFile) {
+  ASSERT_TRUE(ControlSurface::Register(reaper_.GetPluginInfo(),
+                                       MakeType({}, kConfigFile)));
+  std::unique_ptr<TestControlSurface> surface =
+      reaper_.AddSurface("C:\\configs\\a.test");
+  ASSERT_NE(surface, nullptr);
+  TestDialog dialog;
+
+  HWND panel = reaper_.ShowSurfaceConfig(dialog.GetHwnd(), surface.get());
+  ASSERT_NE(panel, nullptr);
+  EXPECT_EQ(GetParent(panel), dialog.GetHwnd());
+  surface = reaper_.ConfirmSurfaceConfig(panel, std::move(surface));
+  ASSERT_NE(surface, nullptr);
+  EXPECT_STREQ(surface->GetConfigString(), "C:\\configs\\a.test");
+}
+
+TEST_F(ControlSurfaceTest, ConfigPanelAddsASurface) {
+  ASSERT_TRUE(ControlSurface::Register(reaper_.GetPluginInfo(),
+                                       MakeType({}, kConfigFile)));
+  TestDialog dialog;
+
+  HWND panel = reaper_.ShowSurfaceConfig(dialog.GetHwnd());
+  ASSERT_NE(panel, nullptr);
+  std::unique_ptr<TestControlSurface> surface =
+      reaper_.ConfirmSurfaceConfig(panel, nullptr);
+  ASSERT_NE(surface, nullptr);
+  EXPECT_STREQ(surface->GetConfigString(), "");
 }
 
 }  // namespace

@@ -104,6 +104,10 @@ class FakeReaper final {
   // How many times a second REAPER runs a control surface.
   static constexpr int kRunsPerSecond = 30;
 
+  // The size of the buffer REAPER sends a surface type's panel on OK, for the
+  // config string (see CreateConfigPanel()).
+  static constexpr int kConfigBufferSize = 1024;
+
   // Returns how long each run is.
   static absl::Duration GetRunTime() {
     return absl::Seconds(1) / kRunsPerSecond;
@@ -142,6 +146,22 @@ class FakeReaper final {
   // if a surface is already open and the type created another (each of which
   // fails the test). Destroying the surface removes it.
   std::unique_ptr<TestControlSurface> AddSurface(std::string_view config = {});
+
+  // Opens REAPER's control surface dialog, `parent`, as the user does in its
+  // preferences, to edit `surface`, or to add one if it is null: asks the
+  // surface for its config string (none for a new one), and has the registered
+  // type create its panel in the dialog with it. Returns the panel, or null if
+  // the type has none (or none is registered, which fails the test). Cancel
+  // only destroys the panel. See CreateConfigPanel() for what REAPER does.
+  HWND ShowSurfaceConfig(HWND parent, TestControlSurface* surface = nullptr);
+
+  // Clicks OK in REAPER's control surface dialog, with `panel`, which
+  // ShowSurfaceConfig() returned for `surface` (or for a new one, if it is
+  // null): asks the panel for the config string, destroys the panel and the
+  // surface, and creates one with the string, even if it is unchanged.
+  // Returns the new surface, as AddSurface() does.
+  std::unique_ptr<TestControlSurface> ConfirmSurfaceConfig(
+      HWND panel, std::unique_ptr<TestControlSurface> surface);
 
   // Returns the open control surface, or null if none is open. Each call on it
   // is an entry point of its own (see Checks). Calls REAPER makes from inside

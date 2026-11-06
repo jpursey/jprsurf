@@ -22,30 +22,27 @@ JPRSurf's own config, `jprsurf.jprsurf`, goes beside `reaper_jprsurf.dll` in
 REAPER's user plugins folder (`%APPDATA%\REAPER\UserPlugins`). A surface reads
 it unless it is given another file.
 
-To use another file, give the surface its path. REAPER's control surface
-dialog can't pick one yet, so it is set in `reaper.ini`, REAPER's own settings
-file, in `%APPDATA%\REAPER`:
+To use another file, give the surface its path:
 
-1. Close REAPER, as it rewrites `reaper.ini` when it exits.
-2. Find the surface's line, which starts with `csurf_` and a number, then
-   `JPRSurf`:
+1. In **Preferences > Control/OSC/web**, select the surface, and click
+   **Edit**.
+2. Click **Browse...**, and pick the file. You can also type or paste its full
+   path into **Config file**.
+3. Click **OK**.
 
-   ```
-   csurf_0=JPRSurf null
-   ```
+An empty **Config file** is JPRSurf's own config, so clearing it goes back to
+that. So is `null`, which `reaper.ini` holds for a surface added before JPRSurf
+had config files.
 
-3. Replace what comes after `JPRSurf` with the file's full path. Spaces in it
-   are fine, without quotes:
+The file is read when REAPER starts, and when you click OK in that dialog, even
+if the path didn't change. So after editing the file, click **Edit**, then
+**OK**, rather than restarting REAPER.
 
-   ```
-   csurf_0=JPRSurf C:\Users\me\Documents\My surface.jprsurf
-   ```
-
-4. Start REAPER.
-
-`null`, or nothing after `JPRSurf`, is JPRSurf's own config. The file is read
-once, when REAPER starts (or when the surface is added), so restart REAPER
-after editing it.
+The path is kept in `reaper.ini`, REAPER's own settings file, in
+`%APPDATA%\REAPER`, on the surface's line, after `JPRSurf`
+(`csurf_0=JPRSurf C:\Users\me\Documents\My surface.jprsurf`). It can be edited
+there too, while REAPER is closed, as REAPER rewrites `reaper.ini` when it
+exits.
 
 Copy `jprsurf.jprsurf` somewhere else before changing it, rather than editing
 the one beside the DLL, as installing JPRSurf again replaces that one.
@@ -212,5 +209,5 @@ on, then what it is about, such as a view and a control:
 C:\Users\me\Documents\My surface.jprsurf: line 61: /track_mode/track_list/strip[]: strip.mut: names nothing
 ```
 
-Fix the errors, and restart REAPER. A missing device that isn't `optional`
-is reported the same way, as the surface can't run without it.
+Fix the errors, then reload the file (see above). A missing device that isn't
+`optional` is reported the same way, as the surface can't run without it.

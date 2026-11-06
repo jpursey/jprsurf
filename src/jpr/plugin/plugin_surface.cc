@@ -15,6 +15,7 @@
 
 #include "absl/log/log.h"
 #include "jpr/common/file_system.h"
+#include "jpr/common/win_config_panel.h"
 #include "jpr/config/surface_config.h"
 #include "jpr/scene/create_scene.h"
 #include "jpr/scene/surface_spec.h"
@@ -41,7 +42,9 @@ bool PluginSurface::Register(reaper_plugin_info_t& plugin_info,
        .description = kDescString,
        .create_listener = std::bind_front(&PluginSurface::Create,
                                           std::string(default_config_path)),
-       .profile = profile});
+       .profile = profile,
+       .config_file = FileFilter{.description = "JPRSurf config",
+                                 .pattern = "*.jprsurf"}});
 }
 
 std::unique_ptr<ControlSurfaceListener> PluginSurface::Create(
@@ -54,14 +57,11 @@ std::unique_ptr<ControlSurfaceListener> PluginSurface::Create(
 
 PluginSurface::PluginSurface(std::string_view default_config_path,
                              std::string_view config)
-    : config_(config) {
+    : config_(config == "null" ? "" : config) {
   LOG(INFO) << "PluginSurface created";
 
   // Without the scene, as when the X-Touch is absent, the surface does nothing.
-  // "null" is the config string earlier versions wrote (an empty gb::Config),
-  // which REAPER still saves for their surfaces.
-  scene_ = ReadScene(config.empty() || config == "null" ? default_config_path
-                                                        : config);
+  scene_ = ReadScene(config_.empty() ? default_config_path : config_);
   if (scene_ != nullptr) {
     scene_->Activate(scene_runner_);
   }

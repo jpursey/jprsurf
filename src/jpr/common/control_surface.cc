@@ -25,6 +25,7 @@
 #include "jpr/common/track.h"
 #include "jpr/common/track_cache.h"
 #include "jpr/common/undo.h"
+#include "jpr/common/win_config_panel.h"
 
 namespace jpr {
 
@@ -99,7 +100,11 @@ HWND ControlSurface::ShowConfig(const char* type_string, HWND parent,
                 << (type_string ? type_string : "(null)")
                 << ", parent=" << parent << ", init_config_string=\""
                 << (init_config_string ? init_config_string : "") << "\")";
-  return nullptr;
+  if (!s_type_.config_file.has_value()) {
+    return nullptr;
+  }
+  return CreateConfigPanel(parent, absl::NullSafeStringView(init_config_string),
+                           *s_type_.config_file);
 }
 
 ControlSurface::ControlSurface(std::string_view config) {
