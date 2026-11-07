@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -109,6 +111,42 @@ inline constexpr PropertyAccessFlags kTriggerAccess = PropertyAccess::kTrigger;
 // Returns the access's name, as errors and docs name it: "read", "write", or
 // "trigger".
 std::string_view GetPropertyAccessName(PropertyAccess access);
+
+//==============================================================================
+// EnumeratedPress
+//==============================================================================
+
+// What a press does to an enumerated value, as a mapping's range gives it (see
+// ViewMapping::ReadConfig):
+// - With `toggles`, a press sets max, or min if the value already is max. An
+//   even count changes nothing, as for a toggle.
+// - Without it, a press steps to the next value from min to max, wrapping from
+//   max to min, and from a value outside them to min. Each of `count` presses
+//   steps once, and if max is before min, a press sets min.
+// Either way, a press whose min is max sets it, and a count of 0 is no press.
+struct EnumeratedPress {
+  friend bool operator==(const EnumeratedPress&,
+                         const EnumeratedPress&) = default;
+
+  // Returns the value after the presses.
+  int Apply(int value) const;
+
+  int min = 0;
+  int max = 0;
+  bool toggles = false;
+  int count = 1;
+};
+
+// Returns the index of the name among the value names, for
+// ViewProperty::FindValue(), or nullopt if it isn't one of them.
+template <typename Names>
+std::optional<int> FindValueName(const Names& names, std::string_view name) {
+  const auto it = std::find(std::begin(names), std::end(names), name);
+  if (it == std::end(names)) {
+    return std::nullopt;
+  }
+  return static_cast<int>(it - std::begin(names));
+}
 
 //==============================================================================
 // ViewProperty
@@ -273,9 +311,9 @@ class ViewProperty {
   // state for a toggle property).
   //
   // These may be overridden by derived classes that have a more specific
-  // translation from the specific type. For instance, an enumerated property
-  // may want to override SetText() to allow setting the value by name
-  // instead of by integer value.
+  // translation from the specific type. SetText() on an enumerated property
+  // sets the value with the name (see FindValue()), and reads any other text as
+  // a number.
   virtual void SetBool(bool value);
   virtual void SetInt(int value);        // Input clamped to [0,GetMaxValue()]
   virtual void SetPan(double value);     // Input clamped to [-1,1]
@@ -304,6 +342,11 @@ class ViewProperty {
   // Returns nullopt if it is a name that isn't one of the enumerated
   // property's values.
   std::optional<Value> ResolveValue(const Value& value) const;
+
+  // Applies a press to an enumerated property, with its min and max clamped to
+  // [0,GetMaxValue()], with WritePress(). A press that changes nothing, and a
+  // property of any other type, are ignored.
+  void PressInt(EnumeratedPress press);
 
   // Runs the action associated with this property. This is only applicable for
   // properties of type kAction, and will have no effect for other types.
@@ -334,6 +377,13 @@ class ViewProperty {
   virtual void WriteTimelinePosition(TimelinePosition value) {}
   virtual int ReadInt() const { return 0; }
   virtual void WriteInt(int value) {}
+
+  // Writes the value the press gives the current one by default. A property
+  // whose writes run an action may override it to run the action with the
+  // press itself (see TrackActions::UiPress()).
+  virtual void WritePress(const EnumeratedPress& press) {
+    WriteInt(press.Apply(ReadInt()));
+  }
 
   // Derived classes should call this whenever the property value changes.
   void NotifyChanged();

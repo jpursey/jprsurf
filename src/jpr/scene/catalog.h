@@ -44,6 +44,10 @@ struct PropertyInfo {
   PropertyAccessFlags access;
   std::string_view description;
   std::optional<ViewNeed> view_need;  // For a view: property only.
+
+  // The names of an enumerated property's values, in order, if they have names
+  // (see ViewProperty::FindValue()), which a config may name them by.
+  absl::Span<const std::string_view> values;
 };
 
 // One built in reference, whose fields are the properties of its kind of

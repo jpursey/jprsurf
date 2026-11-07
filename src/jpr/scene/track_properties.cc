@@ -6,11 +6,16 @@
 #include "jpr/scene/track_properties.h"
 
 #include <algorithm>
+#include <iterator>
 #include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/log/check.h"
+#include "absl/types/span.h"
 #include "jpr/common/reaper_api.h"
 
 namespace jpr {
@@ -68,6 +73,139 @@ class TrackBoolViewProperty : public TrackProperty {
 
  private:
   const TrackBoolProperty property_;
+  TrackActions* const actions_;
+};
+
+// The record modes, in REAPER's order, named for REAPER's "Set track record
+// mode to" actions. REAPER's forced input formats (12 to 15), which no action
+// sets, aren't among them.
+constexpr TrackRecMode kRecModes[] = {
+    TrackRecMode::kInput,
+    TrackRecMode::kOutputStereo,
+    TrackRecMode::kNone,
+    TrackRecMode::kOutputStereoCompensated,
+    TrackRecMode::kMidiOutput,
+    TrackRecMode::kOutputMono,
+    TrackRecMode::kOutputMonoCompensated,
+    TrackRecMode::kMidiOverdub,
+    TrackRecMode::kMidiReplace,
+    TrackRecMode::kMidiTouchReplace,
+    TrackRecMode::kOutputMultichannel,
+    TrackRecMode::kOutputMultichannelCompensated,
+    TrackRecMode::kMidiLatchReplace,
+};
+constexpr std::string_view kRecModeNames[] = {
+    "input",
+    "output_stereo",
+    "none",
+    "output_stereo_compensated",
+    "midi_output",
+    "output_mono",
+    "output_mono_compensated",
+    "midi_overdub",
+    "midi_replace",
+    "midi_touch_replace",
+    "output_multichannel",
+    "output_multichannel_compensated",
+    "midi_latch_replace",
+};
+static_assert(std::size(kRecModes) == std::size(kRecModeNames));
+
+// The monitoring modes, in TrackMonitorMode's order.
+constexpr std::string_view kMonitorModeNames[] = {"off", "on", "auto"};
+
+class RecModeValue final : public TrackValue {
+ public:
+  constexpr RecModeValue() : TrackValue(kRecModeNames) {}
+
+  int Get(const Track& track) const override {
+    // A mode with no name, such as a forced input format, reads as input,
+    // which it is a form of.
+    const auto* it = absl::c_find(kRecModes, track.GetRecMode());
+    return it != std::end(kRecModes)
+               ? static_cast<int>(it - std::begin(kRecModes))
+               : 0;
+  }
+  void Set(TrackBatch& batch, Track* track, int value,
+           TrackGrouping grouping) const override {
+    DCHECK(value >= 0 && value <= GetMaxValue());
+    batch.SetRecMode(track, kRecModes[value], grouping);
+  }
+  std::vector<Track*> GetGroup(Track* track) const override {
+    return TrackCache::Get().GetRecArmGroup(track);
+  }
+};
+
+class MonitorModeValue final : public TrackValue {
+ public:
+  constexpr MonitorModeValue() : TrackValue(kMonitorModeNames) {}
+
+  int Get(const Track& track) const override {
+    return static_cast<int>(track.GetMonitorMode());
+  }
+  void Set(TrackBatch& batch, Track* track, int value,
+           TrackGrouping grouping) const override {
+    DCHECK(value >= 0 && value <= GetMaxValue());
+    batch.SetMonitorMode(track, static_cast<TrackMonitorMode>(value), grouping);
+  }
+  std::vector<Track*> GetGroup(Track* track) const override {
+    // REAPER gangs the monitoring of the selected tracks only, and the track's
+    // own selection is fresh, as the surface refreshes a track before acting
+    // on it. GetSelectedTracks() never has the master.
+    if (!track->GetSelected()) {
+      return {track};
+    }
+    std::vector<Track*> group = TrackCache::Get().GetSelectedTracks();
+    if (!absl::c_linear_search(group, track)) {
+      group.push_back(track);
+    }
+    return group;
+  }
+};
+
+// The one instance of each kind of TrackValue.
+template <typename T>
+constexpr T kTrackValue{};
+
+// A property for an enumerated value of the track. With track actions, a write
+// or a press runs the action rather than setting the value: a write of a value
+// is a press that sets it.
+class TrackEnumeratedProperty : public TrackProperty {
+ public:
+  TrackEnumeratedProperty(std::string_view name, const TrackValue& value,
+                          Track* track, TrackActions* actions)
+      : TrackProperty(name, Type::kEnumerated, kReadWriteAccess, track),
+        value_(value),
+        actions_(actions) {}
+
+  int GetMaxValue() const override { return value_.GetMaxValue(); }
+  std::string GetText() const override {
+    return std::string(value_.GetNames()[GetInt()]);
+  }
+  std::optional<int> FindValue(std::string_view name) const override {
+    return FindValueName(value_.GetNames(), name);
+  }
+
+ protected:
+  int ReadInt() const override { return value_.Get(*GetTrack()); }
+  void WriteInt(int value) override {
+    if (actions_ != nullptr) {
+      WritePress({.min = value, .max = value});
+      return;
+    }
+    TrackBatch batch;
+    value_.Set(batch, GetTrack(), value, TrackGrouping::kNone);
+  }
+  void WritePress(const EnumeratedPress& press) override {
+    if (actions_ == nullptr) {
+      TrackProperty::WritePress(press);
+      return;
+    }
+    actions_->UiPress(GetTrack(), value_, press, /*anchor=*/nullptr);
+  }
+
+ private:
+  const TrackValue& value_;
   TrackActions* const actions_;
 };
 
@@ -224,6 +362,16 @@ std::unique_ptr<TrackProperty> CreateLevel(std::string_view name, Track* track,
   return std::make_unique<T>(name, track, kUi ? actions : nullptr);
 }
 
+// Creates a property for the enumerated value T, which runs the track action if
+// kUi is true.
+template <typename T, bool kUi>
+std::unique_ptr<TrackProperty> CreateEnumerated(std::string_view name,
+                                                Track* track,
+                                                TrackActions* actions) {
+  return std::make_unique<TrackEnumeratedProperty>(name, kTrackValue<T>, track,
+                                                   kUi ? actions : nullptr);
+}
+
 template <TrackTouchType kType>
 std::unique_ptr<TrackProperty> CreateTouched(std::string_view name,
                                              Track* track,
@@ -268,6 +416,27 @@ constexpr TrackPropertyRow kTrackProperties[] = {
       "True while the track is armed for recording. Writing it arms or "
       "disarms this track alone."},
      CreateBool<TrackBoolProperty::kRecArm, false>},
+    {{.name = TrackProperties::kRecMode,
+      .type = Type::kEnumerated,
+      .access = kReadWriteAccess,
+      .description =
+          "The track's record mode, which decides what it records while armed, "
+          "named for REAPER's \"Set track record mode to\" actions: \"none\" "
+          "records nothing, and only monitors the input. REAPER's forced input "
+          "formats, which no action sets, read as \"input\". Writing it sets "
+          "this track's mode alone, but never the master track's, which has "
+          "none.",
+      .values = kTrackValue<RecModeValue>.GetNames()},
+     CreateEnumerated<RecModeValue, false>},
+    {{.name = TrackProperties::kMonitorMode,
+      .type = Type::kEnumerated,
+      .access = kReadWriteAccess,
+      .description =
+          "The track's record monitoring: \"auto\" is REAPER's tape auto "
+          "style. Writing it sets this track's monitoring alone. The master "
+          "track's always reads as \"off\", and is never written.",
+      .values = kTrackValue<MonitorModeValue>.GetNames()},
+     CreateEnumerated<MonitorModeValue, false>},
     {{TrackProperties::kPan, Type::kPan, kReadWriteAccess,
       "The track's pan. Writing it pans this track alone."},
      CreateLevel<TrackPanProperty, false>},
@@ -297,6 +466,26 @@ constexpr TrackPropertyRow kTrackProperties[] = {
       "arm action, as clicking record arm in REAPER does, with the surface's "
       "modifiers, grouping, and anchors."},
      CreateBool<TrackBoolProperty::kRecArm, true>},
+    {{.name = TrackProperties::kUiRecMode,
+      .type = Type::kEnumerated,
+      .access = kReadWriteAccess,
+      .description =
+          "The same as \"track:rec_mode\", but a press or a write runs the "
+          "surface's action for an enumerated value, with the surface's "
+          "modifiers and grouping. Its grouping reaches the tracks a grouped "
+          "record arm does.",
+      .values = kTrackValue<RecModeValue>.GetNames()},
+     CreateEnumerated<RecModeValue, true>},
+    {{.name = TrackProperties::kUiMonitorMode,
+      .type = Type::kEnumerated,
+      .access = kReadWriteAccess,
+      .description =
+          "The same as \"track:monitor_mode\", but a press or a write runs the "
+          "surface's action for an enumerated value, with the surface's "
+          "modifiers and grouping. Its grouping reaches the selected tracks, "
+          "if the track is selected, as REAPER's groups have no monitoring.",
+      .values = kTrackValue<MonitorModeValue>.GetNames()},
+     CreateEnumerated<MonitorModeValue, true>},
     {{TrackProperties::kUiPan, Type::kPan, kReadWriteAccess,
       "The same as \"track:pan\", but writing it runs the surface's pan "
       "action, as panning in REAPER does, with the surface's modifiers and "

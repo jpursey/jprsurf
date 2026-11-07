@@ -208,34 +208,62 @@ struct EnumeratedPress {
 };
 
 class ViewProperty {
-  // Applies a press. The default applies it to GetInt() and calls SetInt().
-  virtual void PressInt(const EnumeratedPress& press);
+  // Applies a press, clamped to the values, with WritePress().
+  void PressInt(EnumeratedPress press);
+
+ protected:
+  // By default, writes the value the press gives the current one.
+  virtual void WritePress(const EnumeratedPress& press);
 };
 
 // An enumerated value of a track, which the track actions read and set.
 class TrackValue {
  public:
-  virtual int GetMaxValue() const = 0;
+  absl::Span<const std::string_view> GetNames() const;
+  int GetMaxValue() const;
   virtual int Get(const Track& track) const = 0;
   virtual void Set(TrackBatch& batch, Track* track, int value,
                    TrackGrouping grouping) const = 0;
+  // The tracks Set() with kGrouped reaches, including the track.
+  virtual std::vector<Track*> GetGroup(Track* track) const = 0;
 };
 
 class TrackActions {
   // Runs the press on the value of the track, with the modifiers in the class
-  // comment, which generalize UiToggle()'s.
+  // comment, which generalize UiToggle()'s, and the value's anchor, if any.
   void UiPress(Track* track, const TrackValue& value,
-               const EnumeratedPress& press);
+               const EnumeratedPress& press, const Anchor<Track>* anchor);
 };
 ```
 
-- `ViewMapping` calls `PressInt()` rather than resolving the press, and the
-  `ui_` enumerated track properties override it to call `UiPress()`.
+- `ViewMapping` calls `PressInt()` rather than resolving the press. It clamps
+  the press to the property's values and calls the protected `WritePress()`,
+  which the `ui_` enumerated track properties override to call `UiPress()`. A
+  write to one of them is a press that sets the value. A step from a value
+  outside the range goes to its min (it used to step to a value outside it).
 - `UiPress()` follows `UiToggle()`'s structure: anchor, Alt, Shift, Option,
-  then the plain press. Alt returns every track past `press.min` to it. The
-  class comment documents both.
+  then the plain press. Alt returns every track past `press.min` to it,
+  refreshing each first, as their cached values may be stale. That is three
+  reads a track (four with a stale record mode), where `UiToggle()`'s Alt
+  reads one: CL6 bounds it on the large project, and if it is too much, a
+  `TrackValue` read of REAPER's value alone replaces the refresh. Ctrl+Alt
+  and Shift+Alt set the tracks going to the max straight to it, with
+  `GetGroup()` for Shift's, so no track is set twice in one run, which the
+  call count tests fail. `UiToggle()` still turns them off and on again,
+  which the follow-up that makes the toggles `TrackValue`s fixes too. The
+  class comment documents both. The anchor is a parameter, which the record stage
+  passes (CL5), so `TrackValue` knows nothing of anchors.
+- `TrackValue` holds its value names, and each kind is a stateless class with
+  one constexpr instance.
 - `track:rec_mode` and `track:monitor_mode` are `TrackValue`s over `Track`'s
-  getters and `TrackBatch`'s setters.
+  getters and `TrackBatch`'s setters. The record mode's values are the 13
+  named modes, numbered in order, so `midi_latch_replace` (REAPER's 16) is 12.
+  A mode with no name, such as a forced input format, reads as `input`, which
+  it is a form of.
+- A config names a built in property's values, so `PropertyInfo` gets
+  `values`, which the config's validator reads, and the generated pages list.
+  `ViewProperty::SetText()` sets an enumerated value by name, which
+  `EnumeratedValueProperty` did on its own.
 - `track:rec_stage` is a `TrackValue` over rec arm and the record mode, in its
   own file, so it can be replaced by a config defined combination later:
   - Off disarms, and leaves the mode alone.
@@ -447,13 +475,14 @@ Depends on: CL1c.
 - `track_test.cc` against the fake: caching, the replaced mode, grouping
   through `GetRecArmGroup()`, and one undo point per batch.
 
-### CL4 [ ] scene: Enumerated track values, rec_mode, and monitor_mode
+### CL4 [x] scene: Enumerated track values, rec_mode, and monitor_mode
 
 Depends on: CL3.
 
 - `EnumeratedPress`, `ViewProperty::PressInt()`, and `ViewMapping` calling it.
 - `TrackValue`, `TrackActions::UiPress()`, and its class comment.
 - `track:rec_mode`, `track:monitor_mode`, and their `ui_` forms.
+- `PropertyInfo::values`, read by the validator and the generated pages.
 - The generated scene pages (`update_user_docs`).
 
 **Verify**

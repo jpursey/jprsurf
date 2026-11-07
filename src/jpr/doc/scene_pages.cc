@@ -155,7 +155,11 @@ std::string GeneratePropertyNamespacePage(const PropertyNamespaceInfo& info) {
                           : "",
                       " | ");
     }
-    absl::StrAppend(&page, GetCellText(property.description), " |\n");
+    absl::StrAppend(&page, GetCellText(property.description));
+    if (!property.values.empty()) {
+      absl::StrAppend(&page, " Values: ", GetCodeList(property.values), ".");
+    }
+    absl::StrAppend(&page, " |\n");
   }
   if (!info.references.empty()) {
     absl::StrAppend(&page,

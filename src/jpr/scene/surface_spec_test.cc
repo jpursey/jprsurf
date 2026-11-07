@@ -905,6 +905,20 @@ TEST(SurfaceSpecTest, ARangeIsOfValuesOfThePropertysType) {
           "\"state:ruler_mode\"'s values"));
 }
 
+TEST(SurfaceSpecTest, ABuiltInEnumeratedValueIsNamedByItsValues) {
+  auto range = [](std::string min, std::string max) {
+    return ViewMapping::Config{.read = {.property_min = std::move(min),
+                                        .property_max = std::move(max)}};
+  };
+  EXPECT_THAT(Validate(MappingSpecs(
+                  {Mapping("track:rec_mode", "play", ViewMapping::kReadControl,
+                           range("none", "midi_overdub")),
+                   Mapping("track:ui_monitor_mode", "play",
+                           ViewMapping::kReadControl, range("on", "loud"))})),
+              ElementsAre("/view: play: range max \"loud\" isn't one of "
+                          "\"track:ui_monitor_mode\"'s values"));
+}
+
 TEST(SurfaceSpecTest, AConditionReadsAValueOfItsPropertysType) {
   SurfaceSpec spec = MappingSpecs(
       {Mapping("track:mute", "play", ViewMapping::kReadWriteControl,

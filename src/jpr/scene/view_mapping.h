@@ -123,7 +123,9 @@ class ViewMapping final {
     // press steps to the next value in [property_min, property_max], wrapping
     // around (such as the timecode display's modes). With it, a press sets
     // property_max, or property_min if the value already is property_max.
-    // Other property types ignore it.
+    // The mapping gives the property the press to apply (see
+    // ViewProperty::PressInt()), so a property whose writes run an action
+    // runs it with the press. Other property types ignore it.
     bool press_toggles = false;
 
     // If true, then the property value will be set to property_max when the

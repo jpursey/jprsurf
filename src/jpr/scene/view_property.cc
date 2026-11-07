@@ -45,6 +45,26 @@ std::string FitVolumeText(std::string_view text, int width) {
 
 }  // namespace
 
+int EnumeratedPress::Apply(int value) const {
+  if (toggles) {
+    if (count % 2 == 0) {
+      return value;
+    }
+    return value == max ? min : max;
+  }
+  if (count <= 0) {
+    return value;
+  }
+  const int size = max - min + 1;
+  if (size <= 1) {
+    return min;
+  }
+
+  // A value outside the range is one step before min.
+  const int offset = (value >= min && value <= max) ? value - min : -1;
+  return min + (offset + count) % size;
+}
+
 std::string_view GetPropertyAccessName(PropertyAccess access) {
   switch (access) {
     case PropertyAccess::kRead:
@@ -84,6 +104,18 @@ std::string_view ViewProperty::GetTypeName(Type type) {
 ViewProperty::ViewProperty(std::string_view name, Type type,
                            PropertyAccessFlags access)
     : name_(name), type_(type), access_(access) {}
+
+void ViewProperty::PressInt(EnumeratedPress press) {
+  // A press that changes nothing (see EnumeratedPress) isn't applied, so it
+  // runs no action either.
+  if (type_ != Type::kEnumerated || press.count <= 0 ||
+      (press.toggles && press.count % 2 == 0)) {
+    return;
+  }
+  press.min = std::clamp(press.min, 0, GetMaxValue());
+  press.max = std::clamp(press.max, 0, GetMaxValue());
+  WritePress(press);
+}
 
 void ViewProperty::RegisterFlag(bool* flag) {
   if (flags_.insert(flag).second && flags_.size() == 1) {
@@ -532,6 +564,10 @@ void ViewProperty::SetText(std::string_view value) {
     case Type::kTimelinePosition:
       break;
     case Type::kEnumerated: {
+      if (std::optional<int> found = FindValue(value)) {
+        WriteInt(*found);
+        break;
+      }
       int int_value = 0;
       absl::SimpleAtoi(value, &int_value);
       WriteInt(std::clamp(int_value, 0, GetMaxValue()));

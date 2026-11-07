@@ -1439,6 +1439,38 @@ TEST_F(ViewMappingTest, PressTogglesSwitchAnEnumeratedValueBetweenItsEnds) {
   EXPECT_EQ(ranged->GetInt(), 1);
 }
 
+TEST_F(ViewMappingTest, AnEnumeratedPropertyAppliesThePressWithItsRange) {
+  FakeDevice::FakeControl other = AddInputs("Other", Input::kPress);
+  FakeDevice::FakeControl set = AddInputs("Set", Input::kPress);
+  TestProperty* stepped =
+      AddProperty(Type::kEnumerated, 0, "user:value", /*max_value=*/3);
+  TestProperty* toggled =
+      AddProperty(Type::kEnumerated, 0, "user:toggled", /*max_value=*/3);
+  TestProperty* whole =
+      AddProperty(Type::kEnumerated, 0, "user:whole", /*max_value=*/3);
+  Read("user:value", {"Button"},
+       {.read = {.property_min = Value(1), .property_max = Value(2)}});
+  Read("user:toggled", {"Other"},
+       {.read = {.property_min = Value(1),
+                 .property_max = Value(3),
+                 .press_toggles = true}});
+
+  // A range past the property's values is clamped to them.
+  Read("user:whole", {"Set"},
+       {.read = {.property_min = Value(5), .property_max = Value(5)}});
+  AddSurface();
+  Tap(button_);
+  EXPECT_EQ(stepped->GetLastPress(), (EnumeratedPress{.min = 1, .max = 2}));
+  EXPECT_EQ(stepped->GetInt(), 1);
+  Tap(other);
+  EXPECT_EQ(toggled->GetLastPress(),
+            (EnumeratedPress{.min = 1, .max = 3, .toggles = true}));
+  EXPECT_EQ(toggled->GetInt(), 3);
+  Tap(set);
+  EXPECT_EQ(whole->GetLastPress(), (EnumeratedPress{.min = 3, .max = 3}));
+  EXPECT_EQ(whole->GetInt(), 3);
+}
+
 TEST_F(ViewMappingTest, ColorsReadInTheirRange) {
   FakeDevice::FakeControl max_fader = AddInputs("MaxFader", Input::kValue);
   FakeDevice::FakeControl min_fader = AddInputs("MinFader", Input::kValue);

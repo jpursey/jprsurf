@@ -6,7 +6,9 @@
 #include "jpr/scene/track_actions.h"
 
 #include <optional>
+#include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/log/check.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/reaper_api.h"
@@ -55,7 +57,7 @@ void TrackActions::UiSelect(Track* track) {
   TrackCache& cache = TrackCache::Get();
 
   if (Track* anchor_track =
-          GetOtherAnchorTrack(TrackBoolProperty::kSelected, track);
+          GetOtherAnchorTrack(GetAnchor(TrackBoolProperty::kSelected), track);
       anchor_track != nullptr) {
     SelectRange(track, anchor_track, /*same_parent=*/true);
     return;
@@ -111,7 +113,7 @@ void TrackActions::UiToggle(Track* track, TrackBoolProperty property) {
   }
   TrackCache& cache = TrackCache::Get();
 
-  if (Track* anchor_track = GetOtherAnchorTrack(property, track);
+  if (Track* anchor_track = GetOtherAnchorTrack(GetAnchor(property), track);
       anchor_track != nullptr) {
     SetRange(track, anchor_track, /*same_parent=*/true, property);
     return;
@@ -192,14 +194,117 @@ void TrackActions::SetRange(Track* track, Track* root, bool same_parent,
 }
 
 //------------------------------------------------------------------------------
+// Enumerated values
+//------------------------------------------------------------------------------
+
+void TrackActions::UiPress(Track* track, const TrackValue& value,
+                           const EnumeratedPress& press,
+                           const Anchor<Track>* anchor) {
+  if (!track->Exists()) {
+    return;
+  }
+  TrackCache& cache = TrackCache::Get();
+
+  if (Track* anchor_track =
+          anchor != nullptr ? GetOtherAnchorTrack(*anchor, track) : nullptr;
+      anchor_track != nullptr) {
+    SetRange(track, anchor_track, /*same_parent=*/true, value);
+    return;
+  }
+
+  // As for UiToggle(), "every track" means all tracks in the project.
+  if (AreModifiersOn(kModAlt)) {
+    // The tracks that go to the max, which go straight to it, so no track is
+    // set twice: with Ctrl this track, and with Shift its group too.
+    std::vector<Track*> raised;
+    if (AreModifiersOn(kModCtrl)) {
+      raised = {track};
+    } else if (AreModifiersOn(kModShift)) {
+      raised = value.GetGroup(track);
+    }
+    TrackBatch batch;
+    for (Track* other : cache.GetTracks()) {
+      if (absl::c_linear_search(raised, other)) {
+        continue;
+      }
+
+      // Tracks not on the surface may have stale cached values, and this one
+      // was refreshed before the action.
+      if (other != track) {
+        other->Refresh();
+      }
+      if (value.Get(*other) > press.min) {
+        value.Set(batch, other, press.min, TrackGrouping::kNone);
+      }
+    }
+    for (Track* other : raised) {
+      value.Set(batch, other, press.max, TrackGrouping::kNone);
+    }
+    if (!raised.empty()) {
+      cache.SetLastTouchedTrack(track);
+    }
+    return;
+  }
+
+  if (AreModifiersOn(kModShift)) {
+    SetRange(track, cache.GetLastTouchedTrack(),
+             /*same_parent=*/!AreModifiersOn(kModCtrl), value);
+    return;
+  }
+
+  TrackBatch batch;
+  if (AreModifiersOn(kModOpt)) {
+    value.Set(batch, track, press.Apply(value.Get(*track)),
+              TrackGrouping::kNone);
+    if (track->GetSelected()) {
+      cache.SetLastTouchedTrack(track);
+      for (Track* selected : cache.GetSelectedTracks()) {
+        if (selected == track) {
+          continue;
+        }
+
+        // Selected tracks may not be on the surface, so their cached values
+        // may be stale.
+        selected->Refresh();
+        value.Set(batch, selected, press.Apply(value.Get(*selected)),
+                  TrackGrouping::kNone);
+      }
+    }
+    return;
+  }
+
+  value.Set(batch, track, press.Apply(value.Get(*track)), GetUiGrouping());
+  cache.SetLastTouchedTrack(track);
+}
+
+void TrackActions::SetRange(Track* track, Track* root, bool same_parent,
+                            const TrackValue& value) {
+  const std::optional<TrackRange> range =
+      TrackRange::Between(root, track, filter_, same_parent);
+  if (!range.has_value()) {
+    return;
+  }
+
+  // As for a toggle, the root's cached value may be stale.
+  root->Refresh();
+  const int root_value = value.Get(*root);
+  TrackBatch batch;
+  for (Track* other : TrackCache::Get().GetTracks()) {
+    if (range->Contains(other)) {
+      value.Set(batch, other, root_value, TrackGrouping::kNone);
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
 // Anchors
 //------------------------------------------------------------------------------
 
-Track* TrackActions::GetOtherAnchorTrack(TrackBoolProperty property,
+Track* TrackActions::GetOtherAnchorTrack(const Anchor<Track>& anchor,
                                          const Track* track) {
   // An anchor on a deleted track is not held, so the action behaves as usual
   // until the anchor's view releases it.
-  Track* anchor_track = GetAnchor(property).Get();
+  Track* anchor_track = anchor.Get();
   if (anchor_track == nullptr || anchor_track == track ||
       !anchor_track->Exists()) {
     return nullptr;

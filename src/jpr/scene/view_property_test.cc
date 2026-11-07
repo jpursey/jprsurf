@@ -153,5 +153,67 @@ TEST(ViewPropertyTest, FittedTextOfOtherTypesIsUnchanged) {
   EXPECT_EQ(TestProperty(Type::kPan, -0.25).GetFittedText(3), "25%L");
 }
 
+TEST(ViewPropertyTest, ATogglingPressSwitchesBetweenItsEnds) {
+  const EnumeratedPress press = {.min = 1, .max = 3, .toggles = true};
+  EXPECT_EQ(press.Apply(1), 3);
+  EXPECT_EQ(press.Apply(3), 1);
+  EXPECT_EQ(press.Apply(0), 3);
+  EXPECT_EQ(press.Apply(2), 3);
+
+  // An even count changes nothing, as for a toggle.
+  EnumeratedPress twice = press;
+  twice.count = 2;
+  EXPECT_EQ(twice.Apply(0), 0);
+  twice.count = 3;
+  EXPECT_EQ(twice.Apply(3), 1);
+
+  // Its ends may be in either order, or the same.
+  EXPECT_EQ((EnumeratedPress{.min = 3, .max = 1, .toggles = true}).Apply(1), 3);
+  EXPECT_EQ((EnumeratedPress{.min = 2, .max = 2, .toggles = true}).Apply(2), 2);
+}
+
+TEST(ViewPropertyTest, ASteppingPressWrapsWithinItsRange) {
+  EnumeratedPress press = {.min = 1, .max = 3};
+  EXPECT_EQ(press.Apply(1), 2);
+  EXPECT_EQ(press.Apply(3), 1);
+
+  // A value outside the range is one step before its min.
+  EXPECT_EQ(press.Apply(0), 1);
+  EXPECT_EQ(press.Apply(5), 1);
+
+  // Each of its count steps once, and no count is no press.
+  press.count = 2;
+  EXPECT_EQ(press.Apply(2), 1);
+  EXPECT_EQ(press.Apply(0), 2);
+  press.count = 0;
+  EXPECT_EQ(press.Apply(5), 5);
+
+  // A range of one value, or whose max is before its min, sets the min.
+  EXPECT_EQ((EnumeratedPress{.min = 2, .max = 2}).Apply(0), 2);
+  EXPECT_EQ((EnumeratedPress{.min = 2, .max = 1}).Apply(0), 2);
+}
+
+TEST(ViewPropertyTest, PressIntClampsThePressToTheValues) {
+  TestProperty property(Type::kEnumerated, 0, /*max_value=*/3);
+  property.PressInt({.min = -1, .max = 9, .toggles = true});
+  EXPECT_EQ(property.GetLastPress(),
+            (EnumeratedPress{.min = 0, .max = 3, .toggles = true}));
+  EXPECT_EQ(property.GetInt(), 3);
+}
+
+TEST(ViewPropertyTest, APressThatChangesNothingIsntApplied) {
+  TestProperty property(Type::kEnumerated, 0, /*max_value=*/3);
+  property.PressInt({.min = 0, .max = 3, .toggles = true, .count = 2});
+  property.PressInt({.min = 0, .max = 3, .count = 0});
+  EXPECT_EQ(property.GetLastPress(), std::nullopt);
+}
+
+TEST(ViewPropertyTest, OnlyAnEnumeratedPropertyAppliesAPress) {
+  TestProperty property(Type::kToggle, false);
+  property.PressInt({.min = 0, .max = 1});
+  EXPECT_EQ(property.GetLastPress(), std::nullopt);
+  EXPECT_FALSE(property.GetBool());
+}
+
 }  // namespace
 }  // namespace jpr

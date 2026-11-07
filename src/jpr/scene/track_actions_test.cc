@@ -6,6 +6,7 @@
 #include "jpr/scene/track_actions.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/functional/function_ref.h"
@@ -16,6 +17,7 @@
 #include "jpr/common/deferred_refresh.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/testing/cached_track.h"
+#include "jpr/common/testing/call_counter.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -29,6 +31,29 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
 constexpr Modifiers kCtrlShift = kModCtrl | kModShift;
+
+constexpr std::string_view kTestValueNames[] = {"input", "output_stereo",
+                                                "none"};
+
+// A value of the first three record modes, by their numbers, which are the only
+// modes the tests give tracks.
+class TestValue final : public TrackValue {
+ public:
+  constexpr TestValue() : TrackValue(kTestValueNames) {}
+
+  int Get(const Track& track) const override {
+    return static_cast<int>(track.GetRecMode());
+  }
+  void Set(TrackBatch& batch, Track* track, int value,
+           TrackGrouping grouping) const override {
+    batch.SetRecMode(track, static_cast<TrackRecMode>(value), grouping);
+  }
+  std::vector<Track*> GetGroup(Track* track) const override {
+    return TrackCache::Get().GetRecArmGroup(track);
+  }
+};
+
+constexpr TestValue kTestValue;
 
 // The project is T1, T2 (a folder of T2.1 and T2.2), T3, and T4, all on the
 // surface. Each action is run as one call REAPER makes into the surface, so
@@ -58,6 +83,13 @@ class TrackActionsTest : public ::testing::Test {
   }
   void Mute(FakeTrack* track, Modifiers modifiers = 0) {
     Toggle(track, TrackBoolProperty::kMute, modifiers);
+  }
+  void PressValue(FakeTrack* track, const EnumeratedPress& press,
+                  Modifiers modifiers = 0,
+                  const Anchor<Track>* anchor = nullptr) {
+    Act(track, modifiers, [this, &press, anchor](Track* cached) {
+      actions_.UiPress(cached, kTestValue, press, anchor);
+    });
   }
 
   // Runs `action` on `track`'s cached track, with `modifiers` held, as a run
@@ -90,6 +122,23 @@ class TrackActionsTest : public ::testing::Test {
       }
     }
     return names;
+  }
+
+  // Returns every track's record mode, in order: T1, T2, T2.1, T2.2, T3, T4.
+  std::vector<int> GetRecModes() {
+    std::vector<int> modes;
+    for (int i = 0; i < project_.GetTrackCount(); ++i) {
+      modes.push_back(project_.GetTrack(i)->rec_mode);
+    }
+    return modes;
+  }
+
+  // Sets the track's record mode in REAPER, which reports it as REAPER does
+  // (see Track::OnRecModeChanged()), so its cached mode is stale until it is
+  // refreshed.
+  static void SetRecMode(FakeTrack* track, int mode) {
+    track->rec_mode = mode;
+    GetCachedTrack(track)->OnRecModeChanged();
   }
 
   // The last touched track's name, or empty if there is none.
@@ -330,6 +379,145 @@ TEST_F(TrackActionsTest, ActionsOnTheStubTrackDoNothing) {
   actions_.UiToggle(stub, TrackBoolProperty::kMute);
   EXPECT_THAT(GetTracksWith(&FakeTrack::selected), IsEmpty());
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), IsEmpty());
+}
+
+//==============================================================================
+// Enumerated values
+//==============================================================================
+
+constexpr EnumeratedPress kToggleNoneOfTwo = {
+    .min = 0, .max = 2, .toggles = true};
+constexpr EnumeratedPress kToggleOneOrTwo = {
+    .min = 1, .max = 2, .toggles = true};
+
+TEST_F(TrackActionsTest, PressSetsTheGroupToTheTracksNewValue) {
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
+  SetRecMode(top_[2], 1);
+  PressValue(top_[0], kToggleNoneOfTwo);
+  EXPECT_THAT(GetRecModes(), ElementsAre(2, 0, 0, 0, 2, 0));
+  EXPECT_EQ(GetLastTouched(), "T1");
+
+  PressValue(top_[0], kToggleNoneOfTwo);
+  EXPECT_THAT(GetRecModes(), ElementsAre(0, 0, 0, 0, 0, 0));
+}
+
+TEST_F(TrackActionsTest, CtrlPressAppliesItToTheTrackAlone) {
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
+  PressValue(top_[0], kToggleNoneOfTwo, kModCtrl);
+  EXPECT_THAT(GetRecModes(), ElementsAre(2, 0, 0, 0, 0, 0));
+  EXPECT_EQ(GetLastTouched(), "T1");
+}
+
+TEST_F(TrackActionsTest, AltPressSetsEveryTrackPastTheMinToIt) {
+  // Each of these tracks' cached modes is stale, so the action reads them.
+  SetRecMode(top_[0], 2);
+  SetRecMode(top_[1], 1);
+  SetRecMode(folder_[1], 2);
+  SetRecMode(top_[3], 2);
+  Hide(top_[3]);
+  SetLastTouched(top_[0]);
+
+  // T3 is before the min, so it is left alone.
+  PressValue(top_[2], kToggleOneOrTwo, kModAlt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 1, 0, 1, 0, 1));
+  EXPECT_EQ(GetLastTouched(), "T1");
+}
+
+TEST_F(TrackActionsTest, CtrlAltPressSetsTheTrackAloneToTheMax) {
+  SetRecMode(top_[0], 2);
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
+  PressValue(top_[2], kToggleOneOrTwo, kModCtrl | kModAlt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 0, 0, 0, 2, 0));
+  EXPECT_EQ(GetLastTouched(), "T3");
+}
+
+TEST_F(TrackActionsTest, ShiftAltPressSetsTheTrackAndItsGroupToTheMax) {
+  // T3 already has the max, and its group still goes to it.
+  SetRecMode(top_[0], 2);
+  SetRecMode(top_[2], 2);
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
+  PressValue(top_[2], kToggleOneOrTwo, kModShift | kModAlt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 0, 0, 0, 2, 2));
+  EXPECT_EQ(GetLastTouched(), "T3");
+}
+
+TEST_F(TrackActionsTest, AltPressSetsEachTrackOnce) {
+  // Every track is past the min, and the press would raise T3 and T4, so
+  // turning them down first, and up again, would repeat their setters, which
+  // the counter fails.
+  for (int i = 0; i < project_.GetTrackCount(); ++i) {
+    SetRecMode(project_.GetTrack(i), 2);
+  }
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
+  CallCounter counter(&reaper_);
+  PressValue(top_[2], kToggleOneOrTwo, kModShift | kModAlt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 1, 1, 1, 2, 2));
+  PressValue(top_[2], kToggleOneOrTwo, kModCtrl | kModAlt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 1, 1, 1, 2, 1));
+}
+
+TEST_F(TrackActionsTest, ShiftPressSetsTheRangeToTheLastTouchedValue) {
+  SetRecMode(folder_[0], 1);
+  PressValue(top_[0], kToggleNoneOfTwo);
+  PressValue(top_[3], kToggleNoneOfTwo, kModShift);
+  EXPECT_THAT(GetRecModes(), ElementsAre(2, 2, 1, 0, 2, 2));
+  EXPECT_EQ(GetLastTouched(), "T1");
+
+  // The last touched track's cached mode is stale, so the range reads it.
+  SetRecMode(top_[0], 0);
+  PressValue(top_[2], kToggleNoneOfTwo, kModShift);
+  EXPECT_THAT(GetRecModes(), ElementsAre(0, 0, 1, 0, 0, 2));
+}
+
+TEST_F(TrackActionsTest, CtrlShiftPressSetsEveryTrackInTheRange) {
+  PressValue(top_[3], kToggleNoneOfTwo);
+  PressValue(folder_[1], kToggleNoneOfTwo, kCtrlShift);
+  EXPECT_THAT(GetRecModes(), ElementsAre(0, 0, 0, 2, 2, 2));
+  EXPECT_EQ(GetLastTouched(), "T4");
+}
+
+TEST_F(TrackActionsTest, OptPressAppliesItToEachSelectedTrackAlone) {
+  top_[0]->selected = true;
+  top_[2]->selected = true;
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
+
+  // Each track steps on its own, and T3's cached mode is stale, so the action
+  // reads it.
+  const EnumeratedPress step = {.min = 0, .max = 2};
+  SetRecMode(top_[2], 2);
+  PressValue(top_[0], step, kModOpt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 0, 0, 0, 0, 0));
+  EXPECT_EQ(GetLastTouched(), "T1");
+
+  // A track that isn't selected is pressed alone.
+  JoinGroup(top_[1], 1);
+  PressValue(top_[1], step, kModOpt);
+  EXPECT_THAT(GetRecModes(), ElementsAre(1, 1, 0, 0, 0, 0));
+  EXPECT_EQ(GetLastTouched(), "T1");
+}
+
+TEST_F(TrackActionsTest, AnAnchoredPressSetsTheRangeFromIt) {
+  // The anchor track's cached mode is stale, so the range reads it, and the
+  // modifiers are ignored.
+  Anchor<Track> anchor;
+  AnchorHold hold = anchor.Hold(GetCachedTrack(top_[0]));
+  SetRecMode(top_[0], 2);
+  SetLastTouched(top_[3]);
+  PressValue(top_[2], kToggleOneOrTwo, kModShift, &anchor);
+  EXPECT_THAT(GetRecModes(), ElementsAre(2, 2, 0, 0, 2, 0));
+  EXPECT_EQ(GetLastTouched(), "T4");
+}
+
+TEST_F(TrackActionsTest, PressOnTheStubTrackDoesNothing) {
+  actions_.UiPress(TrackCache::Get().GetStubTrack(), kTestValue,
+                   kToggleNoneOfTwo, /*anchor=*/nullptr);
+  EXPECT_THAT(GetRecModes(), ElementsAre(0, 0, 0, 0, 0, 0));
 }
 
 //==============================================================================

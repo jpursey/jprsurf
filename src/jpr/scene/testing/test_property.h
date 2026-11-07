@@ -42,6 +42,12 @@ class TestProperty final : public ViewProperty {
 
   int GetMaxValue() const override { return max_value_; }
 
+  // The last press the property applied (see PressInt()), or nullopt if it
+  // hasn't applied one.
+  const std::optional<EnumeratedPress>& GetLastPress() const {
+    return last_press_;
+  }
+
  protected:
   bool ReadBool() const override { return std::get<bool>(value_); }
   void WriteBool(bool value) override { Write(value); }
@@ -61,6 +67,10 @@ class TestProperty final : public ViewProperty {
   void WriteTimelinePosition(TimelinePosition value) override { Write(value); }
   int ReadInt() const override { return std::get<int>(value_); }
   void WriteInt(int value) override { Write(value); }
+  void WritePress(const EnumeratedPress& press) override {
+    last_press_ = press;
+    ViewProperty::WritePress(press);
+  }
 
  private:
   void Write(Value value) {
@@ -72,6 +82,7 @@ class TestProperty final : public ViewProperty {
 
   Value value_;
   int max_value_;
+  std::optional<EnumeratedPress> last_press_;
 };
 
 }  // namespace jpr

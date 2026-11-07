@@ -73,22 +73,7 @@ class EnumeratedValueProperty final : public ViewProperty {
   }
   std::string GetText() const override { return value_names_[value_]; }
   std::optional<int> FindValue(std::string_view name) const override {
-    auto it = std::find(value_names_.begin(), value_names_.end(), name);
-    if (it == value_names_.end()) {
-      return std::nullopt;
-    }
-    return static_cast<int>(it - value_names_.begin());
-  }
-
-  // Sets the value with the name. Text that isn't a name is read as a number,
-  // as for any enumerated property.
-  void SetText(std::string_view value) override {
-    std::optional<int> found = FindValue(value);
-    if (!found.has_value()) {
-      ViewProperty::SetText(value);
-      return;
-    }
-    SetInt(*found);
+    return FindValueName(value_names_, name);
   }
 
  protected:

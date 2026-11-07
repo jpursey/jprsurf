@@ -59,6 +59,22 @@ The state.
 )");
 }
 
+TEST(GeneratePropertyNamespacePageTest, ListsTheNamesOfEnumeratedValues) {
+  constexpr std::string_view kValues[] = {"off", "on", "auto"};
+  const PropertyInfo properties[] = {
+      {.name = "state:mode",
+       .type = Type::kEnumerated,
+       .access = kReadAccess,
+       .description = "The mode.",
+       .values = kValues},
+  };
+  const PropertyNamespaceInfo info = {"state:", "The state.", properties};
+
+  EXPECT_THAT(GeneratePropertyNamespacePage(info),
+              HasSubstr("| `state:mode` | enumerated | read | The mode. "
+                        "Values: `off`, `on`, `auto`. |\n"));
+}
+
 TEST(GeneratePropertyNamespacePageTest, ListsTheViewsOfViewProperties) {
   const PropertyInfo properties[] = {
       {"view:a", Type::kAction, kTriggerAccess, "A.", ViewNeed::kList},

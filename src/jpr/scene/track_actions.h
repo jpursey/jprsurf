@@ -6,11 +6,60 @@
 #pragma once
 
 #include <iterator>
+#include <string_view>
+#include <vector>
 
+#include "absl/types/span.h"
 #include "jpr/common/anchor.h"
 #include "jpr/common/track.h"
+#include "jpr/scene/view_property.h"
 
 namespace jpr {
+
+// An enumerated value of a track, such as its record mode, which the track
+// actions read and set (see TrackActions::UiPress()). Its values are 0 to
+// GetMaxValue(), in the order of their names.
+//
+// Each kind of value is a stateless class, so one constexpr instance of it
+// serves every track.
+class TrackValue {
+ public:
+  TrackValue(const TrackValue&) = delete;
+  TrackValue& operator=(const TrackValue&) = delete;
+
+  constexpr absl::Span<const std::string_view> GetNames() const {
+    return names_;
+  }
+  constexpr int GetMaxValue() const {
+    return static_cast<int>(names_.size()) - 1;
+  }
+
+  // Returns the track's cached value (see Track), which may be stale for a
+  // track the surface doesn't show.
+  virtual int Get(const Track& track) const = 0;
+
+  // Sets the track's value, in [0,GetMaxValue()], in the batch, with the
+  // grouping, which leaves a track that already has the value alone with its
+  // group, as TrackBatch's setters do.
+  virtual void Set(TrackBatch& batch, Track* track, int value,
+                   TrackGrouping grouping) const = 0;
+
+  // Returns the tracks Set() with kGrouped reaches from the track, if the
+  // track's value changes, including the track. This reads REAPER's selection
+  // and groups, so it is for a press, not a run.
+  virtual std::vector<Track*> GetGroup(Track* track) const = 0;
+
+ protected:
+  explicit constexpr TrackValue(absl::Span<const std::string_view> names)
+      : names_(names) {}
+
+  // Not virtual, so an instance is trivially destructible, and nothing
+  // deletes one through this class.
+  ~TrackValue() = default;
+
+ private:
+  absl::Span<const std::string_view> names_;
+};
 
 // The standard behavior of a surface's track controls: select, mute, solo,
 // record arm, volume, and pan. These are like clicking or changing the property
@@ -66,6 +115,28 @@ namespace jpr {
 //   last touched track. (In REAPER this is Shift.)
 // - Default: Toggles this track, and sets its grouped and ganged tracks to the
 //   same value. Sets the last touched track. (The same as REAPER.)
+//
+// An enumerated value (see TrackValue), such as the record mode: a press on it
+// toggles or steps it (see EnumeratedPress), and the modifiers generalize
+// mute's, with the press's min in place of off, and its max in place of on. A
+// value is past the min if it is after it in the value order.
+// - Ctrl+Alt: Sets every track past the min to the min, and this track alone to
+//   the max. Sets the last touched track.
+// - Shift+Alt: Sets every track past the min to the min, and this track and its
+//   grouped and ganged tracks (see TrackValue::GetGroup()) to the max, even
+//   if this track already has it. Sets the last touched track.
+// With Alt, each track is set once: a track going to the max isn't first set to
+// the min, as mute's are turned off and on.
+// - Alt: Sets every track past the min to the min.
+// - Shift, and Ctrl+Shift: The range, as for mute, to the last touched track's
+//   value.
+// - Opt: Applies the press to this track, and if it is selected, to each other
+//   selected track, each on its own, and sets the last touched track. Grouping
+//   is ignored.
+// - Ctrl: Applies the press to this track alone. Sets the last touched track.
+// - Default: Applies the press to this track, and sets its grouped and ganged
+//   tracks to its new value. Sets the last touched track.
+// Its anchor, if it has one, is held by its property (see UiPress()).
 class TrackActions final {
  public:
   // Ranges only include tracks in the filter.
@@ -90,14 +161,23 @@ class TrackActions final {
   void UiSetVolume(Track* track, double volume);
   void UiSetPan(Track* track, double pan);
 
+  // Runs the press on the track's value, with the modifiers above. If
+  // `anchor` isn't null, it is the value's anchor, which acts as the other
+  // properties' anchors do (see GetAnchor()).
+  void UiPress(Track* track, const TrackValue& value,
+               const EnumeratedPress& press, const Anchor<Track>* anchor);
+
  private:
-  // Returns the track holding the property's anchor, or null if it isn't held
-  // on another track that exists.
-  Track* GetOtherAnchorTrack(TrackBoolProperty property, const Track* track);
+  // Returns the track holding the anchor, or null if it isn't held on another
+  // track that exists.
+  static Track* GetOtherAnchorTrack(const Anchor<Track>& anchor,
+                                    const Track* track);
 
   void SelectRange(Track* track, Track* root, bool same_parent);
   void SetRange(Track* track, Track* root, bool same_parent,
                 TrackBoolProperty property);
+  void SetRange(Track* track, Track* root, bool same_parent,
+                const TrackValue& value);
 
   TrackFilter filter_;
   Anchor<Track> anchors_[std::size(kTrackBoolProperties)];

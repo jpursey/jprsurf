@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
@@ -120,9 +122,16 @@ class SurfaceSpecValidator {
     std::optional<ViewProperty::Type> type;
     PropertyAccessFlags access;
 
-    // Its declaration, if it is a declared enumerated value, whose values have
-    // names.
-    const EnumeratedValueSpec* values = nullptr;
+    // The names of its values, if it is an enumerated value whose values have
+    // names: built in (see PropertyInfo::values), or declared.
+    std::vector<std::string_view> values;
+
+    // Returns the built in property the info describes.
+    static Property FromInfo(const PropertyInfo& info) {
+      return {.type = info.type,
+              .access = info.access,
+              .values = {info.values.begin(), info.values.end()}};
+    }
   };
 
   void ValidateDevicesAndWidgets(const SurfaceSpec& spec);
@@ -1115,8 +1124,7 @@ void SurfaceSpecValidator::ValidateValue(const Property& property,
 
              name != nullptr &&
              *property.type == ViewProperty::Type::kEnumerated &&
-             (property.values == nullptr ||
-              !absl::c_linear_search(property.values->values, *name))) {
+             !absl::c_linear_search(property.values, *name)) {
     AddError(what, absl::StrCat(label, " \"", *name, "\" isn't one of ",
                                 property.label, "'s values"));
   }
@@ -1193,7 +1201,7 @@ SurfaceSpecValidator::FindProperty(std::string_view name,
       *error = "isn't on this view";
       return std::nullopt;
     }
-    return Property{.type = row->type, .access = row->access};
+    return Property::FromInfo(*row);
   }
 
   // A name with a '.' is a field of a reference.
@@ -1216,9 +1224,11 @@ SurfaceSpecValidator::FindProperty(std::string_view name,
       *error = "is a reference, whose fields are properties";
       return std::nullopt;
     }
-    return Property{.type = kind.type,
-                    .access = kind.access,
-                    .values = std::get_if<EnumeratedValueSpec>(it->second)};
+    Property property = {.type = kind.type, .access = kind.access};
+    if (const auto* value = std::get_if<EnumeratedValueSpec>(it->second)) {
+      property.values = {value->values.begin(), value->values.end()};
+    }
+    return property;
   }
 
   // Only REAPER knows which commands exist, and their types.
@@ -1232,7 +1242,7 @@ SurfaceSpecValidator::FindProperty(std::string_view name,
   // Any other is a built in property of its namespace, such as state:.
   if (const PropertyNamespaceInfo* info = FindNamespace(name)) {
     if (const PropertyInfo* row = FindInfo(info->properties, name)) {
-      return Property{.type = row->type, .access = row->access};
+      return Property::FromInfo(*row);
     }
   }
   *error = "isn't a property";
@@ -1257,7 +1267,7 @@ std::optional<SurfaceSpecValidator::Property> SurfaceSpecValidator::FindField(
       }
     } else if (const PropertyInfo* row = FindInfo(
                    info->properties, absl::StrCat(info->name, field))) {
-      return Property{.type = row->type, .access = row->access};
+      return Property::FromInfo(*row);
     }
   }
   *error = "isn't a property";

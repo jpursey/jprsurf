@@ -739,29 +739,18 @@ void ViewMapping::InitReadEnumeratedSyncFunction(ControlInput::Type input) {
     return;
   }
 
-  // From a press input, we either toggle between max and min, or cycle
-  // to the next enumerated value, wrapping around from max to min.
-  int min = cfg_min.value_or(0);
-  int max = cfg_max.value_or(property_->GetMaxValue());
+  // From a press input, the property applies the press, which toggles between
+  // min and max, or steps through them (see EnumeratedPress).
+  const EnumeratedPress press = {
+      .min = cfg_min.value_or(0),
+      .max = cfg_max.value_or(property_->GetMaxValue()),
+      .toggles = read_config_.press_toggles};
   reads_property_ = true;
-  if (read_config_.press_toggles) {
-    read_control_ = [min, max](ViewProperty& property, Control& control,
-                               InputId id) {
-      if (control.GetPressCount(id) % 2 != 0) {
-        property.SetInt(property.GetInt() == max ? min : max);
-      }
-    };
-    return;
-  }
-  read_control_ = [min, max](ViewProperty& property, Control& control,
-                             InputId id) {
-    int press_count = control.GetPressCount(id);
-    if (press_count > 0) {
-      int range = max - min + 1;
-      int current = property.GetInt();
-      int new_value = min + ((current - min + press_count) % range);
-      property.SetInt(new_value);
-    }
+  read_control_ = [press](ViewProperty& property, Control& control,
+                          InputId id) {
+    EnumeratedPress counted = press;
+    counted.count = control.GetPressCount(id);
+    property.PressInt(counted);
   };
 }
 

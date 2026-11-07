@@ -5,12 +5,15 @@
 
 #include "jpr/scene/track_properties.h"
 
+#include <optional>
 #include <string_view>
 #include <vector>
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
 #include "jpr/common/color.h"
+#include "jpr/common/deferred_refresh.h"
+#include "jpr/common/modifiers.h"
 #include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
@@ -133,6 +136,141 @@ TEST_F(TrackPropertiesTest, UiPropertiesRunTheTrackActions) {
   EXPECT_EQ(tracks_[2]->volume, 1.0);
   EXPECT_EQ(tracks_[2]->pan, 0.0);
   EXPECT_FALSE(tracks_[2]->selected);
+}
+
+TEST_F(TrackPropertiesTest, ModesReadAsTheirNames) {
+  tracks_[0]->rec_mode = 7;
+  tracks_[0]->monitor_mode = 2;
+  tracks_[1]->rec_mode = 16;
+  tracks_[2]->rec_mode = 13;
+  for (FakeTrack* track : tracks_) {
+    GetCachedTrack(track)->Refresh();
+  }
+  TrackProperties first(&actions_, GetCachedTrack(tracks_[0]));
+  TrackProperties second(&actions_, GetCachedTrack(tracks_[1]));
+  TrackProperties third(&actions_, GetCachedTrack(tracks_[2]));
+
+  for (std::string_view name :
+       {TrackProperties::kRecMode, TrackProperties::kUiRecMode}) {
+    ViewProperty* property = first.GetProperty(name);
+    EXPECT_EQ(property->GetMaxValue(), 12) << name;
+    EXPECT_EQ(property->GetText(), "midi_overdub") << name;
+    EXPECT_EQ(property->GetInt(), 7) << name;
+    EXPECT_EQ(property->FindValue("none"), 2) << name;
+    EXPECT_EQ(property->FindValue("off"), std::nullopt) << name;
+
+    // Latch-replace is REAPER's 16, and is the last value, and a forced input
+    // format reads as input.
+    EXPECT_EQ(second.GetProperty(name)->GetText(), "midi_latch_replace");
+    EXPECT_EQ(second.GetProperty(name)->GetInt(), 12);
+    EXPECT_EQ(third.GetProperty(name)->GetText(), "input");
+  }
+  for (std::string_view name :
+       {TrackProperties::kMonitorMode, TrackProperties::kUiMonitorMode}) {
+    ViewProperty* property = first.GetProperty(name);
+    EXPECT_EQ(property->GetMaxValue(), 2) << name;
+    EXPECT_EQ(property->GetText(), "auto") << name;
+    EXPECT_EQ(second.GetProperty(name)->GetText(), "off") << name;
+  }
+}
+
+TEST_F(TrackPropertiesTest, PlainModesSetOnlyTheirTrack) {
+  JoinGroup(tracks_[0], 1);
+  JoinGroup(tracks_[1], 1);
+  tracks_[0]->selected = true;
+  tracks_[1]->selected = true;
+  GetCachedTrack(tracks_[0])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
+
+  properties.GetProperty(TrackProperties::kRecMode)->SetText("midi_overdub");
+  properties.GetProperty(TrackProperties::kMonitorMode)->SetText("on");
+  reaper_.EndEntryPoint();
+  EXPECT_EQ(tracks_[0]->rec_mode, 7);
+  EXPECT_EQ(tracks_[0]->monitor_mode, 1);
+  EXPECT_EQ(tracks_[1]->rec_mode, 0);
+  EXPECT_EQ(tracks_[1]->monitor_mode, 0);
+
+  // A press applies to the track alone too.
+  properties.GetProperty(TrackProperties::kRecMode)
+      ->PressInt({.min = 2, .max = 2});
+  EXPECT_EQ(tracks_[0]->rec_mode, 2);
+  EXPECT_EQ(tracks_[1]->rec_mode, 0);
+}
+
+// The ui_ modes run the track action for an enumerated value (see
+// TrackActions, whose tests cover it): a write is a press that sets the value.
+// The record mode's grouping is the rec arm group's, and the monitoring's is
+// the selection's.
+TEST_F(TrackPropertiesTest, UiModesRunTheTrackAction) {
+  JoinGroup(tracks_[0], 1);
+  JoinGroup(tracks_[1], 1);
+  tracks_[0]->selected = true;
+  tracks_[2]->selected = true;
+  GetCachedTrack(tracks_[0])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
+
+  // Each changes two tracks, so each is in a deferred refresh, as a run is.
+  {
+    DeferredRefresh deferred_refresh;
+    properties.GetProperty(TrackProperties::kUiRecMode)->SetText("none");
+  }
+  reaper_.EndEntryPoint();
+  EXPECT_EQ(tracks_[1]->rec_mode, 2);
+  {
+    DeferredRefresh deferred_refresh;
+    properties.GetProperty(TrackProperties::kUiMonitorMode)
+        ->PressInt({.min = 0, .max = 2, .toggles = true});
+  }
+  reaper_.EndEntryPoint();
+  EXPECT_EQ(tracks_[0]->monitor_mode, 2);
+  EXPECT_EQ(tracks_[1]->monitor_mode, 0);
+  EXPECT_EQ(tracks_[2]->monitor_mode, 2);
+  EXPECT_EQ(GetCachedTrack(tracks_[0]),
+            TrackCache::Get().GetLastTouchedTrack());
+}
+
+// With Shift+Alt, the press sets the value's group to the max (see
+// TrackValue::GetGroup()), which for the monitoring is the selected tracks.
+TEST_F(TrackPropertiesTest, UiMonitorModesGroupIsTheSelectedTracks) {
+  for (FakeTrack* track : tracks_) {
+    track->monitor_mode = 1;
+  }
+  tracks_[0]->selected = true;
+  tracks_[2]->selected = true;
+  GetCachedTrack(tracks_[0])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
+  SetModifiers(kModShift | kModAlt, true);
+  {
+    DeferredRefresh deferred_refresh;  // As a run holds.
+    properties.GetProperty(TrackProperties::kUiMonitorMode)
+        ->PressInt({.min = 0, .max = 1, .toggles = true});
+  }
+  SetModifiers(kModShift | kModAlt, false);
+  EXPECT_EQ(tracks_[0]->monitor_mode, 1);
+  EXPECT_EQ(tracks_[1]->monitor_mode, 0);
+  EXPECT_EQ(tracks_[2]->monitor_mode, 1);
+}
+
+// REAPER reports a change to the record mode only with the track's
+// SetSurfaceRecArm(), which calls Track::OnRecModeChanged(), so the mode isn't
+// polled: a refresh reads it only after that.
+TEST_F(TrackPropertiesTest, RecModeIsReadOnlyOnceItIsReportedChanged) {
+  Track* track = GetCachedTrack(tracks_[0]);
+  track->Refresh();
+  TrackProperties properties(&actions_, track);
+  ViewProperty* rec_mode = properties.GetProperty(TrackProperties::kRecMode);
+  rec_mode->RegisterFlag(&changed_);
+
+  tracks_[0]->rec_mode = 7;
+  track->Refresh();
+  EXPECT_FALSE(changed_);
+  EXPECT_EQ(rec_mode->GetText(), "input");
+
+  track->OnRecModeChanged();
+  track->Refresh();
+  EXPECT_TRUE(changed_);
+  EXPECT_EQ(rec_mode->GetText(), "midi_overdub");
+  rec_mode->UnregisterFlag(&changed_);
 }
 
 TEST_F(TrackPropertiesTest, ChangesNotifyWhenTheTrackIsRefreshed) {
