@@ -65,6 +65,7 @@ set(jpr_common_testing_DEPS
   absl::flat_hash_map
   absl::flat_hash_set
   absl::function_ref
+  absl::hash
   absl::log
   absl::node_hash_map
   absl::span

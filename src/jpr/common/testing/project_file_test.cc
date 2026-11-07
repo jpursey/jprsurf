@@ -336,11 +336,11 @@ TEST(ProjectFileTest, MasterStateAProjectCantHoldFailsTheTest) {
   master->rec_arm = false;
   master->rec_mode = 2;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
-                          "the master's record or monitoring mode");
+                          "the master's record mode");
   master->rec_mode = 0;
   master->monitor_mode = 0;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
-                          "the master's record or monitoring mode");
+                          "the master's monitoring");
   master->monitor_mode = 1;
   master->group = 1;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's group");

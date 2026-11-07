@@ -280,10 +280,15 @@ In the test install, checked with temporary probes (CL1a):
   compensated), and 16 MIDI latch-replace. No action sets 12 to 15, the forced
   input formats ("Record: input (force format)") in REAPER's API docs.
   `SetMediaTrackInfo_Value()` accepts any number, -1 and 17 to 20 included,
-  and reads it back unchanged, so the surface must only write known modes.
+  and reads it back unchanged, so the surface must only write known modes. A
+  fraction is truncated (2.7 is 2, and -1.5 is -1), for the monitoring too.
 - **Monitoring.** `I_RECMON` is 0 off, 1 on, and 2 auto (tape), and
   `GetTrackState()`'s flags have &128 for 1 and &256 for 2, and neither for any
   other value, which it also accepts. The master's reads as 1, with no flag.
+- **The master** (CL1b): setting its `I_RECMODE` returns true, and changes
+  nothing. Its `I_RECMON` can be set, never shows a flag, and is kept when
+  another project opens in its tab.
+  `CSurf_OnInputMonitorChangeEx()` on the master sets nothing, and returns 0.
 - **The project file.** The REC line is arm, input, monitoring, then mode:
   `REC 0 0 2 7 0 0 0 0` is monitoring auto, MIDI overdub.
 - **Undo.** Neither setter adds an undo point, or makes the project dirty. An
@@ -292,18 +297,24 @@ In the test install, checked with temporary probes (CL1a):
   change with no point of its own is held by the next point, as other changes
   are. The actions add their own ("Set selected track recording mode", and
   "... recording monitor"), only when they change something.
-- **Surface calls.** Setting `I_RECMODE` calls the track's state on the
-  surface twice (`SetSurfaceRecArm()`, `SetSurfaceMute()`, `SetSurfaceSolo()`,
-  `SetSurfaceVolume()`, `SetSurfacePan()`, and `CSURF_EXT_SETPAN_EX`), and
-  setting `I_RECMON` once, even when nothing is armed. In a deferred refresh
-  they are held until it ends, then sent once. The actions send it once, after
-  a change. None of these calls says what the mode or monitoring is.
+- **Surface calls.** Setting `I_RECMODE` calls the track's change on the
+  surface twice (`SetSurfaceRecArm()`, `CSURF_EXT_SETINPUTMONITOR`,
+  `SetSurfaceMute()`, `SetSurfaceSolo()`, `SetSurfaceVolume()`,
+  `SetSurfacePan()`, and `CSURF_EXT_SETPAN_EX`), even when nothing is armed,
+  and even when the mode is unchanged (CL1b). Setting `I_RECMON` calls it
+  once, only when the monitoring changes, the master's too (its mute, volume,
+  and pan). In a deferred refresh they are held until it ends, then sent once
+  for each track, in order, even if changed back. With a rec arm in it, a
+  track whose change waits is sent as one whose rec arm changed. The actions
+  send it once, after a change. Only `CSURF_EXT_SETINPUTMONITOR` says what the
+  monitoring is, and none says what the mode is.
 - **Monitoring with ganging.** `CSurf_OnInputMonitorChangeEx()` with
   `allowgang` sets every selected track to the same monitoring, if the track
-  is selected, and never its groups (REAPER's groups have no monitoring). It
-  returns the new value, sends the state of each track it changes, and adds no
-  undo point, nor makes the project dirty. -1 isn't a toggle (1 went to 2, and
-  2 stayed 2), so the surface never passes it. `I_RECMODE` is never grouped.
+  is selected, the master too, and never its groups (REAPER's groups have no
+  monitoring). It returns the new value, sends the change of each track it
+  sets, in order, even if unchanged (CL1b), and adds no undo point, nor makes
+  the project dirty. -1 isn't a toggle (1 went to 2, and 2 stayed 2), so the
+  surface never passes it. `I_RECMODE` is never grouped.
 - **Rec arm groups.** Each group property has its own leaders and followers
   (`GetSetTrackGroupMembership()` with `RECARM_LEAD` and `RECARM_FOLLOW`, and
   `...High()` for groups 33 to 64, which work the same). A grouped rec arm
@@ -355,7 +366,7 @@ Depends on: nothing.
 - Standard checks.
 - Contract tests (`check_in_reaper`).
 
-### CL1b [ ] common: The setters of the record and monitoring modes
+### CL1b [x] common: The setters of the record and monitoring modes
 
 Depends on: CL1a.
 

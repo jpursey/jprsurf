@@ -7,6 +7,7 @@
 
 #include <array>
 #include <string>
+#include <string_view>
 
 #include "jpr/common/track_state.h"
 #include "sdk/reaper_plugin.h"
@@ -45,13 +46,15 @@ struct FakeTrackUndoValues {
   bool rec_arm = false;  // The master can't be armed.
 
   // As I_RECMODE: REAPER's record mode, such as 0 input and 2 none (monitoring
-  // only). REAPER holds any number, so the fake does too.
+  // only). REAPER holds any number, so the fake does too. The master's is
+  // always 0.
   int rec_mode = 0;
 
   // As I_RECMON: 0 off, 1 on, and 2 auto (tape), and GetTrackState()'s
   // monitoring flags. REAPER's new tracks have it on, but the fake's are off,
   // so a test's tracks have no monitoring flag unless it sets one. REAPER holds
-  // any number, which shows no flag. The master's is on, which shows no flag.
+  // any number, which shows no flag. The master's starts on, and never shows a
+  // flag.
   int monitor_mode = 0;
 
   // As I_AUTOMODE: 0 trim/read, 1 read, 2 touch, 3 write, 4 latch, and 5 latch
@@ -90,6 +93,15 @@ struct FakeTrack : FakeTrackUndoValues {
 
   // As Track_GetPeakInfo() for the left and right channels: 1.0 is 0dB.
   std::array<double, 2> peak = {};
+};
+
+// The properties a track leads and follows in its group (see FakeTrack::group),
+// as GetSetTrackGroupMembership() names them, in the order of the project
+// file's GROUP_FLAGS.
+inline constexpr std::string_view kGroupProperties[] = {
+    "VOLUME_LEAD", "VOLUME_FOLLOW", "PAN_LEAD",  "PAN_FOLLOW",
+    "MUTE_LEAD",   "MUTE_FOLLOW",   "SOLO_LEAD", "SOLO_FOLLOW",
+    "RECARM_LEAD", "RECARM_FOLLOW",
 };
 
 // CSURF_EXT_SETPAN_EX's pan mode for REAPER 4 and later's balance, which every

@@ -26,10 +26,8 @@ namespace {
 constexpr int kNoColor = 16576;
 
 // GROUP_FLAGS has a mask of groups for each property a track leads or follows
-// in, in this order: volume, pan, mute, solo, and rec arm, each leading then
-// following. The rest are left out, as no group has them. Each mask holds
-// groups 1 to 32.
-constexpr int kGroupFlagCount = 10;
+// in, in kGroupProperties' order. The rest are left out, as no group has them.
+// Each mask holds groups 1 to 32.
 constexpr int kMaxGroup = 32;
 
 // Returns `value` as the shortest text that reads back as the same value.
@@ -185,10 +183,16 @@ void ProjectFileWriter::AppendMaster() {
   if (master->rec_arm) {
     Fail("the master's rec arm, which REAPER's master doesn't have");
   }
-  if (master->rec_mode != 0 || master->monitor_mode != 1) {
+  if (master->rec_mode != 0) {
+    Fail("the master's record mode, which REAPER's master can't change");
+  }
+
+  // The contract tests set it back to 1 once a project is open (see
+  // ContractTest::OpenProject()).
+  if (master->monitor_mode != 1) {
     Fail(
-        "the master's record or monitoring mode, which REAPER's master can't "
-        "change");
+        "the master's monitoring, which REAPER keeps from the project open "
+        "before");
   }
   if (master->group != 0) {
     Fail("the master's group");
@@ -254,7 +258,8 @@ void ProjectFileWriter::AppendTrack(int index) {
     Fail(absl::StrCat(track->name, "'s group, ", track->group,
                       ", which isn't from 1 to ", kMaxGroup));
   } else if (track->group > 0) {
-    std::vector<unsigned> masks(kGroupFlagCount, 1u << (track->group - 1));
+    std::vector<unsigned> masks(std::size(kGroupProperties),
+                                1u << (track->group - 1));
     absl::StrAppend(&text_, "    GROUP_FLAGS ", absl::StrJoin(masks, " "),
                     "\n");
   }

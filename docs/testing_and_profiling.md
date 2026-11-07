@@ -425,6 +425,16 @@ REAPER's calls on the surface follow these.
   and without `&1`, of a track in a group changes the group (see "Track
   changes" in `fake_reaper.cc`). Either way, a rec arm is then sent as a
   change to every track.
+- **The record mode and monitoring send the track's change** (2026-11-07).
+  `SetMediaTrackInfo_Value()` with `I_RECMODE` sends it twice, even if nothing
+  changed, and nothing for the master's, which can't be set. With `I_RECMON`,
+  it sends it once if it changed, the master's too, whose change is its
+  `SetSurfaceMute()`, volume, and pan. `CSurf_OnInputMonitorChangeEx()` sends
+  the change of each track it sets, in order, even if nothing changed: the
+  track, and with ganging, every selected track if it is selected, the master
+  too. On the master itself, it sets and sends nothing. In a deferred refresh,
+  they call nothing, and each track's change comes once at its end. With a rec
+  arm, a track whose change waits is sent as one whose rec arm changed.
 - **Send volume and pan notify,** even if nothing changed.
   `SetTrackSendUIVol()` and `SetTrackSendUIPan()` call
   `Extended(CSURF_EXT_SETSENDVOLUME)` or `SETSENDPAN` with the source track,
@@ -458,10 +468,11 @@ REAPER's calls on the surface follow these.
   set in it (ganged tracks too) has its `SetSurfaceVolume()`,
   `SetSurfacePan()`, and `Extended(CSURF_EXT_SETPAN_EX)` sent once, with its
   last values, even if they changed back.
-- **The end of a deferred refresh** sends, for each track in order, its volume
-  and pan, then its mute and solo, then its selection, for those that wait for
-  it. After a rec arm, every track's state comes first, leaving out the volume
-  and pan that wait, which follow it.
+- **The end of a deferred refresh** sends, for each track in order, its change
+  (which has its volume, mute, and solo), or its volume and pan, then its mute
+  and solo, then its selection, for those that wait for it. After a rec arm,
+  every track's state comes first, leaving out the volume and pan that wait,
+  which follow it.
 - **Changes in REAPER's own UI** arrive between runs. Muting a track with its
   button called `Extended(CSURF_EXT_SETLASTTOUCHEDTRACK)`, then the track's
   `SetSurfaceMute()` and `SetSurfaceSolo()`. Clicking a track in the track
@@ -491,7 +502,8 @@ REAPER's calls on the surface follow these.
   file with `PANMODE 3`, and 0 without it), `SetSurfaceMute()`,
   `SetSurfaceSolo()` (not for the master), `SetTrackTitle()`,
   `SetSurfaceRecArm()`, `Extended(CSURF_EXT_SETINPUTMONITOR)` (with the
-  track's `I_RECMON`, which is 1 for the master), and `SetSurfaceSelected()`.
+  track's `I_RECMON`, which starts at 1 for the master), and
+  `SetSurfaceSelected()`.
 - **Creating the surface:** at startup, REAPER calls `create` with the saved
   config string before the project loads, and the surface opens its MIDI ports
   inside it. Then come `Extended(CSURF_EXT_SETBPMANDPLAYRATE)`, and on loading

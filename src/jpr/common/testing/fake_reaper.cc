@@ -279,7 +279,9 @@ class FakeReaper::Api final {
   // with one of those (see FakeTrack::group), but not the selected tracks of a
   // group's other tracks. SetTrackUI*()'s group flags allow both unless &1
   // ("prevent track grouping") or &2 ("prevent selection ganging") is set,
-  // and CSurf_On*ChangeEx()'s allow_gang allows both.
+  // and CSurf_On*ChangeEx()'s allow_gang allows both. The record mode and the
+  // monitoring have no groups, so CSurf_OnInputMonitorChangeEx()'s only
+  // gangs.
   //
   // The other tracks get the same mute or solo, even if the track's didn't
   // change. A rec arm that changes the track sets its ganged tracks, but
@@ -359,6 +361,65 @@ class FakeReaper::Api final {
       grouped->rec_arm = !grouped->rec_arm;
     }
     return new_rec_arm ? 1 : 0;
+  }
+
+  // Sets the record mode (I_RECMODE) or the monitoring (I_RECMON) to `value`
+  // truncated, which REAPER holds whatever it is. Neither is grouped or
+  // ganged. The master's record mode stays 0, but its monitoring can be set.
+  // Returns true.
+  static bool SetMediaTrackInfo_Value(MediaTrack* track_id, const char* name,
+                                      double value) {
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    const std::string_view parameter(name);
+    int FakeTrack::*field = nullptr;
+    if (parameter == "I_RECMODE") {
+      if (IsMaster(track)) {
+        return true;
+      }
+      field = &FakeTrack::rec_mode;
+    } else if (parameter == "I_RECMON") {
+      field = &FakeTrack::monitor_mode;
+    } else {
+      ADD_FAILURE() << "SetMediaTrackInfo_Value(\"" << parameter
+                    << "\") isn't faked yet";
+      return false;
+    }
+    // Written this way, so NaN fails too.
+    if (!(std::abs(value) < 1e9)) {
+      ADD_FAILURE() << "SetMediaTrackInfo_Value(\"" << parameter << "\", "
+                    << value << ") isn't faked yet";
+      return false;
+    }
+    s_instance_->OnDeferrableChange(&track);
+    s_instance_->GetProjectOf(track).BeforeChange();
+    track.*field = static_cast<int>(value);
+    return true;
+  }
+
+  // Sets the track's monitoring, and with `allow_gang`, every selected
+  // track's if the track is selected, the master's too. Monitoring has no
+  // groups. Returns `monitor`. The master's own sets nothing, and returns 0. A
+  // negative `monitor` isn't a toggle in REAPER, and isn't faked.
+  static int CSurf_OnInputMonitorChangeEx(MediaTrack* track_id, int monitor,
+                                          bool allow_gang) {
+    FakeTrack& track = s_instance_->GetTrack(track_id);
+    if (monitor < 0) {
+      ADD_FAILURE() << "CSurf_OnInputMonitorChangeEx(" << monitor
+                    << ") isn't faked yet";
+      return track.monitor_mode;
+    }
+    if (IsMaster(track)) {
+      return 0;
+    }
+    s_instance_->OnDeferrableChange(&track);
+    s_instance_->GetProjectOf(track).BeforeChange();
+    for (FakeTrack* changed :
+         GetChangedTracks(track, allow_gang ? kPreventTrackGrouping
+                                            : kPreventGroupingAndGanging)
+             .ganged) {
+      changed->monitor_mode = monitor;
+    }
+    return monitor;
   }
 
   static double CSurf_OnVolumeChangeEx(MediaTrack* track_id, double volume,
@@ -489,6 +550,24 @@ class FakeReaper::Api final {
     *volume = track.volume;
     *pan = track.pan;
     return true;
+  }
+
+  // The groups a track leads or follows in, for `name`, as a mask of groups 1
+  // to 32, or with ...High(), 33 to 64. A fake track leads and follows in its
+  // group for every property the fake groups (see FakeTrack::group). Setting
+  // them isn't faked yet.
+  static unsigned int GetSetTrackGroupMembership(MediaTrack* track_id,
+                                                 const char* name,
+                                                 unsigned int set_mask,
+                                                 unsigned int set_value) {
+    return GetGroupMask(track_id, name, set_mask, /*first_group=*/1);
+  }
+
+  static unsigned int GetSetTrackGroupMembershipHigh(MediaTrack* track_id,
+                                                     const char* name,
+                                                     unsigned int set_mask,
+                                                     unsigned int set_value) {
+    return GetGroupMask(track_id, name, set_mask, /*first_group=*/33);
   }
 
   // The master's color reads as none, even when it has one.
@@ -868,6 +947,24 @@ class FakeReaper::Api final {
       }
     }
     return grouped;
+  }
+
+  // Returns GetSetTrackGroupMembership()'s mask for `track_id`'s groups from
+  // `first_group` to 31 after it, failing for a `name` the fake doesn't group,
+  // or a `set_mask`.
+  static unsigned int GetGroupMask(MediaTrack* track_id, const char* name,
+                                   unsigned int set_mask, int first_group) {
+    const FakeTrack& track = s_instance_->GetTrack(track_id);
+    const std::string_view property(name);
+    if (set_mask != 0 || std::ranges::find(kGroupProperties, property) ==
+                             std::ranges::end(kGroupProperties)) {
+      ADD_FAILURE() << "GetSetTrackGroupMembership(\"" << property
+                    << "\", set=" << (set_mask != 0) << ") isn't faked yet";
+      return 0;
+    }
+    // A track in no group, whose group is 0, has no bit in either mask.
+    const int bit = track.group - first_group;
+    return bit >= 0 && bit < 32 ? 1u << bit : 0;
   }
 
   // Returns `track_id`'s routes in `category` (see Routes).
@@ -1303,7 +1400,8 @@ void FakeReaper::EndEntryPoint() {
     EndDeferredRefresh();
   }
   if (change_count_ > 1 && changed_tracks_.size() > 1) {
-    ADD_FAILURE() << "Mute, solo, rec arm, or selection changed on "
+    ADD_FAILURE() << "Mute, solo, rec arm, record mode, monitoring, or "
+                     "selection changed on "
                   << changed_tracks_.size() << " tracks, in " << change_count_
                   << " separate changes, in one entry point. Change several "
                      "tracks in one deferred refresh, as a run is, for one UI "

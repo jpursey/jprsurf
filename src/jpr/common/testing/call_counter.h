@@ -16,6 +16,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/hash/hash.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/call_cost.h"
 #include "jpr/common/testing/fake_reaper.h"
@@ -145,11 +146,14 @@ class CallCounter final {
    private:
     friend class CallCounter;
 
-    // Returns `arg` as a number, to compare: a pointer by its address, and any
-    // other by its value.
+    // Returns `arg` as a number, to compare: text (such as a parameter's name)
+    // by its hash, any other pointer by its address, and any other by its
+    // value.
     template <typename T>
     static int64_t ToKeyArg(T arg) {
-      if constexpr (std::is_pointer_v<T>) {
+      if constexpr (std::is_same_v<T, const char*>) {
+        return static_cast<int64_t>(absl::HashOf(std::string_view(arg)));
+      } else if constexpr (std::is_pointer_v<T>) {
         return static_cast<int64_t>(reinterpret_cast<intptr_t>(arg));
       } else {
         return static_cast<int64_t>(arg);

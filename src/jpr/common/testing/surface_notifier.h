@@ -38,13 +38,19 @@ namespace jpr {
 //   is soloed), even if nothing changed. A track's own mute and solo are sent
 //   at the next refresh (see below).
 // - SetTrackUIRecArm(), if a track's rec arm changed: outside a deferred
-//   refresh, the track's change (its rec arm, mute, solo, volume, and pan),
-//   then SetTrackListChange() and every track's state, then the master's solo
-//   and the change of each track whose rec arm changed. In a deferred refresh,
-//   SetTrackListChange() and the master's solo, and the rest at the refresh.
-//   A change to a selected track with selection ganging (group flags without
-//   &2), or to a track in a group with grouping (without &1), is sent as a
-//   change to every track.
+//   refresh, the track's change (its rec arm and monitoring, mute, solo,
+//   volume, and pan), then SetTrackListChange() and every track's state, then
+//   the master's solo and the change of each track whose rec arm changed. In a
+//   deferred refresh, SetTrackListChange() and the master's solo, and the rest
+//   at the refresh. A change to a selected track with selection ganging (group
+//   flags without &2), or to a track in a group with grouping (without &1), is
+//   sent as a change to every track.
+// - SetMediaTrackInfo_Value(): for I_RECMODE, the track's change twice, even if
+//   nothing changed, but nothing for the master's, which can't be set. For
+//   I_RECMON, the track's change if it changed. The master's change is its
+//   mute, volume, and pan.
+// - CSurf_OnInputMonitorChangeEx(): the change of each track it sets, even if
+//   nothing changed, in order. Nothing for the master's own.
 // - SetOnlyTrackSelected() and SetTrackSelected(): the selection of each track
 //   whose selection changed, outside a deferred refresh, and otherwise at the
 //   refresh.
@@ -64,9 +70,10 @@ namespace jpr {
 //   SendUndo()), if there was something to undo or redo.
 //
 // The refresh is when the outermost deferred refresh (a PreventUIRefresh()
-// scope) ends. It sends each track's volume and pan, then its mute and solo,
-// then its selection, for those that wait for it. After a rec arm, every
-// track's state comes first, leaving out what waits. Outside a deferred
+// scope) ends. It sends each track's change, once, or its volume and pan, then
+// its mute and solo, then its selection, for those that wait for it. After a
+// rec arm, every track's state comes first, leaving out what waits, or for a
+// track whose change waits, the end of its state. Outside a deferred
 // refresh, REAPER sends a track's mute and solo before the next run, which a
 // contract test can't span, so it isn't made: they are forgotten when the
 // surface next runs. Until they are sent, every track's state leaves them out.
@@ -174,6 +181,11 @@ class SurfaceNotifier final {
                       int value, int group_flags);
   int OnSetTrackUIRecArm(decltype(SetTrackUIRecArm) original, MediaTrack* track,
                          int rec_arm, int group_flags);
+  bool OnSetMediaTrackInfoValue(decltype(SetMediaTrackInfo_Value) original,
+                                MediaTrack* track, const char* name,
+                                double value);
+  int OnInputMonitorChange(decltype(CSurf_OnInputMonitorChangeEx) original,
+                           MediaTrack* track, int monitor, bool allow_gang);
   void OnSetOnlyTrackSelected(decltype(SetOnlyTrackSelected) original,
                               MediaTrack* track);
   void OnSetTrackSelected(decltype(SetTrackSelected) original,
@@ -214,9 +226,16 @@ class SurfaceNotifier final {
   // leaves it for its end.
   void SendSelectionChanges(const std::vector<FakeTrack*>& changed);
 
+  // Sends `track`'s change `count` times, or inside a deferred refresh, leaves
+  // it for its end, once.
+  void SendOrHoldChange(FakeTrack* track, int count = 1);
+
   // Selects `clicked`, and only it if `only` is true, as a click on it
   // in REAPER does, and calls back.
   void ClickToSelect(FakeTrack* clicked, bool only);
+
+  // Returns `track` if it is in the current project, and otherwise null.
+  FakeTrack* FindTrack(MediaTrack* track);
 
   // Returns true if `track` is the current project's master.
   bool IsMaster(const FakeTrack* track);
@@ -261,9 +280,6 @@ class SurfaceNotifier final {
   // Sends the master's solo, as whether any track is soloed.
   void SendMasterSolo(IReaperControlSurface& surface);
 
-  // Sends the master's mute, volume, and pan, as undo does.
-  void SendMasterMuteVolumeAndPan(IReaperControlSurface& surface);
-
   // Sends a track's mute, and solo unless it is the master, which are then
   // sent.
   void SendMuteAndSolo(IReaperControlSurface& surface, FakeTrack* track);
@@ -286,9 +302,10 @@ class SurfaceNotifier final {
   void SendTitleRecArmAndSelected(IReaperControlSurface& surface,
                                   FakeTrack* track);
 
-  // Sends a change to a track's rec arm: its rec arm and monitoring, mute,
-  // solo, volume, and pan.
-  void SendRecArmChange(IReaperControlSurface& surface, FakeTrack* track);
+  // Sends a track's change, as after a change to its rec arm, record mode, or
+  // monitoring: its rec arm and monitoring, mute, solo, volume, and pan. The
+  // master's is its mute, volume, and pan.
+  void SendChange(IReaperControlSurface& surface, FakeTrack* track);
 
   // Sends every track's volume, pan, mute and solo if they aren't sent yet,
   // and selection, as after a change to automation modes.
@@ -307,9 +324,10 @@ class SurfaceNotifier final {
   absl::flat_hash_map<const FakeTrack*, Unsent> unsent_;
   int64_t unsent_run_ = 0;
 
-  // The tracks whose rec arm, selection, or volume and pan changed in the
-  // deferred refresh.
-  absl::flat_hash_set<const FakeTrack*> deferred_rec_arm_;
+  // Whether a rec arm changed in the deferred refresh, and the tracks whose
+  // change (see SendChange()), selection, or volume and pan wait for its end.
+  bool deferred_rec_arm_ = false;
+  absl::flat_hash_set<const FakeTrack*> deferred_change_;
   absl::flat_hash_set<const FakeTrack*> deferred_selected_;
   absl::flat_hash_set<const FakeTrack*> deferred_volume_;
 
@@ -323,6 +341,12 @@ class SurfaceNotifier final {
   gb::FunctionHook<&SetTrackUIRecArm,
                    Hook<&SurfaceNotifier::OnSetTrackUIRecArm>>
       set_track_ui_rec_arm_hook_{this};
+  gb::FunctionHook<&SetMediaTrackInfo_Value,
+                   Hook<&SurfaceNotifier::OnSetMediaTrackInfoValue>>
+      set_media_track_info_value_hook_{this};
+  gb::FunctionHook<&CSurf_OnInputMonitorChangeEx,
+                   Hook<&SurfaceNotifier::OnInputMonitorChange>>
+      input_monitor_change_hook_{this};
   gb::FunctionHook<&SetOnlyTrackSelected,
                    Hook<&SurfaceNotifier::OnSetOnlyTrackSelected>>
       set_only_track_selected_hook_{this};

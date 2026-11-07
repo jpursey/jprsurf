@@ -166,11 +166,22 @@ std::vector<std::string> EveryState(MediaTrack* unsent = nullptr) {
   return calls;
 }
 
-// A change to a track's rec arm.
-std::vector<std::string> RecArmChange(MediaTrack* track) {
-  std::vector<std::string> calls = RecArmAndMonitor(track);
+// A track's change, as after a change to its rec arm, record mode, or
+// monitoring. The master's has no rec arm or monitoring, and no solo.
+std::vector<std::string> Change(MediaTrack* track) {
+  std::vector<std::string> calls;
+  if (track != GetMasterTrack(nullptr)) {
+    calls = RecArmAndMonitor(track);
+  }
   Append(calls, MuteAndSolo(track));
   Append(calls, VolumeAndPan(track));
+  return calls;
+}
+
+// A track's change, twice, as a record mode sends it.
+std::vector<std::string> ChangeTwice(MediaTrack* track) {
+  std::vector<std::string> calls = Change(track);
+  Append(calls, Change(track));
   return calls;
 }
 
@@ -180,12 +191,12 @@ std::vector<std::string> RecArmChange(MediaTrack* track) {
 std::vector<std::string> RecArmOutsideADeferredRefresh(
     MediaTrack* track, const std::vector<MediaTrack*>& changed,
     MediaTrack* unsent = nullptr) {
-  std::vector<std::string> calls = RecArmChange(track);
+  std::vector<std::string> calls = Change(track);
   calls.push_back("SetTrackListChange()");
   Append(calls, EveryState(unsent));
   calls.push_back(MasterSolo());
   for (MediaTrack* changed_track : changed) {
-    Append(calls, RecArmChange(changed_track));
+    Append(calls, Change(changed_track));
   }
   return calls;
 }
@@ -366,7 +377,7 @@ TEST_F(SurfaceNotifierContractTest,
   Append(expected, State(master_));
   for (MediaTrack* track : {a_, b_}) {
     Append(expected, TitleRecArmAndSelected(track));
-    Append(expected, RecArmChange(track));
+    Append(expected, Change(track));
   }
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
@@ -382,7 +393,7 @@ TEST_F(SurfaceNotifierContractTest,
   std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
   Append(expected, State(master_));
   Append(expected, TitleRecArmAndSelected(a_));
-  Append(expected, RecArmChange(a_));
+  Append(expected, Change(a_));
   Append(expected, State(b_));
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
@@ -400,7 +411,7 @@ TEST_F(SurfaceNotifierContractTest,
   Append(expected, State(a_, /*unsent=*/true));
   Append(expected, MuteAndSolo(a_));
   Append(expected, TitleRecArmAndSelected(b_));
-  Append(expected, RecArmChange(b_));
+  Append(expected, Change(b_));
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
 
@@ -416,7 +427,7 @@ TEST_F(SurfaceNotifierContractTest,
   Append(expected, State(master_));
   for (MediaTrack* track : {a_, b_}) {
     Append(expected, TitleRecArmAndSelected(track));
-    Append(expected, RecArmChange(track));
+    Append(expected, Change(track));
   }
   expected.push_back(Selected(b_));
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
@@ -435,7 +446,7 @@ TEST_F(SurfaceNotifierContractTest,
   Append(expected, State(a_));
   expected.push_back(Selected(a_));
   Append(expected, TitleRecArmAndSelected(b_));
-  Append(expected, RecArmChange(b_));
+  Append(expected, Change(b_));
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
 
@@ -562,8 +573,154 @@ TEST_F(SurfaceNotifierContractTest,
   std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
   Append(expected, State(master_));
   Append(expected, TitleRecArmAndSelected(a_));
-  Append(expected, RecArmChange(a_));
+  Append(expected, Change(a_));
   Append(expected, StateThenVolumeAndPan(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest, RecordModeSendsTheTracksChangeTwice) {
+  SetMediaTrackInfo_Value(a_, "I_RECMODE", 2);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(ChangeTwice(a_)));
+
+  // Even when it changes nothing.
+  SetMediaTrackInfo_Value(a_, "I_RECMODE", 2);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(ChangeTwice(a_)));
+}
+
+TEST_F(SurfaceNotifierContractTest, MonitoringSendsTheTracksChangeIfItChanged) {
+  SetMediaTrackInfo_Value(a_, "I_RECMON", 2);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(a_)));
+  SetMediaTrackInfo_Value(a_, "I_RECMON", 2);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+TEST_F(SurfaceNotifierContractTest, TheMastersMonitoringSendsItsChange) {
+  // Its record mode can't be set.
+  SetMediaTrackInfo_Value(master_, "I_RECMODE", 2);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+  SetMediaTrackInfo_Value(master_, "I_RECMON", 0);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(master_)));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecordModeAndMonitoringInADeferredRefreshSendEachTrackOnceAtItsEnd) {
+  PreventUIRefresh(1);
+  SetMediaTrackInfo_Value(a_, "I_RECMODE", 7);
+  SetMediaTrackInfo_Value(a_, "I_RECMON", 1);
+  SetMediaTrackInfo_Value(b_, "I_RECMODE", 2);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = Change(a_);
+  Append(expected, Change(b_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       MonitoringChangedBackInADeferredRefreshIsStillSent) {
+  PreventUIRefresh(1);
+  SetMediaTrackInfo_Value(a_, "I_RECMON", 2);
+  SetMediaTrackInfo_Value(a_, "I_RECMON", 0);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(a_)));
+
+  // But not monitoring that never changed.
+  PreventUIRefresh(1);
+  SetMediaTrackInfo_Value(a_, "I_RECMON", 0);
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecordModeInADeferredRefreshSendsAMuteInTheTracksChange) {
+  PreventUIRefresh(1);
+  SetTrackUIMute(b_, 1, kPreventGroupingAndGanging);
+  SetMediaTrackInfo_Value(b_, "I_RECMODE", 2);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(b_)));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       RecordModeWithARecArmInADeferredRefreshIsSentAsARecArmIs) {
+  PreventUIRefresh(1);
+  SetTrackUIRecArm(b_, 1, kPreventGroupingAndGanging);
+  SetMediaTrackInfo_Value(a_, "I_RECMODE", 2);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  Append(expected, State(master_));
+  for (MediaTrack* track : {a_, b_}) {
+    Append(expected, TitleRecArmAndSelected(track));
+    Append(expected, Change(track));
+  }
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierContractTest,
+       InputMonitorChangeSendsTheTracksChangeEvenIfNothingChanged) {
+  CSurf_OnInputMonitorChangeEx(a_, 2, false);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(a_)));
+  CSurf_OnInputMonitorChangeEx(a_, 2, false);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(a_)));
+}
+
+TEST_F(SurfaceNotifierContractTest, InputMonitorChangeOfTheMasterSendsNothing) {
+  CSurf_OnInputMonitorChangeEx(master_, 0, false);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+}
+
+class SurfaceNotifierGangedMonitorContractTest
+    : public SurfaceNotifierContractTest {
+ protected:
+  // The master and A are selected.
+  SurfaceNotifierGangedMonitorContractTest() {
+    SetTrackSelected(master_, true);
+    EndEntryPoint();
+    SetTrackSelected(a_, true);
+    EndEntryPoint();
+    TakeCalls();
+  }
+};
+
+TEST_F(SurfaceNotifierGangedMonitorContractTest,
+       GangedInputMonitorChangeSendsEachTrackItSets) {
+  CSurf_OnInputMonitorChangeEx(a_, 2, true);
+  std::vector<std::string> expected = Change(master_);
+  Append(expected, Change(a_));
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+
+  // A track that isn't selected sets only itself.
+  EndEntryPoint();
+  CSurf_OnInputMonitorChangeEx(b_, 2, true);
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(Change(b_)));
+}
+
+TEST_F(SurfaceNotifierGangedMonitorContractTest,
+       InputMonitorChangeInADeferredRefreshSendsAtItsEnd) {
+  PreventUIRefresh(1);
+  CSurf_OnInputMonitorChangeEx(a_, 2, true);
+  CSurf_OnInputMonitorChangeEx(b_, 0, false);
+  EXPECT_THAT(TakeCalls(), IsEmpty());
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected;
+  for (MediaTrack* track : GetTracks()) {
+    Append(expected, Change(track));
+  }
+  EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
+}
+
+TEST_F(SurfaceNotifierGangedMonitorContractTest,
+       InputMonitorChangeWithARecArmInADeferredRefreshIsSentAsARecArmIs) {
+  PreventUIRefresh(1);
+  SetTrackUIRecArm(b_, 1, kPreventGroupingAndGanging);
+  CSurf_OnInputMonitorChangeEx(a_, 2, true);
+  TakeCalls();
+  PreventUIRefresh(-1);
+  std::vector<std::string> expected = {"SetTrackListChange()", MasterSolo()};
+  for (MediaTrack* track : GetTracks()) {
+    Append(expected, TitleRecArmAndSelected(track));
+    Append(expected, Change(track));
+  }
   EXPECT_THAT(TakeCalls(), ElementsAreArray(expected));
 }
 
@@ -620,7 +777,7 @@ TEST_F(SurfaceNotifierContractTest,
   for (MediaTrack* track : GetTracks()) {
     if (track == a_) {
       Append(expected, TitleRecArmAndSelected(track));
-      Append(expected, RecArmChange(track));
+      Append(expected, Change(track));
     } else {
       Append(expected, StateThenVolumeAndPan(track));
     }
@@ -692,7 +849,7 @@ TEST_F(SurfaceNotifierContractTest, UndoAndRedoSendEverything) {
     Append(expected, {MasterSolo(), Mute(master_)});
     Append(expected, VolumeAndPan(master_));
     for (MediaTrack* track : {a_, b_}) {
-      Append(expected, RecArmChange(track));
+      Append(expected, Change(track));
     }
     EXPECT_THAT(TakeCalls(), ElementsAreArray(expected))
         << "Action " << command;

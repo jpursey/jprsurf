@@ -93,10 +93,11 @@ struct FakeCommand {
 //   the last one, which are checked when the test ends them (EndEntryPoint()),
 //   or when the fake is destroyed. Each must leave PreventUIRefresh()
 //   balanced, and follow the one refresh rule: an entry point that changes the
-//   mute, solo, rec arm, or selection of several tracks makes them one change,
-//   in one deferred refresh (a PreventUIRefresh() scope), or one call outside
-//   of any. Each change costs a refresh of REAPER's UI. A run is one deferred
-//   refresh (see ControlSurface), so this catches changes made outside one.
+//   mute, solo, rec arm, record mode, monitoring, or selection of several
+//   tracks makes them one change, in one deferred refresh (a PreventUIRefresh()
+//   scope), or one call outside of any. Each change costs a refresh of REAPER's
+//   UI. A run is one deferred refresh (see ControlSurface), so this catches
+//   changes made outside one.
 //==============================================================================
 
 class FakeReaper final {

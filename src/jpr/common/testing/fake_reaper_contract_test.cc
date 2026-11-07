@@ -339,6 +339,24 @@ TEST_F(TrackContractTest, TracksHaveTheirRecordAndMonitoringModes) {
   EXPECT_FALSE(HasFlag(master, kTrackStateMonitorOn | kTrackStateMonitorAuto));
 }
 
+TEST_F(TrackContractTest, TracksReadTheGroupsTheyLeadAndFollow) {
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("Grouped")->group = 3;
+    project.AddTrack("Not grouped");
+  });
+  MediaTrack* grouped = FindTrack("Grouped");
+  MediaTrack* not_grouped = FindTrack("Not grouped");
+  MediaTrack* master = GetMasterTrack(nullptr);
+  for (std::string_view property : kGroupProperties) {
+    SCOPED_TRACE(property);
+    const std::string name(property);
+    EXPECT_EQ(GetSetTrackGroupMembership(grouped, name.c_str(), 0, 0), 1u << 2);
+    EXPECT_EQ(GetSetTrackGroupMembershipHigh(grouped, name.c_str(), 0, 0), 0u);
+    EXPECT_EQ(GetSetTrackGroupMembership(not_grouped, name.c_str(), 0, 0), 0u);
+    EXPECT_EQ(GetSetTrackGroupMembership(master, name.c_str(), 0, 0), 0u);
+  }
+}
+
 TEST_F(TrackContractTest, EachTrackHasItsOwnGuid) {
   OpenProject(BuildFolders);
   std::vector<std::string> guids = {
@@ -685,6 +703,117 @@ TEST_F(TrackChangeContractTest, ChangesInADeferredRefreshReadBackAtOnce) {
   PreventUIRefresh(-1);
   EXPECT_EQ(GetTrackStateFlags(drums), kTrackStateMute);
   EXPECT_EQ(GetTrackStateFlags(bass), kTrackStateSelected);
+}
+
+TEST_F(TrackChangeContractTest, RecordModeAndMonitoringAreAnyWholeNumber) {
+  OpenProject([](FakeProject& project) { project.AddTrack("Track"); });
+  MediaTrack* track = GetTrack(nullptr, 0);
+
+  // Each is truncated.
+  for (auto [value, mode] :
+       {std::pair(2.0, 2), std::pair(16.0, 16), std::pair(20.0, 20),
+        std::pair(-1.0, -1), std::pair(2.7, 2), std::pair(-1.5, -1)}) {
+    SCOPED_TRACE(value);
+    EXPECT_TRUE(SetMediaTrackInfo_Value(track, "I_RECMODE", value));
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMODE"), mode);
+  }
+
+  // Only 1 and 2 have a flag.
+  struct Monitor {
+    double value;
+    int monitor;
+    int flags;
+  };
+  for (const Monitor& monitor :
+       {Monitor{1.0, 1, kTrackStateMonitorOn},
+        Monitor{2.0, 2, kTrackStateMonitorAuto}, Monitor{0.0, 0, 0},
+        Monitor{3.0, 3, 0}, Monitor{1.5, 1, kTrackStateMonitorOn},
+        Monitor{-2.5, -2, 0}}) {
+    SCOPED_TRACE(monitor.value);
+    EXPECT_TRUE(SetMediaTrackInfo_Value(track, "I_RECMON", monitor.value));
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMON"), monitor.monitor);
+    EXPECT_EQ(GetTrackStateFlags(track), monitor.flags);
+  }
+}
+
+TEST_F(TrackChangeContractTest,
+       TheMastersRecordModeCantBeSetButItsMonitoringCan) {
+  OpenProject([](FakeProject& project) {});
+  MediaTrack* master = GetMasterTrack(nullptr);
+  EXPECT_TRUE(SetMediaTrackInfo_Value(master, "I_RECMODE", 2));
+  EXPECT_EQ(GetMediaTrackInfo_Value(master, "I_RECMODE"), 0.0);
+
+  // Its monitoring never shows a flag.
+  for (int monitor : {0, 2}) {
+    EXPECT_TRUE(SetMediaTrackInfo_Value(master, "I_RECMON", monitor));
+    EXPECT_EQ(GetMediaTrackInfo_Value(master, "I_RECMON"), monitor);
+    EXPECT_EQ(GetTrackStateFlags(master), 0);
+  }
+
+  // An input monitor change of its own doesn't set it, and returns 0.
+  EXPECT_EQ(CSurf_OnInputMonitorChangeEx(master, 1, false), 0);
+  EXPECT_EQ(GetMediaTrackInfo_Value(master, "I_RECMON"), 2.0);
+}
+
+TEST_F(TrackChangeContractTest, RecordModeAndMonitoringArentGroupedOrGanged) {
+  // A and B are selected, and A and C are in a group.
+  OpenProject([](FakeProject& project) {
+    FakeTrack* a = project.AddTrack("A");
+    a->selected = true;
+    a->group = 1;
+    project.AddTrack("B")->selected = true;
+    project.AddTrack("C")->group = 1;
+  });
+  MediaTrack* a = FindTrack("A");
+  SetMediaTrackInfo_Value(a, "I_RECMODE", 2);
+  SetMediaTrackInfo_Value(a, "I_RECMON", 2);
+  for (const char* name : {"B", "C"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(GetMediaTrackInfo_Value(FindTrack(name), "I_RECMODE"), 0.0);
+    EXPECT_EQ(GetMediaTrackInfo_Value(FindTrack(name), "I_RECMON"), 0.0);
+  }
+}
+
+TEST_F(TrackChangeContractTest, InputMonitorChangesSetTheTrack) {
+  OpenProject([](FakeProject& project) { project.AddTrack("Track"); });
+  MediaTrack* track = GetTrack(nullptr, 0);
+  for (int monitor : {2, 2, 1, 0}) {
+    EXPECT_EQ(CSurf_OnInputMonitorChangeEx(track, monitor, false), monitor);
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMON"), monitor);
+  }
+}
+
+TEST_F(TrackChangeContractTest,
+       GangedInputMonitorChangesSetEverySelectedTrackButNoGroup) {
+  // The master, A, and B are selected, B and C are in a group, and D is
+  // neither.
+  OpenProject([](FakeProject& project) {
+    project.GetMasterTrack()->selected = true;
+    project.AddTrack("A")->selected = true;
+    FakeTrack* b = project.AddTrack("B");
+    b->selected = true;
+    b->group = 1;
+    project.AddTrack("C")->group = 1;
+    project.AddTrack("D");
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* d = FindTrack("D");
+  CSurf_OnInputMonitorChangeEx(a, 2, true);
+  EndEntryPoint();
+  EXPECT_EQ(GetMediaTrackInfo_Value(GetMasterTrack(nullptr), "I_RECMON"), 2.0);
+  EXPECT_EQ(GetMediaTrackInfo_Value(b, "I_RECMON"), 2.0);
+  EXPECT_EQ(GetMediaTrackInfo_Value(FindTrack("C"), "I_RECMON"), 0.0);
+  EXPECT_EQ(GetMediaTrackInfo_Value(d, "I_RECMON"), 0.0);
+
+  // Without allow_gang, only the track changes.
+  CSurf_OnInputMonitorChangeEx(a, 0, false);
+  EndEntryPoint();
+  EXPECT_EQ(GetMediaTrackInfo_Value(b, "I_RECMON"), 2.0);
+
+  // A track that isn't selected changes only itself.
+  CSurf_OnInputMonitorChangeEx(d, 1, true);
+  EXPECT_EQ(GetMediaTrackInfo_Value(a, "I_RECMON"), 0.0);
 }
 
 //------------------------------------------------------------------------------
@@ -1035,12 +1164,14 @@ class UndoContractTest : public ContractTest {
     Undo_OnStateChangeEx(name, UNDO_STATE_TRACKCFG, -1);
   }
 
-  // Changes A's mute, solo, rec arm, name, and volume, and the send's volume
-  // and pan, without an undo point.
+  // Changes A's mute, solo, rec arm, record mode, monitoring, name, and
+  // volume, and the send's volume and pan, without an undo point.
   void ChangeA() {
     SetMute(a_, true);
     SetTrackUISolo(a_, 1, kPreventGroupingAndGanging);
     SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
+    SetMediaTrackInfo_Value(a_, "I_RECMODE", 2);
+    SetMediaTrackInfo_Value(a_, "I_RECMON", 2);
     std::string name = "Z";
     GetSetMediaTrackInfo_String(a_, "P_NAME", name.data(), true);
     CSurf_OnVolumeChangeEx(a_, 0.5, false, false);
@@ -1053,6 +1184,8 @@ class UndoContractTest : public ContractTest {
   void ExpectAChanged(bool changed) {
     constexpr int kFlags = kTrackStateMute | kSoloedInPlace | kTrackStateRecArm;
     EXPECT_EQ(GetTrackStateFlags(a_) & kFlags, changed ? kFlags : 0);
+    EXPECT_EQ(GetMediaTrackInfo_Value(a_, "I_RECMODE"), changed ? 2.0 : 0.0);
+    EXPECT_EQ(GetMediaTrackInfo_Value(a_, "I_RECMON"), changed ? 2.0 : 0.0);
     EXPECT_EQ(GetName(a_), changed ? "Z" : "A");
     EXPECT_EQ(GetVolume(a_), changed ? 0.5 : 1.0);
     const std::vector<double> send_vol_pan =
@@ -1074,12 +1207,15 @@ class UndoContractTest : public ContractTest {
 TEST_F(UndoContractTest, ChangesAddNoUndoPointOfTheirOwn) {
   ChangeA();
   SetTrackSelected(a_, true);
+  EndEntryPoint();
+  CSurf_OnInputMonitorChangeEx(b_, 1, false);
   SetGlobalAutomationOverride(4);
   EXPECT_EQ(IsProjectDirty(nullptr), 0);
 
   // So there is nothing to undo.
   Undo();
   ExpectAChanged(true);
+  EXPECT_EQ(GetMediaTrackInfo_Value(b_, "I_RECMON"), 1.0);
   EXPECT_TRUE(HasFlag(a_, kTrackStateSelected));
   EXPECT_EQ(GetGlobalAutomationOverride(), 4);
   EXPECT_EQ(GetRedo(), std::nullopt);

@@ -7,6 +7,7 @@
 
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -181,6 +182,14 @@ constexpr NamedTrackRead kTrackReads[] = {
        char name[256];
        GetSetMediaTrackInfo_String(track, "P_NAME", name,
                                    /*setNewValue=*/false);
+     }},
+    {"GetSetTrackGroupMembership",
+     [](MediaTrack* track, int index) {
+       GetSetTrackGroupMembership(track, "RECARM_LEAD", 0, 0);
+     }},
+    {"GetSetTrackGroupMembershipHigh",
+     [](MediaTrack* track, int index) {
+       GetSetTrackGroupMembershipHigh(track, "RECARM_LEAD", 0, 0);
      }},
     {"GetTrackColor",
      [](MediaTrack* track, int index) { GetTrackColor(track); }},
@@ -363,6 +372,30 @@ void RecArmTrack(bool on) {
 }
 void SelectOtherTrack(bool on) { SetTrackSelected(g_tracks[kOtherTrack], on); }
 
+// Each sets kTrack's record mode between none (monitoring only) and input, or
+// its monitoring between auto and off.
+void RecModeTrack(bool on) {
+  SetMediaTrackInfo_Value(g_tracks[kTrack], "I_RECMODE", on ? 2 : 0);
+}
+void MonitorTrack(bool on) {
+  SetMediaTrackInfo_Value(g_tracks[kTrack], "I_RECMON", on ? 2 : 0);
+}
+void InputMonitorTrack(bool on) {
+  CSurf_OnInputMonitorChangeEx(g_tracks[kTrack], on ? 2 : 0,
+                               /*allowgang=*/false);
+}
+void InputMonitorGanged(bool on) {
+  CSurf_OnInputMonitorChangeEx(g_tracks[kTrack], on ? 2 : 0,
+                               /*allowgang=*/true);
+}
+
+// Returns `measurement`, with `text` added to its condition.
+CostMeasurement AddCondition(CostMeasurement measurement,
+                             std::string_view text) {
+  measurement.condition = absl::StrCat(measurement.condition, ", ", text);
+  return measurement;
+}
+
 // Toggles kTrack's mute, which the next undo point holds.
 void ToggleMute() {
   SetTrackUIMute(g_tracks[kTrack], -1, kPreventGroupingAndGanging);
@@ -407,14 +440,16 @@ void SelectEveryTrack(bool on) {
     SetTrackSelected(track, on);
   }
 }
+void RecModeEveryTrack(bool on) {
+  for (MediaTrack* track : g_tracks) {
+    SetMediaTrackInfo_Value(track, "I_RECMODE", on ? 2 : 0);
+  }
+}
 
 // Changes every track with `change`, in one deferred refresh, as a ranged
 // gesture changes them.
 CostMeasurement ChangeEveryTrack(std::string name, ChangeCall change) {
-  CostMeasurement measurement = Change(std::move(name), change);
-  measurement.condition =
-      absl::StrCat(measurement.condition, ", every track changed");
-  return measurement;
+  return AddCondition(Change(std::move(name), change), "every track changed");
 }
 
 // Changes a route of kTrack (its send, index 0) and of the bus (its first
@@ -423,9 +458,8 @@ void AddRouteChanges(std::vector<CostMeasurement>* measurements,
                      std::string name, ChangeCall send_change,
                      ChangeCall receive_change) {
   measurements->push_back(Change(name, send_change));
-  CostMeasurement receive = Change(std::move(name), receive_change);
-  receive.condition = absl::StrCat(receive.condition, ", a bus's receive");
-  measurements->push_back(std::move(receive));
+  measurements->push_back(
+      AddCondition(Change(std::move(name), receive_change), "a bus's receive"));
 }
 
 void AddChanges(std::vector<CostMeasurement>* measurements) {
@@ -453,6 +487,12 @@ void AddChanges(std::vector<CostMeasurement>* measurements) {
     GetSetMediaTrackInfo_String(g_tracks[kTrack], "P_NAME",
                                 on ? name : other_name, /*setNewValue=*/true);
   }));
+  measurements->push_back(AddCondition(
+      Change("SetMediaTrackInfo_Value", &RecModeTrack), "I_RECMODE"));
+  measurements->push_back(AddCondition(
+      Change("SetMediaTrackInfo_Value", &MonitorTrack), "I_RECMON"));
+  measurements->push_back(
+      Change("CSurf_OnInputMonitorChangeEx", &InputMonitorTrack));
   measurements->push_back(Change("SetGlobalAutomationOverride", [](bool on) {
     SetGlobalAutomationOverride(
         static_cast<int>(on ? AutoOverride::kRead : AutoOverride::kNone));
@@ -477,6 +517,8 @@ void AddChanges(std::vector<CostMeasurement>* measurements) {
       ChangeEveryTrack("SetTrackUIRecArm", &RecArmEveryTrack));
   measurements->push_back(
       ChangeEveryTrack("SetTrackSelected", &SelectEveryTrack));
+  measurements->push_back(
+      ChangeEveryTrack("SetMediaTrackInfo_Value", &RecModeEveryTrack));
 
   // Ganged across every selected track, as the extension's grouped changes
   // are.
@@ -491,6 +533,9 @@ void AddChanges(std::vector<CostMeasurement>* measurements) {
                                /*relative=*/false, /*allowGang=*/true);
       },
       kFolders, Selection::kEveryTrack));
+  measurements->push_back(Change("CSurf_OnInputMonitorChangeEx",
+                                 &InputMonitorGanged, kFolders,
+                                 Selection::kEveryTrack));
 
   // Routes.
   AddRouteChanges(
@@ -521,9 +566,8 @@ void AddChanges(std::vector<CostMeasurement>* measurements) {
       kFolders, Selection::kOneTrack, /*in_deferred_refresh=*/false));
 
   // A deferred refresh with nothing in it, whose end is timed.
-  CostMeasurement empty = Change("PreventUIRefresh", [](bool on) {});
-  empty.condition = absl::StrCat(empty.condition, ", nothing changed");
-  measurements->push_back(std::move(empty));
+  measurements->push_back(AddCondition(
+      Change("PreventUIRefresh", [](bool on) {}), "nothing changed"));
 
   // Undo points.
   measurements->push_back(UndoPoint("Undo_OnStateChangeEx", &AddUndoPoint));

@@ -175,6 +175,20 @@ TEST_F(ReaperTraceTest, TracesResultsAndOutputs) {
           R"(  GetMasterTrack(null) -> master)"));
 }
 
+TEST_F(ReaperTraceTest, TracesMasksInHex) {
+  drums_->group = 5;
+  g_surface_calls = [this] {
+    GetSetTrackGroupMembership(ToMediaTrack(drums_), "RECARM_LEAD", 0, 0);
+  };
+  surface_->Run();
+
+  EXPECT_THAT(
+      ReadTrace(),
+      ElementsAre(
+          StartsWith(kCreateLine), "csurf/Run()",
+          R"(  GetSetTrackGroupMembership(track 3 "Drums", "RECARM_LEAD", 0x0, 0x0) -> 0x10)"));
+}
+
 TEST_F(ReaperTraceTest, NamesTracksAgainOnlyAfterChanges) {
   g_surface_calls = [this] {
     double volume = 0;

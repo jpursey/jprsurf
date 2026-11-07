@@ -24,6 +24,7 @@
 #define REAPERAPI_WANT_CountTracks
 #define REAPERAPI_WANT_CreateMIDIInput
 #define REAPERAPI_WANT_CreateMIDIOutput
+#define REAPERAPI_WANT_CSurf_OnInputMonitorChangeEx
 #define REAPERAPI_WANT_CSurf_OnPanChangeEx
 #define REAPERAPI_WANT_CSurf_OnVolumeChangeEx
 #define REAPERAPI_WANT_EnumProjects
@@ -42,6 +43,8 @@
 #define REAPERAPI_WANT_GetSelectedTrack
 #define REAPERAPI_WANT_GetSelectedTrack2
 #define REAPERAPI_WANT_GetSetMediaTrackInfo_String
+#define REAPERAPI_WANT_GetSetTrackGroupMembership
+#define REAPERAPI_WANT_GetSetTrackGroupMembershipHigh
 #define REAPERAPI_WANT_GetSetTrackSendInfo
 #define REAPERAPI_WANT_GetToggleCommandState
 #define REAPERAPI_WANT_GetTrack
@@ -63,6 +66,7 @@
 #define REAPERAPI_WANT_NamedCommandLookup
 #define REAPERAPI_WANT_PreventUIRefresh
 #define REAPERAPI_WANT_SetGlobalAutomationOverride
+#define REAPERAPI_WANT_SetMediaTrackInfo_Value
 #define REAPERAPI_WANT_SetOnlyTrackSelected
 #define REAPERAPI_WANT_SetTrackSelected
 #define REAPERAPI_WANT_SetTrackSendUIPan
@@ -86,67 +90,71 @@
 
 // Every REAPER API function the extension calls. X(name) is expanded for each
 // one.
-#define JPR_REAPER_API(X)        \
-  X(AnyTrackSolo)                \
-  X(CountSelectedMediaItems)     \
-  X(CountSelectedTracks)         \
-  X(CountSelectedTracks2)        \
-  X(CountTracks)                 \
-  X(CreateMIDIInput)             \
-  X(CreateMIDIOutput)            \
-  X(CSurf_OnPanChangeEx)         \
-  X(CSurf_OnVolumeChangeEx)      \
-  X(EnumProjects)                \
-  X(format_timestr_pos)          \
-  X(GetCursorPosition)           \
-  X(GetGlobalAutomationOverride) \
-  X(GetMasterTrack)              \
-  X(GetMediaTrackInfo_Value)     \
-  X(GetMIDIInputName)            \
-  X(GetMIDIOutputName)           \
-  X(GetNumMIDIInputs)            \
-  X(GetNumMIDIOutputs)           \
-  X(GetParentTrack)              \
-  X(GetPlayPosition)             \
-  X(GetPlayState)                \
-  X(GetSelectedTrack)            \
-  X(GetSelectedTrack2)           \
-  X(GetSetMediaTrackInfo_String) \
-  X(GetSetTrackSendInfo)         \
-  X(GetToggleCommandState)       \
-  X(GetTrack)                    \
-  X(GetTrackColor)               \
-  X(GetTrackGUID)                \
-  X(GetTrackNumSends)            \
-  X(GetTrackReceiveUIMute)       \
-  X(GetTrackReceiveUIVolPan)     \
-  X(GetTrackSendUIMute)          \
-  X(GetTrackSendUIVolPan)        \
-  X(GetTrackState)               \
-  X(GetTrackUIVolPan)            \
-  X(guidToString)                \
-  X(IsProjectDirty)              \
-  X(kbd_getTextFromCmd)          \
-  X(Main_OnCommand)              \
-  X(mkpanstr)                    \
-  X(mkvolstr)                    \
-  X(NamedCommandLookup)          \
-  X(PreventUIRefresh)            \
-  X(SetGlobalAutomationOverride) \
-  X(SetOnlyTrackSelected)        \
-  X(SetTrackSelected)            \
-  X(SetTrackSendUIPan)           \
-  X(SetTrackSendUIVol)           \
-  X(SetTrackUIMute)              \
-  X(SetTrackUIRecArm)            \
-  X(SetTrackUISolo)              \
-  X(ShowConsoleMsg)              \
-  X(stringToGuid)                \
-  X(time_precise)                \
-  X(ToggleTrackSendUIMute)       \
-  X(Track_GetPeakInfo)           \
-  X(Undo_CanRedo2)               \
-  X(Undo_OnStateChangeEx)        \
+#define JPR_REAPER_API(X)           \
+  X(AnyTrackSolo)                   \
+  X(CountSelectedMediaItems)        \
+  X(CountSelectedTracks)            \
+  X(CountSelectedTracks2)           \
+  X(CountTracks)                    \
+  X(CreateMIDIInput)                \
+  X(CreateMIDIOutput)               \
+  X(CSurf_OnInputMonitorChangeEx)   \
+  X(CSurf_OnPanChangeEx)            \
+  X(CSurf_OnVolumeChangeEx)         \
+  X(EnumProjects)                   \
+  X(format_timestr_pos)             \
+  X(GetCursorPosition)              \
+  X(GetGlobalAutomationOverride)    \
+  X(GetMasterTrack)                 \
+  X(GetMediaTrackInfo_Value)        \
+  X(GetMIDIInputName)               \
+  X(GetMIDIOutputName)              \
+  X(GetNumMIDIInputs)               \
+  X(GetNumMIDIOutputs)              \
+  X(GetParentTrack)                 \
+  X(GetPlayPosition)                \
+  X(GetPlayState)                   \
+  X(GetSelectedTrack)               \
+  X(GetSelectedTrack2)              \
+  X(GetSetMediaTrackInfo_String)    \
+  X(GetSetTrackGroupMembership)     \
+  X(GetSetTrackGroupMembershipHigh) \
+  X(GetSetTrackSendInfo)            \
+  X(GetToggleCommandState)          \
+  X(GetTrack)                       \
+  X(GetTrackColor)                  \
+  X(GetTrackGUID)                   \
+  X(GetTrackNumSends)               \
+  X(GetTrackReceiveUIMute)          \
+  X(GetTrackReceiveUIVolPan)        \
+  X(GetTrackSendUIMute)             \
+  X(GetTrackSendUIVolPan)           \
+  X(GetTrackState)                  \
+  X(GetTrackUIVolPan)               \
+  X(guidToString)                   \
+  X(IsProjectDirty)                 \
+  X(kbd_getTextFromCmd)             \
+  X(Main_OnCommand)                 \
+  X(mkpanstr)                       \
+  X(mkvolstr)                       \
+  X(NamedCommandLookup)             \
+  X(PreventUIRefresh)               \
+  X(SetGlobalAutomationOverride)    \
+  X(SetMediaTrackInfo_Value)        \
+  X(SetOnlyTrackSelected)           \
+  X(SetTrackSelected)               \
+  X(SetTrackSendUIPan)              \
+  X(SetTrackSendUIVol)              \
+  X(SetTrackUIMute)                 \
+  X(SetTrackUIRecArm)               \
+  X(SetTrackUISolo)                 \
+  X(ShowConsoleMsg)                 \
+  X(stringToGuid)                   \
+  X(time_precise)                   \
+  X(ToggleTrackSendUIMute)          \
+  X(Track_GetPeakInfo)              \
+  X(Undo_CanRedo2)                  \
+  X(Undo_OnStateChangeEx)           \
   X(Undo_OnStateChangeEx2)
 
 namespace jpr {

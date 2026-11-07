@@ -53,6 +53,10 @@ constexpr NamedCost kCosts[] = {
     {"CountTracks", kCheap},
     {"CreateMIDIInput", kModerate},
     {"CreateMIDIOutput", kModerate},
+    // A small refresh: 1.3us in the call, 20us at the end of a deferred
+    // refresh, and about as much later, on 128 tracks. Ganged across every
+    // track: 0.6ms at the end, and 1.5ms later.
+    {"CSurf_OnInputMonitorChangeEx", DeferrableRefresh(1)},
     {"CSurf_OnPanChangeEx", DeferrableRefresh(1)},
     {"CSurf_OnVolumeChangeEx", DeferrableRefresh(1)},
     {"EnumProjects", kCheap},
@@ -72,6 +76,9 @@ constexpr NamedCost kCosts[] = {
     {"GetSelectedTrack2", kCheap},
     // The extension only sets the name, which takes 4us, and refreshes nothing.
     {"GetSetMediaTrackInfo_String", kModerate},
+    // Each about 270ns, for one property's groups.
+    {"GetSetTrackGroupMembership", kCheap},
+    {"GetSetTrackGroupMembershipHigh", kCheap},
     {"GetSetTrackSendInfo", kCheap},
     {"GetToggleCommandState", kCheap},
     {"GetTrack", kCheap},
@@ -93,6 +100,11 @@ constexpr NamedCost kCosts[] = {
     {"NamedCommandLookup", kCheap},
     {"PreventUIRefresh", kCheap},
     {"SetGlobalAutomationOverride", DeferrableRefresh(0)},
+    // The record mode and monitoring, a small refresh: 3us in the call, 20us
+    // at the end of a deferred refresh, and about 0.1ms later, on 128 tracks.
+    // Every track's record mode: 0.5ms at the end, and 0.8ms later. Its repeat
+    // key is the track and the parameter.
+    {"SetMediaTrackInfo_Value", DeferrableRefresh(2)},
     {"SetOnlyTrackSelected", DeferrableRefresh(0)},
     {"SetTrackSelected", DeferrableRefresh(1)},
     {"SetTrackSendUIPan", DeferrableRefresh(2)},

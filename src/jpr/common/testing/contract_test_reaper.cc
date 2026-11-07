@@ -15,8 +15,10 @@
 #include "absl/functional/function_ref.h"
 #include "absl/log/log.h"
 #include "gtest/gtest.h"
+#include "jpr/common/reaper_api.h"
 #include "jpr/common/testing/contract_test.h"
 #include "jpr/common/testing/fake_project.h"
+#include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/recording_surface.h"
 #include "jpr/common/testing/test_install.h"
 #include "sdk/reaper_plugin.h"
@@ -71,6 +73,11 @@ void ContractTest::OpenProject(absl::FunctionRef<void(FakeProject&)> build) {
   std::unique_ptr<FakeProject> project = FakeProject::Create();
   build(*project);
   EXPECT_TRUE(OpenProjectFile(*project)) << "Failed to write project.rpp";
+
+  // REAPER's master keeps its monitoring when a project opens in its tab, so
+  // it is set back to the project's, which the project file doesn't set.
+  SetMediaTrackInfo_Value(GetMasterTrack(nullptr), "I_RECMON",
+                          project->GetMasterTrack()->monitor_mode);
   TakeCalls();
 }
 

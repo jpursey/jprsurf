@@ -238,6 +238,7 @@ class Tracer final {
 
   std::string FormatValue(bool value);
   std::string FormatValue(int value);
+  std::string FormatValue(unsigned int value);
   std::string FormatValue(double value);
   std::string FormatValue(const char* value);
   std::string FormatValue(const GUID& value);
@@ -512,6 +513,11 @@ std::string Tracer::FormatOutput(T* value) {
 std::string Tracer::FormatValue(bool value) { return value ? "true" : "false"; }
 
 std::string Tracer::FormatValue(int value) { return absl::StrCat(value); }
+
+// The API's unsigned values are masks, such as a track's groups.
+std::string Tracer::FormatValue(unsigned int value) {
+  return absl::StrCat("0x", absl::Hex(value));
+}
 
 std::string Tracer::FormatValue(double value) { return absl::StrCat(value); }
 
