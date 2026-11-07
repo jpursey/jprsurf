@@ -3,8 +3,8 @@ jprsurf 1
 # JPRSurf's own surface: an X-Touch, and an X-Touch Extender to its left if
 # there is one, with two surface modes. In Track mode the strips show the child
 # tracks of a folder, and in Send/Receive mode they show one track's routes. The
-# language is in docs/user/config_spec.md, and what the surface does in
-# docs/user/user_guide.md.
+# language is in docs/user/config_spec.md, and how this file is put together
+# in "JPRSurf's config" in docs/user/user_guide.md.
 
 #------------------------------------------------------------------------------
 # The hardware

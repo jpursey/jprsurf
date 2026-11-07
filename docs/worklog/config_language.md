@@ -26,9 +26,9 @@ where a mapping should be one dense line.
 - **A config with an error runs nothing.** Every error is logged, with the
   file and line it is on, and the whole config is rejected: the surface does
   nothing until it is fixed, as a config never runs half working.
-- **The user guide** has a page on config files
-  ([config_files.md](../user/config_files.md)): picking one, the language by
-  example, and errors.
+- **The user guide** says how to pick a config file, and what its errors look
+  like ([user_guide.md](../user/user_guide.md)), and the config spec defines
+  the language ([config_spec.md](../user/config_spec.md)).
 
 Nothing looks or feels different: the scene built from the file is the one
 `GetDefaultSpec()` built, which a parity test proved before `GetDefaultSpec()`

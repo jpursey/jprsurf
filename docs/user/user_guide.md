@@ -14,6 +14,7 @@ Control support.
 - [Track mode](#track-mode)
 - [Send mode](#send-mode)
 - [Cheat sheet](#cheat-sheet)
+- [JPRSurf's config](#jprsurfs-config)
 - [Reference](#reference)
 
 ---
@@ -28,8 +29,9 @@ does nothing.
 
 **If you use an extender, it must be physically to the left of the X-Touch.**
 JPRSurf lays out the channel strips in that order: the extender's 8 strips are
-channels 1-8, and the X-Touch's 8 strips are channels 9-16. There is currently
-no way to put the extender on the right, or to use more than one.
+channels 1-8, and the X-Touch's 8 strips are channels 9-16. Putting it on the
+right is a change to the config's widgets (see [JPRSurf's
+config](#jprsurfs-config)).
 
 Both units must be in Mackie Control (MC) mode, not HUI or standard MIDI mode.
 
@@ -72,8 +74,8 @@ Control Surface** from the control surface mode list:
 
 Leave **Config file** empty. The surface then reads `jprsurf.jprsurf` beside
 the DLL, which this guide describes, finds the hardware itself, and should
-light up as soon as you click OK. To change what it does, see
-[Config files](config_files.md).
+light up as soon as you click OK. To change what it does, see [Using another
+config file](#using-another-config-file).
 
 It can only be added once. Adding it again shows a message in REAPER's console
 saying it is already running, and nothing is added.
@@ -87,16 +89,58 @@ JPRSurf locates the units by their MIDI port names, which must be exactly:
 
 These are the names the units report by default. If you have renamed them in
 Windows, or you have more than one interface presenting a similar name, JPRSurf
-will not find them, unless its config file's `devices` names them (see
-[Config files](config_files.md)).
+will not find them, unless the config's `devices` names them (see
+[Devices](#devices)).
+
+### Using another config file
+
+Everything the surface does comes from its config file. To change it, copy
+`jprsurf.jprsurf` somewhere else, rather than editing the one beside the DLL,
+as installing JPRSurf again replaces that one. Then edit the copy (see
+[JPRSurf's config](#jprsurfs-config)), and give the surface its path:
+
+1. In **Preferences > Control/OSC/web**, select the surface, and click
+   **Edit**.
+2. Click **Browse...**, and pick the file. You can also type or paste its full
+   path into **Config file**.
+
+   ![The Config file box and its Browse button, in the surface's settings](images/choose-config.png)
+
+3. Click **OK**.
+
+An empty **Config file** is JPRSurf's own config, so clearing it goes back to
+that. So is `null`, which `reaper.ini` holds for a surface added before JPRSurf
+had config files.
+
+The file is read when REAPER starts, and when you click OK in that dialog, even
+if the path didn't change. So after editing the file, click **Edit**, then
+**OK**, rather than restarting REAPER.
+
+The path is kept in `reaper.ini`, REAPER's own settings file, in
+`%APPDATA%\REAPER`, on the surface's line, after `JPRSurf`
+(`csurf_0=JPRSurf C:\Users\me\Documents\My surface.jprsurf`). It can be edited
+there too, while REAPER is closed, as REAPER rewrites `reaper.ini` when it
+exits.
 
 ### If something doesn't work
 
 JPRSurf writes a log to `%APPDATA%\jprsurf.log`, which is cleared each time
 REAPER starts. It lists every MIDI port it found and which ones it opened,
 which is the fastest way to tell whether a naming or port problem is the cause.
-It also lists every error in the config file, as a config with an error does
-nothing at all (see [Config files](config_files.md#errors)).
+
+It also lists every error in the config file. A config with an error does
+nothing: the surface stays dark until it is fixed, rather than running half
+working. Each error starts with the file and the line it is on, then what it
+is about, such as a view and a control:
+
+```
+C:\Users\me\Documents\My surface.jprsurf: line 61: /track_mode/track_list/strip[]: strip.mut: names nothing
+```
+
+Fix the errors, then reload the file (see [Using another config
+file](#using-another-config-file)). A missing device that isn't `optional` is
+reported the same way, as the surface can't run without it. The [config
+spec](config_spec.md#checking-and-errors) says what is checked.
 
 If everything works except the **Save** button's light, check REAPER's undo
 settings. REAPER only tracks whether a project has unsaved changes when
@@ -523,12 +567,12 @@ other, it does nothing.
 | Pot             | Track pan                     | Route pan             | Track pan            |
 | Pot button      | Center pan                    | Center route pan      | Center pan           |
 | Mute            | Track mute                    | Route mute            | Track mute           |
-| Solo            | Track solo                    | --------------------- | Track solo           |
-| Rec             | Track record arm              | --------------------- | Track record arm     |
-| Select          | Select / into folder / anchor | Go to the other end   | -------------------- |
+| Solo            | Track solo                    | -                     | Track solo           |
+| Rec             | Track record arm              | -                     | Track record arm     |
+| Select          | Select / into folder / anchor | Go to the other end   | -                    |
 | Scribble top    | Track name                    | Other track's name    | Track name           |
 | Scribble bottom | Volume                        | Route volume          | Send / Recv          |
-| Meter           | Track level                   | --------------------- | Track level          |
+| Meter           | Track level                   | -                     | Track level          |
 
 ### Navigation, by mode
 
@@ -536,19 +580,129 @@ other, it does nothing.
 | --------------------- | ---------------------------- | ------------------- |
 | Channel Left/Right    | Move by one track            | Move by one route   |
 | Fader Bank Left/Right | Move by 8 tracks             | Page through routes |
-| Global View           | Up a level (long press: top) | ------------------- |
+| Global View           | Up a level (long press: top) | -                   |
+
+---
+
+## JPRSurf's config
+
+Everything this guide describes comes from JPRSurf's config file,
+`jprsurf.jprsurf`, written in the language the [config spec](config_spec.md)
+defines. This section shows how it is put together, so you can find the part
+that does something, and change it (see [Using another config
+file](#using-another-config-file)). The file itself has a comment on each part.
+
+### Devices
+
+```
+devices {
+  xtouch = XTouch(input = "X-Touch", output = "X-Touch")
+  xtouch_ext = XTouchExt(input = "X-Touch-Ext", output = "X-Touch-Ext",
+                         optional = true) {
+    without strip[2].fader [press]
+  }
+}
+```
+
+- The X-Touch is required, so the surface does nothing without it, and the
+  extender is optional.
+- `input` and `output` are the MIDI port names JPRSurf finds each unit by.
+  Change them if Windows shows your units under other names.
+- The `without` line leaves out the touch sensing of the extender's third
+  fader, as the author's has lost it, so that fader only follows REAPER once it
+  stops moving. **If your extender's third fader works, delete that line**, so
+  it senses touch like the others.
+
+See [Devices](config_spec.md#devices) in the spec.
+
+### Widgets
+
+```
+widgets {
+  include xtouch { except strip }
+  strip = join(xtouch_ext.strip, xtouch.strip)
+  route_strip = join(xtouch_ext.strip, xtouch.strip[0..6])
+  info_strip = xtouch.strip[7]
+}
+```
+
+These are the names the mappings use:
+- Every X-Touch control but its strips, by the names on the [X-Touch's
+  page](devices/XTouch.md), such as `play` and `assign_send`.
+- `strip`: every channel strip, left to right, the extender's first. Without
+  the extender, it is the X-Touch's 8. To put the extender on the right, swap
+  the two: `join(xtouch.strip, xtouch_ext.strip)`, and the same for
+  `route_strip`.
+- `route_strip`: the strips that show routes in Send mode, which are all but
+  the X-Touch's last.
+- `info_strip`: the X-Touch's last strip, which is Send mode's Info strip.
+
+The X-Touch's last strip is in both `strip` and `info_strip`, and the mode
+decides which one is in use. See [Widgets](config_spec.md#widgets) in the spec.
+
+### Components
+
+What the surface keeps track of itself (see
+[Components](config_spec.md#components) in the spec):
+
+| Component                  | Kind               | What it is                                                                                                                                        |
+| -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mod:send_hold`            | `modifier`         | On while Send is held, which changes the select buttons in Track mode.                                                                            |
+| `mod:select_anchor`        | `modifier`         | On while a select button is held as a range's anchor.                                                                                             |
+| `user:transport_step`      | `enumerated_value` | What Rewind and Forward move by: `measure`, `beat` (Nudge), or `marker` (Marker).                                                                 |
+| `user:surface_mode`        | `enumerated_value` | The mode: `track` or `send_receive`.                                                                                                              |
+| `user:folder`              | `track_reference`  | The folder whose tracks Track mode shows, which starts as the master track.                                                                       |
+| `user:current_track`       | `track_reference`  | The track whose routes Send mode shows. It follows the last touched track, and Track mode keeps it on the strips.                                 |
+| `user:pick_selected_track` | `track_pick`       | Picks the selected track as the current track, for a tap of Send.                                                                                 |
+| `user:anchor_*`            | `track_anchor`     | On each Track mode strip, the anchors held by its select, mute, solo, and rec arm buttons (see [Ranged actions](#ranged-actions-hold-and-press)). |
+| `user:pick_track`          | `track_pick`       | On each Track mode strip, picks its track as the current track, for select while Send is held.                                                    |
+
+### Named mappings
+
+Mappings used in more than one place (see [Named
+mappings](config_spec.md#named-mappings) in the spec):
+- `track_strip`: a strip showing a track the same way in every mode, which
+  every Track mode strip and the Info strip use. Its select button and bottom
+  scribble line are left to each mode.
+- `auto_mode_button`: one automation button, with and without the global
+  override, used once for each of the five.
+- `list_navigation`: Channel and Bank, which scroll the list, in both modes.
+
+### Views
+
+The rest of the file is its views (see [Views](config_spec.md#views) in the
+spec), which follow the sections of this guide:
+
+```
+(top level)          Always available: modifiers, the timecode display, the
+│                    utility, automation, and transport buttons, and Track
+├── master_fader     The master track's volume
+├── track_mode       While user:surface_mode is track: Send's tap and light
+│   └── track_list   user:folder's child tracks: Global, Channel, and Bank
+│       └── strip    Repeated over strip: track_strip, select, the anchors,
+│                    and select while Send is held
+└── send_receive_mode  While user:surface_mode is send_receive:
+    │                user:current_track's routes, the Info strip, and Send's
+    │                tap and light
+    └── strip        Repeated over route_strip: each route
+```
+
+A change to one mode's behavior is in that mode's view, and a change to a
+button that works the same in every mode is at the top level. For instance, to
+make Shift + Undo do something else, change the `undo [mod:shift]` mapping
+under `# Utility buttons`, to any REAPER action's command ID (see [REAPER
+commands](config_spec.md#reaper-commands) in the spec).
 
 ---
 
 ## Reference
 
-JPRSurf's surface maps the devices' controls to the properties the scene
-provides, in its config file. These pages list both, by the names JPRSurf gives
-them, and are generated from JPRSurf's code. They are what a config names.
-
-- **[Config files](config_files.md):** which file the surface reads, the
-  language, and its errors.
-- **[Device types](devices/README.md):** each one's widgets.
+- **[Config spec](config_spec.md):** the config file language.
+- **[Device types](devices/README.md):** each one's controls, by the names a
+  config uses.
 - **[The scene](scene/README.md):** its properties, by namespace, such as
   REAPER's state and a track's, and the components a config can declare, such
   as its own modifiers and track references.
+
+The device types' and the scene's pages are generated from JPRSurf's code, so
+they always match the version you have.

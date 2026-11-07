@@ -59,19 +59,6 @@ a mapping left with neither side, which `CreateScene()` would report. Checking
 also doesn't report a range end the scene ignores for the input it reads (text
 from a value input, color from a delta), as the rule depends on the input.
 
-## Public config spec and user guide split
-
-- **Layers:** none (docs)
-- **Size:** medium
-- **Feature workflow:** no
-- **Depends on:** nothing
-- **Background:** [config_spec.md](user/config_spec.md)
-
-The config model doc becomes a public specification of the config language. The
-user guide becomes the guide to JPRSurf's own config, and the reference for how
-it uses the spec. This comes after the loader, so the spec has been proven by
-writing a real config in it.
-
 ## Rec and Solo on route strips
 
 - **Layers:** plugin
@@ -429,8 +416,8 @@ REAPER's built in actions only have numbers, so a config that maps Undo says
 the ones JPRSurf's own config uses (the `kCmd*` constants in
 `command_properties.h`): undo, save, play, stop, the automation modes, and so
 on. As with any shorthand, the config expands a name to its `cmd:<id>` form,
-so `scene` doesn't change. The names are part of the public spec, so the list
-is chosen with *Public config spec and user guide split* in mind, and numbers
+so `scene` doesn't change. The names are part of the public spec, listed on the
+`cmd:` page generated from the code, so they are chosen to last, and numbers
 and named command IDs keep working for everything else.
 
 ## Reversed read ranges
