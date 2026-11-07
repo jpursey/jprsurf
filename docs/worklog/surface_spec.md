@@ -3,7 +3,7 @@
 The plugin builds its scene from a C++ data structure, the **`SurfaceSpec`**,
 rather than imperative calls: its devices, widgets, declared components,
 templates, views, mappings, and settings, as the [config
-model](../config_model.md) describes them. JPRSurf's own surface is a spec
+spec](../user/config_spec.md) describes them. JPRSurf's own surface is a spec
 written in code (`GetDefaultSpec()`), and reading a config file later is just
 filling in the same struct (*Config file language and loader*).
 
@@ -158,10 +158,9 @@ the scene's, from the catalog. A type is named by
 
 ### plugin
 
-- **`default_spec.h`:** `GetDefaultSpec()`, JPRSurf's surface, as
-  [JPRSurf's surface in the model](../config_model.md#jprsurfs-surface-in-the-model)
-  sketches it. It has three templates: `track_strip` (a strip that shows a
-  track, used by every track strip and the Info strip), `auto_mode_button`
+- **`default_spec.h`:** `GetDefaultSpec()`, JPRSurf's surface, as the config
+  model sketched it. It has three templates: `track_strip` (a strip that shows
+  a track, used by every track strip and the Info strip), `auto_mode_button`
   (five uses, from the `kAutoModeButtons` table), and `list_navigation` (Bank
   and Channel, used by both list views). The transport steps are a C++ loop
   over `kTransportSteps`, as each step passes a value, which a template can't.

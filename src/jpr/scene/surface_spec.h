@@ -211,8 +211,8 @@ std::string GetViewPath(std::string_view parent_path, const ViewSpec& view);
 //==============================================================================
 
 // A whole surface: its devices, its widgets, and the scene on them (see
-// docs/config_model.md). The root view is the scene's own, so it has no name
-// or config, and isn't repeated.
+// docs/user/config_spec.md). The root view is the scene's own, so it has no
+// name or config, and isn't repeated.
 //
 // Names in paths: a path's first name is looked up from the inside out, and
 // the innermost wins: a widget parameter of the template the mapping is in,

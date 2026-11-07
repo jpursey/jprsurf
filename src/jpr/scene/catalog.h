@@ -95,7 +95,7 @@ struct ParamInfo {
 };
 
 // One kind of component a config can declare (see Components in
-// docs/config_model.md), each with a name and its kind's parameters.
+// docs/user/config_spec.md), each with a name and its kind's parameters.
 struct ComponentKindInfo {
   std::string_view name;        // Such as "enumerated_value".
   std::string_view name_space;  // Of the name it declares, such as "user:".

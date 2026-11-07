@@ -23,10 +23,9 @@ scene from a SurfaceSpec* turns into data.
 - **`ControlSurfaceListener`** lost `OnTracksChanged()`, `OnSelectionChanged()`,
   and `OnLastTouchedTrackChanged()`, which nothing used any more.
 
-This replaced the config model's *Exclusive group*
-([config_model.md](../config_model.md)) with an enumerated value, which makes
-"exactly one" true by construction, rather than enforced across several
-toggles.
+This replaced the *Exclusive group* that the config model planned with an
+enumerated value, which makes "exactly one" true by construction, rather than
+enforced across several toggles.
 
 ## Behavior
 

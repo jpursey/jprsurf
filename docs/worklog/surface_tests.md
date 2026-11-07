@@ -226,7 +226,7 @@ Checked in REAPER, and held by the fake and the notifier:
 - **A change in REAPER's own UI** is a notifier function, made only for what a
   trace has shown, with its own test.
 - **An empty strip shows nothing** by a condition on `exists` on each mapping
-  that would still show a value, as `config_model.md` describes.
+  that would still show a value, as the [config spec](../user/config_spec.md#scrolling-and-navigation) describes.
 
 ## Decisions
 

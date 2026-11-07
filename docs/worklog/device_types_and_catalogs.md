@@ -3,7 +3,7 @@
 Each kind of hardware JPRSurf supports is a **device type**, by name: a
 **catalog** of its controls, as a struct widget shape, the catalog's
 documentation, and a factory that creates the device on its ports (see
-[Device types](../config_model.md#device-types) in the config model). The
+[Devices](../user/config_spec.md#devices) in the config spec). The
 surface's devices are an explicit list, each with its name, type, ports,
 whether it is required, and its **control overrides**. The plugin creates its
 devices from that list, defines JPRSurf's widgets over them, and maps through

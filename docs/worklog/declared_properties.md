@@ -1,7 +1,7 @@
 # Properties Declared on Views, and Track Anchors
 
 A `user:` property can be declared on a view, as in the
-[config model](../config_model.md) (Declared properties, Track anchor). Each
+[config spec](../user/config_spec.md) (Components). Each
 view that declares a name gets its own instance, visible from that view and its
 descendants. Before this, every `user:` property was global, so a property that
 each strip needed got a name generated from the strip's index

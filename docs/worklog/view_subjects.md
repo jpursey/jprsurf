@@ -1,7 +1,7 @@
 # View Subjects, Lists, and References
 
 A view's track and child context are replaced by the subjects, lists, and
-references of the [config model](../config_model.md) (References, Subjects,
+references of the [config spec](../user/config_spec.md) (References, Subjects,
 Lists). Before this, the plugin positioned views itself. It set the master
 fader's track, re-pointed the track list when the track list changed, revealed
 the last touched track, and picked the Send/Receive track and its route type.

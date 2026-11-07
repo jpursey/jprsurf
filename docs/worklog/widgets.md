@@ -1,8 +1,8 @@
 # Widgets
 
 Widgets are the names mappings will use for hardware, without saying which
-device a control is on (see [Widgets](../config_model.md#widgets) in the config
-model). A widget is a control, a struct of named widgets, or an array of
+device a control is on (see [Widgets](../user/config_spec.md#widgets) in the
+config spec). A widget is a control, a struct of named widgets, or an array of
 widgets of the same shape. A config defines its widgets from paths through the
 devices' catalogs, and they resolve to the `Control`s of the devices that are
 present, so `strip[3].fader` is the fourth fader on the surface whether or not

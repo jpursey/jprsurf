@@ -65,7 +65,7 @@ from a value input, color from a delta), as the rule depends on the input.
 - **Size:** medium
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md)
+- **Background:** [config_spec.md](user/config_spec.md)
 
 The config model doc becomes a public specification of the config language. The
 user guide becomes the guide to JPRSurf's own config, and the reference for how
@@ -147,7 +147,7 @@ A row can also have a write function, so the button can change the state too.
 - **Size:** large
 - **Feature workflow:** yes
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Modes),
+- **Background:** [config_spec.md](user/config_spec.md) (Modes),
   [surface_modes.md](worklog/surface_modes.md),
   [enumerated_values_and_picks.md](worklog/enumerated_values_and_picks.md)
 
@@ -247,7 +247,7 @@ Devices are C++ today, which suits the X-Touch (scribble strip sysex, meters,
 timecode). A generic device whose controls are defined in the config (MIDI
 message to control, with input and output types) would support simple
 controllers without any code, much like CSI's surface files. These define
-device controls, not widgets (see [config_model.md](config_model.md)).
+device controls, not widgets (see [Devices](user/config_spec.md#devices)).
 
 ## Choose a config by the devices present
 
@@ -255,7 +255,7 @@ device controls, not widgets (see [config_model.md](config_model.md)).
 - **Size:** large
 - **Feature workflow:** yes
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Devices)
+- **Background:** [config_spec.md](user/config_spec.md) (Devices)
 
 A direction rather than a plan. Each device in a config is required or
 optional, so one config covers a set of hardware with some units missing. A
@@ -289,7 +289,7 @@ X-Touch has. Only worth doing for a surface with identical units.
 - **Feature workflow:** yes
 - **Depends on:** nothing
 - **Background:** [widgets.md](worklog/widgets.md),
-  [config_model.md](config_model.md) (Widgets)
+  [config_spec.md](user/config_spec.md) (Widgets)
 
 Every path in a widget definition starts at a device, so JPRSurf's
 `info_strip` is `xtouch.strip[7]`, which works because the X-Touch is required
@@ -308,7 +308,7 @@ model allows) comes with it. Only worth doing for a config that needs it.
 - **Feature workflow:** no
 - **Depends on:** nothing
 - **Background:** [widgets.md](worklog/widgets.md),
-  [config_model.md](config_model.md) (Defining widgets)
+  [config_spec.md](user/config_spec.md) (Defining widgets)
 
 A struct of array slices of the same length, turned into an array of structs
 (element *i* gets element *i* of each slice), to build strips from controls
@@ -324,7 +324,7 @@ needs it.
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Modifier sets)
+- **Background:** [config_spec.md](user/config_spec.md) (Modifier sets)
 
 A read mapping fires only when exactly its required modifiers are on, among all
 the modifiers the read mappings on its control mention. That keeps Undo and
@@ -346,7 +346,7 @@ can be done at any time, such as when a second case turns up.
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (Mappings)
+- **Background:** [config_spec.md](user/config_spec.md) (Mappings)
 
 A `ViewCondition` is met while its property, read as its value's type, equals
 it (`ViewProperty::Equals()`, see
@@ -354,7 +354,7 @@ it (`ViewProperty::Equals()`, see
 could also compare in other ways (not equal, less, greater, and so on), so a
 condition could test a level directly, rather than needing a toggle made for
 it. Less and greater need an order for text and colors. Mode overrides are a
-value to mode map today, and could become conditions with it. The config model
+value to mode map today, and could become conditions with it. The config spec
 keeps a condition to one property equal to a value, with combining states left
 to components, so it needs updating too.
 
@@ -422,7 +422,7 @@ config needs to name a built in one's, such as the ruler mode's.
 - **Size:** small
 - **Feature workflow:** no
 - **Depends on:** nothing
-- **Background:** [config_model.md](config_model.md) (The escape hatch)
+- **Background:** [config_spec.md](user/config_spec.md) (REAPER commands)
 
 REAPER's built in actions only have numbers, so a config that maps Undo says
 `cmd:40029`. A config could name the common commands instead, starting with

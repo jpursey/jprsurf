@@ -13,7 +13,7 @@ What the scene provides to a config: the built in properties of each namespace, 
 | [`mod:`](mod.md) | The surface's modifiers, which modifier sets require. A config may declare more. |
 | [`track:`](track.md) | The properties of the track a view shows, and the fields of a track reference, such as "state:master_track.volume" for "track:volume". |
 | [`route:`](route.md) | The properties of the send or receive a view shows, and the track at its other end, whose fields are track properties, such as "route:other_track.name". |
-| [`view:`](view.md) | The properties of the view a mapping is in, which act on the view's list, or its parent's. Each is on only the views it needs. |
+| [`view:`](view.md) | The properties of the view a mapping is in, which act on the view's list, or its parent's. Each is on only the views it needs. One without a prefix acts on the view it is in, and one starting with "parent_" acts on the parent view, from an item of its list. A "to_" property names the track it moves the view's reference to, as seen from the view it is in. |
 
 ## Components
 
