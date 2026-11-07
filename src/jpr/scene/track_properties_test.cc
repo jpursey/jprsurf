@@ -83,8 +83,8 @@ TEST_F(TrackPropertiesTest, PropertiesAreCreatedOnce) {
 }
 
 TEST_F(TrackPropertiesTest, PlainPropertiesSetOnlyTheirTrack) {
-  tracks_[0]->group = 1;
-  tracks_[1]->group = 1;
+  JoinGroup(tracks_[0], 1);
+  JoinGroup(tracks_[1], 1);
   TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
 
   properties.GetProperty(TrackProperties::kName)->SetText("Drums");
@@ -113,8 +113,8 @@ TEST_F(TrackPropertiesTest, PlainPropertiesSetOnlyTheirTrack) {
 // cover each action), which by default changes the track's group too, where a
 // plain property changes only its own track. Each write is a call of its own.
 TEST_F(TrackPropertiesTest, UiPropertiesRunTheTrackActions) {
-  tracks_[0]->group = 1;
-  tracks_[1]->group = 1;
+  JoinGroup(tracks_[0], 1);
+  JoinGroup(tracks_[1], 1);
   tracks_[2]->selected = true;
   GetCachedTrack(tracks_[2])->Refresh();
   TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));

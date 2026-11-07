@@ -6,9 +6,11 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
+#include "absl/log/check.h"
 #include "jpr/common/track_state.h"
 #include "sdk/reaper_plugin.h"
 
@@ -29,6 +31,15 @@ namespace jpr {
 // Its values that undo points hold are in FakeTrackUndoValues, and the rest in
 // FakeTrack itself (see "Undo and saving" in FakeProject).
 //==============================================================================
+
+// The groups a track leads and follows in for one property, as masks of groups
+// 1 to 64, where group 1 is the lowest bit (see GroupMask()).
+struct FakeTrackGroups {
+  uint64_t lead = 0;
+  uint64_t follow = 0;
+
+  bool operator==(const FakeTrackGroups&) const = default;
+};
 
 struct FakeTrackUndoValues {
   // The master's is MASTER, which P_NAME can't read or set.
@@ -64,11 +75,16 @@ struct FakeTrackUndoValues {
   // As GetTrackColor(): 0 for none, or 0x01BBGGRR. The master's reads as 0.
   int color = 0;
 
-  // The track's group, or 0 for none. A grouped change to the mute, solo, rec
-  // arm, volume, or pan of a track in a group changes every track in it (see
-  // "Track changes" in fake_reaper.cc for how). This is simpler than REAPER's
-  // groups, where each property has its own leaders and followers.
-  int group = 0;
+  // The groups the track leads and follows in, for each property the fake
+  // groups (see kGroupProperties). A grouped change to a track reaches the
+  // followers of each group it leads (see "Track changes" in fake_reaper.cc
+  // for how). JoinGroup() makes a track lead and follow a group in all of
+  // them. The master's are empty.
+  FakeTrackGroups volume_groups;
+  FakeTrackGroups pan_groups;
+  FakeTrackGroups mute_groups;
+  FakeTrackGroups solo_groups;
+  FakeTrackGroups rec_arm_groups;
 
   // As B_SHOWINMIXER and B_SHOWINTCP, the Track Manager's settings, and
   // GetTrackState()'s hidden flags. The master isn't in the Track Manager: its
@@ -95,14 +111,48 @@ struct FakeTrack : FakeTrackUndoValues {
   std::array<double, 2> peak = {};
 };
 
-// The properties a track leads and follows in its group (see FakeTrack::group),
-// as GetSetTrackGroupMembership() names them, in the order of the project
-// file's GROUP_FLAGS.
-inline constexpr std::string_view kGroupProperties[] = {
-    "VOLUME_LEAD", "VOLUME_FOLLOW", "PAN_LEAD",  "PAN_FOLLOW",
-    "MUTE_LEAD",   "MUTE_FOLLOW",   "SOLO_LEAD", "SOLO_FOLLOW",
-    "RECARM_LEAD", "RECARM_FOLLOW",
+// One of FakeTrack's groups, such as &FakeTrack::rec_arm_groups.
+using FakeGroupsMember = FakeTrackGroups FakeTrackUndoValues::*;
+
+// A property the fake groups.
+struct FakeGroupProperty {
+  // As GetSetTrackGroupMembership() names it, before _LEAD or _FOLLOW.
+  std::string_view name;
+  FakeGroupsMember groups;
+
+  // True if a grouped change reaches tracks as REAPER's does for any groups
+  // (see "Track changes" in fake_reaper.cc). Otherwise, it is faked only where
+  // each track leads and follows the same group, and no more than one.
+  bool faked_in_full = false;
 };
+
+// The properties the fake groups, in the order of the project file's
+// GROUP_FLAGS, which has each one's leads, then its follows.
+inline constexpr FakeGroupProperty kGroupProperties[] = {
+    {"VOLUME", &FakeTrackUndoValues::volume_groups},
+    {"PAN", &FakeTrackUndoValues::pan_groups},
+    {"MUTE", &FakeTrackUndoValues::mute_groups},
+    {"SOLO", &FakeTrackUndoValues::solo_groups},
+    {"RECARM", &FakeTrackUndoValues::rec_arm_groups, /*faked_in_full=*/true},
+};
+
+// Returns FakeTrackGroups' mask of `group`, from 1 to 64.
+inline uint64_t GroupMask(int group) {
+  CHECK(group >= 1 && group <= 64) << "Group " << group;
+  return uint64_t{1} << (group - 1);
+}
+
+// Makes `track` lead and follow `group`, from 1 to 64, in every property the
+// fake groups, as REAPER's track grouping dialog does with all of them
+// checked.
+inline void JoinGroup(FakeTrack* track, int group) {
+  const uint64_t mask = GroupMask(group);
+  for (const FakeGroupProperty& property : kGroupProperties) {
+    FakeTrackGroups& groups = track->*property.groups;
+    groups.lead |= mask;
+    groups.follow |= mask;
+  }
+}
 
 // CSURF_EXT_SETPAN_EX's pan mode for REAPER 4 and later's balance, which every
 // fake track has, as every track in the traces did.

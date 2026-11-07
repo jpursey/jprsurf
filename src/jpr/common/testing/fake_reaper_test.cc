@@ -459,8 +459,8 @@ TEST(FakeReaperTest, GroupedChangesItCantMoveFailTheTest) {
   FakeProject& project = reaper.GetProject();
   FakeTrack* drums = project.AddTrack("Drums");
   FakeTrack* kick = project.AddTrack("Kick");
-  drums->group = 1;
-  kick->group = 1;
+  JoinGroup(drums, 1);
+  JoinGroup(kick, 1);
   drums->volume = 0.0;
   kick->pan = 0.5;
   EXPECT_NONFATAL_FAILURE(
@@ -632,7 +632,7 @@ TEST(FakeReaperTest, ColorGroupAndVisibilityAreUndone) {
   FakeTrack* drums = project.AddTrack("Drums");
   ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventGroupingAndGanging);
   drums->color = 0x014080FF;
-  drums->group = 1;
+  JoinGroup(drums, 1);
   drums->show_in_mixer = false;
   drums->show_in_tcp = false;
   drums->selected = true;
@@ -640,10 +640,48 @@ TEST(FakeReaperTest, ColorGroupAndVisibilityAreUndone) {
 
   EXPECT_TRUE(project.Undo());
   EXPECT_EQ(drums->color, 0);
-  EXPECT_EQ(drums->group, 0);
+  EXPECT_EQ(drums->rec_arm_groups, FakeTrackGroups{});
   EXPECT_TRUE(drums->show_in_mixer);
   EXPECT_TRUE(drums->show_in_tcp);
   EXPECT_TRUE(drums->selected);
+}
+
+// Only rec arm's groups are faked in full (see Track changes in
+// fake_reaper.cc).
+TEST(FakeReaperTest, OtherGroupsAreFakedOnlyIfEachTrackLeadsAndFollowsOne) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* drums = project.AddTrack("Drums");
+  drums->mute_groups.lead = GroupMask(1);
+  FakeTrack* kick = project.AddTrack("Kick");
+  kick->mute_groups.follow = GroupMask(1);
+  EXPECT_NONFATAL_FAILURE(
+      ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventSelectionGanging),
+      "Drums's MUTE groups, other than one it leads and follows, aren't faked");
+
+  drums->mute_groups = {.lead = GroupMask(1) | GroupMask(2),
+                        .follow = GroupMask(1) | GroupMask(2)};
+  JoinGroup(kick, 1);
+  EXPECT_NONFATAL_FAILURE(
+      ::SetTrackUIMute(ToMediaTrack(drums), 1, kPreventSelectionGanging),
+      "Drums's MUTE groups");
+
+  // Without grouping, they're never read.
+  ::SetTrackUIMute(ToMediaTrack(drums), 0, kPreventGroupingAndGanging);
+}
+
+// REAPER's master can't be in a group, so the fake fails a ganged change that
+// would read the master's.
+TEST(FakeReaperTest, TheMastersGroupsArentFaked) {
+  FakeReaper reaper;
+  FakeProject& project = reaper.GetProject();
+  FakeTrack* master = project.GetMasterTrack();
+  master->selected = true;
+  master->rec_arm_groups.lead = GroupMask(1);
+  FakeTrack* drums = project.AddTrack("Drums");
+  drums->selected = true;
+  EXPECT_NONFATAL_FAILURE(::SetTrackUIRecArm(ToMediaTrack(drums), 1, 0),
+                          "The master's groups aren't faked");
 }
 
 TEST(FakeReaperTest, UndoLeavesDeletedTracksAndRoutesDeleted) {

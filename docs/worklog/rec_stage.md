@@ -321,12 +321,18 @@ In the test install, checked with temporary probes (CL1a):
   that changes the track reaches every follower of a group the track leads,
   and on through each of those that leads a group of its own. A follower that
   doesn't lead reaches no one. With ganging, it reaches the selected tracks,
-  if the track is selected, and each of their groups the same way.
+  if the track is selected, and each of their groups the same way. The
+  project file holds groups 33 to 64 in `GROUP_FLAGS_HIGH`, in the order of
+  `GROUP_FLAGS` (CL1c).
 - **Rec arm values.** Every track reached is set to the track's new value,
   and nothing changes if the track doesn't. The one exception: a follower that
-  leads the group, when the track also follows it, is toggled instead. Groups
-  made from the fake's `group` are all of this kind, which is why the fake
-  toggles grouped tracks today.
+  leads the group, when the track also follows it, is toggled instead. A
+  group whose tracks all lead and follow it, as most groups made in REAPER's
+  UI are, is of this kind, so its tracks toggle. The fake's contract tests
+  check each case (CL1c), including a follower reached through another
+  group, which is set, and one reached first from a track that doesn't
+  follow, which is set, though a track reached later leads and follows a
+  group with it.
 
 In the user's REAPER:
 - **Changes in REAPER's own UI** (a trace, 2026-11-07, of one track's record
@@ -382,7 +388,7 @@ Depends on: CL1a.
 - Contract tests (`check_in_reaper`).
 - Cost measurement of the new functions (main session, quiet machine).
 
-### CL1c [ ] common: Rec arm groups in the fake
+### CL1c [x] common: Rec arm groups in the fake
 
 Depends on: CL1b.
 

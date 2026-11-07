@@ -6,6 +6,7 @@
 #include "jpr/common/testing/fake_reaper.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -22,6 +23,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_replace.h"
+#include "absl/strings/strip.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "gtest/gtest.h"
@@ -275,22 +277,27 @@ class FakeReaper::Api final {
   //
   // A change can also change other tracks, as REAPER's UI does. With selection
   // ganging, a change to a selected track changes every selected track, the
-  // master too. Then with grouping, it changes every other track in a group
-  // with one of those (see FakeTrack::group), but not the selected tracks of a
-  // group's other tracks. SetTrackUI*()'s group flags allow both unless &1
-  // ("prevent track grouping") or &2 ("prevent selection ganging") is set,
-  // and CSurf_On*ChangeEx()'s allow_gang allows both. The record mode and the
-  // monitoring have no groups, so CSurf_OnInputMonitorChangeEx()'s only
-  // gangs.
+  // master too. Then with grouping, it changes each follower of a group one of
+  // those leads, for the property changed (see FakeTrack's groups), and on
+  // through each follower that leads a group of its own, but not the selected
+  // tracks of the tracks it reaches. SetTrackUI*()'s group flags allow both
+  // unless &1 ("prevent track grouping") or &2 ("prevent selection ganging")
+  // is set, and CSurf_On*ChangeEx()'s allow_gang allows both. The record mode
+  // and the monitoring have no groups, so CSurf_OnInputMonitorChangeEx()'s
+  // only gangs.
   //
   // The other tracks get the same mute or solo, even if the track's didn't
-  // change. A rec arm that changes the track sets its ganged tracks, but
-  // toggles its grouped tracks, and one that doesn't change it changes
-  // nothing. A volume or pan moves the others by the same change: volume by
-  // its ratio, and pan by its difference. REAPER measures that change from
-  // where each track was when the gesture began, which the fake doesn't
-  // model, so a grouped change that clamps another track's pan, or moves a
-  // volume from -inf, isn't faked yet.
+  // change. A rec arm that changes the track sets the others to its new
+  // value, except a follower that leads the group it was reached through,
+  // which the track it was reached from follows too: it is toggled. One that
+  // doesn't change the track changes nothing. A volume or pan moves the
+  // others by the same change: volume by its ratio, and pan by its
+  // difference. REAPER measures that change from where each track was when
+  // the gesture began, which the fake doesn't model, so a grouped change that
+  // clamps another track's pan, or moves a volume from -inf, isn't faked yet.
+  //
+  // Only rec arm's groups are faked in full. The others are faked only where
+  // each track leads and follows the same group, and no more than one.
   //----------------------------------------------------------------------------
 
   static void PreventUIRefresh(int count) {
@@ -304,7 +311,8 @@ class FakeReaper::Api final {
     s_instance_->OnDeferrableChange(&track);
     s_instance_->GetProjectOf(track).BeforeChange();
     const bool new_mute = GetNewValue(mute, track.mute);
-    for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
+    for (FakeTrack* changed :
+         GetChangedTracks(track, group_flags, &FakeTrack::mute_groups).All()) {
       changed->mute = new_mute;
     }
     return new_mute ? 1 : 0;
@@ -327,7 +335,8 @@ class FakeReaper::Api final {
     const bool new_solo = GetNewValue(solo, track.solo);
     const bool in_place = new_solo && solo != 2;
     const FakeTrack* master = project.GetMasterTrack();
-    for (FakeTrack* changed : GetChangedTracks(track, group_flags).All()) {
+    for (FakeTrack* changed :
+         GetChangedTracks(track, group_flags, &FakeTrack::solo_groups).All()) {
       changed->solo = new_solo;
       changed->solo_in_place = in_place && changed != master;
     }
@@ -351,14 +360,16 @@ class FakeReaper::Api final {
     if (new_rec_arm == track.rec_arm) {
       return new_rec_arm ? 1 : 0;
     }
-    const ChangedTracks changed = GetChangedTracks(track, group_flags);
+    const ChangedTracks changed =
+        GetChangedTracks(track, group_flags, &FakeTrack::rec_arm_groups);
     for (FakeTrack* ganged : changed.ganged) {
       if (ganged != master) {
         ganged->rec_arm = new_rec_arm;
       }
     }
-    for (FakeTrack* grouped : changed.grouped) {
-      grouped->rec_arm = !grouped->rec_arm;
+    for (const GroupedTrack& grouped : changed.grouped) {
+      grouped.track->rec_arm =
+          grouped.mutual ? !grouped.track->rec_arm : new_rec_arm;
     }
     return new_rec_arm ? 1 : 0;
   }
@@ -414,9 +425,7 @@ class FakeReaper::Api final {
     s_instance_->OnDeferrableChange(&track);
     s_instance_->GetProjectOf(track).BeforeChange();
     for (FakeTrack* changed :
-         GetChangedTracks(track, allow_gang ? kPreventTrackGrouping
-                                            : kPreventGroupingAndGanging)
-             .ganged) {
+         GetGangedTracks(track, allow_gang ? 0 : kPreventSelectionGanging)) {
       changed->monitor_mode = monitor;
     }
     return monitor;
@@ -433,7 +442,8 @@ class FakeReaper::Api final {
     project.BeforeChange();
     const double old_volume = track.volume;
     for (FakeTrack* changed :
-         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging)
+         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging,
+                          &FakeTrack::volume_groups)
              .All()) {
       if (changed == &track) {
         changed->volume = volume;
@@ -460,7 +470,8 @@ class FakeReaper::Api final {
     const double new_pan = std::clamp(pan, -1.0, 1.0);
     const double change = new_pan - track.pan;
     for (FakeTrack* changed :
-         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging)
+         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging,
+                          &FakeTrack::pan_groups)
              .All()) {
       if (changed == &track) {
         changed->pan = new_pan;
@@ -553,9 +564,8 @@ class FakeReaper::Api final {
   }
 
   // The groups a track leads or follows in, for `name`, as a mask of groups 1
-  // to 32, or with ...High(), 33 to 64. A fake track leads and follows in its
-  // group for every property the fake groups (see FakeTrack::group). Setting
-  // them isn't faked yet.
+  // to 32, or with ...High(), 33 to 64, for each property the fake groups (see
+  // kGroupProperties). Setting them isn't faked yet.
   static unsigned int GetSetTrackGroupMembership(MediaTrack* track_id,
                                                  const char* name,
                                                  unsigned int set_mask,
@@ -886,17 +896,28 @@ class FakeReaper::Api final {
   }
 
  private:
+  // A track a grouped change reaches (see Track changes).
+  struct GroupedTrack {
+    FakeTrack* track = nullptr;
+
+    // True if the track leads the group it was reached through, which the
+    // track it was reached from follows too.
+    bool mutual = false;
+  };
+
   // The tracks a change to a track changes (see Track changes).
   struct ChangedTracks {
     // The track, and the selected tracks if it is ganged with them.
     std::vector<FakeTrack*> ganged;
 
-    // The other tracks in a group with one of those.
-    std::vector<FakeTrack*> grouped;
+    // The other tracks the groups of those reach.
+    std::vector<GroupedTrack> grouped;
 
     std::vector<FakeTrack*> All() const {
       std::vector<FakeTrack*> tracks = ganged;
-      tracks.insert(tracks.end(), grouped.begin(), grouped.end());
+      for (const GroupedTrack& each : grouped) {
+        tracks.push_back(each.track);
+      }
       return tracks;
     }
   };
@@ -913,40 +934,84 @@ class FakeReaper::Api final {
   }
 
   // Returns the tracks a change to `track` changes, with SetTrackUI*()'s
-  // `group_flags`.
-  static ChangedTracks GetChangedTracks(FakeTrack& track, int group_flags) {
+  // `group_flags`, through the groups of `property`.
+  static ChangedTracks GetChangedTracks(FakeTrack& track, int group_flags,
+                                        FakeGroupsMember property) {
     ChangedTracks changed;
-    if (IsGanged(track, group_flags)) {
-      changed.ganged = s_instance_->GetProjectOf(track).GetSelectedTracks(
-          /*include_master=*/true);
-    } else {
-      changed.ganged = {&track};
-    }
+    changed.ganged = GetGangedTracks(track, group_flags);
     if (IsGrouped(group_flags)) {
-      changed.grouped = GetGroupedTracks(changed.ganged);
+      changed.grouped = GetGroupedTracks(changed.ganged, property);
     }
     return changed;
   }
 
-  // Returns every track in a group with one of `tracks`, that isn't one of
-  // them.
-  static std::vector<FakeTrack*> GetGroupedTracks(
-      absl::Span<FakeTrack* const> tracks) {
-    std::vector<FakeTrack*> grouped;
-    if (std::ranges::none_of(tracks, &FakeTrack::group)) {
+  // Returns the track, and with SetTrackUI*()'s `group_flags`, every selected
+  // track if it is selected, the master too.
+  static std::vector<FakeTrack*> GetGangedTracks(FakeTrack& track,
+                                                 int group_flags) {
+    if (IsGanged(track, group_flags)) {
+      return s_instance_->GetProjectOf(track).GetSelectedTracks(
+          /*include_master=*/true);
+    }
+    return {&track};
+  }
+
+  // Returns the tracks the groups of `tracks` reach for `property`, that aren't
+  // one of them: each follower of a group one of them leads, and on through
+  // each follower that leads a group of its own (see Track changes).
+  static std::vector<GroupedTrack> GetGroupedTracks(
+      absl::Span<FakeTrack* const> tracks, FakeGroupsMember property) {
+    std::vector<GroupedTrack> grouped;
+    if (std::ranges::none_of(tracks, [property](const FakeTrack* track) {
+          return (track->*property).lead != 0;
+        })) {
       return grouped;
     }
     const FakeProject& project = s_instance_->GetProjectOf(*tracks.front());
-    for (int i = 0; i < project.GetTrackCount(); ++i) {
-      FakeTrack* other = project.GetTrack(i);
-      if (other->group != 0 &&
-          std::ranges::find(tracks, other) == tracks.end() &&
-          std::ranges::find(tracks, other->group, &FakeTrack::group) !=
-              tracks.end()) {
-        grouped.push_back(other);
+    const FakeTrack* master = project.GetMasterTrack();
+    if (master->*property != FakeTrackGroups{}) {
+      ADD_FAILURE() << "The master's groups aren't faked, as REAPER's master "
+                       "can't be in one";
+    }
+    const FakeGroupProperty& group_property = *std::ranges::find(
+        kGroupProperties, property, &FakeGroupProperty::groups);
+    if (!group_property.faked_in_full) {
+      ValidateSimpleGroups(project, group_property);
+    }
+    std::vector<FakeTrack*> reached(tracks.begin(), tracks.end());
+    for (int i = 0; i < static_cast<int>(reached.size()); ++i) {
+      const FakeTrackGroups& from = reached[i]->*property;
+      for (int j = 0; j < project.GetTrackCount(); ++j) {
+        FakeTrack* other = project.GetTrack(j);
+        const FakeTrackGroups& to = other->*property;
+        const uint64_t through = from.lead & to.follow;
+        if (through != 0 &&
+            std::ranges::find(reached, other) == reached.end()) {
+          reached.push_back(other);
+          grouped.push_back({.track = other,
+                             .mutual = (through & to.lead & from.follow) != 0});
+        }
       }
     }
     return grouped;
+  }
+
+  // Fails for the first track in `project` that doesn't lead and follow the
+  // same group of `property`, or is in more than one, which only the
+  // properties faked in full fake (see FakeGroupProperty).
+  static void ValidateSimpleGroups(const FakeProject& project,
+                                   const FakeGroupProperty& property) {
+    for (int i = 0; i < project.GetTrackCount(); ++i) {
+      const FakeTrack* track = project.GetTrack(i);
+      const FakeTrackGroups& groups = track->*property.groups;
+      if (groups.lead != groups.follow ||
+          (groups.lead != 0 && !std::has_single_bit(groups.lead))) {
+        ADD_FAILURE() << track->name << "'s " << property.name
+                      << " groups, other than one it leads and follows, "
+                         "aren't faked yet";
+        return;
+      }
+    }
   }
 
   // Returns GetSetTrackGroupMembership()'s mask for `track_id`'s groups from
@@ -956,15 +1021,34 @@ class FakeReaper::Api final {
                                    unsigned int set_mask, int first_group) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
     const std::string_view property(name);
-    if (set_mask != 0 || std::ranges::find(kGroupProperties, property) ==
-                             std::ranges::end(kGroupProperties)) {
+    const uint64_t* mask =
+        set_mask == 0 ? FindGroupMask(track, property) : nullptr;
+    if (mask == nullptr) {
       ADD_FAILURE() << "GetSetTrackGroupMembership(\"" << property
                     << "\", set=" << (set_mask != 0) << ") isn't faked yet";
       return 0;
     }
-    // A track in no group, whose group is 0, has no bit in either mask.
-    const int bit = track.group - first_group;
-    return bit >= 0 && bit < 32 ? 1u << bit : 0;
+    return static_cast<unsigned int>(*mask >> (first_group - 1));
+  }
+
+  // Returns the mask of `track`'s groups GetSetTrackGroupMembership() names
+  // `name`, such as RECARM_LEAD, or nullptr if the fake doesn't group it.
+  static const uint64_t* FindGroupMask(const FakeTrack& track,
+                                       std::string_view name) {
+    for (const FakeGroupProperty& property : kGroupProperties) {
+      if (!absl::ConsumePrefix(&name, property.name)) {
+        continue;
+      }
+      const FakeTrackGroups& groups = track.*property.groups;
+      if (name == "_LEAD") {
+        return &groups.lead;
+      }
+      if (name == "_FOLLOW") {
+        return &groups.follow;
+      }
+      return nullptr;
+    }
+    return nullptr;
   }
 
   // Returns `track_id`'s routes in `category` (see Routes).

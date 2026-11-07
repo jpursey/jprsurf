@@ -341,20 +341,44 @@ TEST_F(TrackContractTest, TracksHaveTheirRecordAndMonitoringModes) {
 
 TEST_F(TrackContractTest, TracksReadTheGroupsTheyLeadAndFollow) {
   OpenProject([](FakeProject& project) {
-    project.AddTrack("Grouped")->group = 3;
+    JoinGroup(project.AddTrack("Grouped"), 3);
+    project.AddTrack("High")->mute_groups = {
+        .lead = GroupMask(2) | GroupMask(40), .follow = GroupMask(64)};
+    project.AddTrack("Only high")->rec_arm_groups.follow = GroupMask(40);
     project.AddTrack("Not grouped");
   });
   MediaTrack* grouped = FindTrack("Grouped");
+  MediaTrack* high = FindTrack("High");
   MediaTrack* not_grouped = FindTrack("Not grouped");
   MediaTrack* master = GetMasterTrack(nullptr);
-  for (std::string_view property : kGroupProperties) {
-    SCOPED_TRACE(property);
-    const std::string name(property);
-    EXPECT_EQ(GetSetTrackGroupMembership(grouped, name.c_str(), 0, 0), 1u << 2);
-    EXPECT_EQ(GetSetTrackGroupMembershipHigh(grouped, name.c_str(), 0, 0), 0u);
-    EXPECT_EQ(GetSetTrackGroupMembership(not_grouped, name.c_str(), 0, 0), 0u);
-    EXPECT_EQ(GetSetTrackGroupMembership(master, name.c_str(), 0, 0), 0u);
+  for (const FakeGroupProperty& property : kGroupProperties) {
+    for (const char* suffix : {"_LEAD", "_FOLLOW"}) {
+      const std::string name = absl::StrCat(property.name, suffix);
+      SCOPED_TRACE(name);
+      EXPECT_EQ(GetSetTrackGroupMembership(grouped, name.c_str(), 0, 0),
+                1u << 2);
+      EXPECT_EQ(GetSetTrackGroupMembershipHigh(grouped, name.c_str(), 0, 0),
+                0u);
+      EXPECT_EQ(GetSetTrackGroupMembership(not_grouped, name.c_str(), 0, 0),
+                0u);
+      EXPECT_EQ(GetSetTrackGroupMembership(master, name.c_str(), 0, 0), 0u);
+    }
   }
+
+  // Each property has its own leads and follows, and ...High() has groups 33
+  // to 64.
+  EXPECT_EQ(GetSetTrackGroupMembership(high, "MUTE_LEAD", 0, 0), 1u << 1);
+  EXPECT_EQ(GetSetTrackGroupMembershipHigh(high, "MUTE_LEAD", 0, 0), 1u << 7);
+  EXPECT_EQ(GetSetTrackGroupMembership(high, "MUTE_FOLLOW", 0, 0), 0u);
+  EXPECT_EQ(GetSetTrackGroupMembershipHigh(high, "MUTE_FOLLOW", 0, 0),
+            1u << 31);
+  EXPECT_EQ(GetSetTrackGroupMembership(high, "SOLO_LEAD", 0, 0), 0u);
+  EXPECT_EQ(GetSetTrackGroupMembershipHigh(high, "SOLO_FOLLOW", 0, 0), 0u);
+  MediaTrack* only_high = FindTrack("Only high");
+  EXPECT_EQ(GetSetTrackGroupMembership(only_high, "RECARM_FOLLOW", 0, 0), 0u);
+  EXPECT_EQ(GetSetTrackGroupMembershipHigh(only_high, "RECARM_FOLLOW", 0, 0),
+            1u << 7);
+  EXPECT_EQ(GetSetTrackGroupMembershipHigh(only_high, "RECARM_LEAD", 0, 0), 0u);
 }
 
 TEST_F(TrackContractTest, EachTrackHasItsOwnGuid) {
@@ -488,13 +512,13 @@ TEST_F(TrackChangeContractTest, VolumeAndPanAreSet) {
 // A and B are in a group, C isn't, and D is in another. B's volume and pan are
 // 0.5.
 void BuildGroups(FakeProject& project) {
-  project.AddTrack("A")->group = 1;
+  JoinGroup(project.AddTrack("A"), 1);
   FakeTrack* b = project.AddTrack("B");
-  b->group = 1;
+  JoinGroup(b, 1);
   b->volume = 0.5;
   b->pan = 0.5;
   project.AddTrack("C");
-  project.AddTrack("D")->group = 2;
+  JoinGroup(project.AddTrack("D"), 2);
 }
 
 TEST_F(TrackChangeContractTest, GroupedMuteAndSoloSetTheGroup) {
@@ -552,6 +576,114 @@ TEST_F(TrackChangeContractTest, GroupedRecArmTogglesTheGroup) {
   // A rec arm that doesn't change the track changes nothing.
   EXPECT_EQ(Set(kTrackStateRecArm, a, 0, kPreventSelectionGanging), 0);
   EXPECT_TRUE(HasFlag(b, kTrackStateRecArm));
+}
+
+TEST_F(TrackChangeContractTest,
+       GroupedRecArmReachesFollowersOfGroupsTheTrackLeadsAndOnThroughTheirs) {
+  // A leads groups 1 and 40. B and C follow 1, and C leads 2, which D follows.
+  // E leads 2 too, but follows nothing, and F follows 40.
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("A")->rec_arm_groups.lead = GroupMask(1) | GroupMask(40);
+    project.AddTrack("B")->rec_arm_groups.follow = GroupMask(1);
+    project.AddTrack("C")->rec_arm_groups = {.lead = GroupMask(2),
+                                             .follow = GroupMask(1)};
+    project.AddTrack("D")->rec_arm_groups.follow = GroupMask(2);
+    project.AddTrack("E")->rec_arm_groups.lead = GroupMask(2);
+    project.AddTrack("F")->rec_arm_groups.follow = GroupMask(40);
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  Set(kTrackStateRecArm, a, 1, kPreventSelectionGanging);
+  for (const char* name : {"B", "C", "D", "F"}) {
+    SCOPED_TRACE(name);
+    EXPECT_TRUE(HasFlag(FindTrack(name), kTrackStateRecArm));
+  }
+  EXPECT_FALSE(HasFlag(FindTrack("E"), kTrackStateRecArm));
+
+  // A follower that doesn't lead reaches no one.
+  Set(kTrackStateRecArm, b, 0, kPreventSelectionGanging);
+  EXPECT_FALSE(HasFlag(b, kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(a, kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(FindTrack("C"), kTrackStateRecArm));
+
+  // Each track reached is set to the track's value, B too, which already was.
+  Set(kTrackStateRecArm, a, 0, kPreventSelectionGanging);
+  for (const char* name : {"B", "C", "D", "F"}) {
+    SCOPED_TRACE(name);
+    EXPECT_FALSE(HasFlag(FindTrack(name), kTrackStateRecArm));
+  }
+}
+
+TEST_F(TrackChangeContractTest,
+       GroupedRecArmTogglesAFollowerThatLeadsAGroupTheTrackFollows) {
+  // A, B, and C lead and follow group 1, D follows it, and E leads it. F leads
+  // group 2, and G leads and follows it. B, D, and G are armed.
+  OpenProject([](FakeProject& project) {
+    const FakeTrackGroups one = {.lead = GroupMask(1), .follow = GroupMask(1)};
+    project.AddTrack("A")->rec_arm_groups = one;
+    FakeTrack* b = project.AddTrack("B");
+    b->rec_arm_groups = one;
+    b->rec_arm = true;
+    project.AddTrack("C")->rec_arm_groups = one;
+    FakeTrack* d = project.AddTrack("D");
+    d->rec_arm_groups.follow = GroupMask(1);
+    d->rec_arm = true;
+    project.AddTrack("E")->rec_arm_groups.lead = GroupMask(1);
+    project.AddTrack("F")->rec_arm_groups.lead = GroupMask(2);
+    FakeTrack* g = project.AddTrack("G");
+    g->rec_arm_groups = {.lead = GroupMask(2), .follow = GroupMask(2)};
+    g->rec_arm = true;
+  });
+
+  // B and C lead the group A follows, so they toggle, and D, which only
+  // follows, is set. E doesn't follow, so isn't reached.
+  Set(kTrackStateRecArm, FindTrack("A"), 1, kPreventSelectionGanging);
+  EXPECT_FALSE(HasFlag(FindTrack("B"), kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(FindTrack("C"), kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(FindTrack("D"), kTrackStateRecArm));
+  EXPECT_FALSE(HasFlag(FindTrack("E"), kTrackStateRecArm));
+
+  // F doesn't follow the group G leads, so G is set.
+  Set(kTrackStateRecArm, FindTrack("F"), 1, kPreventSelectionGanging);
+  EXPECT_TRUE(HasFlag(FindTrack("G"), kTrackStateRecArm));
+}
+
+TEST_F(TrackChangeContractTest,
+       GroupedRecArmSetsAFollowerTheTrackReachesFirst) {
+  // A leads group 1, which B and C follow. B and C lead and follow group 2 too,
+  // and C is armed. C is reached from A, which doesn't follow group 1, before
+  // B could reach it through group 2, so it is set rather than toggled.
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("A")->rec_arm_groups.lead = GroupMask(1);
+    const FakeTrackGroups both = {.lead = GroupMask(2),
+                                  .follow = GroupMask(1) | GroupMask(2)};
+    project.AddTrack("B")->rec_arm_groups = both;
+    FakeTrack* c = project.AddTrack("C");
+    c->rec_arm_groups = both;
+    c->rec_arm = true;
+  });
+  Set(kTrackStateRecArm, FindTrack("A"), 1, kPreventSelectionGanging);
+  EXPECT_TRUE(HasFlag(FindTrack("B"), kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(FindTrack("C"), kTrackStateRecArm));
+}
+
+TEST_F(TrackChangeContractTest, GangedRecArmReachesTheGroupsOfSelectedTracks) {
+  // A and B are selected, B leads group 1, and C follows it.
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("A")->selected = true;
+    FakeTrack* b = project.AddTrack("B");
+    b->selected = true;
+    b->rec_arm_groups.lead = GroupMask(1);
+    project.AddTrack("C")->rec_arm_groups.follow = GroupMask(1);
+  });
+  Set(kTrackStateRecArm, FindTrack("A"), 1, 0);
+  EXPECT_TRUE(HasFlag(FindTrack("B"), kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(FindTrack("C"), kTrackStateRecArm));
+
+  // Without grouping, only the selected tracks.
+  Set(kTrackStateRecArm, FindTrack("A"), 0, kPreventTrackGrouping);
+  EXPECT_FALSE(HasFlag(FindTrack("B"), kTrackStateRecArm));
+  EXPECT_TRUE(HasFlag(FindTrack("C"), kTrackStateRecArm));
 }
 
 TEST_F(TrackChangeContractTest, GroupedVolumeAndPanMoveTheGroupAsMuch) {
@@ -664,8 +796,8 @@ TEST_F(TrackChangeContractTest, GangedTracksChangeTheirGroupsButNotTheReverse) {
     project.AddTrack("A")->selected = true;
     FakeTrack* b = project.AddTrack("B");
     b->selected = true;
-    b->group = 1;
-    project.AddTrack("C")->group = 1;
+    JoinGroup(b, 1);
+    JoinGroup(project.AddTrack("C"), 1);
   });
   MediaTrack* a = FindTrack("A");
   MediaTrack* b = FindTrack("B");
@@ -760,9 +892,9 @@ TEST_F(TrackChangeContractTest, RecordModeAndMonitoringArentGroupedOrGanged) {
   OpenProject([](FakeProject& project) {
     FakeTrack* a = project.AddTrack("A");
     a->selected = true;
-    a->group = 1;
+    JoinGroup(a, 1);
     project.AddTrack("B")->selected = true;
-    project.AddTrack("C")->group = 1;
+    JoinGroup(project.AddTrack("C"), 1);
   });
   MediaTrack* a = FindTrack("A");
   SetMediaTrackInfo_Value(a, "I_RECMODE", 2);
@@ -792,8 +924,8 @@ TEST_F(TrackChangeContractTest,
     project.AddTrack("A")->selected = true;
     FakeTrack* b = project.AddTrack("B");
     b->selected = true;
-    b->group = 1;
-    project.AddTrack("C")->group = 1;
+    JoinGroup(b, 1);
+    JoinGroup(project.AddTrack("C"), 1);
     project.AddTrack("D");
   });
   MediaTrack* a = FindTrack("A");

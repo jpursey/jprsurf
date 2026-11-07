@@ -422,9 +422,9 @@ REAPER's calls on the surface follow these.
   selection again.
 - **Ganging and grouping:** with the setters' group flags without `&2`, a
   mute, solo, or rec arm of a selected track changes every selected track,
-  and without `&1`, of a track in a group changes the group (see "Track
-  changes" in `fake_reaper.cc`). Either way, a rec arm is then sent as a
-  change to every track.
+  and without `&1`, of a track that leads a group changes its followers (see
+  "Track changes" in `fake_reaper.cc`). Either way, a rec arm is then sent as
+  a change to every track.
 - **The record mode and monitoring send the track's change** (2026-11-07).
   `SetMediaTrackInfo_Value()` with `I_RECMODE` sends it twice, even if nothing
   changed, and nothing for the master's, which can't be set. With `I_RECMON`,

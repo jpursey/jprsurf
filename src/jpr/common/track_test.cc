@@ -563,8 +563,8 @@ TEST_F(TrackTest, BatchOfSelectionAloneAddsNoUndoPoint) {
 TEST_F(TrackTest, GroupingChangesTheGroup) {
   FakeTrack* drums = project_.AddTrack("Drums");
   FakeTrack* kick = project_.AddTrack("Kick");
-  drums->group = 1;
-  kick->group = 1;
+  JoinGroup(drums, 1);
+  JoinGroup(kick, 1);
   TrackCache::Get().Refresh();
 
   GetCachedTrack(drums)->SetMute(true);

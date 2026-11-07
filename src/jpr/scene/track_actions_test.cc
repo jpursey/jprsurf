@@ -114,8 +114,8 @@ class TrackActionsTest : public ::testing::Test {
 //==============================================================================
 
 TEST_F(TrackActionsTest, VolumeAndPanChangeTheGroup) {
-  top_[0]->group = 1;
-  top_[2]->group = 1;
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
   actions_.UiSetVolume(GetCachedTrack(top_[0]), 0.5);
   actions_.UiSetPan(GetCachedTrack(top_[0]), 0.25);
   EXPECT_EQ(top_[0]->volume, 0.5);
@@ -126,8 +126,8 @@ TEST_F(TrackActionsTest, VolumeAndPanChangeTheGroup) {
 }
 
 TEST_F(TrackActionsTest, CtrlVolumeAndPanChangeOnlyTheTrack) {
-  top_[0]->group = 1;
-  top_[2]->group = 1;
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
   SetModifiers(kModCtrl, true);
   actions_.UiSetVolume(GetCachedTrack(top_[0]), 0.5);
   actions_.UiSetPan(GetCachedTrack(top_[0]), 0.25);
@@ -219,8 +219,8 @@ TEST_F(TrackActionsTest, RangesSelectOnlyTracksOnTheSurface) {
 //==============================================================================
 
 TEST_F(TrackActionsTest, ToggleSetsTheGroupToTheTracksNewValue) {
-  top_[0]->group = 1;
-  top_[2]->group = 1;
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
   top_[2]->mute = true;
   Mute(top_[0]);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T1", "T3"));
@@ -231,8 +231,8 @@ TEST_F(TrackActionsTest, ToggleSetsTheGroupToTheTracksNewValue) {
 }
 
 TEST_F(TrackActionsTest, CtrlToggleTogglesTheTrackAlone) {
-  top_[0]->group = 1;
-  top_[2]->group = 1;
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
   Mute(top_[0], kModCtrl);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T1"));
   EXPECT_EQ(GetLastTouched(), "T1");
@@ -258,8 +258,8 @@ TEST_F(TrackActionsTest, AltTurnsEveryTrackOff) {
 
 TEST_F(TrackActionsTest, CtrlAltTurnsOnTheTrackAlone) {
   top_[0]->mute = true;
-  top_[2]->group = 1;
-  top_[3]->group = 1;
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
   Mute(top_[2], kModCtrl | kModAlt);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T3"));
   EXPECT_EQ(GetLastTouched(), "T3");
@@ -267,8 +267,8 @@ TEST_F(TrackActionsTest, CtrlAltTurnsOnTheTrackAlone) {
 
 TEST_F(TrackActionsTest, ShiftAltTurnsOnTheTrackAndItsGroup) {
   top_[0]->mute = true;
-  top_[2]->group = 1;
-  top_[3]->group = 1;
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
   Mute(top_[2], kModShift | kModAlt);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T3", "T4"));
   EXPECT_EQ(GetLastTouched(), "T3");
@@ -290,8 +290,8 @@ TEST_F(TrackActionsTest, ShiftSetsTheRangeWithTheSameParentToTheLastTouched) {
 }
 
 TEST_F(TrackActionsTest, CtrlShiftSetsEveryTrackInTheRangeAlone) {
-  top_[0]->group = 1;
-  top_[2]->group = 1;
+  JoinGroup(top_[0], 1);
+  JoinGroup(top_[2], 1);
   Mute(top_[3]);
   Mute(folder_[1], kCtrlShift);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T2.2", "T3", "T4"));
@@ -308,8 +308,8 @@ TEST_F(TrackActionsTest, RangesSetOnlyTracksOnTheSurface) {
 TEST_F(TrackActionsTest, OptTogglesEachSelectedTrackAlone) {
   top_[0]->selected = true;
   top_[2]->selected = true;
-  top_[2]->group = 1;
-  top_[3]->group = 1;
+  JoinGroup(top_[2], 1);
+  JoinGroup(top_[3], 1);
 
   // T3's cached value is stale, so the action reads it.
   top_[2]->mute = true;
@@ -318,7 +318,7 @@ TEST_F(TrackActionsTest, OptTogglesEachSelectedTrackAlone) {
   EXPECT_EQ(GetLastTouched(), "T1");
 
   // A track that isn't selected is toggled alone.
-  top_[1]->group = 1;
+  JoinGroup(top_[1], 1);
   Mute(top_[1], kModOpt);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T1", "T2"));
   EXPECT_EQ(GetLastTouched(), "T1");

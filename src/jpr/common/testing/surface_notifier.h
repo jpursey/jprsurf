@@ -43,8 +43,8 @@ namespace jpr {
 //   the master's solo and the change of each track whose rec arm changed. In a
 //   deferred refresh, SetTrackListChange() and the master's solo, and the rest
 //   at the refresh. A change to a selected track with selection ganging (group
-//   flags without &2), or to a track in a group with grouping (without &1), is
-//   sent as a change to every track.
+//   flags without &2), or to a track that leads a rec arm group with grouping
+//   (without &1), is sent as a change to every track.
 // - SetMediaTrackInfo_Value(): for I_RECMODE, the track's change twice, even if
 //   nothing changed, but nothing for the master's, which can't be set. For
 //   I_RECMON, the track's change if it changed. The master's change is its

@@ -176,7 +176,7 @@ TEST_F(ReaperTraceTest, TracesResultsAndOutputs) {
 }
 
 TEST_F(ReaperTraceTest, TracesMasksInHex) {
-  drums_->group = 5;
+  JoinGroup(drums_, 5);
   g_surface_calls = [this] {
     GetSetTrackGroupMembership(ToMediaTrack(drums_), "RECARM_LEAD", 0, 0);
   };

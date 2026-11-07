@@ -122,7 +122,7 @@ int SurfaceNotifier::OnSetTrackUIRecArm(decltype(SetTrackUIRecArm) original,
   // every track, whatever it changed.
   FakeTrack* fake_track = ToFakeTrack(track);
   if (IsGanged(*fake_track, group_flags) ||
-      (IsGrouped(group_flags) && fake_track->group != 0)) {
+      (IsGrouped(group_flags) && fake_track->rec_arm_groups.lead != 0)) {
     changed = GetTracks();
     changed.erase(changed.begin());
   }

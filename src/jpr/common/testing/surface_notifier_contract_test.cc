@@ -960,8 +960,8 @@ class SurfaceNotifierGroupContractTest : public ContractTest {
   // A and B are in a group, and C isn't.
   SurfaceNotifierGroupContractTest() {
     OpenProject([](FakeProject& project) {
-      project.AddTrack("A")->group = 1;
-      project.AddTrack("B")->group = 1;
+      JoinGroup(project.AddTrack("A"), 1);
+      JoinGroup(project.AddTrack("B"), 1);
       project.AddTrack("C");
     });
     a_ = GetTrack(nullptr, 0);

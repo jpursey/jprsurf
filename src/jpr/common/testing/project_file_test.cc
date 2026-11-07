@@ -242,22 +242,25 @@ TEST(ProjectFileTest, WritesHardwareOutputs) {
               ElementsAre("MASTERHWOUT 0 0 1 0 0 0 0 -1"));
 }
 
-TEST(ProjectFileTest, GroupsLeadAndFollowEachGroupedProperty) {
+TEST(ProjectFileTest, GroupsAreEachPropertysLeadsThenFollows) {
   std::unique_ptr<FakeProject> project = FakeProject::Create();
-  project->AddTrack("A")->group = 1;
-  project->AddTrack("B")->group = 32;
+  JoinGroup(project->AddTrack("A"), 1);
+  JoinGroup(project->AddTrack("B"), 32);
   project->AddTrack("C");
-  EXPECT_THAT(Lines(WriteProjectFile(*project), "GROUP_FLAGS"),
+  FakeTrack* d = project->AddTrack("D");
+  d->volume_groups.lead = GroupMask(2);
+  d->pan_groups.follow = GroupMask(3);
+  d->rec_arm_groups = {.lead = GroupMask(1) | GroupMask(64),
+                       .follow = GroupMask(33)};
+  const std::string text = WriteProjectFile(*project);
+  EXPECT_THAT(Lines(text, "GROUP_FLAGS"),
               ElementsAre("GROUP_FLAGS 1 1 1 1 1 1 1 1 1 1",
                           "GROUP_FLAGS 2147483648 2147483648 2147483648 "
                           "2147483648 2147483648 2147483648 2147483648 "
-                          "2147483648 2147483648 2147483648"));
-
-  FakeTrack* d = project->AddTrack("D");
-  d->group = 33;
-  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "isn't from 1 to 32");
-  d->group = -1;
-  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "isn't from 1 to 32");
+                          "2147483648 2147483648 2147483648",
+                          "GROUP_FLAGS 2 0 0 4 0 0 0 0 1 0"));
+  EXPECT_THAT(Lines(text, "GROUP_FLAGS_HIGH"),
+              ElementsAre("GROUP_FLAGS_HIGH 0 0 0 0 0 0 0 0 2147483648 1"));
 }
 
 TEST(ProjectFileTest, SelectedItemsAreOnTheFirstTrack) {
@@ -342,9 +345,9 @@ TEST(ProjectFileTest, MasterStateAProjectCantHoldFailsTheTest) {
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
                           "the master's monitoring");
   master->monitor_mode = 1;
-  master->group = 1;
-  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's group");
-  master->group = 0;
+  master->solo_groups.follow = GroupMask(1);
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's groups");
+  master->solo_groups = {};
   master->show_in_mixer = false;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
                           "the master hidden in the mixer");

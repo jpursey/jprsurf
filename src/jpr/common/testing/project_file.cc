@@ -5,8 +5,10 @@
 
 #include "jpr/common/testing/project_file.h"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -25,10 +27,28 @@ namespace {
 // The PEAKCOL REAPER writes for a track with no color of its own.
 constexpr int kNoColor = 16576;
 
-// GROUP_FLAGS has a mask of groups for each property a track leads or follows
-// in, in kGroupProperties' order. The rest are left out, as no group has them.
-// Each mask holds groups 1 to 32.
-constexpr int kMaxGroup = 32;
+// Returns GROUP_FLAGS' masks of groups 1 to 32 for `track`, or with `high`,
+// GROUP_FLAGS_HIGH's of groups 33 to 64: each property's leads, then its
+// follows, in kGroupProperties' order. The rest are left out, as no group has
+// them.
+std::vector<uint32_t> GroupFlags(const FakeTrack* track, bool high) {
+  const int shift = high ? 32 : 0;
+  std::vector<uint32_t> masks;
+  for (const FakeGroupProperty& property : kGroupProperties) {
+    const FakeTrackGroups& groups = track->*property.groups;
+    masks.push_back(static_cast<uint32_t>(groups.lead >> shift));
+    masks.push_back(static_cast<uint32_t>(groups.follow >> shift));
+  }
+  return masks;
+}
+
+// Returns true if `track` leads or follows any group.
+bool HasGroups(const FakeTrack* track) {
+  return std::ranges::any_of(
+      kGroupProperties, [track](const FakeGroupProperty& property) {
+        return track->*property.groups != FakeTrackGroups{};
+      });
+}
 
 // Returns `value` as the shortest text that reads back as the same value.
 std::string Number(double value) {
@@ -194,8 +214,8 @@ void ProjectFileWriter::AppendMaster() {
         "the master's monitoring, which REAPER keeps from the project open "
         "before");
   }
-  if (master->group != 0) {
-    Fail("the master's group");
+  if (HasGroups(master)) {
+    Fail("the master's groups");
   }
   if (!master->show_in_mixer) {
     Fail("the master hidden in the mixer, which shows the master its own way");
@@ -254,14 +274,15 @@ void ProjectFileWriter::AppendTrack(int index) {
   absl::StrAppend(&text_, "    REC ", Flag(track->rec_arm), " 0 ",
                   track->monitor_mode, " ", track->rec_mode, " 0 0 0\n");
   absl::StrAppend(&text_, "    TRACKID ", guid, "\n");
-  if (track->group < 0 || track->group > kMaxGroup) {
-    Fail(absl::StrCat(track->name, "'s group, ", track->group,
-                      ", which isn't from 1 to ", kMaxGroup));
-  } else if (track->group > 0) {
-    std::vector<unsigned> masks(std::size(kGroupProperties),
-                                1u << (track->group - 1));
-    absl::StrAppend(&text_, "    GROUP_FLAGS ", absl::StrJoin(masks, " "),
+  if (HasGroups(track)) {
+    absl::StrAppend(&text_, "    GROUP_FLAGS ",
+                    absl::StrJoin(GroupFlags(track, /*high=*/false), " "),
                     "\n");
+    const std::vector<uint32_t> high = GroupFlags(track, /*high=*/true);
+    if (std::ranges::any_of(high, [](uint32_t mask) { return mask != 0; })) {
+      absl::StrAppend(&text_, "    GROUP_FLAGS_HIGH ", absl::StrJoin(high, " "),
+                      "\n");
+    }
   }
 
   // Receives, in order, each naming the track it comes from.
