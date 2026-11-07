@@ -19,9 +19,9 @@
 #include "jpr/common/color.h"
 #include "jpr/common/modifiers.h"
 #include "jpr/common/timeline.h"
-#include "jpr/common/track.h"
 #include "jpr/device/control_input.h"
 #include "jpr/scene/catalog.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_mapping.h"
@@ -259,9 +259,9 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
                           .type = ViewMapping::kReadControl}};
   ViewSpec strip = RepeatedView("strip", "strip");
   strip.components = {
-      TrackAnchorSpec{"user:anchor_select", TrackBoolProperty::kSelected,
+      TrackAnchorSpec{"user:anchor_select", TrackAnchorAction::kSelected,
                       "mod:send_hold"},
-      TrackAnchorSpec{"user:anchor_mute", TrackBoolProperty::kMute,
+      TrackAnchorSpec{"user:anchor_mute", TrackAnchorAction::kMute,
                       "mod:shift"},
       TrackPickSpec{"user:pick_track", "user:current_track"},
   };
@@ -474,9 +474,9 @@ TEST(SurfaceSpecTest, AnAnchorIsOnATrackWithAModifier) {
   ViewSpec view = BoundView("view", "state:master_track");
   view.components = {
       TrackAnchorSpec{"user:none"},
-      TrackAnchorSpec{"user:built_in", TrackBoolProperty::kMute, "mod:shift"},
-      TrackAnchorSpec{"user:declared", TrackBoolProperty::kSolo, "mod:fn"},
-      TrackAnchorSpec{"user:other", TrackBoolProperty::kRecArm, "user:fn"}};
+      TrackAnchorSpec{"user:built_in", TrackAnchorAction::kMute, "mod:shift"},
+      TrackAnchorSpec{"user:declared", TrackAnchorAction::kSolo, "mod:fn"},
+      TrackAnchorSpec{"user:other", TrackAnchorAction::kRecArm, "user:fn"}};
   spec.root.children = {
       view, {.name = "none", .components = {TrackAnchorSpec{"user:a"}}}};
   EXPECT_THAT(Validate(spec),

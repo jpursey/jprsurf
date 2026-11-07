@@ -42,7 +42,7 @@ Declared on a view.
 
 | Parameter | Value | Given | Description |
 | --- | --- | --- | --- |
-| `action` | One of `selected`, `mute`, `solo`, `rec_arm` | Required | The track action whose anchor it holds. |
+| `action` | One of `selected`, `mute`, `solo`, `rec_arm`, `rec_stage` | Required | The track action whose anchor it holds. |
 | `modifier` | A [modifier](mod.md): built in, or declared | Optional | A modifier that is on while it is held. |
 
 ## `track_pick`

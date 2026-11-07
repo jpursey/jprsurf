@@ -527,7 +527,7 @@ TEST_F(TrackActionsTest, PressOnTheStubTrackDoesNothing) {
 TEST_F(TrackActionsTest, AnAnchorActsOnTheRangeFromIt) {
   // The anchor track's cached value is stale, so the range reads it.
   top_[0]->mute = true;
-  AnchorHold hold = actions_.GetAnchor(TrackBoolProperty::kMute)
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kMute)
                         .Hold(GetCachedTrack(top_[0]));
   SetLastTouched(top_[3]);
 
@@ -543,7 +543,7 @@ TEST_F(TrackActionsTest, AnAnchorActsOnTheRangeFromIt) {
 
 TEST_F(TrackActionsTest, AnAnchorSelectsTheRangeFromIt) {
   top_[3]->selected = true;
-  AnchorHold hold = actions_.GetAnchor(TrackBoolProperty::kSelected)
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kSelected)
                         .Hold(GetCachedTrack(top_[1]));
   SetLastTouched(top_[0]);
   Select(top_[2], kCtrlShift);
@@ -552,21 +552,21 @@ TEST_F(TrackActionsTest, AnAnchorSelectsTheRangeFromIt) {
 }
 
 TEST_F(TrackActionsTest, AnAnchorIsOnlyForItsAction) {
-  AnchorHold hold = actions_.GetAnchor(TrackBoolProperty::kSolo)
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kSolo)
                         .Hold(GetCachedTrack(top_[0]));
   Mute(top_[2]);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T3"));
 }
 
 TEST_F(TrackActionsTest, AnAnchorOnTheTrackItselfActsAsUsual) {
-  AnchorHold hold = actions_.GetAnchor(TrackBoolProperty::kMute)
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kMute)
                         .Hold(GetCachedTrack(top_[2]));
   Mute(top_[2]);
   EXPECT_THAT(GetTracksWith(&FakeTrack::mute), ElementsAre("T3"));
 }
 
 TEST_F(TrackActionsTest, AnAnchorOnADeletedTrackActsAsUsual) {
-  AnchorHold hold = actions_.GetAnchor(TrackBoolProperty::kMute)
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kMute)
                         .Hold(GetCachedTrack(top_[0]));
   project_.DeleteTrack(top_[0]);
   TrackCache::Get().Refresh();

@@ -614,6 +614,12 @@ class TrackBatch final {
   void SetRecMode(Track* track, TrackRecMode mode,
                   TrackGrouping grouping = TrackGrouping::kNone);
 
+  // Restores the record mode of the track alone, if it is kNone, and the
+  // track exists and isn't the master: to the mode SetRecMode() last replaced
+  // with kNone (see Track::GetReplacedRecMode()), or kInput if it hasn't.
+  // Like SetRecMode(), this follows REAPER's mode, not the cached one.
+  void RestoreRecMode(Track* track);
+
   // Sets the monitoring mode of the track, if it exists and isn't the master.
   // REAPER has no groups for monitoring, so with kGrouped, this sets every
   // selected track if the track is selected, as REAPER's UI does.
@@ -628,6 +634,9 @@ class TrackBatch final {
   // Sets the record mode of the track alone, if HasModes(), and returns true
   // if it changed.
   bool SetOneRecMode(Track* track, TrackRecMode mode);
+
+  // The same, for a track that HasModes(), whose mode in REAPER is `current`.
+  bool SetOneRecMode(Track* track, TrackRecMode current, TrackRecMode mode);
 
   // Notes a change that adds the undo point named `undo_name`, before it is
   // made.

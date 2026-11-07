@@ -16,6 +16,37 @@
 
 namespace jpr {
 
+// The track actions that have an anchor (see TrackActions::GetAnchor()), each
+// named for the track property it acts on.
+enum class TrackAnchorAction {
+  kSelected,
+  kMute,
+  kSolo,
+  kRecArm,
+  kRecStage,
+};
+
+// Every TrackAnchorAction, in order.
+inline constexpr TrackAnchorAction kTrackAnchorActions[] = {
+    TrackAnchorAction::kSelected, TrackAnchorAction::kMute,
+    TrackAnchorAction::kSolo, TrackAnchorAction::kRecArm,
+    TrackAnchorAction::kRecStage};
+
+// Returns the anchor action of a toggle's action.
+constexpr TrackAnchorAction GetAnchorAction(TrackBoolProperty property) {
+  switch (property) {
+    case TrackBoolProperty::kSelected:
+      return TrackAnchorAction::kSelected;
+    case TrackBoolProperty::kMute:
+      return TrackAnchorAction::kMute;
+    case TrackBoolProperty::kSolo:
+      return TrackAnchorAction::kSolo;
+    case TrackBoolProperty::kRecArm:
+      return TrackAnchorAction::kRecArm;
+  }
+  return TrackAnchorAction::kSelected;
+}
+
 // An enumerated value of a track, such as its record mode, which the track
 // actions read and set (see TrackActions::UiPress()). Its values are 0 to
 // GetMaxValue(), in the order of their names.
@@ -71,11 +102,11 @@ class TrackValue {
 // properties that run it (the ui_ properties in TrackProperties) only map a
 // control to it.
 //
-// Select, mute, solo, and record arm each also have an anchor (see
-// GetAnchor()). If the property's anchor is held on another track, the action
-// acts on the range between the anchor track and this track instead, the same
-// as Shift, but from the anchor track rather than the last touched track. This
-// takes precedence over all modifiers, which are ignored.
+// Select, mute, solo, record arm, and the record stage each also have an anchor
+// (see GetAnchor()). If the property's anchor is held on another track, the
+// action acts on the range between the anchor track and this track instead, the
+// same as Shift, but from the anchor track rather than the last touched track.
+// This takes precedence over all modifiers, which are ignored.
 //
 // Ranges only include tracks in the track filter, and do nothing if either end
 // is not in it. They ignore grouping, and don't set the last touched track.
@@ -147,10 +178,10 @@ class TrackActions final {
 
   TrackFilter GetTrackFilter() const { return filter_; }
 
-  // The anchor for a property's action. An anchor held on a track that no
-  // longer exists is treated as not held.
-  Anchor<Track>& GetAnchor(TrackBoolProperty property) {
-    return anchors_[static_cast<int>(property)];
+  // The anchor for an action. An anchor held on a track that no longer exists
+  // is treated as not held.
+  Anchor<Track>& GetAnchor(TrackAnchorAction action) {
+    return anchors_[static_cast<int>(action)];
   }
 
   // Runs the action for selecting, toggling, or changing the property of the
@@ -180,7 +211,7 @@ class TrackActions final {
                 const TrackValue& value);
 
   TrackFilter filter_;
-  Anchor<Track> anchors_[std::size(kTrackBoolProperties)];
+  Anchor<Track> anchors_[std::size(kTrackAnchorActions)];
 };
 
 }  // namespace jpr

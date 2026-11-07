@@ -17,11 +17,11 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/common/modifiers.h"
-#include "jpr/common/track.h"
 #include "jpr/scene/modifier_property.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/testing/scene_test.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/track_anchor_property.h"
 #include "jpr/scene/track_pick_property.h"
 #include "jpr/scene/track_reference.h"
@@ -305,7 +305,7 @@ TEST_F(CatalogTest, ComponentKindsHaveTheirPropertysTypeAndAccess) {
   }
 }
 
-TEST_F(CatalogTest, TrackAnchorActionsAreTheTrackToggles) {
+TEST_F(CatalogTest, TrackAnchorActionsAreNamedByTheirTrackProperties) {
   absl::Span<const ComponentKindInfo> kinds = GetComponentKinds();
   auto anchor = absl::c_find_if(kinds, [](const ComponentKindInfo& kind) {
     return kind.name == "track_anchor";
@@ -316,9 +316,9 @@ TEST_F(CatalogTest, TrackAnchorActionsAreTheTrackToggles) {
   });
   ASSERT_NE(action, anchor->params.end());
 
-  // Each action is named by the track: toggle it acts on, one for each track
-  // action.
-  EXPECT_EQ(action->choices.size(), std::size(kTrackBoolProperties));
+  // Each action is named by the track: property it acts on, one for each
+  // action with an anchor: the toggles, then the record stage.
+  EXPECT_EQ(action->choices.size(), std::size(kTrackAnchorActions));
   absl::Span<const PropertyInfo> track_properties =
       GetNamespace(kTrackNamespace).properties;
   for (std::string_view choice : action->choices) {
@@ -327,7 +327,9 @@ TEST_F(CatalogTest, TrackAnchorActionsAreTheTrackToggles) {
           return row.name == absl::StrCat(kTrackNamespace, choice);
         });
     ASSERT_NE(property, track_properties.end()) << choice;
-    EXPECT_EQ(property->type, Type::kToggle) << choice;
+    EXPECT_EQ(property->type,
+              choice == "rec_stage" ? Type::kEnumerated : Type::kToggle)
+        << choice;
   }
 }
 

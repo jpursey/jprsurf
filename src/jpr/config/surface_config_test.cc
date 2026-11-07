@@ -5,6 +5,7 @@
 
 #include "jpr/config/surface_config.h"
 
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +24,7 @@
 #include "jpr/device/widget_definition.h"
 #include "jpr/scene/catalog.h"
 #include "jpr/scene/surface_spec.h"
+#include "jpr/scene/track_actions.h"
 
 namespace jpr {
 namespace {
@@ -207,7 +209,7 @@ components {
                                      .follow = "state:last_touched_track"},
                   TrackReferenceSpec{.name = "user:current_track"},
                   TrackAnchorSpec{.name = "user:anchor",
-                                  .action = TrackBoolProperty::kRecArm,
+                                  .action = TrackAnchorAction::kRecArm,
                                   .modifier = "mod:send_hold"},
                   TrackPickSpec{.name = "user:pick",
                                 .reference = "user:folder",
@@ -253,6 +255,28 @@ std::string GetComponentConfig(const ComponentKindInfo& kind,
 }
 
 // So that a kind added to the catalog is read, with each of its parameters.
+// The config reader maps each action by its place in the catalog's choices, so
+// this reads each by name.
+TEST(ReadSurfaceConfigTest, ReadsEachTrackAnchorAction) {
+  constexpr std::pair<std::string_view, TrackAnchorAction> kActions[] = {
+      {"selected", TrackAnchorAction::kSelected},
+      {"mute", TrackAnchorAction::kMute},
+      {"solo", TrackAnchorAction::kSolo},
+      {"rec_arm", TrackAnchorAction::kRecArm},
+      {"rec_stage", TrackAnchorAction::kRecStage},
+  };
+  static_assert(std::size(kActions) == std::size(kTrackAnchorActions));
+  for (const auto& [name, action] : kActions) {
+    SCOPED_TRACE(name);
+    const SurfaceSpec spec = ReadValid(
+        absl::StrCat("jprsurf 1\ndevices {}\nwidgets {}\n"
+                     "components { track_anchor user:anchor(action = ",
+                     name, ") }\n"));
+    ASSERT_EQ(spec.components.size(), 1);
+    EXPECT_EQ(std::get<TrackAnchorSpec>(spec.components[0]).action, action);
+  }
+}
+
 TEST(ReadSurfaceConfigTest, ReadsEveryParameterOfEveryComponentKind) {
   for (const ComponentKindInfo& kind : GetComponentKinds()) {
     SCOPED_TRACE(kind.name);
@@ -567,7 +591,7 @@ view folder(subject = user:folder,
   view strip in xtouch.strip {
     components { track_pick user:pick(reference = user:current_track) }
     mappings { strip.select -> track:ui_selected }
-    components { track_anchor user:anchor(action = mute) }
+    components { track_anchor user:anchor(action = rec_stage) }
     mappings { use strip(strip = strip) }
   }
 }
@@ -600,7 +624,7 @@ view tracks(list = child_tracks) {}
                       {TrackPickSpec{.name = "user:pick",
                                      .reference = "user:current_track"},
                        TrackAnchorSpec{.name = "user:anchor",
-                                       .action = TrackBoolProperty::kMute}},
+                                       .action = TrackAnchorAction::kRecStage}},
                   .uses = {{.name = "strip", .widgets = {{"strip", "strip"}}}},
                   .mappings = {{.property = "track:ui_selected",
                                 .control = "strip.select",
@@ -834,7 +858,7 @@ components {
                   "line 9: user:e: \"values\" is given twice",
                   "line 10: user:f: fallback isn't a name with a namespace",
                   "line 11: user:g: action \"muted\" isn't one of: selected, "
-                  "mute, solo, rec_arm"));
+                  "mute, solo, rec_arm, rec_stage"));
 }
 
 TEST(ReadSurfaceConfigTest, StatementErrors) {

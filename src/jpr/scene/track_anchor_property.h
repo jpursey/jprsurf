@@ -8,7 +8,7 @@
 #include <string_view>
 
 #include "jpr/common/modifiers.h"
-#include "jpr/common/track.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_property.h"
 
@@ -31,7 +31,7 @@ class TrackAnchorProperty final : public ViewProperty {
  public:
   struct Config {
     // The action whose anchor is held.
-    TrackBoolProperty action = TrackBoolProperty::kSelected;
+    TrackAnchorAction action = TrackAnchorAction::kSelected;
 
     // Modifier bits that are on while the anchor is held, if any.
     Modifiers modifier = 0;
@@ -46,7 +46,7 @@ class TrackAnchorProperty final : public ViewProperty {
   void SetView(View* view) override { view_ = view; }
 
  private:
-  const TrackBoolProperty action_;
+  const TrackAnchorAction action_;
   const Modifiers modifier_;
   View* view_ = nullptr;  // The view that owns this, if any.
 };

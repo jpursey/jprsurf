@@ -271,10 +271,21 @@ class TrackActions {
   - Record arms, and if the mode is `none`, sets the replaced mode or `input`.
   - With `kGrouped`, it sets every track in `GetRecArmGroup()`, each alone, so
     REAPER's grouping and the record mode reach the same tracks.
+  - Record restores the mode with `TrackBatch::RestoreRecMode()`, which CL5
+    adds to `common`, beside the replaced mode's memory. Like `SetRecMode()`,
+    it follows REAPER's mode, not the cached one, as a track reached by a
+    group or a range may not be on the surface, and its cached mode stale: one
+    cheap read for each track set to record.
+  - Neither stage sets the monitoring, so a monitored track is heard only if
+    its monitoring is on or auto.
 - Anchors: `TrackActions` gets an anchor for the record stage, and
   `track_anchor`'s `action` takes `rec_stage`. A ranged press copies the anchor
   track's value. Anchors for `rec_mode` and `monitor_mode` are left out until
-  something uses them.
+  something uses them. The actions with anchors are a `TrackAnchorAction`
+  (`track_actions.h`), the toggles, then the record stage, which
+  `TrackAnchorSpec` holds, so the config's reader maps the `action` choice to
+  one (CL5 touches `config` for that line, and a test of each choice). The
+  `ui_rec_stage` property passes the anchor to `UiPress()`.
 
 **Brittleness:** `UiPress()` and `UiToggle()` are parallel implementations of
 the same rules. Once the record stage is in, the toggles could become
@@ -493,7 +504,7 @@ Depends on: CL3.
 - `track_properties_test.cc`: the properties, and a change made in REAPER
   read on its notification, with no polling.
 
-### CL5 [ ] scene: The record stage
+### CL5 [x] scene: The record stage
 
 Depends on: CL4.
 

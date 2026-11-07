@@ -10,6 +10,7 @@ set(jpr_scene_SOURCE
   create_scene.cc create_scene.h
   modifier_property.h
   polled_toggle_property.cc polled_toggle_property.h
+  rec_stage_value.cc rec_stage_value.h
   route_properties.cc route_properties.h
   route_reference.cc route_reference.h
   scene.cc scene.h
@@ -51,6 +52,7 @@ set(jpr_scene_TEST_SOURCE
   const_property_test.cc
   create_scene_test.cc
   polled_toggle_property_test.cc
+  rec_stage_value_test.cc
   route_properties_test.cc
   route_reference_test.cc
   scene_test.cc

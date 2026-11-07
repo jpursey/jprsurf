@@ -700,6 +700,38 @@ TEST_F(TrackTest, SettingNoRecordModeRemembersTheModeItReplaced) {
   EXPECT_EQ(track->GetReplacedRecMode(), TrackRecMode::kInput);
 }
 
+TEST_F(TrackTest, RestoringTheRecordModeSetsTheModeNoneReplaced) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  fake->rec_mode = 7;
+  Track* track = Refresh(fake);
+  TrackBatch().SetRecMode(track, TrackRecMode::kNone);
+  TrackBatch().RestoreRecMode(track);
+  EXPECT_EQ(fake->rec_mode, 7);
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kMidiOverdub);
+  EXPECT_EQ(project_.GetUndoPoints().size(), 2);
+
+  // Another mode is left as it is.
+  TrackBatch().RestoreRecMode(track);
+  EXPECT_EQ(fake->rec_mode, 7);
+  EXPECT_EQ(project_.GetUndoPoints().size(), 2);
+}
+
+TEST_F(TrackTest, RestoringTheRecordModeFollowsREAPERsMode) {
+  // Set to none in REAPER, but not yet read, with no mode replaced, so it
+  // restores input.
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Track* track = Refresh(fake);
+  fake->rec_mode = 2;
+  TrackBatch().RestoreRecMode(track);
+  EXPECT_EQ(fake->rec_mode, 0);
+
+  // Set to another mode in REAPER, but not yet read, which is kept, and read.
+  fake->rec_mode = 7;
+  TrackBatch().RestoreRecMode(track);
+  EXPECT_EQ(fake->rec_mode, 7);
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kMidiOverdub);
+}
+
 TEST_F(TrackTest, BatchSetsTheMonitoringModeWithOneUndoPoint) {
   FakeTrack* drums = project_.AddTrack("Drums");
   FakeTrack* bass = project_.AddTrack("Bass");
@@ -747,6 +779,7 @@ TEST_F(TrackTest, MastersModesAreNeverSet) {
   {
     TrackBatch batch;
     batch.SetRecMode(master, TrackRecMode::kNone);
+    batch.RestoreRecMode(master);
     batch.SetMonitorMode(master, TrackMonitorMode::kAuto);
   }
   EXPECT_EQ(project_.GetMasterTrack()->rec_mode, before.rec_mode);

@@ -43,6 +43,7 @@
 #include "jpr/device/widget_path.h"
 #include "jpr/scene/catalog.h"
 #include "jpr/scene/surface_spec.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_condition.h"
 #include "jpr/scene/view_mapping.h"
@@ -529,9 +530,9 @@ void SetParams(TrackReferenceSpec& spec, const ParamValues& values) {
 }
 
 void SetParams(TrackAnchorSpec& spec, const ParamValues& values) {
-  // The choices are in the order of kTrackBoolProperties.
+  // The choices are in the order of kTrackAnchorActions.
   if (std::optional<int> action = GetValue(values, "action").choice) {
-    spec.action = kTrackBoolProperties[*action];
+    spec.action = kTrackAnchorActions[*action];
   }
   spec.modifier = GetText(values, "modifier");
 }

@@ -57,7 +57,7 @@ void TrackActions::UiSelect(Track* track) {
   TrackCache& cache = TrackCache::Get();
 
   if (Track* anchor_track =
-          GetOtherAnchorTrack(GetAnchor(TrackBoolProperty::kSelected), track);
+          GetOtherAnchorTrack(GetAnchor(TrackAnchorAction::kSelected), track);
       anchor_track != nullptr) {
     SelectRange(track, anchor_track, /*same_parent=*/true);
     return;
@@ -113,7 +113,8 @@ void TrackActions::UiToggle(Track* track, TrackBoolProperty property) {
   }
   TrackCache& cache = TrackCache::Get();
 
-  if (Track* anchor_track = GetOtherAnchorTrack(GetAnchor(property), track);
+  if (Track* anchor_track =
+          GetOtherAnchorTrack(GetAnchor(GetAnchorAction(property)), track);
       anchor_track != nullptr) {
     SetRange(track, anchor_track, /*same_parent=*/true, property);
     return;

@@ -91,6 +91,7 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kRecArm = kTrackName<"rec_arm">;
   static constexpr std::string_view kRecMode = kTrackName<"rec_mode">;
   static constexpr std::string_view kMonitorMode = kTrackName<"monitor_mode">;
+  static constexpr std::string_view kRecStage = kTrackName<"rec_stage">;
   static constexpr std::string_view kPan = kTrackName<"pan">;
   static constexpr std::string_view kVolume = kTrackName<"volume">;
   static constexpr std::string_view kMeter = TrackMeterProperty::kMeter;
@@ -101,6 +102,7 @@ class TrackProperties final : public TrackListener {
   static constexpr std::string_view kUiRecMode = kTrackName<"ui_rec_mode">;
   static constexpr std::string_view kUiMonitorMode =
       kTrackName<"ui_monitor_mode">;
+  static constexpr std::string_view kUiRecStage = kTrackName<"ui_rec_stage">;
   static constexpr std::string_view kUiPan = kTrackName<"ui_pan">;
   static constexpr std::string_view kUiVolume = kTrackName<"ui_volume">;
   static constexpr std::string_view kTrackIsFolder = kTrackName<"is_folder">;

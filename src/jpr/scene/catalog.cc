@@ -5,10 +5,13 @@
 
 #include "jpr/scene/catalog.h"
 
+#include <iterator>
+
 #include "jpr/common/modifiers.h"
 #include "jpr/scene/route_properties.h"
 #include "jpr/scene/scene.h"
 #include "jpr/scene/state_properties.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/track_properties.h"
 #include "jpr/scene/view_list.h"
 
@@ -69,14 +72,16 @@ absl::Span<const ComponentKindInfo> GetComponentKinds() {
        "one on the surface, this one changes to it too."},
   };
 
-  // The track actions, by the names of the track: properties they act on, in
-  // the order of kTrackBoolProperties.
+  // The track actions with anchors, by the names of the track: properties they
+  // act on, in the order of kTrackAnchorActions.
   static constexpr std::string_view kTrackActions[] = {
       TrackProperties::kSelected.substr(kTrackNamespace.size()),
       TrackProperties::kMute.substr(kTrackNamespace.size()),
       TrackProperties::kSolo.substr(kTrackNamespace.size()),
       TrackProperties::kRecArm.substr(kTrackNamespace.size()),
+      TrackProperties::kRecStage.substr(kTrackNamespace.size()),
   };
+  static_assert(std::size(kTrackActions) == std::size(kTrackAnchorActions));
   static constexpr ParamInfo kTrackAnchorParams[] = {
       {"action", ParamKind::kChoice, ParamUse::kRequired,
        "The track action whose anchor it holds.", kTrackActions},

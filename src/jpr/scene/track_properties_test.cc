@@ -11,6 +11,7 @@
 
 #include "gb/test/log_error_guard.h"
 #include "gtest/gtest.h"
+#include "jpr/common/anchor.h"
 #include "jpr/common/color.h"
 #include "jpr/common/deferred_refresh.h"
 #include "jpr/common/modifiers.h"
@@ -249,6 +250,66 @@ TEST_F(TrackPropertiesTest, UiMonitorModesGroupIsTheSelectedTracks) {
   EXPECT_EQ(tracks_[0]->monitor_mode, 1);
   EXPECT_EQ(tracks_[1]->monitor_mode, 0);
   EXPECT_EQ(tracks_[2]->monitor_mode, 1);
+}
+
+// The record stage's own tests are RecStageValue's: these show its properties
+// read it, and that only the ui_ form is grouped and anchored.
+TEST_F(TrackPropertiesTest, RecStagesReadAsTheirNames) {
+  tracks_[0]->rec_arm = true;
+  tracks_[0]->rec_mode = 2;
+  GetCachedTrack(tracks_[0])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[0]));
+  for (std::string_view name :
+       {TrackProperties::kRecStage, TrackProperties::kUiRecStage}) {
+    ViewProperty* property = properties.GetProperty(name);
+    EXPECT_EQ(property->GetMaxValue(), 2) << name;
+    EXPECT_EQ(property->GetText(), "monitor") << name;
+    EXPECT_EQ(property->FindValue("record"), 2) << name;
+  }
+}
+
+TEST_F(TrackPropertiesTest, PlainRecStageSetsOnlyItsTrack) {
+  JoinGroup(tracks_[1], 1);
+  JoinGroup(tracks_[2], 1);
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kRecStage)
+                        .Hold(GetCachedTrack(tracks_[0]));
+  GetCachedTrack(tracks_[2])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[2]));
+  properties.GetProperty(TrackProperties::kRecStage)->SetText("monitor");
+  EXPECT_FALSE(tracks_[0]->rec_arm);
+  EXPECT_FALSE(tracks_[1]->rec_arm);
+  EXPECT_TRUE(tracks_[2]->rec_arm);
+  EXPECT_EQ(tracks_[2]->rec_mode, 2);
+}
+
+// A held record stage anchor sets the range from it to its stage, as the
+// other actions' anchors do (see TrackActions).
+TEST_F(TrackPropertiesTest, UiRecStageHasItsAnchor) {
+  tracks_[0]->rec_arm = true;
+  tracks_[0]->rec_mode = 2;
+  GetCachedTrack(tracks_[0])->Refresh();
+  AnchorHold hold = actions_.GetAnchor(TrackAnchorAction::kRecStage)
+                        .Hold(GetCachedTrack(tracks_[0]));
+  GetCachedTrack(tracks_[2])->Refresh();
+  TrackProperties properties(&actions_, GetCachedTrack(tracks_[2]));
+  {
+    DeferredRefresh deferred_refresh;  // As a run holds.
+    properties.GetProperty(TrackProperties::kUiRecStage)
+        ->PressInt({.min = 1, .max = 2, .toggles = true});
+  }
+  for (FakeTrack* track : tracks_) {
+    EXPECT_TRUE(track->rec_arm) << track->name;
+    EXPECT_EQ(track->rec_mode, 2) << track->name;
+  }
+
+  // Another action's anchor isn't the record stage's.
+  hold = actions_.GetAnchor(TrackAnchorAction::kRecArm)
+             .Hold(GetCachedTrack(tracks_[0]));
+  reaper_.EndEntryPoint();
+  properties.GetProperty(TrackProperties::kUiRecStage)
+      ->PressInt({.min = 1, .max = 2, .toggles = true});
+  EXPECT_EQ(tracks_[2]->rec_mode, 0);
+  EXPECT_EQ(tracks_[1]->rec_mode, 2);
 }
 
 // REAPER reports a change to the record mode only with the track's

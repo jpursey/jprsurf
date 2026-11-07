@@ -38,13 +38,13 @@ class TrackAnchorPropertyTest : public SceneTest {
     view->Enable();
     anchor_ = view->AddUserProperty(std::make_unique<TrackAnchorProperty>(
         "user:anchor",
-        TrackAnchorProperty::Config{.action = TrackBoolProperty::kMute,
+        TrackAnchorProperty::Config{.action = TrackAnchorAction::kMute,
                                     .modifier = modifier_}));
     AddSurface();
   }
 
   // Returns the track the action's anchor is held on, or null.
-  Track* GetAnchorTrack(TrackBoolProperty action = TrackBoolProperty::kMute) {
+  Track* GetAnchorTrack(TrackAnchorAction action = TrackAnchorAction::kMute) {
     return GetScene()->GetTrackActions().GetAnchor(action).Get();
   }
 
@@ -60,7 +60,7 @@ TEST_F(TrackAnchorPropertyTest, HoldsTheAnchorOnItsViewsTrack) {
   anchor_->SetBool(true);
   EXPECT_EQ(GetAnchorTrack(), GetCachedTrack(tracks_[1]));
   EXPECT_TRUE(AreModifiersOn(modifier_));
-  EXPECT_EQ(GetAnchorTrack(TrackBoolProperty::kSolo), nullptr);
+  EXPECT_EQ(GetAnchorTrack(TrackAnchorAction::kSolo), nullptr);
 
   // It always reads as off, so it can only be written.
   EXPECT_FALSE(anchor_->GetBool());
@@ -81,7 +81,7 @@ TEST_F(TrackAnchorPropertyTest, OutsideAViewItDoesNothing) {
   TrackAnchorProperty* anchor =
       GetScene()->AddUserProperty(std::make_unique<TrackAnchorProperty>(
           "user:scene_anchor",
-          TrackAnchorProperty::Config{.action = TrackBoolProperty::kMute}));
+          TrackAnchorProperty::Config{.action = TrackAnchorAction::kMute}));
   anchor->SetBool(true);
   EXPECT_EQ(GetAnchorTrack(), nullptr);
 }

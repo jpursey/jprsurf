@@ -17,6 +17,7 @@
 #include "jpr/device/spec_line.h"
 #include "jpr/device/widget_definition.h"
 #include "jpr/scene/catalog.h"
+#include "jpr/scene/track_actions.h"
 #include "jpr/scene/view.h"
 #include "jpr/scene/view_mapping.h"
 #include "jpr/scene/view_property.h"
@@ -67,7 +68,7 @@ struct TrackAnchorSpec {
                          const TrackAnchorSpec&) = default;
 
   std::string name;
-  TrackBoolProperty action = TrackBoolProperty::kSelected;
+  TrackAnchorAction action = TrackAnchorAction::kSelected;
   std::string modifier;  // A modifier, such as "mod:select_anchor".
   SpecLine line;         // Where it was written, for errors.
 };

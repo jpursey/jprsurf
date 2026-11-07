@@ -610,15 +610,33 @@ void TrackBatch::SetRecMode(Track* track, TrackRecMode mode,
   }
 }
 
+void TrackBatch::RestoreRecMode(Track* track) {
+  if (!HasModes(track)) {
+    return;
+  }
+
+  // A mode other than kNone is left as it is, which still brings the cache
+  // into line with it.
+  const TrackRecMode current = ReadRecMode(track->track_id_);
+  SetOneRecMode(track, current,
+                current == TrackRecMode::kNone
+                    ? track->replaced_rec_mode_.value_or(TrackRecMode::kInput)
+                    : current);
+}
+
 bool TrackBatch::SetOneRecMode(Track* track, TrackRecMode mode) {
   if (!HasModes(track)) {
     return false;
   }
-  MediaTrack* const track_id = track->track_id_;
 
   // The cached modes are only kept up to date for tracks the surface shows, so
   // the setters compare against REAPER's.
-  const TrackRecMode current = ReadRecMode(track_id);
+  return SetOneRecMode(track, ReadRecMode(track->track_id_), mode);
+}
+
+bool TrackBatch::SetOneRecMode(Track* track, TrackRecMode current,
+                               TrackRecMode mode) {
+  MediaTrack* const track_id = track->track_id_;
   const bool changed = (current != mode);
   if (changed) {
     if (mode == TrackRecMode::kNone) {

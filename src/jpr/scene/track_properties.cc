@@ -16,7 +16,9 @@
 #include "absl/algorithm/container.h"
 #include "absl/log/check.h"
 #include "absl/types/span.h"
+#include "jpr/common/anchor.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/scene/rec_stage_value.h"
 
 namespace jpr {
 
@@ -169,14 +171,16 @@ constexpr T kTrackValue{};
 
 // A property for an enumerated value of the track. With track actions, a write
 // or a press runs the action rather than setting the value: a write of a value
-// is a press that sets it.
+// is a press that sets it. The anchor, if not null, is the value's anchor.
 class TrackEnumeratedProperty : public TrackProperty {
  public:
   TrackEnumeratedProperty(std::string_view name, const TrackValue& value,
-                          Track* track, TrackActions* actions)
+                          Track* track, TrackActions* actions,
+                          const Anchor<Track>* anchor)
       : TrackProperty(name, Type::kEnumerated, kReadWriteAccess, track),
         value_(value),
-        actions_(actions) {}
+        actions_(actions),
+        anchor_(anchor) {}
 
   int GetMaxValue() const override { return value_.GetMaxValue(); }
   std::string GetText() const override {
@@ -201,12 +205,13 @@ class TrackEnumeratedProperty : public TrackProperty {
       TrackProperty::WritePress(press);
       return;
     }
-    actions_->UiPress(GetTrack(), value_, press, /*anchor=*/nullptr);
+    actions_->UiPress(GetTrack(), value_, press, anchor_);
   }
 
  private:
   const TrackValue& value_;
   TrackActions* const actions_;
+  const Anchor<Track>* const anchor_;
 };
 
 // A property for pan. With track actions, a write runs the action rather than
@@ -368,8 +373,18 @@ template <typename T, bool kUi>
 std::unique_ptr<TrackProperty> CreateEnumerated(std::string_view name,
                                                 Track* track,
                                                 TrackActions* actions) {
-  return std::make_unique<TrackEnumeratedProperty>(name, kTrackValue<T>, track,
-                                                   kUi ? actions : nullptr);
+  return std::make_unique<TrackEnumeratedProperty>(
+      name, kTrackValue<T>, track, kUi ? actions : nullptr, /*anchor=*/nullptr);
+}
+
+// Creates the ui_ property for the record stage, which runs the track action,
+// with the record stage's anchor.
+std::unique_ptr<TrackProperty> CreateUiRecStage(std::string_view name,
+                                                Track* track,
+                                                TrackActions* actions) {
+  return std::make_unique<TrackEnumeratedProperty>(
+      name, kTrackValue<RecStageValue>, track, actions,
+      &actions->GetAnchor(TrackAnchorAction::kRecStage));
 }
 
 template <TrackTouchType kType>
@@ -437,6 +452,22 @@ constexpr TrackPropertyRow kTrackProperties[] = {
           "track's always reads as \"off\", and is never written.",
       .values = kTrackValue<MonitorModeValue>.GetNames()},
      CreateEnumerated<MonitorModeValue, false>},
+    {{.name = TrackProperties::kRecStage,
+      .type = Type::kEnumerated,
+      .access = kReadWriteAccess,
+      .description =
+          "The track's record stage, which combines its record arm and record "
+          "mode: \"off\" is disarmed, \"monitor\" is armed with the record "
+          "mode \"none\", so it records nothing, and \"record\" is armed with "
+          "any other mode. Neither sets the track's monitoring, so a track "
+          "is heard while armed only if its \"track:monitor_mode\" is on or "
+          "auto. Writing it sets this track's stage "
+          "alone: \"off\" disarms it, and leaves its mode alone; \"monitor\" "
+          "sets its mode to \"none\", and arms it; and \"record\" arms it, and "
+          "if its mode is \"none\", sets the mode the surface last replaced "
+          "with \"none\", or \"input\" if it hasn't since REAPER started.",
+      .values = kTrackValue<RecStageValue>.GetNames()},
+     CreateEnumerated<RecStageValue, false>},
     {{TrackProperties::kPan, Type::kPan, kReadWriteAccess,
       "The track's pan. Writing it pans this track alone."},
      CreateLevel<TrackPanProperty, false>},
@@ -486,6 +517,16 @@ constexpr TrackPropertyRow kTrackProperties[] = {
           "if the track is selected, as REAPER's groups have no monitoring.",
       .values = kTrackValue<MonitorModeValue>.GetNames()},
      CreateEnumerated<MonitorModeValue, true>},
+    {{.name = TrackProperties::kUiRecStage,
+      .type = Type::kEnumerated,
+      .access = kReadWriteAccess,
+      .description =
+          "The same as \"track:rec_stage\", but a press or a write runs the "
+          "surface's action for an enumerated value, with the surface's "
+          "modifiers, grouping, and anchors. Its grouping reaches the tracks "
+          "a grouped record arm does, and sets each one's record mode too.",
+      .values = kTrackValue<RecStageValue>.GetNames()},
+     CreateUiRecStage},
     {{TrackProperties::kUiPan, Type::kPan, kReadWriteAccess,
       "The same as \"track:pan\", but writing it runs the surface's pan "
       "action, as panning in REAPER does, with the surface's modifiers and "
