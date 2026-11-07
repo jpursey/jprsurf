@@ -14,9 +14,9 @@ from JPRSurf's code, so they always match the version that reads the config:
   of its properties and references, and the kinds of component a config can
   declare, with their parameters.
 
-The [user guide](user_guide.md) covers JPRSurf's own config,
-`jprsurf.jprsurf`, which is the best place to see the whole language at work,
-and how to make the surface read another file.
+The [user guide](user_guide.md) covers how to make a surface read a config
+file, and the [X-Touch example](configs/xtouch.md) is a whole config, which is
+the best place to see the language at work.
 
 ---
 
@@ -668,8 +668,8 @@ The braces after the property hold its options. A read mapping's range:
   the max unless it is already there. On an enumerated value, a press steps
   through the range instead, wrapping around.
 - **`toggle <min> .. <max>`**: on an enumerated value, a press sets the max,
-  or the min if it already is the max. Nudge and Marker in JPRSurf's config use
-  it, so turning one on turns the other off.
+  or the min if it already is the max. Nudge and Marker in the X-Touch example
+  use it, so turning one on turns the other off.
 
 A mapping has at most one of these. Each end is a value of the property's
 type: a number with a decimal point for a pan, volume, or normalized value,

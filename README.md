@@ -6,7 +6,9 @@ This currently supports Windows only and the X-Touch Universal and X-Touch
 Extender control surfaces via the MCU and Behringer XCTL protocols.
 
 **[Read the User Guide](docs/user/user_guide.md)** for how to install JPRSurf in
-REAPER, and what every control on the surface does.
+REAPER and give it a config file. The [X-Touch example
+config](docs/user/configs/xtouch.md) is a complete surface, with what every
+control on it does.
 
 ## Building the code
 

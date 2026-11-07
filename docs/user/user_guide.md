@@ -1,63 +1,56 @@
 # JPRSurf User Guide
 
-JPRSurf is a REAPER control surface extension for the Behringer X-Touch, with
-optional support for an X-Touch Extender. It replaces REAPER's stock Mackie
-Control support.
+JPRSurf is a REAPER control surface extension. Everything a surface does comes
+from its config file: which devices it uses, what each of their controls does,
+and the modes that change that. This guide covers setting JPRSurf up in REAPER
+and giving it a config file. What a config can say is in the [config
+spec](config_spec.md), and the [example configs](#example-configs) are
+complete surfaces to use as they are, or start your own from.
 
 ---
 
 ## Contents
 
-- [Getting started](#getting-started)
-- [Concepts](#concepts)
-- [Always available](#always-available)
-- [Track mode](#track-mode)
-- [Send mode](#send-mode)
-- [Cheat sheet](#cheat-sheet)
-- [JPRSurf's config](#jprsurfs-config)
+- [Supported hardware](#supported-hardware)
+- [Installing the extension](#installing-the-extension)
+- [Turning off REAPER's own MIDI handling](#turning-off-reapers-own-midi-handling)
+- [Adding the control surface](#adding-the-control-surface)
+- [Choosing the config file](#choosing-the-config-file)
+- [If something doesn't work](#if-something-doesnt-work)
+- [Example configs](#example-configs)
 - [Reference](#reference)
 
 ---
 
-## Getting started
+## Supported hardware
 
-### Hardware
+JPRSurf supports the [device types](devices/README.md) it lists, each with a
+page of its controls, by the names a config uses. A config can use any number
+of devices together, each required or optional.
 
-JPRSurf supports one X-Touch, and optionally one X-Touch Extender. An extender
-is not required, but the X-Touch is: with only an extender connected, JPRSurf
-does nothing.
+---
 
-**If you use an extender, it must be physically to the left of the X-Touch.**
-JPRSurf lays out the channel strips in that order: the extender's 8 strips are
-channels 1-8, and the X-Touch's 8 strips are channels 9-16. Putting it on the
-right is a change to the config's widgets (see [JPRSurf's
-config](#jprsurfs-config)).
-
-Both units must be in Mackie Control (MC) mode, not HUI or standard MIDI mode.
-
-The [X-Touch](devices/XTouch.md) and [X-Touch Extender](devices/XTouchExt.md)
-pages list every control on each unit, by the names JPRSurf gives them.
-
-### Installing the extension
+## Installing the extension
 
 1. Close REAPER.
-2. Copy `reaper_jprsurf.dll`, and its config file, `jprsurf.jprsurf`, into
-   REAPER's user plugins folder:
+2. Copy `reaper_jprsurf.dll` into REAPER's user plugins folder:
    `%APPDATA%\REAPER\UserPlugins`
    (typically `C:\Users\<you>\AppData\Roaming\REAPER\UserPlugins`).
 3. Start REAPER.
 
 JPRSurf is Windows only.
 
-### Turning off REAPER's own MIDI handling
+---
 
-**This step matters.** JPRSurf opens the X-Touch's MIDI ports directly. If
+## Turning off REAPER's own MIDI handling
+
+**This step matters.** JPRSurf opens its devices' MIDI ports directly. If
 REAPER also has those ports enabled, REAPER and JPRSurf will both talk to the
-surface and fight over it - faders jump back, lights flicker, and buttons do
+devices and fight over them - faders jump back, lights flicker, and buttons do
 things twice.
 
-In **Preferences > Audio > MIDI Inputs**, make sure the X-Touch devices have
-**no** boxes ticked - not Input, not All, not Control:
+In **Preferences > Audio > MIDI Inputs**, make sure the devices your config
+uses have **no** boxes ticked - not Input, not All, not Control:
 
 ![REAPER MIDI input device settings, with the X-Touch devices unchecked](images/midi-inputs.png)
 
@@ -65,42 +58,31 @@ In **Preferences > Audio > MIDI Outputs**, the same - neither Enable nor Clock:
 
 ![REAPER MIDI output device settings, with the X-Touch devices unchecked](images/midi-outputs.png)
 
-### Adding the control surface
+---
+
+## Adding the control surface
 
 In **Preferences > Control/OSC/web**, click **Add**, and choose **Jovian Path
 Control Surface** from the control surface mode list:
 
 ![Adding the Jovian Path Control Surface in REAPER's control surface preferences](images/add-control-surface.png)
 
-Leave **Config file** empty. The surface then reads `jprsurf.jprsurf` beside
-the DLL, which this guide describes, finds the hardware itself, and should
-light up as soon as you click OK. To change what it does, see [Using another
-config file](#using-another-config-file).
+Then choose its config file (see below), and click OK. The surface finds its
+devices by the MIDI port names its config gives them, and should light up at
+once.
 
 It can only be added once. Adding it again shows a message in REAPER's console
 saying it is already running, and nothing is added.
 
-JPRSurf locates the units by their MIDI port names, which must be exactly:
+---
 
-| Device           | Port name     |
-| ---------------- | ------------- |
-| X-Touch          | `X-Touch`     |
-| X-Touch Extender | `X-Touch-Ext` |
+## Choosing the config file
 
-These are the names the units report by default. If you have renamed them in
-Windows, or you have more than one interface presenting a similar name, JPRSurf
-will not find them, unless the config's `devices` names them (see
-[Devices](#devices)).
+The surface does nothing until it has a config file. Keep yours somewhere of
+your own, such as `%APPDATA%\REAPER`, and give the surface its path:
 
-### Using another config file
-
-Everything the surface does comes from its config file. To change it, copy
-`jprsurf.jprsurf` somewhere else, rather than editing the one beside the DLL,
-as installing JPRSurf again replaces that one. Then edit the copy (see
-[JPRSurf's config](#jprsurfs-config)), and give the surface its path:
-
-1. In **Preferences > Control/OSC/web**, select the surface, and click
-   **Edit**.
+1. Open the surface's settings: the dialog that adds it, or later, in
+   **Preferences > Control/OSC/web**, select the surface, and click **Edit**.
 2. Click **Browse...**, and pick the file. You can also type or paste its full
    path into **Config file**.
 
@@ -108,9 +90,9 @@ as installing JPRSurf again replaces that one. Then edit the copy (see
 
 3. Click **OK**.
 
-An empty **Config file** is JPRSurf's own config, so clearing it goes back to
-that. So is `null`, which `reaper.ini` holds for a surface added before JPRSurf
-had config files.
+An empty **Config file** is no config file, so the surface does nothing. So is
+`null`, which `reaper.ini` holds for a surface added before JPRSurf had config
+files.
 
 The file is read when REAPER starts, and when you click OK in that dialog, even
 if the path didn't change. So after editing the file, click **Edit**, then
@@ -122,11 +104,14 @@ The path is kept in `reaper.ini`, REAPER's own settings file, in
 there too, while REAPER is closed, as REAPER rewrites `reaper.ini` when it
 exits.
 
-### If something doesn't work
+---
+
+## If something doesn't work
 
 JPRSurf writes a log to `%APPDATA%\jprsurf.log`, which is cleared each time
-REAPER starts. It lists every MIDI port it found and which ones it opened,
-which is the fastest way to tell whether a naming or port problem is the cause.
+REAPER starts. It says which config file it read, and lists every MIDI port it
+found and which ones it opened, which is the fastest way to tell whether a
+naming or port problem is the cause.
 
 It also lists every error in the config file. A config with an error does
 nothing: the surface stays dark until it is fixed, rather than running half
@@ -137,561 +122,21 @@ is about, such as a view and a control:
 C:\Users\me\Documents\My surface.jprsurf: line 61: /track_mode/track_list/strip[]: strip.mut: names nothing
 ```
 
-Fix the errors, then reload the file (see [Using another config
-file](#using-another-config-file)). A missing device that isn't `optional` is
+Fix the errors, then reload the file (see [Choosing the config
+file](#choosing-the-config-file)). A missing device that isn't `optional` is
 reported the same way, as the surface can't run without it. The [config
 spec](config_spec.md#checking-and-errors) says what is checked.
 
-If everything works except the **Save** button's light, check REAPER's undo
-settings. REAPER only tracks whether a project has unsaved changes when
-"undo/prompt to save" is enabled, and the light has nothing to report without
-it. This is on by default, so it only comes up if you have turned it off.
-
 ---
 
-## Concepts
+## Example configs
 
-### Modes
+Each example is a complete config, with a page on what it does and how it is
+put together. Copy one somewhere of your own to use it, or to start from.
 
-The surface is always in exactly one mode. The mode decides what the channel
-strips show and what their controls do. Everything outside the strips - the
-transport, the utility buttons, the timecode display, and the master fader -
-works the same way in every mode.
-
-There are two modes:
-
-| Mode      | Shows                                                        |
-| --------- | ------------------------------------------------------------ |
-| **Track** | The tracks of your project, one per strip                    |
-| **Send**  | The sends or receives of a single track, one route per strip |
-
-The **Track** and **Send** buttons in the assign section choose the mode. Their
-lights tell you both which mode you are in and which modes you can reach:
-
-| Light    | Meaning                              |
-| -------- | ------------------------------------ |
-| Off      | This mode is not available right now |
-| Solid    | This mode is available               |
-| Blinking | This is the current mode             |
-
-Track mode is always available, and the surface starts there. Send mode is
-available when exactly one track is selected in REAPER, that track is visible
-on the surface, and it has at least one send or receive.
-
-The current mode keeps blinking even when it is no longer available. If you are
-in Send mode and change the track selection, the Send button stays lit until
-you leave.
-
-### Modifiers
-
-**Shift**, **Ctrl**, **Alt**, and **Option** in the Modify section are
-modifiers. Hold one down and press something else; they never do anything on
-their own. They can be combined, and several combinations have their own
-meaning - Shift + Ctrl and Alt + Ctrl both do something different from either
-one alone.
-
-What a modifier does depends on what you press with it, so they are documented
-with the controls they affect. Most of them are in
-[Modifiers on track controls](#modifiers-on-track-controls). Shift also picks
-the alternate action on each of the utility buttons.
-
-Some ordinary buttons also act as modifiers while you hold them. Holding
-**Send** in Track mode, for example, changes both what the select buttons do
-and what their lights show. These are documented with the mode they belong to.
-
-### Undo
-
-Where REAPER allows it, one gesture on the surface is one undo point. Setting
-mute across a range of twenty tracks is a single undo step, not twenty. Send
-and receive volume and pan moves are collected into one undo point once you
-stop moving the control.
-
-REAPER holds a track fader or pan move open until the next undo point, so a
-change made within about half a second of one (such as a mute, or a send
-fader) joins the same undo step.
-
----
-
-## Always available
-
-Everything in this section works the same way in both modes.
-
-### Transport
-
-These are the buttons in the transport section, at the bottom right of the
-X-Touch.
-
-| Button      | Short press                             | Long press         | Lit when                 |
-| ----------- | --------------------------------------- | ------------------ | ------------------------ |
-| **Rewind**  | Previous measure (see Nudge and Marker) |                    |                          |
-| **Forward** | Next measure (see Nudge and Marker)     |                    |                          |
-| **Stop**    | Stop                                    |                    |                          |
-| **Play**    | Play / pause                            |                    | The transport is rolling |
-| **Record**  | Start or stop recording                 |                    | Recording                |
-| **Nudge**   | Move by beat instead of measure         |                    | Turned on                |
-| **Marker**  | Move by marker instead of measure       |                    | Turned on                |
-| **Cycle**   | Toggle repeat                           |                    | Repeat is on             |
-| **Click**   | Toggle the metronome                    |                    | The metronome is on      |
-| **Solo**    | Toggle solo in front                    | Unsolo every track | Solo in front is on      |
-
-**Record** follows REAPER's own transport buttons. It starts recording, and
-starts playback as well if the transport was stopped or paused. Pressing it
-again while recording turns recording off and leaves the transport rolling.
-Stopping or pausing also turns recording off.
-
-**Nudge** and **Marker** change what Rewind and Forward do. They are not held
-down - press one to turn it on, and press it again to turn it off. Each is lit
-while it is on. Only one can be on at a time, so turning one on turns the
-other off.
-
-**Solo** here is the standalone button above the transport, not a channel strip
-solo. A long press unsolos every track in the project.
-
-### Timecode display
-
-The display shows the play position, in whichever unit REAPER's ruler is set
-to.
-
-The **SMPTE/Beats** button steps through the four ruler modes, in this order:
-
-| Mode        | Display shows       | Light |
-| ----------- | ------------------- | ----- |
-| **Beats**   | Bars and beats      | Beats |
-| **Time**    | Minutes and seconds | None  |
-| **Frames**  | SMPTE timecode      | SMPTE |
-| **Samples** | Samples             | None  |
-
-Pressing it again from Samples returns to Beats. The **SMPTE** and **Beats**
-lights only cover two of the four modes, so when neither is lit the ruler is
-in Time or Samples - read the display itself to tell which.
-
-The **Solo** indicator light beside them lights whenever any track in the
-project is soloed. It is an indicator only, not a button.
-
-### Master fader
-
-The X-Touch's master fader always controls the master track's volume, in every
-mode. It is never re-purposed.
-
-### Utility buttons
-
-| Button     | Short press          | Shift + press                         | Ctrl + press        | Lit when                     |
-| ---------- | -------------------- | ------------------------------------- | ------------------- | ---------------------------- |
-| **Undo**   | Undo                 | Redo                                  |                     | There is something to redo   |
-| **Save**   | Save project         | Save a new version of the project     |                     | Blinking: unsaved changes    |
-| **Cancel** | Unselect all items   | Remove time selection and loop points |                     | Any media items are selected |
-| **Enter**  | Insert new MIDI item | Insert empty item                     | Insert click source |                              |
-
-The Cancel light follows the item selection only, which is what a plain press
-clears. Shift + Cancel doesn't affect it.
-
-All of these lights follow the current project when you switch project tabs.
-
-### Automation buttons
-
-The automation buttons set the automation mode of every selected track, or
-REAPER's global automation override while **Group** is on (see below):
-
-| Button    | Sets the selected tracks to |
-| --------- | --------------------------- |
-| **Trim**  | Trim/Read                   |
-| **Read**  | Read                        |
-| **Touch** | Touch                       |
-| **Write** | Write                       |
-| **Latch** | Latch                       |
-
-Each press is a single undo step. With no tracks selected, a press does
-nothing. The master track counts as a selected track like any other.
-
-Each button shows how many of the selected tracks are in its mode:
-
-| Light    | Selected tracks in the mode |
-| -------- | --------------------------- |
-| Off      | None                        |
-| Solid    | All of them                 |
-| Blinking | Some of them                |
-
-So with a single track selected, exactly one button is solid. When the selected
-tracks are in different modes, each of their modes blinks, and pressing any of
-the buttons puts them all in that mode. With no tracks selected, all are off.
-
-REAPER also has a Latch Preview mode, which has no button. Tracks in Latch
-Preview light nothing, but still count as selected tracks, so a mix of Latch
-and Latch Preview tracks blinks Latch.
-
-The lights follow the current project when you switch project tabs.
-
-#### Global automation override
-
-REAPER's global automation override (the automation control on its transport)
-makes every track behave as if it were in one mode, without changing the
-tracks' own modes. It can also be **Bypass**, which ignores all automation. It
-is saved with each project, and isn't an undo step.
-
-**Group** turns the override on and off, and is lit while it is on. Turning it
-on restores the last override, set from either the surface or REAPER, or
-Bypass if there hasn't been one since REAPER started.
-
-While the override is on, each mode button is lit while the override is its
-mode. Pressing it sets the override to its mode, or back to Bypass if it
-already was. REAPER's Latch Preview override, which has no button, blinks
-Latch, and pressing Latch then sets Latch.
-
----
-
-## Track mode
-
-Track mode is the default. Each channel strip shows one track of your project.
-
-### The channel strip
-
-| Control             | Shows / does        |
-| ------------------- | ------------------- |
-| **Fader**           | Track volume        |
-| **Pot**             | Track pan           |
-| **Pot button**      | Reset pan to center |
-| **Mute**            | Mute                |
-| **Solo**            | Solo                |
-| **Rec**             | Record arm          |
-| **Meter**           | Track level         |
-| **Scribble top**    | Track name          |
-| **Scribble bottom** | Track volume, in dB |
-| **Scribble color**  | Track color         |
-
-The pot ring tells you what kind of track you are looking at. A normal track
-shows its pan as a single lit position. A **folder track** lights the
-far-left and far-right ring LEDs together instead, which is how the X-Touch
-stands in for the dedicated indicator on the original Mackie surface. A strip
-with **no track** has its ring completely off.
-
-### Select
-
-| Action               | Result                                                          |
-| -------------------- | --------------------------------------------------------------- |
-| Short press          | Select only this track (or unselect it, if it was the only one) |
-| Double press         | Navigate into this track, if it is a folder                     |
-| Long press           | Select the track, and anchor it for a range (see below)         |
-| Ctrl + press         | Add or remove this track from the selection                     |
-| Shift +  press       | Select the range from the last track you touched                |
-| Shift + Ctrl + press | The same, but crossing folder boundaries                        |
-
-A plain Shift range only covers tracks with the same parent as the starting
-track. This differs from REAPER's default, and is usually what you want on a
-surface - an expanded folder in the middle of the range doesn't drag its
-children in. Add Ctrl for REAPER's "everything in between" behavior.
-
-### Navigating the track list
-
-| Button                    | Short press            | Long press                | Lit when                     |
-| ------------------------- | ---------------------- | ------------------------- | ---------------------------- |
-| **Channel Left/Right**    | Move by one track      |                           |                              |
-| **Fader Bank Left/Right** | Move by 8 tracks       |                           |                              |
-| **Global View**           | Go up one folder level | Go all the way to the top | There is a level to go up to |
-
-A fader bank is always 8 tracks, whether or not you have an extender.
-
-Going into a folder with a double press of select, and back out with Global
-View, is how you move through a project with nested folders. Global View
-centers the view on the folder you just left, so you don't lose your place. It
-is dark at the top level, where there is nowhere further to go.
-
-### Modifiers on track controls
-
-Held while pressing **mute**, **solo**, or **rec arm**:
-
-| Modifier         | Result                                                      |
-| ---------------- | ----------------------------------------------------------- |
-| *(none)*         | Toggle this track, following grouping                       |
-| **Ctrl**         | Toggle this track only, ignoring grouping and ganging       |
-| **Shift**        | Set the range from the last track you touched to this track |
-| **Shift + Ctrl** | The same, crossing folder boundaries                        |
-| **Alt**          | Clear it on every track in the project                      |
-| **Alt + Ctrl**   | Clear everywhere, then set this track only                  |
-| **Alt + Shift**  | Clear everywhere, then set this track, following grouping   |
-| **Option**       | Toggle this track and every selected track                  |
-
-Alt clears every track in the whole project, not just the ones on the surface,
-so a mute you can neither see nor reach cannot be left behind. Alt + Ctrl is
-the quickest way to solo exactly one track from anywhere.
-
-Held while moving a **fader** or **pot**:
-
-| Modifier | Result                                 |
-| -------- | -------------------------------------- |
-| **Ctrl** | Move this track only, ignoring ganging |
-
-### Ranged actions: hold and press
-
-Hold **select**, **mute**, **solo**, or **rec arm** on one track, and press the
-same button on another track. Everything between the two is affected:
-
-- **Select** selects exactly that range, and unselects everything else.
-- **Mute**, **solo**, and **rec arm** set the whole range to the held track's
-  current value. Holding mute on a muted track and pressing another mute mutes
-  the range; holding it on an unmuted track unmutes the range.
-
-Mute, solo, and rec arm anchor as soon as you press them, and the press still
-does its normal job. Select anchors after a short hold, because a quick press
-of two selects in a row has to stay a double press.
-
-Each button has its own anchor, so holding mute on one track and select on
-another gives you two independent ranges. Keep holding, and each further press
-redoes the range from the same anchor. A range only covers tracks with the same
-parent as the anchor track, and is a single undo point. Modifiers are ignored
-while an anchor is held.
-
-This is the same idea as Shift, with both ends under your fingers. Shift is
-still useful when the two ends aren't on the surface at the same time.
-
-### Holding Send
-
-Hold the **Send** button while in Track mode and the surface turns into a map
-of your routing:
-
-- The **select lights** stop showing REAPER's selection and instead light for
-  every track that has a send or a receive.
-- **Pressing select** on one of those tracks jumps straight into Send mode for
-  it.
-
-Holding Send never changes your track selection, so you can hold it to look and
-release it without anything happening. Releasing Send only switches mode if you
-pressed it briefly.
-
----
-
-## Send mode
-
-Send mode shows the sends or receives of a **single track**. The folder
-hierarchy has no meaning here; you are looking at one track's routing.
-
-### Getting in and out
-
-There are three ways in:
-
-| How                                      | Result                                      |
-| ---------------------------------------- | ------------------------------------------- |
-| Short press **Send**                     | Show the selected track's routing           |
-| Hold **Send**, press a **select** button | Show that track's routing                   |
-| Select a different track in REAPER       | The view follows to the newly touched track |
-
-Entering shows the track's **sends**, unless it has only receives, in which
-case it shows those.
-
-Press **Track** to leave. You return to Track mode with the Send mode track
-visible among its siblings, wherever it lives in the project.
-
-Master track routing and hardware outputs are not shown.
-
-### Route strips
-
-Every strip except the rightmost X-Touch strip shows one send or receive:
-
-| Control             | Shows / does                                    |
-| ------------------- | ----------------------------------------------- |
-| **Fader**           | Route volume                                    |
-| **Pot**             | Route pan                                       |
-| **Pot button**      | Reset route pan to center                       |
-| **Mute**            | Mute the route                                  |
-| **Select**          | Jump to the track at the other end of the route |
-| **Scribble top**    | The other track's name                          |
-| **Scribble bottom** | Route volume, in dB                             |
-| **Scribble color**  | The other track's color                         |
-
-**Select walks the routing graph.** On a send, it takes you to the destination
-track and shows its receives; on a receive, it takes you to the source track
-and shows its sends. Either way you arrive at the other end of the route you
-were looking at, and can keep going. This never changes REAPER's track
-selection.
-
-Rec and Solo are unused on route strips and stay dark. Strips past the last
-route are empty, with their pot ring off.
-
-**Channel Left/Right** moves by one route, and **Fader Bank Left/Right** pages
-through a full screen of them at a time.
-
-### The Info strip
-
-The rightmost strip on the X-Touch (strip 8, or strip 16 with an extender) does
-not show a route. It shows the **track whose routing you are looking at**, with
-the same controls as a Track mode strip: fader, pot, pot button, mute, solo,
-rec arm, meter, name, and color.
-
-Its bottom scribble line shows **Send** or **Recv**, so you always know which
-you are looking at. Its select button is unused.
-
-This lets you watch and adjust the track itself without leaving the mode.
-
-### Sends or receives
-
-A short press of **Send** while in Send mode toggles between the track's sends
-and its receives, starting from the first one. If the track only has one or the
-other, it does nothing.
-
----
-
-## Cheat sheet
-
-### Global buttons
-
-| Button      | Short press                | Shift + press         | Ctrl + press        | Long press                    |
-| ----------- | -------------------------- | --------------------- | ------------------- | ----------------------------- |
-| Undo        | Undo                       | Redo                  |                     |                               |
-| Save        | Save                       | Save new version      |                     |                               |
-| Cancel      | Unselect all items         | Remove time selection |                     |                               |
-| Enter       | Insert MIDI item           | Insert empty item     | Insert click source |                               |
-| Trim        | Selected tracks: trim/read |                       |                     |                               |
-| Read        | Selected tracks: read      |                       |                     |                               |
-| Touch       | Selected tracks: touch     |                       |                     |                               |
-| Write       | Selected tracks: write     |                       |                     |                               |
-| Latch       | Selected tracks: latch     |                       |                     |                               |
-| Group       | Toggle automation override |                       |                     |                               |
-| Rewind      | Previous measure           |                       |                     |                               |
-| Forward     | Next measure               |                       |                     |                               |
-| Nudge       | Toggle moving by beat      |                       |                     |                               |
-| Marker      | Toggle moving by marker    |                       |                     |                               |
-| Stop        | Stop                       |                       |                     |                               |
-| Play        | Play / pause               |                       |                     |                               |
-| Record      | Start or stop recording    |                       |                     |                               |
-| Cycle       | Toggle repeat              |                       |                     |                               |
-| Click       | Toggle metronome           |                       |                     |                               |
-| Solo        | Solo in front              |                       |                     | Unsolo all tracks             |
-| SMPTE/Beats | Cycle the ruler mode       |                       |                     |                               |
-| Track       | Track mode                 |                       |                     |                               |
-| Send        | Send mode                  |                       |                     | Show routing on select lights |
-
-### Channel strip, by mode
-
-| Control         | Track mode                    | Send mode route strip | Send mode Info strip |
-| --------------- | ----------------------------- | --------------------- | -------------------- |
-| Fader           | Track volume                  | Route volume          | Track volume         |
-| Pot             | Track pan                     | Route pan             | Track pan            |
-| Pot button      | Center pan                    | Center route pan      | Center pan           |
-| Mute            | Track mute                    | Route mute            | Track mute           |
-| Solo            | Track solo                    | -                     | Track solo           |
-| Rec             | Track record arm              | -                     | Track record arm     |
-| Select          | Select / into folder / anchor | Go to the other end   | -                    |
-| Scribble top    | Track name                    | Other track's name    | Track name           |
-| Scribble bottom | Volume                        | Route volume          | Send / Recv          |
-| Meter           | Track level                   | -                     | Track level          |
-
-### Navigation, by mode
-
-| Button                | Track mode                   | Send mode           |
-| --------------------- | ---------------------------- | ------------------- |
-| Channel Left/Right    | Move by one track            | Move by one route   |
-| Fader Bank Left/Right | Move by 8 tracks             | Page through routes |
-| Global View           | Up a level (long press: top) | -                   |
-
----
-
-## JPRSurf's config
-
-Everything this guide describes comes from JPRSurf's config file,
-`jprsurf.jprsurf`, written in the language the [config spec](config_spec.md)
-defines. This section shows how it is put together, so you can find the part
-that does something, and change it (see [Using another config
-file](#using-another-config-file)). The file itself has a comment on each part.
-
-### Devices
-
-```
-devices {
-  xtouch = XTouch(input = "X-Touch", output = "X-Touch")
-  xtouch_ext = XTouchExt(input = "X-Touch-Ext", output = "X-Touch-Ext",
-                         optional = true) {
-    without strip[2].fader [press]
-  }
-}
-```
-
-- The X-Touch is required, so the surface does nothing without it, and the
-  extender is optional.
-- `input` and `output` are the MIDI port names JPRSurf finds each unit by.
-  Change them if Windows shows your units under other names.
-- The `without` line leaves out the touch sensing of the extender's third
-  fader, as the author's has lost it, so that fader only follows REAPER once it
-  stops moving. **If your extender's third fader works, delete that line**, so
-  it senses touch like the others.
-
-See [Devices](config_spec.md#devices) in the spec.
-
-### Widgets
-
-```
-widgets {
-  include xtouch { except strip }
-  strip = join(xtouch_ext.strip, xtouch.strip)
-  route_strip = join(xtouch_ext.strip, xtouch.strip[0..6])
-  info_strip = xtouch.strip[7]
-}
-```
-
-These are the names the mappings use:
-- Every X-Touch control but its strips, by the names on the [X-Touch's
-  page](devices/XTouch.md), such as `play` and `assign_send`.
-- `strip`: every channel strip, left to right, the extender's first. Without
-  the extender, it is the X-Touch's 8. To put the extender on the right, swap
-  the two: `join(xtouch.strip, xtouch_ext.strip)`, and the same for
-  `route_strip`.
-- `route_strip`: the strips that show routes in Send mode, which are all but
-  the X-Touch's last.
-- `info_strip`: the X-Touch's last strip, which is Send mode's Info strip.
-
-The X-Touch's last strip is in both `strip` and `info_strip`, and the mode
-decides which one is in use. See [Widgets](config_spec.md#widgets) in the spec.
-
-### Components
-
-What the surface keeps track of itself (see
-[Components](config_spec.md#components) in the spec):
-
-| Component                  | Kind               | What it is                                                                                                                                        |
-| -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mod:send_hold`            | `modifier`         | On while Send is held, which changes the select buttons in Track mode.                                                                            |
-| `mod:select_anchor`        | `modifier`         | On while a select button is held as a range's anchor.                                                                                             |
-| `user:transport_step`      | `enumerated_value` | What Rewind and Forward move by: `measure`, `beat` (Nudge), or `marker` (Marker).                                                                 |
-| `user:surface_mode`        | `enumerated_value` | The mode: `track` or `send_receive`.                                                                                                              |
-| `user:folder`              | `track_reference`  | The folder whose tracks Track mode shows, which starts as the master track.                                                                       |
-| `user:current_track`       | `track_reference`  | The track whose routes Send mode shows. It follows the last touched track, and Track mode keeps it on the strips.                                 |
-| `user:pick_selected_track` | `track_pick`       | Picks the selected track as the current track, for a tap of Send.                                                                                 |
-| `user:anchor_*`            | `track_anchor`     | On each Track mode strip, the anchors held by its select, mute, solo, and rec arm buttons (see [Ranged actions](#ranged-actions-hold-and-press)). |
-| `user:pick_track`          | `track_pick`       | On each Track mode strip, picks its track as the current track, for select while Send is held.                                                    |
-
-### Named mappings
-
-Mappings used in more than one place (see [Named
-mappings](config_spec.md#named-mappings) in the spec):
-- `track_strip`: a strip showing a track the same way in every mode, which
-  every Track mode strip and the Info strip use. Its select button and bottom
-  scribble line are left to each mode.
-- `auto_mode_button`: one automation button, with and without the global
-  override, used once for each of the five.
-- `list_navigation`: Channel and Bank, which scroll the list, in both modes.
-
-### Views
-
-The rest of the file is its views (see [Views](config_spec.md#views) in the
-spec), which follow the sections of this guide:
-
-```
-(top level)          Always available: modifiers, the timecode display, the
-│                    utility, automation, and transport buttons, and Track
-├── master_fader     The master track's volume
-├── track_mode       While user:surface_mode is track: Send's tap and light
-│   └── track_list   user:folder's child tracks: Global, Channel, and Bank
-│       └── strip    Repeated over strip: track_strip, select, the anchors,
-│                    and select while Send is held
-└── send_receive_mode  While user:surface_mode is send_receive:
-    │                user:current_track's routes, the Info strip, and Send's
-    │                tap and light
-    └── strip        Repeated over route_strip: each route
-```
-
-A change to one mode's behavior is in that mode's view, and a change to a
-button that works the same in every mode is at the top level. For instance, to
-make Shift + Undo do something else, change the `undo [mod:shift]` mapping
-under `# Utility buttons`, to any REAPER action's command ID (see [REAPER
-commands](config_spec.md#reaper-commands) in the spec).
+| Example                      | Hardware                                                            |
+| ---------------------------- | ------------------------------------------------------------------- |
+| [X-Touch](configs/xtouch.md) | A Behringer X-Touch, and optionally an X-Touch Extender to its left |
 
 ---
 
