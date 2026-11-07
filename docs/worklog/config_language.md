@@ -13,13 +13,14 @@ where a mapping should be one dense line.
 
 ## Behavior
 
-- **JPRSurf's own surface is a config file**, `config/jprsurf.jprsurf`, which
-  the build deploys beside the DLL, in REAPER's `UserPlugins` folder. It is the
-  only definition of JPRSurf's surface: `GetDefaultSpec()` is gone, and the
-  surface tests read the file from the source tree.
-- **The config string is the file's path.** An empty config string is the
-  deployed `jprsurf.jprsurf`, and so is `null`, which earlier versions wrote,
-  and which the surface gives back to REAPER as empty.
+- **JPRSurf's own surface is a config file**, now the X-Touch example,
+  `docs/user/configs/xtouch.jprsurf`. `GetDefaultSpec()` is gone, and the
+  surface tests read the file from the source tree. (The build first deployed
+  it beside the DLL, as the file an empty config string read. Since the
+  example config was split out, an empty config string reads nothing.)
+- **The config string is the file's path.** An empty one names no file, so the
+  surface does nothing, and so does `null`, which earlier versions wrote, and
+  which the surface gives back to REAPER as empty.
 - **REAPER's control surface dialog picks the file:** Edit shows a Config file
   box with a Browse button. OK recreates the surface, which reads the file
   again, even if the path didn't change, so Edit, then OK, reloads it.
@@ -36,7 +37,7 @@ went. No call count bound moved.
 
 ## The language
 
-`config/jprsurf.jprsurf` is the whole language at work. Brackets say what kind
+`docs/user/configs/xtouch.jprsurf` is the whole language at work. Brackets say what kind
 of thing is inside them, everywhere in the file:
 - `{ }` holds a **body**: a list of statements, each starting with a keyword,
   except in a `mappings` block, where each is a mapping.
@@ -190,14 +191,13 @@ its template.
 - **`PluginSurface`** reads its config string as a path in `GetFileSystem()`,
   and creates the scene from the file, logging which file it reads and every
   error with the path in front. It registers the `*.jprsurf` filter.
-- **`dll_main.cc`** finds the deployed file beside the DLL
-  (`Plugin::Options::config_path`), and registers the operating system's files
+- **`dll_main.cc`** registers the operating system's files
   (`gb::LocalFileProtocol::CreateOsRoot()`), so a path opens as Windows writes
   it.
-- **The build** deploys `config/jprsurf.jprsurf` beside the DLL, and the tests
-  read it where it is checked in (`JPR_CONFIG_FILE`): `ConfigFileTest` checks
-  it reads and is valid, and `DefaultConfigTest` builds the surface tests'
-  scene from it (`SurfaceTest` takes a config file's path).
+- **The tests** read the X-Touch example where it is checked in
+  (`JPR_CONFIG_FILE`): `ConfigFileTest` checks it reads and is valid, and
+  `DefaultConfigTest` builds the surface tests' scene from it (`SurfaceTest`
+  gives the surface a config file's path as its config string).
 - **`PluginTest`** fails on any error logged, as the surface tests do, and
   tests a config string that is empty, `null`, a path, a missing file, a file
   with errors, and the dialog: `null` shown as empty, and OK reading the file
@@ -205,8 +205,9 @@ its template.
 
 ## Building blocks
 
-- **A change to JPRSurf's surface** is an edit to `config/jprsurf.jprsurf`,
-  which `ConfigFileTest` reads and checks before any surface test runs.
+- **A change to JPRSurf's surface** is an edit to the X-Touch example,
+  `docs/user/configs/xtouch.jprsurf`, which `ConfigFileTest` reads and checks
+  before any surface test runs.
 - **A new component kind** needs a few lines in the reader that fill in its
   `ComponentSpec` from its parameters' text, beyond what surface_spec.md's
   building blocks say. A test reads one of each kind in `GetComponentKinds()`,

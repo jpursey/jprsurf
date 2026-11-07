@@ -18,7 +18,6 @@
 #include "absl/log/log.h"
 #include "gb/base/init_logging.h"
 #include "gb/base/log_file.h"
-#include "gb/base/unicode.h"
 #include "gb/file/local_file_protocol.h"
 #include "jpr/common/file_system.h"
 #include "jpr/common/log_path.h"
@@ -76,23 +75,8 @@ bool RegisterLocalFiles() {
   return GetFileSystem()->Register(gb::LocalFileProtocol::CreateOsRoot());
 }
 
-// Returns the path of the default config file, jprsurf.jprsurf beside the DLL,
-// or "" if the DLL's path can't be found.
-std::string GetConfigPath(HMODULE dll) {
-  std::wstring path(MAX_PATH, L'\0');
-  const DWORD length =
-      GetModuleFileNameW(dll, path.data(), static_cast<DWORD>(path.size()));
-  if (length == 0 || length == path.size()) {
-    return {};
-  }
-  path.resize(length);
-  return gb::ToUtf8(std::filesystem::path(path)
-                        .replace_filename("jprsurf.jprsurf")
-                        .u16string());
-}
-
 // Returns the plugin's options, from its environment.
-Plugin::Options GetOptions(HMODULE dll) {
+Plugin::Options GetOptions() {
   Plugin::Options options;
   const bool has_log_folder = RegisterLogFolder();
   if (IsTraceOn()) {
@@ -111,11 +95,6 @@ Plugin::Options GetOptions(HMODULE dll) {
   if (!RegisterLocalFiles()) {
     LOG(ERROR) << "The local file system can't be registered, so no config "
                   "file can be read.";
-  }
-  options.config_path = GetConfigPath(dll);
-  if (options.config_path.empty()) {
-    LOG(ERROR) << "The DLL's path can't be found, so there is no default "
-                  "config file.";
   }
   return options;
 }
@@ -147,9 +126,7 @@ REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(
     jpr::Plugin::Unload();
     return 0;
   }
-  return jpr::Plugin::Load(instance, *plugin_info, jpr::GetOptions(instance))
-             ? 1
-             : 0;
+  return jpr::Plugin::Load(instance, *plugin_info, jpr::GetOptions()) ? 1 : 0;
 }
 
 }  // extern "C"

@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "absl/types/span.h"
+
 namespace jpr {
 
 // One generated page of the user docs.
@@ -20,12 +22,13 @@ struct UserDocPage {
 // Returns every generated page: in devices/, each device type's page and
 // their index (see device_type_page.h), and in scene/, the scene's index, each
 // property namespace's page, and the component kinds' (see scene_pages.h).
-// Every .md file in a directory of docs/user, as opposed to in docs/user
-// itself, is one of them.
+// Every .md file in their directories is one of them. docs/user itself, and
+// its other directories, such as configs/, hold hand-written pages.
 std::vector<UserDocPage> GenerateUserDocPages();
 
-// Returns the path, as a page's, of each .md file in a directory of the user
-// docs at `dir`, such as "devices/XTouch.md".
-std::vector<std::string> ListPageFiles(const std::filesystem::path& dir);
+// Returns the path, as a page's, of each .md file in the user docs at `dir`
+// that is in a directory one of `pages` is in, such as "devices/XTouch.md".
+std::vector<std::string> ListPageFiles(const std::filesystem::path& dir,
+                                       absl::Span<const UserDocPage> pages);
 
 }  // namespace jpr

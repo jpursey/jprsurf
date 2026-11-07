@@ -42,9 +42,9 @@ namespace jpr {
 
 class SurfaceTest : public ::testing::Test {
  protected:
-  // The surface reads the config file at `config_path`, a local path (the
-  // fixture registers the local file system, as dll_main.cc does), or none for
-  // a test that adds no surface.
+  // The surface's config string is `config_path`, the config file it reads, as
+  // a local path (the fixture registers the local file system, as dll_main.cc
+  // does), or none for a test that adds no surface.
   explicit SurfaceTest(std::string config_path = {});
 
   // Calls RemoveSurface(), before any fixture's members go, so the surface

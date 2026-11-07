@@ -7,9 +7,13 @@
 
 #include <filesystem>
 #include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
 #include "jpr/device/device_types.h"
 #include "jpr/doc/device_type_page.h"
 #include "jpr/doc/scene_pages.h"
@@ -38,18 +42,26 @@ std::vector<UserDocPage> GenerateUserDocPages() {
   return pages;
 }
 
-std::vector<std::string> ListPageFiles(const std::filesystem::path& dir) {
-  std::vector<std::string> files;
-  for (const std::filesystem::directory_entry& page_dir :
-       std::filesystem::directory_iterator(dir)) {
-    if (!page_dir.is_directory()) {
-      continue;
+std::vector<std::string> ListPageFiles(const std::filesystem::path& dir,
+                                       absl::Span<const UserDocPage> pages) {
+  absl::flat_hash_set<std::string> page_dirs;
+  for (const UserDocPage& page : pages) {
+    // docs/user itself holds hand-written pages, so it is never listed.
+    std::string page_dir =
+        std::filesystem::path(page.path).parent_path().string();
+    if (!page_dir.empty()) {
+      page_dirs.insert(std::move(page_dir));
     }
+  }
+  std::vector<std::string> files;
+  for (const std::string& page_dir : page_dirs) {
+    // A directory that doesn't exist yet has no files.
+    std::error_code error;
     for (const std::filesystem::directory_entry& entry :
-         std::filesystem::directory_iterator(page_dir.path())) {
+         std::filesystem::directory_iterator(dir / page_dir, error)) {
       if (entry.path().extension() == ".md") {
-        files.push_back(absl::StrCat(page_dir.path().filename().string(), "/",
-                                     entry.path().filename().string()));
+        files.push_back(
+            absl::StrCat(page_dir, "/", entry.path().filename().string()));
       }
     }
   }

@@ -5,7 +5,6 @@
 
 #include "jpr/plugin/plugin_surface.h"
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -34,34 +33,35 @@ constexpr const char kDescString[] = "Jovian Path Control Surface";
 //------------------------------------------------------------------------------
 
 bool PluginSurface::Register(reaper_plugin_info_t& plugin_info,
-                             std::string_view default_config_path,
                              const ReaperProfiler::Options& profile) {
   return ControlSurface::Register(
-      plugin_info,
-      {.type_string = kTypeString,
-       .description = kDescString,
-       .create_listener = std::bind_front(&PluginSurface::Create,
-                                          std::string(default_config_path)),
-       .profile = profile,
-       .config_file = FileFilter{.description = "JPRSurf config",
-                                 .pattern = "*.jprsurf"}});
+      plugin_info, {.type_string = kTypeString,
+                    .description = kDescString,
+                    .create_listener = &PluginSurface::Create,
+                    .profile = profile,
+                    .config_file = FileFilter{.description = "JPRSurf config",
+                                              .pattern = "*.jprsurf"}});
 }
 
 std::unique_ptr<ControlSurfaceListener> PluginSurface::Create(
-    std::string_view default_config_path, std::string_view config) {
+    std::string_view config) {
   // The listener is a private base, so convert the pointer here, where it is
   // accessible.
-  return std::unique_ptr<ControlSurfaceListener>(
-      new PluginSurface(default_config_path, config));
+  return std::unique_ptr<ControlSurfaceListener>(new PluginSurface(config));
 }
 
-PluginSurface::PluginSurface(std::string_view default_config_path,
-                             std::string_view config)
+PluginSurface::PluginSurface(std::string_view config)
     : config_(config == "null" ? "" : config) {
   LOG(INFO) << "PluginSurface created";
 
+  if (config_.empty()) {
+    LOG(WARNING) << "The surface has no config file, so it does nothing until "
+                    "one is picked in its settings in REAPER";
+    return;
+  }
+
   // Without the scene, as when the X-Touch is absent, the surface does nothing.
-  scene_ = ReadScene(config_.empty() ? default_config_path : config_);
+  scene_ = ReadScene(config_);
   if (scene_ != nullptr) {
     scene_->Activate(scene_runner_);
   }

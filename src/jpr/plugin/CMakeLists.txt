@@ -33,9 +33,8 @@ set(jpr_plugin_TEST_DEPS
 gb_add_library(jpr_plugin)
 target_include_directories(jpr_plugin PUBLIC "../..")
 
-# JPRSurf's config, where it is checked in, which the tests read, and the
-# deploy copies beside the DLL.
-set(JPR_CONFIG_FILE "${PROJECT_SOURCE_DIR}/config/jprsurf.jprsurf")
+# The X-Touch example config, where it is checked in, which the tests read.
+set(JPR_CONFIG_FILE "${PROJECT_SOURCE_DIR}/docs/user/configs/xtouch.jprsurf")
 target_compile_definitions(jpr_plugin_test PRIVATE
   "JPR_CONFIG_FILE=\"${JPR_CONFIG_FILE}\""
 )
@@ -79,20 +78,16 @@ gb_add_shared_library(reaper_jprsurf)
 # The deploy is a target of its own, rather than a step of reaper_jprsurf's
 # build, so targets that only need the DLL, such as check_load_in_reaper, don't
 # deploy it.
-# It copies the DLL and JPRSurf's config beside it, the default config file
-# (see PluginSurface). It runs only when one of them changed, as the stamp is
-# touched after the copy.
+# It copies the DLL, and runs only when it changed, as the stamp is touched
+# after the copy.
 if(JPR_DEPLOY_TO_REAPER)
   set(deploy_stamp "${CMAKE_CURRENT_BINARY_DIR}/deploy_reaper_jprsurf.stamp")
   add_custom_command(OUTPUT "${deploy_stamp}"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
       $<TARGET_FILE:reaper_jprsurf>
       "${REAPER_PLUGINS_DIR}/reaper_jprsurf.dll"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${JPR_CONFIG_FILE}"
-      "${REAPER_PLUGINS_DIR}/jprsurf.jprsurf"
       COMMAND ${CMAKE_COMMAND} -E touch "${deploy_stamp}"
-      DEPENDS reaper_jprsurf $<TARGET_FILE:reaper_jprsurf> "${JPR_CONFIG_FILE}"
+      DEPENDS reaper_jprsurf $<TARGET_FILE:reaper_jprsurf>
       COMMENT "Deploying plugin to Reaper..."
   )
   add_custom_target(deploy_reaper_jprsurf ALL DEPENDS "${deploy_stamp}")

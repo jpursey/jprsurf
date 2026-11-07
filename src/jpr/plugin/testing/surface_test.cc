@@ -36,9 +36,8 @@ SurfaceTest::SurfaceTest(std::string config_path)
 void SurfaceTest::TearDown() { RemoveSurface(); }
 
 void SurfaceTest::AddSurface() {
-  ASSERT_TRUE(Plugin::Load(nullptr, reaper_.GetPluginInfo(),
-                           {.config_path = config_path_}));
-  surface_ = reaper_.AddSurface();
+  ASSERT_TRUE(Plugin::Load(nullptr, reaper_.GetPluginInfo(), {}));
+  surface_ = reaper_.AddSurface(config_path_);
   ASSERT_NE(surface_, nullptr);
   surface_->SetTrackListChange();
   RunUntilShown();

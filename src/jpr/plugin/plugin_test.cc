@@ -37,8 +37,8 @@ using ::testing::StartsWith;
 class PluginTest : public ::testing::Test {
  protected:
   // The surface's scene maps REAPER's actions, so a REAPER without them
-  // creates none. Config files are read from the local file system, where
-  // JPRSurf's is checked in, or from "test:".
+  // creates none. Config files are read from the local file system, where the
+  // X-Touch example is checked in, or from "test:".
   PluginTest() {
     AddReaperActions(&reaper_);
     EXPECT_TRUE(
@@ -48,7 +48,7 @@ class PluginTest : public ::testing::Test {
   }
 
   // Loads the plugin as REAPER does, with `options`.
-  bool Load(const Plugin::Options& options = {.config_path = JPR_CONFIG_FILE}) {
+  bool Load(const Plugin::Options& options = {}) {
     return Plugin::Load(nullptr, reaper_.GetPluginInfo(), options);
   }
 
@@ -81,7 +81,8 @@ TEST_F(PluginTest, AddingASurfaceOpensTheXTouchPorts) {
   FakeMidiOutput* xtouch_ext_out = reaper_.AddMidiOutput("X-Touch-Ext");
   ASSERT_TRUE(Load());
 
-  std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface();
+  std::unique_ptr<TestControlSurface> surface =
+      reaper_.AddSurface(JPR_CONFIG_FILE);
   ASSERT_NE(surface, nullptr);
   EXPECT_TRUE(xtouch_in_->IsOpen());
   EXPECT_TRUE(xtouch_out_->IsOpen());
@@ -96,18 +97,28 @@ TEST_F(PluginTest, AddingASurfaceOpensTheXTouchPorts) {
   Plugin::Unload();
 }
 
-TEST_F(PluginTest, NullIsTheDefaultConfig) {
+TEST_F(PluginTest, AnEmptyConfigStringRunsNothing) {
+  ASSERT_TRUE(Load());
+  std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface();
+  ASSERT_NE(surface, nullptr);
+  EXPECT_FALSE(xtouch_in_->IsOpen());
+  EXPECT_STREQ(surface->GetConfigString(), "");
+  surface.reset();
+  Plugin::Unload();
+}
+
+TEST_F(PluginTest, NullIsAnEmptyConfigString) {
   ASSERT_TRUE(Load());
   std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface("null");
   ASSERT_NE(surface, nullptr);
-  EXPECT_TRUE(xtouch_in_->IsOpen());
+  EXPECT_FALSE(xtouch_in_->IsOpen());
   EXPECT_STREQ(surface->GetConfigString(), "");
   surface.reset();
   Plugin::Unload();
 }
 
 TEST_F(PluginTest, AConfigStringIsTheConfigFilesPath) {
-  ASSERT_TRUE(Load({.config_path = "test:/missing.jprsurf"}));
+  ASSERT_TRUE(Load());
 
   std::unique_ptr<TestControlSurface> surface =
       reaper_.AddSurface(JPR_CONFIG_FILE);
@@ -118,7 +129,7 @@ TEST_F(PluginTest, AConfigStringIsTheConfigFilesPath) {
   Plugin::Unload();
 }
 
-TEST_F(PluginTest, REAPERsDialogShowsNullAsTheDefault) {
+TEST_F(PluginTest, REAPERsDialogShowsNullAsEmpty) {
   ASSERT_TRUE(Load());
   std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface("null");
   ASSERT_NE(surface, nullptr);
@@ -130,7 +141,7 @@ TEST_F(PluginTest, REAPERsDialogShowsNullAsTheDefault) {
   }
   ASSERT_NE(surface, nullptr);
   EXPECT_STREQ(surface->GetConfigString(), "");
-  EXPECT_TRUE(xtouch_in_->IsOpen());
+  EXPECT_FALSE(xtouch_in_->IsOpen());
   surface.reset();
   Plugin::Unload();
 }
@@ -244,9 +255,9 @@ TEST_F(PluginTest, TracesToTheTracePath) {
 TEST_F(PluginTest, SurfacesWriteTheirProfileToTheProfilePath) {
   ASSERT_TRUE(GetFileSystem()->Register(
       std::make_unique<gb::MemoryFileProtocol>(), "profile"));
-  ASSERT_TRUE(Load(
-      {.profile_path = "profile:/test.txt", .config_path = JPR_CONFIG_FILE}));
-  std::unique_ptr<TestControlSurface> surface = reaper_.AddSurface();
+  ASSERT_TRUE(Load({.profile_path = "profile:/test.txt"}));
+  std::unique_ptr<TestControlSurface> surface =
+      reaper_.AddSurface(JPR_CONFIG_FILE);
   ASSERT_NE(surface, nullptr);
   surface->Run();
 

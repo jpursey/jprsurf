@@ -13,16 +13,16 @@
 
 namespace jpr {
 
-// Returns the path of JPRSurf's config, config/jprsurf.jprsurf, where it is
-// checked in.
+// Returns the path of the X-Touch example config,
+// docs/user/configs/xtouch.jprsurf, where it is checked in.
 const char* GetConfigFilePath();
 
 //==============================================================================
 // DefaultConfigTest
 //
-// A fixture for tests of JPRSurf's own config, config/jprsurf.jprsurf, read
-// from where it is checked in: an X-Touch, with an X-Touch Extender to its
-// left.
+// A fixture for tests of the X-Touch example config,
+// docs/user/configs/xtouch.jprsurf, read from where it is checked in: an
+// X-Touch, with an X-Touch Extender to its left.
 //
 // Strips are numbered across the surface: 0-7 on the extender, and 8-15 on
 // the X-Touch, or 0-7 on the X-Touch alone.

@@ -57,7 +57,7 @@ bool RemoveOtherPages(const std::filesystem::path& dir,
   for (const UserDocPage& page : pages) {
     paths.insert(page.path);
   }
-  for (const std::string& file : ListPageFiles(dir)) {
+  for (const std::string& file : ListPageFiles(dir, pages)) {
     if (paths.contains(file)) {
       continue;
     }

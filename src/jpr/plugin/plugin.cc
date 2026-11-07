@@ -60,7 +60,7 @@ bool Plugin::Load(HINSTANCE hinstance, reaper_plugin_info_t& plugin_info,
   }
 
   if (!PluginSurface::Register(
-          plugin_info, options.config_path,
+          plugin_info,
           {.path = options.profile_path, .name = kName, .build = kBuild})) {
     return false;
   }

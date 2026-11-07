@@ -5,6 +5,7 @@
 
 #include "jpr/doc/user_docs.h"
 
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -18,6 +19,7 @@
 namespace jpr {
 namespace {
 
+using ::testing::ElementsAre;
 using ::testing::UnorderedElementsAreArray;
 
 // Returns the file's contents without carriage returns, or "" if it can't be
@@ -40,15 +42,38 @@ TEST(UserDocsTest, CheckedInPagesAreUpToDate) {
 }
 
 TEST(UserDocsTest, CheckedInPagesAreOnlyTheGeneratedOnes) {
+  const std::vector<UserDocPage> pages = GenerateUserDocPages();
   std::vector<std::string> paths;
-  for (const UserDocPage& page : GenerateUserDocPages()) {
+  for (const UserDocPage& page : pages) {
     paths.push_back(page.path);
   }
-  EXPECT_THAT(ListPageFiles(JPR_USER_DOCS_DIR),
+  EXPECT_THAT(ListPageFiles(JPR_USER_DOCS_DIR, pages),
               UnorderedElementsAreArray(paths))
       << JPR_USER_DOCS_DIR
       << " has pages that aren't generated: build the update_user_docs "
          "target.";
+}
+
+// Only the directories the pages are in hold generated pages, so a
+// hand-written page in docs/user, or in another directory of it, isn't listed,
+// even with a page in docs/user itself.
+TEST(UserDocsTest, PageFilesAreOnlyInThePagesDirectories) {
+  const std::filesystem::path dir =
+      std::filesystem::path(::testing::TempDir()) / "user_docs_test";
+  std::filesystem::remove_all(dir);
+  for (const char* file : {"guide.md", "devices/Unit.md", "devices/Unit.png",
+                           "configs/example.md"}) {
+    const std::filesystem::path path = dir / file;
+    std::filesystem::create_directories(path.parent_path());
+    std::FILE* stream = std::fopen(path.string().c_str(), "wb");
+    ASSERT_NE(stream, nullptr) << path.generic_string();
+    std::fclose(stream);
+  }
+
+  const UserDocPage pages[] = {
+      {"devices/Other.md", ""}, {"scene/README.md", ""}, {"Top.md", ""}};
+  EXPECT_THAT(ListPageFiles(dir, pages), ElementsAre("devices/Unit.md"));
+  std::filesystem::remove_all(dir);
 }
 
 }  // namespace

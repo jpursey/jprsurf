@@ -40,8 +40,7 @@ constexpr int kFolderRing = 5;
 // sent again.
 constexpr absl::Duration kMeterFallTime = absl::Milliseconds(500);
 
-// How long a pot, or a fader without touch, stays touched after a move, and a
-// run.
+// How long a pot stays touched after a move, and a run.
 const absl::Duration kTouchHoldTime = absl::Seconds(Control::kTouchHoldSecs);
 const absl::Duration kRunTime = FakeReaper::GetRunTime();
 
@@ -66,9 +65,6 @@ class TrackStripTest : public DefaultConfigTest {
 
 //------------------------------------------------------------------------------
 // Faders
-//
-// The extender's third fader has no touch on JPRSurf's hardware, so it moves
-// none.
 //------------------------------------------------------------------------------
 
 TEST_F(TrackStripTest, FaderShowsTheVolume) {
@@ -164,8 +160,8 @@ TEST_F(TrackStripTest, PotButtonCentersThePan) {
 // Touch
 //
 // REAPER asks whether each track's volume and pan are touched, for Touch and
-// Latch automation. A fader with touch is touched while a hand is on it, and
-// the pots, and the extender's third fader, for a hold after each move.
+// Latch automation. A fader is touched while a hand is on it, and a pot for a
+// hold after each move.
 //------------------------------------------------------------------------------
 
 TEST_F(TrackStripTest, TouchingAFaderTouchesItsTracksVolume) {
@@ -182,15 +178,6 @@ TEST_F(TrackStripTest, TouchingAFaderTouchesItsTracksVolume) {
   xtouch_ext_->ReleaseFader(0);
   RunUntilShown();
   EXPECT_FALSE(IsTouched(tracks_[0], TrackTouchType::kVolume));
-}
-
-TEST_F(TrackStripTest, MovingAFaderWithoutTouchTouchesItForAHold) {
-  xtouch_ext_->MoveFader(2, kFader0dB);
-  RunUntilShown();
-  EXPECT_TRUE(IsTouched(tracks_[kFolder], TrackTouchType::kVolume));
-
-  surface_->RunFor(kTouchHoldTime + kRunTime * 2);
-  EXPECT_FALSE(IsTouched(tracks_[kFolder], TrackTouchType::kVolume));
 }
 
 TEST_F(TrackStripTest, TurningAPotTouchesItsTracksPanForAHold) {

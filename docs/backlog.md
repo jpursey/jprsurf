@@ -194,7 +194,7 @@ lines, not files).
 
 A template's parameters are widgets and properties, so the transport steps,
 which differ only in the value each sets, are written out three times in
-`config/jprsurf.jprsurf`. A value parameter (a number or a name, for a `set`,
+the X-Touch example config. A value parameter (a number or a name, for a `set`,
 a `range` end, or a condition's value) would let one template cover them.
 
 ## Conditions around a use
@@ -320,7 +320,7 @@ mapping meant to fire with a modifier held "whatever else is held" needs a copy
 for every combination of the other modifiers on the control. Today that is the
 Send/Receive pick on a strip's select button, and the mapping beside it that
 enters the mode, which each need a second copy for Send held along with a
-select anchor (the track list's strip view in `config/jprsurf.jprsurf`).
+select anchor (the track list's strip view in the X-Touch example config).
 
 A mapping could also list modifiers it ignores, so the pick is one mapping that
 requires `mod:send_hold` and ignores `mod:select_anchor`. It is purely
