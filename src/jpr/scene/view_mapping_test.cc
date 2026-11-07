@@ -28,6 +28,7 @@
 #include "jpr/device/control_output.h"
 #include "jpr/device/testing/fake_control_io.h"
 #include "jpr/device/testing/fake_device.h"
+#include "jpr/scene/modifier_property.h"
 #include "jpr/scene/testing/scene_test.h"
 #include "jpr/scene/testing/test_property.h"
 #include "jpr/scene/value_property.h"
@@ -1203,6 +1204,39 @@ TEST_F(ViewMappingTest, APressGoesToTheOtherEndOrTheNearerOne) {
   }
 }
 
+TEST_F(ViewMappingTest, APressSetsTheValueOfARangeWithOneValue) {
+  // A range whose ends are the same, as "set" reads, is that value from
+  // anywhere: a pan centered, as a pot button does, a volume, and a normalized
+  // value.
+  struct Row {
+    Type type;
+    double initial;
+    double set;
+  };
+  const std::vector<Row> rows = {
+      {Type::kPan, 0.5, 0.0},        {Type::kPan, -1.0, 0.0},
+      {Type::kPan, 0.0, 0.0},        {Type::kVolume, 0.3, 1.0},
+      {Type::kNormalized, 0.7, 0.5},
+  };
+  const std::vector<FakeDevice::FakeControl> controls =
+      AddInputControls("value", static_cast<int>(rows.size()), Input::kPress);
+  std::vector<Reader> readers;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    readers.push_back(AddReader(controls[i], rows[i].type, rows[i].initial,
+                                {.property_min = Value(rows[i].set),
+                                 .property_max = Value(rows[i].set)}));
+  }
+  AddSurface();
+
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    SCOPED_TRACE(i);
+    Tap(readers[i].control);
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].set));
+    Tap(readers[i].control);
+    EXPECT_TRUE(readers[i].property->Equals(rows[i].set));
+  }
+}
+
 TEST_F(ViewMappingTest, APressStepsAPanToItsNextStop) {
   // A pan whose range spans the center steps through min, the center, and max
   // (see PansReadEachInput and PansReadInTheirRange for presses from each).
@@ -1868,6 +1902,29 @@ TEST_F(ViewMappingTest, AnAddedModifierIsRequiredByItsName) {
   Move(fader_, 0.5);
   surface_->Run();
   EXPECT_DOUBLE_EQ(property->GetNormalized(), 0.5);
+}
+
+TEST_F(ViewMappingTest, AControlHoldingAModifierShowsIt) {
+  // As a Shift button does: it is lit while it is held.
+  FakeDevice::FakeControl shift = device_->AddControl(
+      {.name = "Shift",
+       .press_input = std::make_unique<FakePressInput>(),
+       .dvalue_output = std::make_unique<FakeDValueOutput>()});
+  EXPECT_TRUE(GetView()->AddMapping(ViewMapping::kReadWriteControl,
+                                    ModifierProperty::kShift, "Shift",
+                                    {.read = {.press_release = true}}));
+  AddSurface();
+  EXPECT_EQ(shift.dvalue_output->GetValue(), 0);
+
+  Press(shift);
+  RunUntilShown();
+  EXPECT_TRUE(AreModifiersOn(kModShift));
+  EXPECT_EQ(shift.dvalue_output->GetValue(), 1);
+
+  Release(shift);
+  RunUntilShown();
+  EXPECT_FALSE(AreModifiersOn(kModShift));
+  EXPECT_EQ(shift.dvalue_output->GetValue(), 0);
 }
 
 TEST_F(ViewMappingTest, MappingsTakeTurnsOnAControlByTheirModifiers) {

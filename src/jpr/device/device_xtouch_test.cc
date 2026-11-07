@@ -456,6 +456,23 @@ TEST_F(DeviceXTouchTest, FadersAreHeldWhileTouched) {
   }
 }
 
+// A move that sets nothing, as on a strip with no track, leaves the fader where
+// the hand left it until it is released, and then it goes back to its value.
+TEST_F(DeviceXTouchTest, AReleasedFaderGoesBackToItsValue) {
+  for (int fader : {0, FakeXTouch::kMasterFader}) {
+    SCOPED_TRACE(GetFaderName(fader));
+    xtouch_.TouchFader(fader);
+    xtouch_.MoveFader(fader, FakeXTouch::kFaderMax);
+    Run();
+    EXPECT_EQ(xtouch_.GetFader(fader), FakeXTouch::kFaderMax);
+
+    xtouch_.ReleaseFader(fader);
+    Run();
+    Run();
+    EXPECT_EQ(xtouch_.GetFader(fader), 0);
+  }
+}
+
 // A fader whose override drops its touch has none, and isn't set until the hand
 // has stopped moving it.
 TEST_F(DeviceXTouchOverrideTest, FaderWithoutItsTouchIsSetOnceItStops) {

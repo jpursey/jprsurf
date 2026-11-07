@@ -313,6 +313,23 @@ TEST_F(ViewListTest, TheTrackListChangingKeepsThePositionInRange) {
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3"));
 }
 
+TEST_F(ViewListTest, AHiddenFolderIsKeptAndShowsNothingUntilItIsShown) {
+  View* list = AddChildTracks(3);
+  AddSurface();
+  SetReference(folder_reference_, top_[2]);
+
+  project_.ShowInMixer(top_[2], false);
+  surface_->RunFor(ControlSurface::kTrackFilterInterval +
+                   FakeReaper::GetRunTime());
+  EXPECT_EQ(folder_reference_->GetTrack(), GetCachedTrack(top_[2]));
+  EXPECT_THAT(GetShown(list), ElementsAre("", "", ""));
+
+  project_.ShowInMixer(top_[2], true);
+  surface_->RunFor(ControlSurface::kTrackFilterInterval +
+                   FakeReaper::GetRunTime());
+  EXPECT_THAT(GetShown(list), ElementsAre("T3.1", "T3.2", "T3.3"));
+}
+
 TEST_F(ViewListTest, ItemsReleaseTheirAnchorsWhenTheListMoves) {
   View* list = AddChildTracks();
   AddSurface();
