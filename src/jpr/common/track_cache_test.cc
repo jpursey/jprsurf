@@ -185,5 +185,16 @@ TEST_F(TrackCacheTest, SelectedAutomationModes) {
   EXPECT_FALSE(Cache().HasSelectedAutoMode(AutoMode::kWrite));
 }
 
+TEST_F(TrackCacheTest, NothingSelectedHasNoSelectedAutomationModes) {
+  // Every track has a mode of its own, the master's being trim/read.
+  project_.AddTrack("Drums")->auto_mode = static_cast<int>(AutoMode::kTouch);
+  Cache().Refresh();
+  for (int mode = 0; mode < kAutoModeCount; ++mode) {
+    EXPECT_FALSE(Cache().HasSelectedAutoMode(static_cast<AutoMode>(mode)))
+        << mode;
+  }
+  EXPECT_FALSE(Cache().HasMixedSelectedAutoModes());
+}
+
 }  // namespace
 }  // namespace jpr

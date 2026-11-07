@@ -18,6 +18,7 @@
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/track_cache.h"
+#include "jpr/common/undo.h"
 
 namespace jpr {
 namespace {
@@ -185,6 +186,38 @@ TEST_F(TrackTest, DeletedTrackHasNoValues) {
   track->SetMute(true);
   track->SetVolume(0.5);
   EXPECT_THAT(project_.GetUndoPoints(), IsEmpty());
+}
+
+// The stub track is no track at all, so it is black, unlike a track with no
+// color, and its volume is silent, so a fader showing it is at the bottom.
+TEST_F(TrackTest, StubTrackHasNoValues) {
+  Track* stub = TrackCache::Get().GetStubTrack();
+  EXPECT_FALSE(stub->Exists());
+  EXPECT_EQ(stub->GetName(), "");
+  EXPECT_EQ(stub->GetColor(), (Color{0, 0, 0}));
+  EXPECT_EQ(stub->GetVolume(), 0.0);
+  EXPECT_EQ(stub->GetPan(), 0.0);
+
+  // Setting its values does nothing.
+  stub->SetVolume(0.5);
+  stub->SetPan(0.5);
+  stub->SetMute(true);
+  EXPECT_EQ(stub->GetVolume(), 0.0);
+  EXPECT_EQ(stub->GetPan(), 0.0);
+  EXPECT_FALSE(stub->GetMute());
+  EXPECT_THAT(project_.GetUndoPoints(), IsEmpty());
+}
+
+TEST_F(TrackTest, MasterTrackReadsAndSetsItsVolume) {
+  FakeTrack* fake = project_.GetMasterTrack();
+  fake->volume = 0.5;
+  TrackCache::Get().Refresh();
+  Track* master = TrackCache::Get().GetMasterTrack();
+  EXPECT_EQ(master->GetVolume(), 0.5);
+
+  master->SetVolume(0.25);
+  EXPECT_EQ(fake->volume, 0.25);
+  EXPECT_EQ(master->GetVolume(), 0.25);
 }
 
 TEST_F(TrackTest, RefreshMeterReportsTheLouderChannel) {
@@ -399,7 +432,10 @@ TEST_F(TrackTest, SetsSendsAfterHardwareOutputs) {
 
   // Setting a route the track doesn't have does nothing.
   track->SetRouteVolume(TrackRouteType::kSend, 2, 0.5);
+  track->SetRoutePan(TrackRouteType::kSend, 2, 0.5);
+  track->SetRouteMute(TrackRouteType::kSend, 2, true);
   EXPECT_EQ(listener.routes_change_count, 3);
+  EXPECT_FALSE(to_bus->mute);
 }
 
 TEST_F(TrackTest, SetsReceives) {
@@ -448,6 +484,27 @@ TEST_F(TrackTest, RouteMuteKeepsPendingChangesOutOfItsUndoPoint) {
       project_.GetUndoPoints(),
       ElementsAre(Field(&FakeUndoPoint::name, "JPR: Adjust send volume"),
                   Field(&FakeUndoPoint::name, "Toggle send mute")));
+}
+
+TEST_F(TrackTest, RouteUndoPointsAreNamedForTheRouteTypeAndValue) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bus = project_.AddTrack("Bus");
+  project_.AddSend(drums, bus);
+  Track* send_track = Refresh(drums);
+  Track* receive_track = GetCachedTrack(bus);
+
+  // Each kind of change adds the pending undo point of another kind first.
+  send_track->SetRouteVolume(TrackRouteType::kSend, 0, 0.5);
+  send_track->SetRoutePan(TrackRouteType::kSend, 0, 0.5);
+  receive_track->SetRouteVolume(TrackRouteType::kReceive, 0, 0.25);
+  receive_track->SetRoutePan(TrackRouteType::kReceive, 0, -0.5);
+  ContinuousUndo::Get().Flush();
+  EXPECT_THAT(
+      project_.GetUndoPoints(),
+      ElementsAre(Field(&FakeUndoPoint::name, "JPR: Adjust send volume"),
+                  Field(&FakeUndoPoint::name, "JPR: Adjust send pan"),
+                  Field(&FakeUndoPoint::name, "JPR: Adjust receive volume"),
+                  Field(&FakeUndoPoint::name, "JPR: Adjust receive pan")));
 }
 
 //------------------------------------------------------------------------------
