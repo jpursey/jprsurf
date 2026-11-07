@@ -34,11 +34,10 @@ class XTouchConfigTest : public SurfaceTest {
   static constexpr int kFader0dB = 12720;
 
   // The ring mode a strip shows a pan with (boost/cut), and the ring positions
-  // for full left, center, and full right.
+  // for full left and center.
   static constexpr int kPanRing = 1;
   static constexpr int kLeftRing = 1;
   static constexpr int kCenterRing = 6;
-  static constexpr int kRightRing = 11;
 
   // With an extender to the left of the X-Touch, unless `extender` is false,
   // for the X-Touch alone.

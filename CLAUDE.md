@@ -130,7 +130,7 @@ The user runs REAPER, with the extension deployed to it, only for these:
    - The feature's own checks, and how it feels on the hardware.
    - An idle profile, for a feature that changed per-run work (see Performance).
 
-   Existing behavior is covered by the surface tests in `src/jpr/plugin/xtouch_config`, and each feature adds surface tests of its own behavior, with the call count bounds of each gesture it adds (see Call counts in Performance), so there is no smoke test of everything else. A bug found then is fixed in a follow-up CL, after fixing the gap in the fake that let it through.
+   Existing behavior is covered by each library's unit tests, and by the surface tests in `src/jpr/plugin/xtouch_config`, which check what the pieces do together in the X-Touch example config: modes, views and components working together, gestures that share a control, and what the whole stack does, such as its undo points. What one mapping does is checked by its pieces' unit tests, not again in a surface test. Each feature adds both, with the call count bounds of each gesture it adds (see Call counts in Performance), so there is no smoke test of everything else. A bug found then is fixed in a follow-up CL, after fixing the gap in the fake that let it through.
 
 ## Diagnostics
 

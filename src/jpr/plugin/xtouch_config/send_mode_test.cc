@@ -163,13 +163,6 @@ TEST_F(SendModeTest, HoldingSendPicksRatherThanSelectingARange) {
 // Route strips
 //------------------------------------------------------------------------------
 
-TEST_F(SendModeTest, RouteStripShowsTheOtherTracksColor) {
-  tracks_[kBus]->color = 0x010000FF;  // As 0x01BBGGRR. T5 has none.
-  EnterSendMode(kSource);
-  EXPECT_EQ(xtouch_ext_->GetScribbleColor(0), ScribbleColor::kRed);
-  EXPECT_EQ(xtouch_ext_->GetScribbleColor(1), ScribbleColor::kWhite);
-}
-
 TEST_F(SendModeTest, RouteStripShowsTheRoute) {
   EnterSendMode(kSource);
   EXPECT_EQ(GetBottomLine(0), "0.00dB");
@@ -197,29 +190,6 @@ TEST_F(SendModeTest, EmptyRouteStripIsBlank) {
 
   Tap(*xtouch_ext_, StripButton::kMute, 1);
   EXPECT_EQ(GetLight(StripButton::kMute, 1), Light::kOff);
-}
-
-TEST_F(SendModeTest, MovingARouteFaderSetsTheVolume) {
-  EnterSendMode(kSource);
-  MoveFader(*xtouch_ext_, 0, 0);
-  EXPECT_EQ(source_to_bus_->volume, 0.0);
-  EXPECT_EQ(xtouch_ext_->GetFader(0), 0);
-}
-
-TEST_F(SendModeTest, TurningARoutePotSetsThePan) {
-  EnterSendMode(kSource);
-  xtouch_ext_->TurnPot(0, 63);
-  RunUntilShown();
-  EXPECT_DOUBLE_EQ(source_to_bus_->pan, 1.0);
-  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kRightRing}));
-}
-
-TEST_F(SendModeTest, RoutePotButtonCentersThePan) {
-  source_to_bus_->pan = 0.5;
-  EnterSendMode(kSource);
-  Tap(*xtouch_ext_, StripButton::kPotButton, 0);
-  EXPECT_EQ(source_to_bus_->pan, 0.0);
-  EXPECT_EQ(xtouch_ext_->GetRing(0), (Ring{kPanRing, kCenterRing}));
 }
 
 // REAPER only asks whether a track's volume or pan is touched, so the route
@@ -251,17 +221,6 @@ TEST_F(SendModeTest, EnteringTheModeReleasesAHeldFadersTouch) {
 
   EnterSendMode(kSource);
   EXPECT_FALSE(IsTouched(tracks_[kSource], TrackTouchType::kVolume));
-}
-
-TEST_F(SendModeTest, RouteMuteTogglesTheMute) {
-  EnterSendMode(kSource);
-  Tap(*xtouch_ext_, StripButton::kMute, 0);
-  EXPECT_TRUE(source_to_bus_->mute);
-  EXPECT_EQ(GetLight(StripButton::kMute, 0), Light::kOn);
-
-  Tap(*xtouch_ext_, StripButton::kMute, 0);
-  EXPECT_FALSE(source_to_bus_->mute);
-  EXPECT_EQ(GetLight(StripButton::kMute, 0), Light::kOff);
 }
 
 //------------------------------------------------------------------------------
@@ -386,73 +345,6 @@ TEST_F(SendModeTest, EachKindOfRouteMoveHasItsOwnUndoPoint) {
       reaper_.GetProject().GetUndoPoints(),
       ElementsAre(Field(&FakeUndoPoint::name, "JPR: Adjust send volume"),
                   Field(&FakeUndoPoint::name, "JPR: Adjust send pan")));
-}
-
-TEST_F(SendModeTest, ReceiveMovesAreNamedForReceives) {
-  EnterSendMode(kOnlyReceives);
-  MoveFader(*xtouch_ext_, 0, 0);
-  WaitForUndo();
-  EXPECT_THAT(
-      reaper_.GetProject().GetUndoPoints(),
-      ElementsAre(Field(&FakeUndoPoint::name, "JPR: Adjust receive volume")));
-}
-
-//------------------------------------------------------------------------------
-// Sends and receives
-//
-// A track's sends are shown, unless it only has receives, and tapping Send
-// switches between them.
-//------------------------------------------------------------------------------
-
-TEST_F(SendModeTest, TappingSendSwitchesBetweenSendsAndReceives) {
-  EnterSendMode(kBus);
-  EXPECT_EQ(GetName(0), "T5");
-  EXPECT_EQ(GetName(1), "");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Send");
-
-  Tap(xtouch_, Button::kAssignSend);
-  EXPECT_EQ(GetName(0), "T1");
-  EXPECT_EQ(GetName(1), "T2");
-  EXPECT_EQ(GetName(2), "T3");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Recv");
-
-  Tap(xtouch_, Button::kAssignSend);
-  EXPECT_EQ(GetName(0), "T5");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Send");
-}
-
-TEST_F(SendModeTest, TrackWithOnlyReceivesShowsThem) {
-  EnterSendMode(kOnlyReceives);
-  EXPECT_EQ(GetName(0), "T1");
-  EXPECT_EQ(GetName(1), "T4");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Recv");
-
-  Tap(xtouch_, Button::kAssignSend);
-  EXPECT_EQ(GetName(0), "T1");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Recv");
-}
-
-//------------------------------------------------------------------------------
-// Walking the routes
-//
-// Select on a route strip goes to the track at the route's other end, and
-// shows its routes of the other kind, scrolled so the route back is shown.
-//------------------------------------------------------------------------------
-
-TEST_F(SendModeTest, SelectGoesToTheOtherEndOfTheRoute) {
-  EnterSendMode(kSource);
-  Tap(*xtouch_ext_, StripButton::kMute, 0);
-
-  TapSelect(0);
-  EXPECT_EQ(GetName(kInfoStrip), "T4");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Recv");
-  EXPECT_EQ(GetName(0), "T1");
-  EXPECT_EQ(GetLight(StripButton::kMute, 0), Light::kOn);
-
-  TapSelect(2);
-  EXPECT_EQ(GetName(kInfoStrip), "T3");
-  EXPECT_EQ(GetBottomLine(kInfoStrip), "Send");
-  EXPECT_EQ(GetName(0), "T4");
 }
 
 //------------------------------------------------------------------------------

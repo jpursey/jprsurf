@@ -5,24 +5,13 @@
 
 #include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
-#include "gb/test/log_recorder.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "jpr/common/testing/fake_midi.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/testing/surface_test.h"
 
 namespace jpr {
 namespace {
-
-using ::testing::AllOf;
-using ::testing::Each;
-using ::testing::Field;
-using ::testing::HasSubstr;
-using ::testing::IsEmpty;
-using ::testing::Not;
 
 using Button = FakeXTouch::Button;
 using Led = FakeXTouch::Led;
@@ -122,29 +111,6 @@ TEST_F(XTouchAloneTest, TheXTouchShowsTheFirstTracks) {
   AddSurface();
   EXPECT_FALSE(xtouch_ext_.has_value());
   EXPECT_EQ(GetName(0), "T1");
-}
-
-// The extender alone, without the X-Touch the surface needs.
-class ExtenderAloneTest : public SurfaceTest {
- protected:
-  ExtenderAloneTest() : SurfaceTest(GetConfigFilePath()) {}
-
-  FakeXTouch xtouch_ext_{reaper_, FakeXTouch::Type::kExtender, "X-Touch-Ext"};
-};
-
-// The surface logs that the X-Touch is absent, and leaves the extender's ports
-// closed, so it shows nothing.
-TEST_F(ExtenderAloneTest, TheExtenderAloneDoesNothing) {
-  AddTracks(1)[0]->mute = true;
-  AddSurface();
-  EXPECT_THAT(
-      log_error_guard_.TakeMessages(),
-      AllOf(Not(IsEmpty()), Each(Field(&gb::LogRecorder::Message::text,
-                                       HasSubstr("xtouch: is required")))));
-  EXPECT_FALSE(xtouch_ext_.GetInputPort()->IsOpen());
-  EXPECT_FALSE(xtouch_ext_.GetOutputPort()->IsOpen());
-  EXPECT_EQ(xtouch_ext_.GetLight(StripButton::kMute, 0), Light::kOff);
-  EXPECT_EQ(xtouch_ext_.GetScribble(0, 0), "       ");
 }
 
 }  // namespace

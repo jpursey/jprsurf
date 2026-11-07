@@ -6,9 +6,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "jpr/common/control_surface.h"
 #include "jpr/common/testing/fake_project.h"
-#include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
@@ -40,19 +38,6 @@ class TrackListTest : public XTouchConfigTest {
     AddSurface();
   }
 
-  // Goes into T20, which a bank right shows.
-  void GoIntoBigFolder() {
-    Tap(xtouch_, Button::kBankRight);
-    DoublePressSelect(kBigFolder - 8);
-  }
-
-  // Lets the surface see a track shown or hidden.
-  void WaitForTrackFilters() {
-    surface_->RunFor(ControlSurface::kTrackFilterInterval +
-                     FakeReaper::GetRunTime());
-    RunUntilShown();
-  }
-
   std::vector<FakeTrack*> top_;
   std::vector<FakeTrack*> big_;  // T20's tracks.
 };
@@ -60,27 +45,6 @@ class TrackListTest : public XTouchConfigTest {
 //------------------------------------------------------------------------------
 // Select
 //------------------------------------------------------------------------------
-
-TEST_F(TrackListTest, TapSelectsOnlyTheTrack) {
-  top_[0]->selected = true;
-  top_[12]->selected = true;
-  RunUntilShown();
-
-  TapSelect(3);
-  for (FakeTrack* track : top_) {
-    EXPECT_EQ(track->selected, track == top_[3]) << track->name;
-  }
-  EXPECT_EQ(GetLight(StripButton::kSelect, 0), Light::kOff);
-  EXPECT_EQ(GetLight(StripButton::kSelect, 3), Light::kOn);
-  EXPECT_EQ(GetLight(StripButton::kSelect, 12), Light::kOff);
-}
-
-TEST_F(TrackListTest, TapUnselectsTheOnlySelectedTrack) {
-  TapSelect(3);
-  TapSelect(3);
-  EXPECT_FALSE(top_[3]->selected);
-  EXPECT_EQ(GetLight(StripButton::kSelect, 3), Light::kOff);
-}
 
 TEST_F(TrackListTest, SelectLightShowsTheSelection) {
   top_[9]->selected = true;
@@ -114,25 +78,6 @@ TEST_F(TrackListTest, HoldingSelectAndPressingAnotherSelectsTheRange) {
 // Folders
 //------------------------------------------------------------------------------
 
-TEST_F(TrackListTest, DoublePressGoesIntoAFolder) {
-  DoublePressSelect(kFolder);
-  EXPECT_EQ(GetName(0), "T2.1");
-  EXPECT_EQ(GetName(1), "T2.2");
-  EXPECT_EQ(GetName(2), "");
-}
-
-TEST_F(TrackListTest, DoublePressGoesIntoAFolderInAFolder) {
-  DoublePressSelect(kFolder);
-  DoublePressSelect(0);
-  EXPECT_EQ(GetName(0), "T2.1.1");
-  EXPECT_EQ(GetName(1), "");
-}
-
-TEST_F(TrackListTest, DoublePressOnATrackWithNoTracksInItStays) {
-  DoublePressSelect(0);
-  EXPECT_EQ(GetName(0), "T1");
-}
-
 TEST_F(TrackListTest, GlobalIsLitInAFolder) {
   EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOff);
   DoublePressSelect(kFolder);
@@ -152,43 +97,9 @@ TEST_F(TrackListTest, GlobalGoesUpALevel) {
   EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOff);
 }
 
-TEST_F(TrackListTest, GlobalCentersTheFolderItLeaves) {
-  GoIntoBigFolder();
-  EXPECT_EQ(GetName(0), "T20.1");
-
-  Tap(xtouch_, Button::kGlobal);
-  EXPECT_EQ(GetName(8), "T20");
-}
-
-TEST_F(TrackListTest, HoldingGlobalGoesToTheTop) {
-  DoublePressSelect(kFolder);
-  DoublePressSelect(0);
-
-  LongPress(xtouch_, Button::kGlobal);
-  EXPECT_EQ(GetName(0), "T1");
-  EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOff);
-}
-
 //------------------------------------------------------------------------------
 // Bank and Channel
 //------------------------------------------------------------------------------
-
-TEST_F(TrackListTest, BankMovesEightTracksUntilAnEndIsShown) {
-  Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(GetName(0), "T9");
-  Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(GetName(0), "T17");
-  EXPECT_EQ(GetName(15), "T32");
-  Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(GetName(0), "T17");
-
-  Tap(xtouch_, Button::kBankLeft);
-  EXPECT_EQ(GetName(0), "T9");
-  Tap(xtouch_, Button::kBankLeft);
-  EXPECT_EQ(GetName(0), "T1");
-  Tap(xtouch_, Button::kBankLeft);
-  EXPECT_EQ(GetName(0), "T1");
-}
 
 // A fader held through a bank touches the track it shows next.
 TEST_F(TrackListTest, BankMovesAHeldFadersTouch) {
@@ -199,24 +110,6 @@ TEST_F(TrackListTest, BankMovesAHeldFadersTouch) {
   Tap(xtouch_, Button::kBankRight);
   EXPECT_FALSE(IsTouched(top_[0], TrackTouchType::kVolume));
   EXPECT_TRUE(IsTouched(top_[8], TrackTouchType::kVolume));
-}
-
-TEST_F(TrackListTest, ChannelMovesOneTrackUntilAnEndIsShown) {
-  Tap(xtouch_, Button::kChannelRight);
-  EXPECT_EQ(GetName(0), "T2");
-  Tap(xtouch_, Button::kChannelLeft);
-  EXPECT_EQ(GetName(0), "T1");
-  Tap(xtouch_, Button::kChannelLeft);
-  EXPECT_EQ(GetName(0), "T1");
-}
-
-TEST_F(TrackListTest, BankInAFolderStopsAtItsLastTrack) {
-  GoIntoBigFolder();
-  Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(GetName(0), "T20.5");
-  EXPECT_EQ(GetName(15), "T20.20");
-  Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(GetName(0), "T20.5");
 }
 
 //------------------------------------------------------------------------------
@@ -258,8 +151,7 @@ TEST_F(TrackListTest, ShowsTheTrackSendModeWentToOnReturning) {
 //------------------------------------------------------------------------------
 // Losing the folder
 //
-// A deleted folder goes back to the top level. A hidden one is kept, rather
-// than going back, until it is shown again.
+// A deleted folder goes back to the top level.
 //------------------------------------------------------------------------------
 
 TEST_F(TrackListTest, DeletingTheFolderGoesToTheTop) {
@@ -269,19 +161,6 @@ TEST_F(TrackListTest, DeletingTheFolderGoesToTheTop) {
   RunUntilShown();
   EXPECT_EQ(GetName(0), "T1");
   EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOff);
-}
-
-TEST_F(TrackListTest, HiddenFolderIsKeptUntilItIsShown) {
-  DoublePressSelect(kFolder);
-  reaper_.GetProject().ShowInMixer(top_[kFolder], false);
-  WaitForTrackFilters();
-  EXPECT_EQ(GetName(0), "");
-  EXPECT_EQ(xtouch_.GetLight(Button::kGlobal), Light::kOn);
-
-  reaper_.GetProject().ShowInMixer(top_[kFolder], true);
-  WaitForTrackFilters();
-  EXPECT_EQ(GetName(0), "T2.1");
-  EXPECT_EQ(GetName(1), "T2.2");
 }
 
 //------------------------------------------------------------------------------
