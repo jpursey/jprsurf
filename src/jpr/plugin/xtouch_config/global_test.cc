@@ -15,7 +15,7 @@
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 namespace jpr {
 namespace {
@@ -33,7 +33,7 @@ using StripButton = FakeXTouch::StripButton;
 
 // Four tracks, on the extender's first strips, for the automation modes. The
 // global controls are all on the X-Touch.
-class GlobalTest : public DefaultConfigTest {
+class GlobalTest : public XTouchConfigTest {
  protected:
   static constexpr int kTrackCount = 4;
 

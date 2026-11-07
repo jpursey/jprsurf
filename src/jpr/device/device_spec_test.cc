@@ -166,7 +166,7 @@ class CreateDevicesTest : public ::testing::Test {
     return device_type != nullptr ? device_type->catalog : nullptr;
   }
 
-  // JPRSurf's own devices.
+  // The X-Touch example config's devices.
   const DeviceSpec xtouch_spec_ = {.name = "xtouch",
                                    .type = "XTouch",
                                    .input_port = "X-Touch",

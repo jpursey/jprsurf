@@ -3,39 +3,39 @@
 ## Use of this source code is governed by an MIT-style License that can be found
 ## in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-# Tests of JPRSurf's own config, and their fixture. Only tests link this, never
-# the plugin's DLL.
+# Tests of the X-Touch example config, and their fixture. Only tests link this,
+# never the plugin's DLL.
 
-set(jpr_default_config_SOURCE
-  default_config_test.cc default_config_test.h
+set(jpr_xtouch_config_SOURCE
+  xtouch_config_test.cc xtouch_config_test.h
 )
 
-set(jpr_default_config_DEPS
+set(jpr_xtouch_config_DEPS
   absl::strings
   jpr_device_testing
   jpr_plugin_testing
 )
 
-set(jpr_default_config_TEST_SOURCE
+set(jpr_xtouch_config_TEST_SOURCE
   call_count_test.cc
   config_file_test.cc
-  default_config_test_test.cc
+  xtouch_config_test_test.cc
   global_test.cc
   send_mode_test.cc
   track_list_test.cc
   track_strip_test.cc
 )
 
-set(jpr_default_config_TEST_DEPS
+set(jpr_xtouch_config_TEST_DEPS
   jpr_config
   jpr_scene
 )
 
-gb_add_library(jpr_default_config)
+gb_add_library(jpr_xtouch_config)
 
-# JPRSurf's config, which the fixture and the tests read where it is checked
-# in.
-target_compile_definitions(jpr_default_config PRIVATE
+# The X-Touch example config, which the fixture and the tests read where it is
+# checked in.
+target_compile_definitions(jpr_xtouch_config PRIVATE
   "JPR_CONFIG_FILE=\"${JPR_CONFIG_FILE}\""
 )
 
@@ -51,7 +51,7 @@ set(jpr_benchmark_DEPS
   gb_base
   gb_file
   gtest
-  jpr_default_config
+  jpr_xtouch_config
 )
 
 add_executable(jpr_benchmark benchmark.cc)

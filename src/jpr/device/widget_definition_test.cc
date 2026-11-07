@@ -528,7 +528,7 @@ class ResolveWidgetsTest : public WidgetDefinitionTest {
                             : -1;
   }
 
-  // The definitions of JPRSurf's own widgets, on two extenders.
+  // The X-Touch example config's widgets, on two extenders.
   const WidgetStructDefinition widgets_ = {
       .includes = {{"xtouch", {"strip"}}},
       .fields = {

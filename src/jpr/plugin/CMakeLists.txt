@@ -56,7 +56,7 @@ add_dependencies(jpr_plugin jpr_build_info)
 target_include_directories(jpr_plugin PRIVATE "${JPR_BUILD_INFO_DIR}")
 
 add_subdirectory(testing)
-add_subdirectory(default_config)
+add_subdirectory(xtouch_config)
 
 # The DLL REAPER loads: just its entry points, which read the environment.
 

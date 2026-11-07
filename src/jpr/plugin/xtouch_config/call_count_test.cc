@@ -12,7 +12,7 @@
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/large_project.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 namespace jpr {
 namespace {
@@ -23,7 +23,7 @@ using StripButton = FakeXTouch::StripButton;
 //==============================================================================
 // CallCountTest
 //
-// The REAPER calls the default config makes on the large project (see
+// The REAPER calls the X-Touch example config makes on the large project (see
 // AddLargeProject()), as exact counts by cost (see CallCounts), so a change
 // that makes more calls, or costlier ones, fails, and so does one that makes
 // fewer, until its bounds are lowered with it.
@@ -33,7 +33,7 @@ using StripButton = FakeXTouch::StripButton;
 // test helpers make them, and the steady state tests show what those cost.
 //==============================================================================
 
-class CallCountTest : public DefaultConfigTest {
+class CallCountTest : public XTouchConfigTest {
  protected:
   static constexpr int kBus = 0;     // T1, with 31 receives.
   static constexpr int kFolder = 4;  // T5, with 9 tracks.

@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 #include "gb/test/log_recorder.h"
 #include "gmock/gmock.h"
@@ -29,7 +29,7 @@ using Led = FakeXTouch::Led;
 using Light = FakeXTouch::Light;
 using StripButton = FakeXTouch::StripButton;
 
-TEST_F(DefaultConfigTest, TheExtenderIsLeftOfTheXTouch) {
+TEST_F(XTouchConfigTest, TheExtenderIsLeftOfTheXTouch) {
   AddTracks(16);
   AddSurface();
   EXPECT_EQ(GetName(0), "T1");
@@ -37,7 +37,7 @@ TEST_F(DefaultConfigTest, TheExtenderIsLeftOfTheXTouch) {
 }
 
 // A folder on the fourth strip, to press its select button.
-class PressTest : public DefaultConfigTest {
+class PressTest : public XTouchConfigTest {
  protected:
   static constexpr int kFolderStrip = 3;
 
@@ -69,7 +69,7 @@ TEST_F(PressTest, LongPressHolds) {
 
 // Removing the surface, as REAPER does at exit, or when the user removes it,
 // leaves the hardware as it starts: off, at zero, blank, and black.
-TEST_F(DefaultConfigTest, RemovingTheSurfaceClearsTheHardware) {
+TEST_F(XTouchConfigTest, RemovingTheSurfaceClearsTheHardware) {
   for (FakeTrack* track : AddTracks(16)) {
     track->color = 0x010000FF;  // Red, as 0x01BBGGRR.
     track->mute = true;
@@ -112,9 +112,9 @@ TEST_F(DefaultConfigTest, RemovingTheSurfaceClearsTheHardware) {
   EXPECT_EQ(xtouch_.GetTimecode(), "          ");
 }
 
-class XTouchAloneTest : public DefaultConfigTest {
+class XTouchAloneTest : public XTouchConfigTest {
  protected:
-  XTouchAloneTest() : DefaultConfigTest(/*extender=*/false) {}
+  XTouchAloneTest() : XTouchConfigTest(/*extender=*/false) {}
 };
 
 TEST_F(XTouchAloneTest, TheXTouchShowsTheFirstTracks) {

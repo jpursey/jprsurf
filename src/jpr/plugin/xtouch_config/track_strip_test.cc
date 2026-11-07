@@ -15,7 +15,7 @@
 #include "jpr/common/track.h"
 #include "jpr/device/control.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 namespace jpr {
 namespace {
@@ -46,7 +46,7 @@ const absl::Duration kRunTime = FakeReaper::GetRunTime();
 
 // Ten tracks: eight on the extender, and two on the X-Touch, whose other six
 // strips are empty. T3 is a folder, with a track in it.
-class TrackStripTest : public DefaultConfigTest {
+class TrackStripTest : public XTouchConfigTest {
  protected:
   static constexpr int kTrackCount = 10;
   static constexpr int kFolder = 2;      // T3, on the extender's third strip.

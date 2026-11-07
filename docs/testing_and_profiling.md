@@ -242,11 +242,12 @@ outermost one ends.
 ### Benchmarks
 
 JPRSurf's own time, without REAPER. `jpr_benchmark`
-(`plugin/default_config/benchmark.cc`) runs the default config on the large
-project (`AddLargeProject()`) under the fake, as the surface tests do, with a
-`ReaperProfiler` of its own. Its times depend on the machine and its load, so
-it isn't a ctest test: the `benchmark` target runs it on demand (see CLAUDE.md),
-and its summary is compared against a snapshot (see `profiles/README.md`).
+(`plugin/xtouch_config/benchmark.cc`) runs the X-Touch example config on the
+large project (`AddLargeProject()`) under the fake, as the surface tests do,
+with a `ReaperProfiler` of its own. Its times depend on the machine and its
+load, so it isn't a ctest test: the `benchmark` target runs it on demand (see
+CLAUDE.md), and its summary is compared against a snapshot (see
+`profiles/README.md`).
 - **What it times:** each steady state the call count tests count (at the top,
   in a folder, while playing, and Send/Receive mode on a bus), for 3000 runs;
   and each kind of gesture in a session at the surface (ranges, taps, folders,
@@ -661,8 +662,8 @@ in [surface_tests.md](worklog/surface_tests.md).
   the clock right (`Tap()`, `DoublePress()`, `LongPress()`, `Hold()`, and
   `MoveFader()`). Anything logged at `ERROR` or above fails the test, as
   `jprsurf.log` with no new errors is the first check in REAPER.
-- **`DefaultConfigTest`** (`jpr/plugin/default_config`) is the fixture for the
-  config `PluginSurface` builds: an X-Touch with an extender to its left (or
+- **`XTouchConfigTest`** (`jpr/plugin/xtouch_config`) is the fixture for the
+  X-Touch example config: an X-Touch with an extender to its left (or
   the X-Touch alone), its strips numbered across both, and what its tests
   share (how a strip shows 0dB and a pan, a strip's lights, and selecting).
   Each file's fixture derives from it, and builds the least project that
@@ -794,7 +795,7 @@ write its log over the user's: remove them by hand.
 | `common` | The fake                    | `Track`, `TrackCache`, `TrackBatch`, `Timeline`, MIDI ports, `ContinuousUndo`, and `ControlSurface`'s callbacks and single instance rule                              |
 | `device` | The fake, and other fakes   | `Control`, its inputs and outputs, and their MIDI variants, each on its own; and every control on `DeviceXTouch`, on a fake X-Touch                                   |
 | `scene`  | The fake, and fake controls | Properties against REAPER's state, views (conditions, subjects, lists, references), mappings (modifiers, taps, picks), and `TrackActions` (ranges, anchors, grouping) |
-| `plugin` | The surface harness         | JPRSurf's own surface, a file per area: track strips, the track list and its navigation, Send/Receive mode, and the global controls                                   |
+| `plugin` | The surface harness         | The X-Touch example config, a file per area: track strips, the track list and its navigation, Send/Receive mode, and the global controls                              |
 
 Existing tests that need no REAPER stay as they are.
 
@@ -817,9 +818,9 @@ and what they found are in
   solo, rec arm, selection, volume, and pan, a route's, and the automation
   override) isn't a refresh there; the deferred refresh's end is, if one was
   made in it.
-- **Bounds:** `CallCountTest` (`plugin/default_config/call_count_test.cc`)
-  runs JPRSurf's own surface on the large project (`AddLargeProject()`, 128
-  tracks in folders, with buses and sends), and bounds the calls of starting
+- **Bounds:** `CallCountTest` (`plugin/xtouch_config/call_count_test.cc`)
+  runs the X-Touch example config on the large project (`AddLargeProject()`,
+  128 tracks in folders, with buses and sends), and bounds the calls of starting
   up, a second of steady state in each mode, each gesture the surface tests
   make, and the infrequent events, as exact `CallCounts`. A regression fails,
   and so does an improvement, until its bound is lowered in the same change. A

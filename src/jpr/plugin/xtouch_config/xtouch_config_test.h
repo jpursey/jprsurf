@@ -18,7 +18,7 @@ namespace jpr {
 const char* GetConfigFilePath();
 
 //==============================================================================
-// DefaultConfigTest
+// XTouchConfigTest
 //
 // A fixture for tests of the X-Touch example config,
 // docs/user/configs/xtouch.jprsurf, read from where it is checked in: an
@@ -28,7 +28,7 @@ const char* GetConfigFilePath();
 // the X-Touch, or 0-7 on the X-Touch alone.
 //==============================================================================
 
-class DefaultConfigTest : public SurfaceTest {
+class XTouchConfigTest : public SurfaceTest {
  protected:
   // Where the X-Touch's faders show 0dB, give or take a position for rounding.
   static constexpr int kFader0dB = 12720;
@@ -42,7 +42,7 @@ class DefaultConfigTest : public SurfaceTest {
 
   // With an extender to the left of the X-Touch, unless `extender` is false,
   // for the X-Touch alone.
-  explicit DefaultConfigTest(bool extender = true);
+  explicit XTouchConfigTest(bool extender = true);
 
   // Returns the X-Touch `strip` is on, and its strip there.
   FakeXTouch& GetXTouch(int strip);

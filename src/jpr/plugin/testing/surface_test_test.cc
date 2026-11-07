@@ -20,7 +20,7 @@ using ::testing::ElementsAre;
 using ::testing::Field;
 
 // The presses, and the surface with devices, are tested with a config's
-// devices (see DefaultConfigTest's tests). Naming tracks is tested with the
+// devices (see XTouchConfigTest's tests). Naming tracks is tested with the
 // fake (see FakeProject::AddTracks()).
 using SurfaceTestTest = SurfaceTest;
 

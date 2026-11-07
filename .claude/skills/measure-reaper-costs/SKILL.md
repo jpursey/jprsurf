@@ -63,7 +63,7 @@ user.
    the arguments that name what it acts on. Say how a cost grows, if it does,
    in a comment beside it.
 5. **Update the call count bounds** a new category moves, in
-   `src/jpr/plugin/default_config/call_count_test.cc`, as each failure's
+   `src/jpr/plugin/xtouch_config/call_count_test.cc`, as each failure's
    counts show, checking each move makes sense.
 6. **Show the user** the measurement's lines with the CL, as they aren't
    kept.

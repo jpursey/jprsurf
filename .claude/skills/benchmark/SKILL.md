@@ -5,10 +5,10 @@ description: Run JPRSurf's benchmarks under the fake REAPER and compare them aga
 
 # Benchmark
 
-JPRSurf's own time under the fake REAPER: the default config's steady states,
-and each kind of gesture in a session at the surface, on a large project (see
-"Benchmarks" in `docs/testing_and_profiling.md`). It times the machine, so it
-needs a quiet one.
+JPRSurf's own time under the fake REAPER: the X-Touch example config's steady
+states, and each kind of gesture in a session at the surface, on a large
+project (see "Benchmarks" in `docs/testing_and_profiling.md`). It times the
+machine, so it needs a quiet one.
 
 ## Whether to run it
 

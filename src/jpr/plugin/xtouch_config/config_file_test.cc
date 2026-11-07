@@ -12,7 +12,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "jpr/config/surface_config.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 #include "jpr/scene/surface_spec.h"
 
 namespace jpr {
@@ -20,7 +20,7 @@ namespace {
 
 using ::testing::IsEmpty;
 
-// The surface tests (see DefaultConfigTest) check what the config does. This
+// The surface tests (see XTouchConfigTest) check what the config does. This
 // checks it on its own, so an error in it is reported once, here.
 TEST(ConfigFileTest, ReadsAndIsValid) {
   std::ifstream file(GetConfigFilePath(), std::ios::binary);

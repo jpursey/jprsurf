@@ -11,7 +11,7 @@
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 namespace jpr {
 namespace {
@@ -36,7 +36,7 @@ using StripButton = FakeXTouch::StripButton;
 // In Send/Receive mode, strips 0-14 show the routes, and the X-Touch's last
 // strip (strip 15) is the Info strip, which shows the track whose routes they
 // are.
-class SendModeTest : public DefaultConfigTest {
+class SendModeTest : public XTouchConfigTest {
  protected:
   static constexpr int kTrackCount = 6;
   static constexpr int kSource = 0;        // T1.
@@ -511,9 +511,9 @@ TEST_F(SendModeTest, DeletedTrackShowsNothingUntilAnotherIsTouched) {
 //------------------------------------------------------------------------------
 
 // T1 sends to T2-T9, one more than the route strips.
-class SendModeAloneTest : public DefaultConfigTest {
+class SendModeAloneTest : public XTouchConfigTest {
  protected:
-  SendModeAloneTest() : DefaultConfigTest(/*extender=*/false) {
+  SendModeAloneTest() : XTouchConfigTest(/*extender=*/false) {
     std::vector<FakeTrack*> tracks = AddTracks(9);
     for (int i = 1; i < 9; ++i) {
       reaper_.GetProject().AddSend(tracks[0], tracks[i]);

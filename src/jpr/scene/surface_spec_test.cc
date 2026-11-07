@@ -162,7 +162,8 @@ TEST(SurfaceSpecTest, AnEmptySpecIsValid) {
   EXPECT_THAT(Validate({}), IsEmpty());
 }
 
-// A spec with each kind of thing checking accepts, as JPRSurf's own uses them.
+// A spec with each kind of thing checking accepts, as the X-Touch example
+// config uses them.
 TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
   SurfaceSpec spec = GetXTouchSpec();
   spec.components = {

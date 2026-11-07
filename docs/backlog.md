@@ -413,7 +413,7 @@ config needs to name a built in one's, such as the ruler mode's.
 
 REAPER's built in actions only have numbers, so a config that maps Undo says
 `cmd:40029`. A config could name the common commands instead, starting with
-the ones JPRSurf's own config uses (the `kCmd*` constants in
+the ones the X-Touch example config uses (the `kCmd*` constants in
 `command_properties.h`): undo, save, play, stop, the automation modes, and so
 on. As with any shorthand, the config expands a name to its `cmd:<id>` form,
 so `scene` doesn't change. The names are part of the public spec, listed on the
@@ -777,6 +777,6 @@ Only worth doing once a debugging session needs it.
 JPRSurf's programs parse their own command lines, each taking only an output
 directory from `argv` and printing its own usage: `jpr_update_user_docs`
 (`src/jpr/doc/update_user_docs.cc`) and `jpr_benchmark`
-(`src/jpr/plugin/default_config/benchmark.cc`, beside gtest's flags). Once
+(`src/jpr/plugin/xtouch_config/benchmark.cc`, beside gtest's flags). Once
 Game Bits has its command line library (`gb/cli`), define each one's interface
 with it instead, with help text for each, and validation of the directory.

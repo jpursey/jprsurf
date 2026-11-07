@@ -12,7 +12,7 @@
 #include "jpr/common/testing/fake_track.h"
 #include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 namespace jpr {
 namespace {
@@ -24,7 +24,7 @@ using StripButton = FakeXTouch::StripButton;
 // 32 top level tracks: two banks past the 16 strips. T2 is a folder two levels
 // deep (T2.1, with T2.1.1, and T2.2), and T20 has 20 tracks, more than the
 // strips. T1 sends to T20.19, for Send/Receive mode to go to.
-class TrackListTest : public DefaultConfigTest {
+class TrackListTest : public XTouchConfigTest {
  protected:
   static constexpr int kTopCount = 32;
   static constexpr int kFolder = 1;      // T2.
@@ -32,7 +32,7 @@ class TrackListTest : public DefaultConfigTest {
   static constexpr int kBigFolderCount = 20;
   static constexpr int kSendTarget = 18;  // T20.19.
 
-  explicit TrackListTest(bool extender = true) : DefaultConfigTest(extender) {
+  explicit TrackListTest(bool extender = true) : XTouchConfigTest(extender) {
     top_ = AddTracks(kTopCount);
     AddTracks(1, AddTracks(2, top_[kFolder])[0]);
     big_ = AddTracks(kBigFolderCount, top_[kBigFolder]);

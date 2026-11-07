@@ -3,10 +3,11 @@
 // Use of this source code is governed by an MIT-style License that can be found
 // in the LICENSE file or at https://opensource.org/licenses/MIT.
 
-// JPRSurf's own time, under the fake REAPER, for the default config's steady
-// states and the gestures of a session at the surface (see "Benchmarks" in
-// docs/testing_and_profiling.md). The benchmark target runs this, which isn't
-// a ctest test, as its times depend on the machine and its load.
+// JPRSurf's own time, under the fake REAPER, for the X-Touch example config's
+// steady states and the gestures of a session at the surface (see
+// "Benchmarks" in docs/testing_and_profiling.md). The benchmark target runs
+// this, which isn't a ctest test, as its times depend on the machine and its
+// load.
 //
 // It takes the directory to write to as its only argument (beside gtest's
 // flags). Each benchmark writes its profile there, named for it, and the
@@ -37,7 +38,7 @@
 #include "jpr/common/testing/large_project.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/build_info.h"
-#include "jpr/plugin/default_config/default_config_test.h"
+#include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
 namespace jpr {
 namespace {
@@ -96,14 +97,14 @@ bool WriteSummary() {
 //==============================================================================
 // Benchmark
 //
-// A benchmark of the default config on the large project (see
+// A benchmark of the X-Touch example config on the large project (see
 // AddLargeProject()), with the profiler on. Each sets up the state it starts
 // from, and then times either a steady state (TimeIdle() or TimeRuns()) or an
 // action (TimeActions()). An action's time is beyond the idle time of its runs
 // (see "Benchmarks" in docs/testing_and_profiling.md).
 //==============================================================================
 
-class Benchmark : public DefaultConfigTest {
+class Benchmark : public XTouchConfigTest {
  protected:
   static constexpr int kBus = 0;     // T1, with 31 receives.
   static constexpr int kFolder = 4;  // T5, with 9 tracks.
@@ -169,7 +170,7 @@ void Benchmark::TearDown() {
   if (profiler_.has_value() && !HasFailure()) {
     ADD_FAILURE() << "The benchmark timed nothing.";
   }
-  DefaultConfigTest::TearDown();
+  XTouchConfigTest::TearDown();
 }
 
 void Benchmark::TimeIdle() {
