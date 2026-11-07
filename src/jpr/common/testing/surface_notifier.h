@@ -77,9 +77,9 @@ namespace jpr {
 //
 // Tracks are sent master first, then in order, from the current project. It
 // makes every call the contract tests show, not just those ControlSurface acts
-// on, except those about state the fake doesn't hold: the mixer's scroll, and
-// input monitoring. REAPER also calls IsKeyDown(VK_SHIFT) before each run,
-// which isn't made either.
+// on, except those about state the fake doesn't hold, the mixer's scroll.
+// REAPER also calls IsKeyDown(VK_SHIFT) before each run, which isn't made
+// either.
 //
 // Calls from inside a function are made on the surface the open
 // TestControlSurface wraps (see TestControlSurface::GetWrapped()), so they are
@@ -277,12 +277,17 @@ class SurfaceNotifier final {
   void SendState(IReaperControlSurface& surface, FakeTrack* track,
                  bool unsent_volume = false);
 
-  // Sends a track's title, rec arm, and selection, the end of its state.
+  // Sends a track's rec arm, then its monitoring, which REAPER always sends
+  // together.
+  void SendRecArmAndMonitor(IReaperControlSurface& surface, FakeTrack* track);
+
+  // Sends a track's title, rec arm and monitoring, and selection, the end of
+  // its state.
   void SendTitleRecArmAndSelected(IReaperControlSurface& surface,
                                   FakeTrack* track);
 
-  // Sends a change to a track's rec arm: its rec arm, mute, solo, volume, and
-  // pan.
+  // Sends a change to a track's rec arm: its rec arm and monitoring, mute,
+  // solo, volume, and pan.
   void SendRecArmChange(IReaperControlSurface& surface, FakeTrack* track);
 
   // Sends every track's volume, pan, mute and solo if they aren't sent yet,

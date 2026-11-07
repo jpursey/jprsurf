@@ -144,6 +144,8 @@ TEST_F(TrackContractTest, TrackStateHasTheTracksFlags) {
     in_place->solo = true;
     in_place->solo_in_place = true;
     project.AddTrack("Armed")->rec_arm = true;
+    project.AddTrack("Monitoring on")->monitor_mode = 1;
+    project.AddTrack("Monitoring auto")->monitor_mode = 2;
     FakeTrack* folder = project.AddTrack("Folder");
     project.AddTrack("In folder", folder);
     project.AddTrack("Hidden in TCP")->show_in_tcp = false;
@@ -158,6 +160,10 @@ TEST_F(TrackContractTest, TrackStateHasTheTracksFlags) {
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed")), kTrackStateSolo);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Soloed in place")), kSoloedInPlace);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Armed")), kTrackStateRecArm);
+  EXPECT_EQ(GetTrackStateFlags(FindTrack("Monitoring on")),
+            kTrackStateMonitorOn);
+  EXPECT_EQ(GetTrackStateFlags(FindTrack("Monitoring auto")),
+            kTrackStateMonitorAuto);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Folder")), kTrackStateFolder);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("In folder")), 0);
   EXPECT_EQ(GetTrackStateFlags(FindTrack("Hidden in TCP")),
@@ -303,6 +309,34 @@ TEST_F(TrackContractTest, TracksHaveTheirVisibilityAndAutomationMode) {
                                       "I_AUTOMODE"),
               mode);
   }
+}
+
+TEST_F(TrackContractTest, TracksHaveTheirRecordAndMonitoringModes) {
+  // Input, none (monitoring only), MIDI overdub, and MIDI latch-replace.
+  constexpr std::array<int, 4> kRecModes = {0, 2, 7, 16};
+  OpenProject([&](FakeProject& project) {
+    for (int mode : kRecModes) {
+      project.AddTrack(absl::StrCat("Record ", mode))->rec_mode = mode;
+    }
+    for (int mode = 0; mode <= 2; ++mode) {
+      project.AddTrack(absl::StrCat("Monitor ", mode))->monitor_mode = mode;
+    }
+  });
+  for (int mode : kRecModes) {
+    MediaTrack* track = FindTrack(absl::StrCat("Record ", mode));
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMODE"), mode);
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMON"), 0.0);
+  }
+  for (int mode = 0; mode <= 2; ++mode) {
+    MediaTrack* track = FindTrack(absl::StrCat("Monitor ", mode));
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMON"), mode);
+    EXPECT_EQ(GetMediaTrackInfo_Value(track, "I_RECMODE"), 0.0);
+  }
+  // The master's monitoring reads as on, with no flag.
+  MediaTrack* master = GetMasterTrack(nullptr);
+  EXPECT_EQ(GetMediaTrackInfo_Value(master, "I_RECMODE"), 0.0);
+  EXPECT_EQ(GetMediaTrackInfo_Value(master, "I_RECMON"), 1.0);
+  EXPECT_FALSE(HasFlag(master, kTrackStateMonitorOn | kTrackStateMonitorAuto));
 }
 
 TEST_F(TrackContractTest, EachTrackHasItsOwnGuid) {

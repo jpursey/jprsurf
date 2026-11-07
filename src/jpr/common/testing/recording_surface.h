@@ -21,9 +21,8 @@ namespace jpr {
 // A control surface that records every call REAPER makes on it, as text, so a
 // test can check what REAPER calls back. Tracks are recorded by name (see
 // GetTrackText()), and values as they read, such as
-// "SetSurfaceMute(Drums, true)". Its runs aren't recorded, and nor are the
-// Extended() calls about state the fake doesn't hold (the mixer's scroll, and
-// input monitoring).
+// "SetSurfaceMute(Drums, true)". Its runs aren't recorded, and nor is the
+// Extended() call about state the fake doesn't hold (the mixer's scroll).
 //
 // It reads track names through REAPER's API, so it works the same under the
 // fake REAPER and in REAPER. Its type is registered with REAPER as "RECORDING"

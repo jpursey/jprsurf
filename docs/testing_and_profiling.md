@@ -341,16 +341,16 @@ class FakeReaper final {
 
 ### State
 
-| Area                   | Held                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Tracks                 | Order, parent, GUID, name, color, volume, pan, mute, solo, rec arm, automation mode, TCP and mixer visibility, peak |
-| Selection              | Selected tracks (the master too), and the selected media item count                                                 |
-| Routes                 | Each send and receive: the other track, volume, pan, and mute                                                       |
-| Transport and timeline | Play state, play and cursor positions                                                                               |
-| Commands               | Toggle states, named command IDs, and command names. Commands the test gives a handler run it.                      |
-| Automation and undo    | The global automation override, undo points, whether redo is possible, the dirty flag                               |
-| MIDI ports             | Named inputs and outputs (see [Fake X-Touch](#fake-x-touch))                                                        |
-| Clock                  | What `time_precise()` returns                                                                                       |
+| Area                   | Held                                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tracks                 | Order, parent, GUID, name, color, volume, pan, mute, solo, rec arm, record mode, monitoring, automation mode, TCP and mixer visibility, peak |
+| Selection              | Selected tracks (the master too), and the selected media item count                                                                          |
+| Routes                 | Each send and receive: the other track, volume, pan, and mute                                                                                |
+| Transport and timeline | Play state, play and cursor positions                                                                                                        |
+| Commands               | Toggle states, named command IDs, and command names. Commands the test gives a handler run it.                                               |
+| Automation and undo    | The global automation override, undo points, whether redo is possible, the dirty flag                                                        |
+| MIDI ports             | Named inputs and outputs (see [Fake X-Touch](#fake-x-touch))                                                                                 |
+| Clock                  | What `time_precise()` returns                                                                                                                |
 
 A `MediaTrack*` is opaque in the SDK, so the fake hands out pointers to its
 own tracks.
@@ -407,16 +407,17 @@ REAPER's calls on the surface follow these.
   outside a deferred refresh during the call (a track already selected isn't
   sent), and in one at `PreventUIRefresh(-1)`.
 - **Rec arm changes the track list,** if it changes a track. A track's change
-  is its `SetSurfaceRecArm()`, `SetSurfaceMute()`, `SetSurfaceSolo()`, and
-  volume and pan (as in every track's state, below). Outside a deferred
+  is its `SetSurfaceRecArm()`, `Extended(CSURF_EXT_SETINPUTMONITOR)`,
+  `SetSurfaceMute()`, `SetSurfaceSolo()`, and volume and pan (as in every
+  track's state, below). Outside a deferred
   refresh, during `SetTrackUIRecArm()`, REAPER sends the track's change,
   `SetTrackListChange()`, every track's state, `SetSurfaceSolo(master)`, and
   the track's change again. In a deferred refresh, it calls
   `SetTrackListChange()` and `SetSurfaceSolo(master)`, and at
   `PreventUIRefresh(-1)` come `Extended(CSURF_EXT_SETMIXERSCROLL)`,
   `SetTrackListChange()`, `SetSurfaceSolo(master)`, and every track's state,
-  once for the deferred refresh. In it, a track whose rec arm changed has only its title, rec arm, and
-  selection, then its change. A track whose mute or solo is still to be sent
+  once for the deferred refresh. In it, a track whose rec arm changed has only
+  its title, rec arm and monitoring, and selection, then its change. A track whose mute or solo is still to be sent
   has them after its selection, and one whose selection changed has its
   selection again.
 - **Ganging and grouping:** with the setters' group flags without `&2`, a
@@ -488,9 +489,9 @@ REAPER's calls on the surface follow these.
   `SetSurfaceVolume()`, `SetSurfacePan()`, `Extended(CSURF_EXT_SETPAN_EX)`
   (with the track's pan mode: 3, REAPER 4 and later's balance, in a project
   file with `PANMODE 3`, and 0 without it), `SetSurfaceMute()`,
-  `SetSurfaceSolo()` (not for the master),
-  `SetTrackTitle()`, `SetSurfaceRecArm()`, `Extended(CSURF_EXT_SETINPUTMONITOR)`,
-  and `SetSurfaceSelected()`.
+  `SetSurfaceSolo()` (not for the master), `SetTrackTitle()`,
+  `SetSurfaceRecArm()`, `Extended(CSURF_EXT_SETINPUTMONITOR)` (with the
+  track's `I_RECMON`, which is 1 for the master), and `SetSurfaceSelected()`.
 - **Creating the surface:** at startup, REAPER calls `create` with the saved
   config string before the project loads, and the surface opens its MIDI ports
   inside it. Then come `Extended(CSURF_EXT_SETBPMANDPLAYRATE)`, and on loading

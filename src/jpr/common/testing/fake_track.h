@@ -44,6 +44,16 @@ struct FakeTrackUndoValues {
 
   bool rec_arm = false;  // The master can't be armed.
 
+  // As I_RECMODE: REAPER's record mode, such as 0 input and 2 none (monitoring
+  // only). REAPER holds any number, so the fake does too.
+  int rec_mode = 0;
+
+  // As I_RECMON: 0 off, 1 on, and 2 auto (tape), and GetTrackState()'s
+  // monitoring flags. REAPER's new tracks have it on, but the fake's are off,
+  // so a test's tracks have no monitoring flag unless it sets one. REAPER holds
+  // any number, which shows no flag. The master's is on, which shows no flag.
+  int monitor_mode = 0;
+
   // As I_AUTOMODE: 0 trim/read, 1 read, 2 touch, 3 write, 4 latch, and 5 latch
   // preview.
   int auto_mode = 0;

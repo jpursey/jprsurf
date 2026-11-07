@@ -36,6 +36,7 @@ std::unique_ptr<FakeProject> FakeProject::Create() {
 FakeProject::FakeProject(int number) : number_(number) {
   master_track_ = CreateTrack(MakeGuid(), nullptr);
   master_track_->name = "MASTER";
+  master_track_->monitor_mode = 1;  // As REAPER's master reads.
 }
 
 //------------------------------------------------------------------------------

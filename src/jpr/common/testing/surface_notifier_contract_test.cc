@@ -27,6 +27,7 @@
 namespace jpr {
 namespace {
 
+using ::testing::Contains;
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::IsEmpty;
@@ -95,6 +96,13 @@ std::string Selected(MediaTrack* track) {
   return Flag("SetSurfaceSelected", track, kTrackStateSelected);
 }
 
+// A track's rec arm, then its monitoring, which are always sent together.
+std::vector<std::string> RecArmAndMonitor(MediaTrack* track) {
+  return {RecArm(track),
+          absl::StrCat("Extended(SETINPUTMONITOR, ", Name(track), ", ",
+                       GetMediaTrackInfo_Value(track, "I_RECMON"), ")")};
+}
+
 std::string MasterSolo() {
   return absl::StrCat("SetSurfaceSolo(master, ",
                       RecordingSurface::GetBoolText(AnyTrackSolo(nullptr)),
@@ -118,12 +126,15 @@ std::vector<std::string> MuteAndSolo(MediaTrack* track) {
   return {Mute(track), Solo(track)};
 }
 
-// The end of a track's state: its title, rec arm, and selection.
+// The end of a track's state: its title, rec arm and monitoring, and
+// selection.
 std::vector<std::string> TitleRecArmAndSelected(MediaTrack* track) {
   int flags = 0;
-  return {absl::StrCat("SetTrackTitle(", Name(track), ", ",
-                       GetTrackState(track, &flags), ")"),
-          RecArm(track), Selected(track)};
+  std::vector<std::string> calls = {absl::StrCat(
+      "SetTrackTitle(", Name(track), ", ", GetTrackState(track, &flags), ")")};
+  Append(calls, RecArmAndMonitor(track));
+  calls.push_back(Selected(track));
+  return calls;
 }
 
 // A track's whole state, as after a track list change, leaving out its mute
@@ -157,7 +168,7 @@ std::vector<std::string> EveryState(MediaTrack* unsent = nullptr) {
 
 // A change to a track's rec arm.
 std::vector<std::string> RecArmChange(MediaTrack* track) {
-  std::vector<std::string> calls = {RecArm(track)};
+  std::vector<std::string> calls = RecArmAndMonitor(track);
   Append(calls, MuteAndSolo(track));
   Append(calls, VolumeAndPan(track));
   return calls;
@@ -818,6 +829,21 @@ TEST_F(SurfaceNotifierGroupContractTest,
   SetTrackUIRecArm(a_, 1, kPreventGroupingAndGanging);
   EXPECT_THAT(TakeCalls(),
               ElementsAreArray(RecArmOutsideADeferredRefresh(a_, {a_})));
+}
+
+using SurfaceNotifierMonitorContractTest = ContractTest;
+
+TEST_F(SurfaceNotifierMonitorContractTest, EachTracksStateHasItsMonitoring) {
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("A")->monitor_mode = 2;
+    project.AddTrack("B")->monitor_mode = 1;
+  });
+  MediaTrack* a = GetTrack(nullptr, 0);
+  SetTrackUIRecArm(a, 1, 0);
+  const std::vector<std::string> calls = TakeCalls();
+  EXPECT_THAT(calls, Contains("Extended(SETINPUTMONITOR, master, 1)"));
+  EXPECT_THAT(calls, Contains("Extended(SETINPUTMONITOR, A, 2)"));
+  EXPECT_THAT(calls, Contains("Extended(SETINPUTMONITOR, B, 1)"));
 }
 
 }  // namespace

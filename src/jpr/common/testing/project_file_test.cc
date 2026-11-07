@@ -99,6 +99,8 @@ TEST(ProjectFileTest, WritesEachTracksState) {
   b->mute = true;
   b->solo = true;
   b->rec_arm = true;
+  b->monitor_mode = 2;
+  b->rec_mode = 7;
   b->selected = true;
   b->auto_mode = 4;
   b->show_in_mixer = false;
@@ -128,7 +130,7 @@ TEST(ProjectFileTest, WritesEachTracksState) {
                         "    ISBUS 0 0\n"
                         "    SHOWINMIX 0 0.6667 0.5 0 0.5 0 0 0\n"
                         "    SEL 1\n"
-                        "    REC 1 0 0 0 0 0 0\n"
+                        "    REC 1 0 2 7 0 0 0\n"
                         "    TRACKID {00000003-0001-0000-0000-000000000000}\n"
                         "  >\n"));
   EXPECT_LT(text.find("NAME \"A\""), text.find("NAME \"B\""));
@@ -332,6 +334,14 @@ TEST(ProjectFileTest, MasterStateAProjectCantHoldFailsTheTest) {
   master->rec_arm = true;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's rec arm");
   master->rec_arm = false;
+  master->rec_mode = 2;
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
+                          "the master's record or monitoring mode");
+  master->rec_mode = 0;
+  master->monitor_mode = 0;
+  EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project),
+                          "the master's record or monitoring mode");
+  master->monitor_mode = 1;
   master->group = 1;
   EXPECT_NONFATAL_FAILURE(WriteProjectFile(*project), "the master's group");
   master->group = 0;

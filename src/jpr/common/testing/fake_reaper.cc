@@ -130,6 +130,12 @@ class FakeReaper::Api final {
     if (parameter == "I_AUTOMODE") {
       return track.auto_mode;
     }
+    if (parameter == "I_RECMODE") {
+      return track.rec_mode;
+    }
+    if (parameter == "I_RECMON") {
+      return track.monitor_mode;
+    }
     if (parameter == "I_FOLDERCOMPACT") {
       return track.folder_compact;
     }
@@ -457,19 +463,23 @@ class FakeReaper::Api final {
   // Track state
   //----------------------------------------------------------------------------
 
-  // The fake has no FX or input monitoring, so their flags are never set.
+  // The fake has no FX, so their flag is never set, and the master's
+  // monitoring shows no flag.
   static const char* GetTrackState(MediaTrack* track_id, int* flags) {
     const FakeTrack& track = s_instance_->GetTrack(track_id);
-    *flags =
-        (s_instance_->GetProjectOf(track).IsFolder(&track) ? kTrackStateFolder
-                                                           : 0) |
-        (track.selected ? kTrackStateSelected : 0) |
-        (track.mute ? kTrackStateMute : 0) |
-        (track.solo ? kTrackStateSolo : 0) |
-        (track.solo && track.solo_in_place ? kTrackStateSoloInPlace : 0) |
-        (track.rec_arm ? kTrackStateRecArm : 0) |
-        (track.show_in_tcp ? 0 : kTrackStateHiddenInTcp) |
-        (track.show_in_mixer ? 0 : kTrackStateHiddenInMixer);
+    const FakeProject& project = s_instance_->GetProjectOf(track);
+    const int monitor_mode =
+        &track == project.GetMasterTrack() ? 0 : track.monitor_mode;
+    *flags = (project.IsFolder(&track) ? kTrackStateFolder : 0) |
+             (track.selected ? kTrackStateSelected : 0) |
+             (track.mute ? kTrackStateMute : 0) |
+             (track.solo ? kTrackStateSolo : 0) |
+             (track.solo && track.solo_in_place ? kTrackStateSoloInPlace : 0) |
+             (track.rec_arm ? kTrackStateRecArm : 0) |
+             (monitor_mode == 1 ? kTrackStateMonitorOn : 0) |
+             (monitor_mode == 2 ? kTrackStateMonitorAuto : 0) |
+             (track.show_in_tcp ? 0 : kTrackStateHiddenInTcp) |
+             (track.show_in_mixer ? 0 : kTrackStateHiddenInMixer);
     return track.name.c_str();
   }
 

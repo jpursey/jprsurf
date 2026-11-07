@@ -195,8 +195,13 @@ int RecordingSurface::Extended(int call, void* param1, void* param2,
                                     GetOptionalText(param1), ", ",
                                     GetOptionalText(param2), ")"));
       break;
-    case CSURF_EXT_SETMIXERSCROLL:
     case CSURF_EXT_SETINPUTMONITOR:
+      calls_.push_back(
+          absl::StrCat("Extended(SETINPUTMONITOR, ",
+                       GetTrackText(static_cast<MediaTrack*>(param1)), ", ",
+                       *static_cast<int*>(param2), ")"));
+      break;
+    case CSURF_EXT_SETMIXERSCROLL:
       // About state the fake doesn't hold (see SurfaceNotifier).
       break;
     default:

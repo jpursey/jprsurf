@@ -185,6 +185,11 @@ void ProjectFileWriter::AppendMaster() {
   if (master->rec_arm) {
     Fail("the master's rec arm, which REAPER's master doesn't have");
   }
+  if (master->rec_mode != 0 || master->monitor_mode != 1) {
+    Fail(
+        "the master's record or monitoring mode, which REAPER's master can't "
+        "change");
+  }
   if (master->group != 0) {
     Fail("the master's group");
   }
@@ -241,9 +246,9 @@ void ProjectFileWriter::AppendTrack(int index) {
                   " 0.6667 0.5 ", Flag(track->show_in_tcp), " 0.5 0 0 0\n");
   absl::StrAppend(&text_, "    SEL ", Flag(track->selected), "\n");
 
-  // Rec arm, then the input, and input monitoring off, as the fake has none,
-  // where REAPER's new tracks have it on.
-  absl::StrAppend(&text_, "    REC ", Flag(track->rec_arm), " 0 0 0 0 0 0\n");
+  // Rec arm, the input (the first), the monitoring, then the record mode.
+  absl::StrAppend(&text_, "    REC ", Flag(track->rec_arm), " 0 ",
+                  track->monitor_mode, " ", track->rec_mode, " 0 0 0\n");
   absl::StrAppend(&text_, "    TRACKID ", guid, "\n");
   if (track->group < 0 || track->group > kMaxGroup) {
     Fail(absl::StrCat(track->name, "'s group, ", track->group,

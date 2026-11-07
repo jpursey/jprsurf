@@ -498,13 +498,21 @@ void SurfaceNotifier::SendState(IReaperControlSurface& surface,
 void SurfaceNotifier::SendTitleRecArmAndSelected(IReaperControlSurface& surface,
                                                  FakeTrack* track) {
   surface.SetTrackTitle(ToMediaTrack(track), track->name.c_str());
-  surface.SetSurfaceRecArm(ToMediaTrack(track), track->rec_arm);
+  SendRecArmAndMonitor(surface, track);
   surface.SetSurfaceSelected(ToMediaTrack(track), track->selected);
+}
+
+void SurfaceNotifier::SendRecArmAndMonitor(IReaperControlSurface& surface,
+                                           FakeTrack* track) {
+  surface.SetSurfaceRecArm(ToMediaTrack(track), track->rec_arm);
+  int monitor_mode = track->monitor_mode;
+  surface.Extended(CSURF_EXT_SETINPUTMONITOR, ToMediaTrack(track),
+                   &monitor_mode, nullptr);
 }
 
 void SurfaceNotifier::SendRecArmChange(IReaperControlSurface& surface,
                                        FakeTrack* track) {
-  surface.SetSurfaceRecArm(ToMediaTrack(track), track->rec_arm);
+  SendRecArmAndMonitor(surface, track);
   SendMuteAndSolo(surface, track);
   SendVolumeAndPan(surface, track);
 }
