@@ -48,7 +48,7 @@ class ChildTrackList final : public ViewList {
   void Layout() override;
   void AddItemProperties(View* item) override;
 
-  // See View::kTrackParent and View::kTrackRoot.
+  // See View::kToParentTrack and View::kToMasterTrack.
   void MoveToParent();
   void MoveToRoot() { MoveTo(TrackCache::Get().GetMasterTrack(), 0); }
 
@@ -73,22 +73,22 @@ ChildTrackList::ChildTrackList(View* view, std::optional<int> bank_size,
   if (!HasWritableReference()) {
     return;
   }
-  AddAction(view, View::kTrackParent, [this] { MoveToParent(); });
-  AddAction(view, View::kTrackRoot, [this] { MoveToRoot(); });
+  AddAction(view, View::kToParentTrack, [this] { MoveToParent(); });
+  AddAction(view, View::kToMasterTrack, [this] { MoveToRoot(); });
 }
 
 void ChildTrackList::AddItemProperties(View* item) {
   if (!HasWritableReference()) {
     return;
   }
-  AddAction(item, View::kParentTrackChild, [this, item] {
+  AddAction(item, View::kParentToTrack, [this, item] {
     Track* track = item->GetTrack();
     if (track->GetChildTrackCount(GetTrackFilter()) > 0) {
       MoveTo(track, 0);
     }
   });
-  AddAction(item, View::kParentTrackParent, [this] { MoveToParent(); });
-  AddAction(item, View::kParentTrackRoot, [this] { MoveToRoot(); });
+  AddAction(item, View::kParentToGrandparentTrack, [this] { MoveToParent(); });
+  AddAction(item, View::kParentToMasterTrack, [this] { MoveToRoot(); });
 }
 
 void ChildTrackList::Layout() {
@@ -179,7 +179,7 @@ void ChildTrackList::Reveal(Track* track) {
 //==============================================================================
 
 // The route type a routes list shows, which reads as text, "Send" or "Recv"
-// (see View::kChildRouteTypeName).
+// (see View::kRouteTypeName).
 class RouteTypeProperty final : public ViewProperty {
  public:
   explicit RouteTypeProperty(std::string_view name)
@@ -228,10 +228,10 @@ class RouteList final : public ViewList {
 
   TrackRouteType GetRouteType() const { return route_type_->GetRouteType(); }
 
-  // See View::kChildRouteToggle.
+  // See View::kToggleRoutes.
   void ToggleRouteType();
 
-  // See View::kParentRouteOtherTrack.
+  // See View::kParentToOtherTrack.
   void CrossRoute(View* item);
 
   const View::RouteTypeRule rule_;
@@ -242,13 +242,13 @@ RouteList::RouteList(View* view, std::optional<int> bank_size,
                      TrackReference* writable_reference,
                      View::RouteTypeRule rule)
     : ViewList(view, bank_size, writable_reference), rule_(rule) {
-  AddAction(view, View::kChildRouteToggle, [this] { ToggleRouteType(); });
-  route_type_ = AddProperty<RouteTypeProperty>(view, View::kChildRouteTypeName);
+  AddAction(view, View::kToggleRoutes, [this] { ToggleRouteType(); });
+  route_type_ = AddProperty<RouteTypeProperty>(view, View::kRouteTypeName);
 }
 
 void RouteList::AddItemProperties(View* item) {
   if (HasWritableReference()) {
-    AddAction(item, View::kParentRouteOtherTrack,
+    AddAction(item, View::kParentToOtherTrack,
               [this, item] { CrossRoute(item); });
   }
 }
@@ -385,10 +385,10 @@ ViewList::ViewList(View* view, std::optional<int> bank_size,
     : view_(view),
       bank_size_(bank_size),
       writable_reference_(writable_reference) {
-  AddAction(view, View::kChildDec, [this] { Scroll(-1); });
-  AddAction(view, View::kChildInc, [this] { Scroll(1); });
-  AddAction(view, View::kBankDec, [this] { Scroll(-GetBankSize()); });
-  AddAction(view, View::kBankInc, [this] { Scroll(GetBankSize()); });
+  AddAction(view, View::kScrollPrev, [this] { Scroll(-1); });
+  AddAction(view, View::kScrollNext, [this] { Scroll(1); });
+  AddAction(view, View::kBankPrev, [this] { Scroll(-GetBankSize()); });
+  AddAction(view, View::kBankNext, [this] { Scroll(GetBankSize()); });
 }
 
 void ViewList::AddItem(View* item) {

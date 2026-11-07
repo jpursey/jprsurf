@@ -250,10 +250,10 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
       ChildTracksView("track_mode", "user:folder", "user:current_track");
   track_mode.config.condition = ViewCondition::Config{
       .property = "user:surface_mode", .value = std::string("track")};
-  track_mode.mappings = {{.property = "view:bank_inc",
+  track_mode.mappings = {{.property = "view:bank_next",
                           .control = "function[0]",
                           .type = ViewMapping::kReadControl},
-                         {.property = "view:track_parent",
+                         {.property = "view:to_parent_track",
                           .control = "function[1]",
                           .type = ViewMapping::kReadControl}};
   ViewSpec strip = RepeatedView("strip", "strip");
@@ -267,7 +267,7 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
   strip.uses = {{.name = "anchored_strip",
                  .widgets = {{"strip", "strip"}},
                  .properties = {{"anchor", "user:anchor_select"}}}};
-  strip.mappings = {{.property = "view:parent_track_child",
+  strip.mappings = {{.property = "view:parent_to_track",
                      .control = "strip.rec",
                      .type = ViewMapping::kReadControl},
                     {.property = "user:pick_track",
@@ -282,7 +282,7 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
       BoundView("send_receive_mode", "user:current_track");
   send_receive_mode.config.list =
       View::ListConfig{.items = View::Routes{}, .bank_size = 8};
-  send_receive_mode.mappings = {{.property = "view:child_route_type_name",
+  send_receive_mode.mappings = {{.property = "view:route_type_name",
                                  .control = "strip[7].scribble_bottom",
                                  .type = ViewMapping::kWriteControl}};
   ViewSpec route = RepeatedView("strip", "route_strip");
@@ -292,7 +292,7 @@ TEST(SurfaceSpecTest, AValidSpecHasNoErrors) {
                     {.property = "route:other_track.name",
                      .control = "route_strip.scribble_top",
                      .type = ViewMapping::kWriteControl},
-                    {.property = "view:parent_route_other_track",
+                    {.property = "view:parent_to_other_track",
                      .control = "route_strip.select",
                      .type = ViewMapping::kReadControl},
                     {.property = "state:master_track.volume",
@@ -749,7 +749,7 @@ TEST(SurfaceSpecTest, AMappingIsOfAControl) {
 TEST(SurfaceSpecTest, AMappingsPropertyIsOneWhereItIs) {
   SurfaceSpec spec = MappingSpecs(
       {Mapping("track:nothing", "play"), Mapping("route:volume", "play"),
-       Mapping("view:bank_inc", "play"), Mapping("view:nothing", "play"),
+       Mapping("view:bank_next", "play"), Mapping("view:nothing", "play"),
        Mapping("user:track", "play"), Mapping("user:track.nothing", "play"),
        Mapping("user:nothing.mute", "play"), Mapping("user:nothing", "play"),
        Mapping("state:nothing", "play"), Mapping("cmd:", "play"),
@@ -761,8 +761,8 @@ TEST(SurfaceSpecTest, AMappingsPropertyIsOneWhereItIs) {
   // do its items, and what a view declares is visible only in it.
   ViewSpec list =
       WithChild(ChildTracksView("list"), RepeatedView("strip", "strip"));
-  list.mappings = {Mapping("view:track_parent", "play")};
-  list.children[0].mappings = {Mapping("view:parent_track_child", "play")};
+  list.mappings = {Mapping("view:to_parent_track", "play")};
+  list.children[0].mappings = {Mapping("view:parent_to_track", "play")};
   ViewSpec anchored = BoundView("anchored", "state:master_track");
   anchored.components = {TrackAnchorSpec{"user:anchor"}};
   spec.root.children.push_back(list);
@@ -775,7 +775,7 @@ TEST(SurfaceSpecTest, AMappingsPropertyIsOneWhereItIs) {
           "/view: play: property \"track:nothing\" isn't a property",
           "/view: play: property \"route:volume\" needs a view with a route "
           "subject",
-          "/view: play: property \"view:bank_inc\" isn't on this view",
+          "/view: play: property \"view:bank_next\" isn't on this view",
           "/view: play: property \"view:nothing\" isn't a property",
           "/view: play: property \"user:track\" is a reference, whose fields "
           "are properties",
@@ -789,8 +789,8 @@ TEST(SurfaceSpecTest, AMappingsPropertyIsOneWhereItIs) {
           "/view: play: property \"cmd:a\" isn't a command id",
           "/view: play: property \"nothing\" isn't a property",
           "/view: play: property \"user:anchor\" isn't a property",
-          "/list: play: property \"view:track_parent\" isn't on this view",
-          "/list/strip[]: play: property \"view:parent_track_child\" isn't on "
+          "/list: play: property \"view:to_parent_track\" isn't on this view",
+          "/list/strip[]: play: property \"view:parent_to_track\" isn't on "
           "this view"));
 }
 
@@ -952,13 +952,13 @@ TEST(SurfaceSpecTest, AnItemsConditionIsMadeBeforeItsListsProperties) {
   spec.components = {TrackReferenceSpec{"user:folder"}};
   ViewSpec list = ListView("list", "user:folder");
   list.children[0].config.condition =
-      ViewCondition::Config{.property = "view:parent_track_child"};
-  list.children[0].mappings = {Mapping(
-      "view:parent_track_child", "strip.select", ViewMapping::kReadControl)};
+      ViewCondition::Config{.property = "view:parent_to_track"};
+  list.children[0].mappings = {Mapping("view:parent_to_track", "strip.select",
+                                       ViewMapping::kReadControl)};
   spec.root.children = {list};
   EXPECT_THAT(Validate(spec),
               ElementsAre("/list/strip[]: condition "
-                          "\"view:parent_track_child\" isn't on this view"));
+                          "\"view:parent_to_track\" isn't on this view"));
 }
 
 TEST(SurfaceSpecTest, AMappingRequiresModifiers) {

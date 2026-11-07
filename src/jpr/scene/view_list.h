@@ -28,58 +28,62 @@ namespace jpr {
 // View properties
 //==============================================================================
 
-// Every view: property (see View::kChildDec), with what it needs of its view.
+// Every view: property (see View::kScrollPrev), with what it needs of its view.
 // A list adds the properties of each need its view meets, by a
 // ViewPropertyName, so it can't add one without a row here. A "writable"
 // reference is one the view may set (see Scene::AddTrackReference()).
 inline constexpr PropertyInfo kViewProperties[] = {
-    {View::kChildDec, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kScrollPrev, ViewProperty::Type::kAction, kTriggerAccess,
      "Scrolls the view's list one item back. The scroll position is kept in "
      "range.",
      ViewNeed::kList},
-    {View::kChildInc, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kScrollNext, ViewProperty::Type::kAction, kTriggerAccess,
      "Scrolls the view's list one item forward. The scroll position is kept "
      "in range.",
      ViewNeed::kList},
-    {View::kBankDec, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kBankPrev, ViewProperty::Type::kAction, kTriggerAccess,
      "Scrolls the view's list back by its bank size. The scroll position is "
      "kept in range.",
      ViewNeed::kList},
-    {View::kBankInc, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kBankNext, ViewProperty::Type::kAction, kTriggerAccess,
      "Scrolls the view's list forward by its bank size. The scroll position "
      "is kept in range.",
      ViewNeed::kList},
-    {View::kTrackParent, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kToParentTrack, ViewProperty::Type::kAction, kTriggerAccess,
      "Sets the view's reference to its track's parent track, navigating up "
      "one level, with the track that was left centered in the list if "
      "possible. This does nothing if the track has no parent track.",
      ViewNeed::kChildTracksList},
-    {View::kTrackRoot, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kToMasterTrack, ViewProperty::Type::kAction, kTriggerAccess,
      "Sets the view's reference to the master track.",
      ViewNeed::kChildTracksList},
-    {View::kParentTrackChild, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kParentToTrack, ViewProperty::Type::kAction, kTriggerAccess,
      "Sets the parent view's reference to this view's track, navigating into "
      "it, if it has child tracks on the surface.",
      ViewNeed::kChildTracksItem},
-    {View::kParentTrackParent, ViewProperty::Type::kAction, kTriggerAccess,
-     "The same as \"view:track_parent\" on the parent view.",
+    {View::kParentToGrandparentTrack, ViewProperty::Type::kAction,
+     kTriggerAccess,
+     "Sets the parent view's reference to this view's grandparent track, "
+     "navigating up one level: the same as \"view:to_parent_track\" on the "
+     "parent view.",
      ViewNeed::kChildTracksItem},
-    {View::kParentTrackRoot, ViewProperty::Type::kAction, kTriggerAccess,
-     "The same as \"view:track_root\" on the parent view.",
+    {View::kParentToMasterTrack, ViewProperty::Type::kAction, kTriggerAccess,
+     "Sets the parent view's reference to the master track: the same as "
+     "\"view:to_master_track\" on the parent view.",
      ViewNeed::kChildTracksItem},
-    {View::kParentRouteOtherTrack, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kParentToOtherTrack, ViewProperty::Type::kAction, kTriggerAccess,
      "Sets the parent view's reference to the track at the other end of this "
      "view's route, showing the other route type: from a send to the "
      "destination track's receives, or from a receive to the source track's "
      "sends. The list is scrolled so the route back to the original track is "
      "shown. This does nothing if this view has no route.",
      ViewNeed::kRoutesItem},
-    {View::kChildRouteToggle, ViewProperty::Type::kAction, kTriggerAccess,
+    {View::kToggleRoutes, ViewProperty::Type::kAction, kTriggerAccess,
      "Switches the view's routes list between sends and receives, from the "
      "start of the list. This does nothing if the track has no routes of the "
      "other type.",
      ViewNeed::kRoutesList},
-    {View::kChildRouteTypeName, ViewProperty::Type::kText, kReadAccess,
+    {View::kRouteTypeName, ViewProperty::Type::kText, kReadAccess,
      "The route type the view's routes list shows: \"Send\" or \"Recv\".",
      ViewNeed::kRoutesList},
 };
@@ -221,7 +225,7 @@ class ViewList {
   // Adds the view: properties that act on this list to a new list item view.
   virtual void AddItemProperties(View* item) = 0;
 
-  // See View::kChildInc and View::kBankInc.
+  // See View::kScrollNext and View::kBankNext.
   void Scroll(int offset);
   int GetBankSize() const;
 

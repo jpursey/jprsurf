@@ -204,7 +204,7 @@ TEST_F(SceneTest, StatePropertiesAreCreatedOnce) {
 
 TEST_F(SceneTest, ViewNamespacesArentGlobal) {
   EXPECT_EQ(GetScene()->GetProperty(TrackProperties::kMute), nullptr);
-  EXPECT_EQ(GetScene()->GetProperty(View::kChildInc), nullptr);
+  EXPECT_EQ(GetScene()->GetProperty(View::kScrollNext), nullptr);
 }
 
 TEST_F(SceneTest, ModifierPropertiesAreBuiltIn) {

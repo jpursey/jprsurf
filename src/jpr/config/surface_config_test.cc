@@ -464,7 +464,7 @@ TEST(ReadSurfaceConfigTest, ReadsTemplates) {
 devices {}
 widgets {}
 mappings list_navigation {
-  channel_left -> view:child_dec
+  channel_left -> view:scroll_prev
 }
 mappings button(widget button, property command, property light = command,
                 property other = state:can_redo) {
@@ -477,7 +477,7 @@ mappings button(widget button, property command, property light = command,
       spec.templates,
       ElementsAre(
           TemplateSpec{.name = "list_navigation",
-                       .mappings = {{.property = "view:child_dec",
+                       .mappings = {{.property = "view:scroll_prev",
                                      .control = "channel_left",
                                      .type = ViewMapping::kReadControl}}},
           TemplateSpec{

@@ -145,7 +145,7 @@ class ViewListTest : public SceneTest {
 
   // Returns the route type a routes list shows, "Send" or "Recv".
   static std::string GetRouteTypeName(const View* list) {
-    ViewProperty* name = list->GetProperty(View::kChildRouteTypeName);
+    ViewProperty* name = list->GetProperty(View::kRouteTypeName);
     EXPECT_NE(name, nullptr);
     return name != nullptr ? name->GetText() : "";
   }
@@ -174,29 +174,29 @@ TEST_F(ViewListTest, EachListHasThePropertiesThatActOnIt) {
   View* child_tracks = AddChildTracks();
   View* routes = AddRoutes("Routes");
 
-  EXPECT_EQ(plain->GetProperty(View::kChildInc), nullptr);
+  EXPECT_EQ(plain->GetProperty(View::kScrollNext), nullptr);
   for (View* list : {child_tracks, routes}) {
-    for (std::string_view name :
-         {View::kChildDec, View::kChildInc, View::kBankDec, View::kBankInc}) {
+    for (std::string_view name : {View::kScrollPrev, View::kScrollNext,
+                                  View::kBankPrev, View::kBankNext}) {
       EXPECT_NE(list->GetProperty(name), nullptr) << name;
     }
   }
 
-  EXPECT_NE(child_tracks->GetProperty(View::kTrackParent), nullptr);
-  EXPECT_NE(child_tracks->GetProperty(View::kTrackRoot), nullptr);
-  EXPECT_EQ(child_tracks->GetProperty(View::kChildRouteToggle), nullptr);
+  EXPECT_NE(child_tracks->GetProperty(View::kToParentTrack), nullptr);
+  EXPECT_NE(child_tracks->GetProperty(View::kToMasterTrack), nullptr);
+  EXPECT_EQ(child_tracks->GetProperty(View::kToggleRoutes), nullptr);
   View* track_item = child_tracks->GetChildViewAt(0);
-  EXPECT_NE(track_item->GetProperty(View::kParentTrackChild), nullptr);
-  EXPECT_NE(track_item->GetProperty(View::kParentTrackParent), nullptr);
-  EXPECT_NE(track_item->GetProperty(View::kParentTrackRoot), nullptr);
-  EXPECT_EQ(track_item->GetProperty(View::kParentRouteOtherTrack), nullptr);
+  EXPECT_NE(track_item->GetProperty(View::kParentToTrack), nullptr);
+  EXPECT_NE(track_item->GetProperty(View::kParentToGrandparentTrack), nullptr);
+  EXPECT_NE(track_item->GetProperty(View::kParentToMasterTrack), nullptr);
+  EXPECT_EQ(track_item->GetProperty(View::kParentToOtherTrack), nullptr);
 
-  EXPECT_NE(routes->GetProperty(View::kChildRouteToggle), nullptr);
-  EXPECT_NE(routes->GetProperty(View::kChildRouteTypeName), nullptr);
-  EXPECT_EQ(routes->GetProperty(View::kTrackParent), nullptr);
+  EXPECT_NE(routes->GetProperty(View::kToggleRoutes), nullptr);
+  EXPECT_NE(routes->GetProperty(View::kRouteTypeName), nullptr);
+  EXPECT_EQ(routes->GetProperty(View::kToParentTrack), nullptr);
   View* route_item = routes->GetChildViewAt(0);
-  EXPECT_NE(route_item->GetProperty(View::kParentRouteOtherTrack), nullptr);
-  EXPECT_EQ(route_item->GetProperty(View::kParentTrackChild), nullptr);
+  EXPECT_NE(route_item->GetProperty(View::kParentToOtherTrack), nullptr);
+  EXPECT_EQ(route_item->GetProperty(View::kParentToTrack), nullptr);
 }
 
 TEST_F(ViewListTest, NavigatingNeedsAWritableReference) {
@@ -205,15 +205,13 @@ TEST_F(ViewListTest, NavigatingNeedsAWritableReference) {
   View* routes =
       AddList(Scene::kMasterTrack, {.items = View::Routes{}}, 2, "Routes");
 
-  EXPECT_NE(child_tracks->GetProperty(View::kChildInc), nullptr);
-  EXPECT_EQ(child_tracks->GetProperty(View::kTrackParent), nullptr);
-  EXPECT_EQ(child_tracks->GetProperty(View::kTrackRoot), nullptr);
-  EXPECT_EQ(
-      child_tracks->GetChildViewAt(0)->GetProperty(View::kParentTrackChild),
-      nullptr);
-  EXPECT_EQ(
-      routes->GetChildViewAt(0)->GetProperty(View::kParentRouteOtherTrack),
-      nullptr);
+  EXPECT_NE(child_tracks->GetProperty(View::kScrollNext), nullptr);
+  EXPECT_EQ(child_tracks->GetProperty(View::kToParentTrack), nullptr);
+  EXPECT_EQ(child_tracks->GetProperty(View::kToMasterTrack), nullptr);
+  EXPECT_EQ(child_tracks->GetChildViewAt(0)->GetProperty(View::kParentToTrack),
+            nullptr);
+  EXPECT_EQ(routes->GetChildViewAt(0)->GetProperty(View::kParentToOtherTrack),
+            nullptr);
 }
 
 TEST_F(ViewListTest, ActionsSeeTheSubjectChangedEarlierInTheRun) {
@@ -223,7 +221,7 @@ TEST_F(ViewListTest, ActionsSeeTheSubjectChangedEarlierInTheRun) {
 
   // The list lays out for T3 before it scrolls.
   track_reference_->Set(GetCachedTrack(top_[2]));
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
   EXPECT_THAT(GetShown(list), ElementsAre("T4", "T1"));
 }
@@ -248,17 +246,17 @@ TEST_F(ViewListTest, ScrollsByOneOrABankInRange) {
   AddSurface();
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2"));
 
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3"));
-  RunAction(list, View::kBankInc);
+  RunAction(list, View::kBankNext);
   EXPECT_THAT(GetShown(list), ElementsAre("T4", "T5"));
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
   EXPECT_THAT(GetShown(list), ElementsAre("T4", "T5"));
-  RunAction(list, View::kBankDec);
+  RunAction(list, View::kBankPrev);
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3"));
-  RunAction(list, View::kBankDec);
+  RunAction(list, View::kBankPrev);
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2"));
-  RunAction(list, View::kChildDec);
+  RunAction(list, View::kScrollPrev);
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2"));
 }
 
@@ -267,9 +265,9 @@ TEST_F(ViewListTest, ABankIsTheBankSizeIfItHasOne) {
       AddList("user:folder", {.items = View::ChildTracks{}, .bank_size = 3});
   AddSurface();
 
-  RunAction(list, View::kBankInc);
+  RunAction(list, View::kBankNext);
   EXPECT_THAT(GetShown(list), ElementsAre("T4", "T5"));
-  RunAction(list, View::kBankDec);
+  RunAction(list, View::kBankPrev);
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2"));
 }
 
@@ -286,7 +284,7 @@ TEST_F(ViewListTest, ABankSizeIsPositive) {
 TEST_F(ViewListTest, ANewSubjectShowsItsListFromTheStart) {
   View* list = AddChildTracks();
   AddSurface();
-  RunAction(list, View::kBankInc);
+  RunAction(list, View::kBankNext);
 
   SetReference(folder_reference_, top_[2]);
   EXPECT_THAT(GetShown(list), ElementsAre("T3.1", "T3.2"));
@@ -295,7 +293,7 @@ TEST_F(ViewListTest, ANewSubjectShowsItsListFromTheStart) {
 TEST_F(ViewListTest, TheTrackListChangingKeepsThePositionInRange) {
   View* list = AddChildTracks();
   AddSurface();
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3"));
 
   // The surface polls for a track shown or hidden.
@@ -322,7 +320,7 @@ TEST_F(ViewListTest, ItemsReleaseTheirAnchorsWhenTheListMoves) {
   list->GetChildViewAt(0)->SetAnchor(anchor.Hold(GetCachedTrack(top_[0])));
   ASSERT_TRUE(anchor.IsHeld());
 
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
   EXPECT_FALSE(anchor.IsHeld());
 }
 
@@ -331,10 +329,10 @@ TEST_F(ViewListTest, NavigatesIntoAFolder) {
   AddSurface();
 
   // T1 has no child tracks.
-  RunAction(list->GetChildViewAt(0), View::kParentTrackChild);
+  RunAction(list->GetChildViewAt(0), View::kParentToTrack);
   EXPECT_EQ(folder_reference_->GetTrack(), TrackCache::Get().GetMasterTrack());
 
-  RunAction(list->GetChildViewAt(2), View::kParentTrackChild);
+  RunAction(list->GetChildViewAt(2), View::kParentToTrack);
   EXPECT_EQ(folder_reference_->GetTrack(), GetCachedTrack(top_[2]));
   EXPECT_THAT(GetShown(list), ElementsAre("T3.1", "T3.2", "T3.3"));
 }
@@ -344,16 +342,16 @@ TEST_F(ViewListTest, NavigatesUpWithTheFolderCentered) {
   AddSurface();
 
   // The master track has no parent.
-  RunAction(list, View::kTrackParent);
+  RunAction(list, View::kToParentTrack);
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2", "T3"));
 
   SetReference(folder_reference_, top_[2]);
-  RunAction(list, View::kTrackParent);
+  RunAction(list, View::kToParentTrack);
   EXPECT_EQ(folder_reference_->GetTrack(), TrackCache::Get().GetMasterTrack());
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3", "T4"));
 
   SetReference(folder_reference_, top_[2]);
-  RunAction(list->GetChildViewAt(0), View::kParentTrackParent);
+  RunAction(list->GetChildViewAt(0), View::kParentToGrandparentTrack);
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3", "T4"));
 }
 
@@ -362,12 +360,12 @@ TEST_F(ViewListTest, NavigatesToTheRoot) {
   AddSurface();
 
   SetReference(folder_reference_, top_[2]);
-  RunAction(list, View::kTrackRoot);
+  RunAction(list, View::kToMasterTrack);
   EXPECT_EQ(folder_reference_->GetTrack(), TrackCache::Get().GetMasterTrack());
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2", "T3"));
 
   SetReference(folder_reference_, top_[2]);
-  RunAction(list->GetChildViewAt(1), View::kParentTrackRoot);
+  RunAction(list->GetChildViewAt(1), View::kParentToMasterTrack);
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2", "T3"));
 }
 
@@ -402,7 +400,7 @@ TEST_F(ViewListTest, RevealsOnlyWhenTheReferenceChanges) {
   AddSurface();
   SetReference(revealed_reference_, top_[3]);
 
-  RunAction(list, View::kBankDec);
+  RunAction(list, View::kBankPrev);
   surface_->Run();
   EXPECT_THAT(GetShown(list), ElementsAre("T1", "T2"));
 }
@@ -454,7 +452,7 @@ TEST_F(ViewListTest, ShowsTheTracksRoutes) {
   SetReference(track_reference_, top_[0]);
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3"));
 
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
   EXPECT_THAT(GetShown(list), ElementsAre("T3", "T4"));
 
   // Items past the end of the list show nothing.
@@ -486,19 +484,19 @@ TEST_F(ViewListTest, TheToggleSwitchesTheRouteTypeFromTheStart) {
   SetReference(track_reference_, top_[0]);
   EXPECT_EQ(GetRouteTypeName(list), "Send");
 
-  RunAction(list, View::kChildInc);
-  RunAction(list, View::kChildRouteToggle);
+  RunAction(list, View::kScrollNext);
+  RunAction(list, View::kToggleRoutes);
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
   EXPECT_THAT(GetShown(list), ElementsAre("T5", "T4"));
 
-  RunAction(list, View::kChildRouteToggle);
+  RunAction(list, View::kToggleRoutes);
   EXPECT_EQ(GetRouteTypeName(list), "Send");
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T3"));
 
   // T3 has no sends to switch to.
   SetReference(track_reference_, top_[2]);
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
-  RunAction(list, View::kChildRouteToggle);
+  RunAction(list, View::kToggleRoutes);
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
   EXPECT_THAT(GetShown(list), ElementsAre("T2", "T4"));
 }
@@ -509,7 +507,7 @@ TEST_F(ViewListTest, CrossesARouteToShowTheRouteBack) {
   SetReference(track_reference_, top_[0]);
 
   // T1's send to T3 is T3's last receive.
-  RunAction(list->GetChildViewAt(1), View::kParentRouteOtherTrack);
+  RunAction(list->GetChildViewAt(1), View::kParentToOtherTrack);
   EXPECT_EQ(track_reference_->GetTrack(), GetCachedTrack(top_[2]));
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
   EXPECT_THAT(GetShown(list), ElementsAre("T4", "T1"));
@@ -517,7 +515,7 @@ TEST_F(ViewListTest, CrossesARouteToShowTheRouteBack) {
   // T4's first send, to T1, is T1's middle receive, which is shown as the last
   // item.
   SetReference(track_reference_, top_[3]);
-  RunAction(list->GetChildViewAt(0), View::kParentRouteOtherTrack);
+  RunAction(list->GetChildViewAt(0), View::kParentToOtherTrack);
   EXPECT_EQ(track_reference_->GetTrack(), GetCachedTrack(top_[0]));
   EXPECT_THAT(GetShown(list), ElementsAre("T5", "T4"));
 }
@@ -526,17 +524,17 @@ TEST_F(ViewListTest, CrossingShowsTheOtherRouteTypeWhateverTheRule) {
   View* list = AddRoutes();
   AddSurface();
   SetReference(track_reference_, top_[0]);
-  RunAction(list, View::kChildInc);
+  RunAction(list, View::kScrollNext);
 
   // T4 has sends, but shows the receive from T1, after the next run too.
-  RunAction(list->GetChildViewAt(1), View::kParentRouteOtherTrack);
+  RunAction(list->GetChildViewAt(1), View::kParentToOtherTrack);
   surface_->Run();
   EXPECT_EQ(track_reference_->GetTrack(), GetCachedTrack(top_[3]));
   EXPECT_EQ(GetRouteTypeName(list), "Recv");
   EXPECT_THAT(GetShown(list), ElementsAre("T1", ""));
 
   // And back, to T1's send to T4, its last.
-  RunAction(list->GetChildViewAt(0), View::kParentRouteOtherTrack);
+  RunAction(list->GetChildViewAt(0), View::kParentToOtherTrack);
   EXPECT_EQ(track_reference_->GetTrack(), GetCachedTrack(top_[0]));
   EXPECT_EQ(GetRouteTypeName(list), "Send");
   EXPECT_THAT(GetShown(list), ElementsAre("T3", "T4"));
@@ -547,7 +545,7 @@ TEST_F(ViewListTest, CrossingAnItemWithNoRouteDoesNothing) {
   AddSurface();
   SetReference(track_reference_, top_[4]);
 
-  RunAction(list->GetChildViewAt(1), View::kParentRouteOtherTrack);
+  RunAction(list->GetChildViewAt(1), View::kParentToOtherTrack);
   EXPECT_EQ(track_reference_->GetTrack(), GetCachedTrack(top_[4]));
   EXPECT_EQ(GetRouteTypeName(list), "Send");
   EXPECT_THAT(GetShown(list), ElementsAre("T1", ""));

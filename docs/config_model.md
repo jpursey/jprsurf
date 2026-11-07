@@ -15,8 +15,7 @@ config file fills in. JPRSurf's surface is its config file,
 
 Property names in this doc are the ones the code uses, except for properties
 that components will provide, whose names are illustrative. The **Today** notes
-use the current C++ names. [Names](#names) covers what changes before any of
-them are frozen.
+use the current C++ names. [Names](#names) covers how names are chosen.
 
 ## Principles
 
@@ -235,7 +234,7 @@ says what kind of property it is and what its scope is:
 | `const:`  | Fixed values that mappings write, with an explicit type, named by a number      | Global         | `const:1`                                                           |
 | `track:`  | The view's subject, when it is a track                                          | View           | `track:name`, `track:has_routes`                                    |
 | `route:`  | The view's subject, when it is a send or receive                                | View           | `route:volume`, `route:other_track`                                 |
-| `view:`   | The view itself: its list, and navigation                                       | View           | `view:bank_inc`, `view:child_route_toggle`                          |
+| `view:`   | The view itself: its list, and navigation                                       | View           | `view:bank_next`, `view:toggle_routes`                              |
 | `user:`   | Declared by the config, other than modifiers                                    | Where declared | `user:anchor_select`, `user:surface_mode`                           |
 
 A namespace groups properties by what they are, not by how they are
@@ -401,9 +400,9 @@ A view can have a **list**: an ordered list of subjects of one kind, with a
 A routes list's **direction** (sends or receives) is part of its state:
 - A parameter picks the direction whenever the view's track changes: sends,
   receives, or sends unless the track only has receives (JPRSurf's choice).
-- `view:child_route_toggle` switches it, and `view:child_route_type_name` names
-  it ("Send" or "Recv").
-- Crossing a route (`view:parent_route_other_track`) sets the opposite
+- `view:toggle_routes` switches it, and `view:route_type_name` names it
+  ("Send" or "Recv").
+- Crossing a route (`view:parent_to_other_track`) sets the opposite
   direction, so the route back to the original track is shown.
 
 A config that only ever wants sends picks sends, and doesn't map the toggle.
@@ -429,9 +428,10 @@ own subject (Send/Receive mode's Info strip could be one).
 
 #### Scrolling
 
-- `view:child_inc` and `view:child_dec` scroll by one item, and `view:bank_inc`
-  and `view:bank_dec` by the **bank size**: a number, or the number of
-  instances (Send/Receive mode pages through every route strip at once).
+- `view:scroll_prev` and `view:scroll_next` scroll by one item, and
+  `view:bank_prev` and `view:bank_next` by the **bank size**: a number, or the
+  number of instances (Send/Receive mode pages through every route strip at
+  once).
 - An instance past the end of the list has an empty subject of the list's
   kind, so its `track:exists` or `route:exists` is false, and its controls show
   nothing. An empty subject's values read as nothing where they can (no name,
@@ -676,17 +676,22 @@ or `device`, and a spec declares them by kind (`ComponentSpec`, and
 
 ### Navigation
 
-The `view:` properties, which already exist:
-- `child_inc`, `child_dec`, `bank_inc`, and `bank_dec` scroll the view's list.
-- `track_parent` and `track_root` move the view's bound reference up a folder,
-  or to the master track. `parent_track_child`, `parent_track_parent`, and
-  `parent_track_root` do the same to the parent view's reference, from one of
-  its children.
-- `parent_route_other_track` moves the parent view's reference across a route
+The `view:` properties, which already exist. One without a prefix acts on the
+view its mapping is in, and one starting with `parent_` acts on the parent
+view, from one of its list's items. A `to_` property names the track it moves
+the view's bound reference to, as seen from the view its mapping is in.
+- `scroll_prev`, `scroll_next`, `bank_prev`, and `bank_next` scroll the view's
+  list.
+- `to_parent_track` and `to_master_track` move the view's bound reference up a
+  folder, or to the master track.
+- `parent_to_track` moves the parent view's reference into this view's track.
+  `parent_to_grandparent_track` and `parent_to_master_track` move it up a
+  folder, or to the master track.
+- `parent_to_other_track` moves the parent view's reference across a route
   to the track at the other end, and sets its routes list to the opposite
   direction.
-- `child_route_toggle` and `child_route_type_name` switch and name a routes
-  list's direction.
+- `toggle_routes` and `route_type_name` switch and name a routes list's
+  direction.
 
 ### Beneath the config
 
@@ -785,7 +790,8 @@ property is in a namespace, the polled state rows have names rather than
 indices, rec arm is `rec_arm` everywhere, and the secondary ruler is
 `state:secondary_ruler_*` rather than `ruler2_*`. *Device types and catalogs*
 named the controls by their widget paths, and the output modes by name. The
-audit below is what is left. Properties the plugin declares are in `user:`, as
+`view:` properties were renamed once views had references and lists (see
+[Navigation](#navigation)). Properties the plugin declares are in `user:`, as
 a config's will be.
 
 ### Conventions
@@ -804,12 +810,6 @@ identifiers.
   even though both can contain `.`.
 - Indices start from 0, and are never part of a name.
 - A name says what a thing is, not how it is implemented.
-
-### Audit
-
-| Today                                                                      | Problem                                                                                             | Change                                                                                                         |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `view:track_parent`, `view:track_root`, and the other view properties      | Named before the model had references and lists                                                     | Settled when navigation is reviewed as a component                                                             |
 
 ## JPRSurf's surface in the model
 

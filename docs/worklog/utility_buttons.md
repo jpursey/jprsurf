@@ -90,7 +90,7 @@ to holding Solo. `kStateAnyTrackSolo` can't be a `CommandToggleProperty` for
 `TrackProperties::kTrackHasParent` is a toggle that is true while a track has a
 parent track, alongside `kTrackIsFolder` and `kTrackExists`. Top level tracks
 have the master track as their parent, so only the master (and stub) track has
-none, and on the track list view it is true exactly when `View::kTrackParent`
+none, and on the track list view it is true exactly when `View::kToParentTrack`
 would move up a level. It needs no polling: it notifies when a view's track
 changes and when the track is removed, and moving a track in REAPER never takes
 its parent away.

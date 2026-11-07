@@ -192,7 +192,7 @@ order already guarantees.
   `user:pick_track`, and the condition `track:has_routes`. Both picks set
   `user:current_track`. The mode views switch on the next run, so the track is
   set before its view activates.
-- **Send in Send/Receive mode**: a tap runs `view:child_route_toggle`.
+- **Send in Send/Receive mode**: a tap runs `view:toggle_routes`.
 - **Mode lights**: Track mode blinks Track, and lights Send from
   `state:selected_track.has_routes`. Send/Receive mode blinks Send, and lights
   Track. The current mode stays lit whether or not it is available.

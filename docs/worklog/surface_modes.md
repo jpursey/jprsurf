@@ -64,7 +64,7 @@ root                      global mappings: modifiers (including mod:send_hold),
   `user:surface_mode` has one value.
 - The Info strip mappings are on `SendReceiveMode` itself rather than a child
   view: a view's own mappings use its own track and aren't affected by its
-  child context or banking, and it has the `view:child_route_type_name`
+  child context or banking, and it has the `view:route_type_name`
   property.
 - `SendReceiveMode`'s bank size is its child view count, so Bank Left/Right
   pages through all route strips at once.
@@ -122,7 +122,7 @@ root                      global mappings: modifiers (including mod:send_hold),
 - Scribble: the other track's name on top, the route volume on the bottom, and
   the other track's color.
 - Select navigates to the other end of the route
-  (`view:parent_route_other_track`): a send goes to the destination track
+  (`view:parent_to_other_track`): a send goes to the destination track
   showing its receives, and a receive goes to the source track showing its
   sends. This never changes REAPER's selection.
 - Rec and Solo are unmapped, so they are cleared.
@@ -134,13 +134,13 @@ root                      global mappings: modifiers (including mod:send_hold),
   same controls as a Track mode strip (fader, pot, mute, solo, rec arm, meter,
   name, color).
 - The bottom scribble line shows "Send" or "Recv"
-  (`view:child_route_type_name`).
+  (`view:route_type_name`).
 - Select is unmapped.
 
 ### Changing the track or route type
 
 - A tap of Send toggles between sends and receives if the track has both
-  (`view:child_route_toggle`), and otherwise does nothing. Toggling starts from
+  (`view:toggle_routes`), and otherwise does nothing. Toggling starts from
   the first route.
 - `user:current_track` follows REAPER's last touched track, unless it is the
   master track or isn't on the surface, so the view moves to a newly touched
@@ -219,10 +219,10 @@ root                      global mappings: modifiers (including mod:send_hold),
   past the end), for its name and color.
 - `RouteProperties` (`route:volume`, `route:pan`, `route:mute`,
   `route:exists`) are bound to (track, route type, index).
-- View properties: `view:parent_route_other_track` (navigate across a route),
-  `view:child_route_toggle` (toggle sends and receives), and
-  `view:child_route_type_name` ("Send" / "Recv"). Send/Receive mode's Send tap
-  runs `view:child_route_toggle`.
+- View properties: `view:parent_to_other_track` (navigate across a route),
+  `view:toggle_routes` (toggle sends and receives), and
+  `view:route_type_name` ("Send" / "Recv"). Send/Receive mode's Send tap
+  runs `view:toggle_routes`.
 - `track:has_routes`: a read-only track property, true if the track has any
   sends or receives.
 

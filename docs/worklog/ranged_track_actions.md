@@ -113,7 +113,7 @@ Each layer only knows what it needs to:
   anchor from the scene's `TrackActions` on the view's track (unless the strip
   is empty) and gives it to the view; false releases it from the view.
 - Select, per Track mode strip:
-  - Press: `kUiSelected`. Double press: `kParentTrackChild`.
+  - Press: `kUiSelected`. Double press: `kParentToTrack`.
   - Long press: `kUiSelected` and `user:anchor_select_<n>`. The select
     anchor's hold turns on `mod:select_anchor`.
   - `kUiSelected` requiring `mod:select_anchor`. While a select anchor is held,
@@ -122,9 +122,9 @@ Each layer only knows what it needs to:
     (`user:pick_send_receive_track_<n>` requires `mod:send_hold`).
 - Mute, solo, rec arm, per Track mode strip: `user:anchor_<action>_<n>`
   alongside the existing mappings. They have no long or double press, so need no modifier.
-- Global: `kTrackParent` on press, `kTrackRoot` on long press.
-  `View::kTrackParent` centers the child context on the track that was left,
-  sharing code with `kParentTrackParent`.
+- Global: `kToParentTrack` on press, `kToMasterTrack` on long press.
+  `View::kToParentTrack` centers the child context on the track that was left,
+  sharing code with `kParentToGrandparentTrack`.
 
 ## Building blocks
 

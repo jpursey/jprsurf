@@ -108,8 +108,8 @@ class View final {
 
     std::variant<ChildTracks, Routes> items;
 
-    // How far kBankInc and kBankDec scroll, which must be positive. Defaults to
-    // the item count.
+    // How far kBankNext and kBankPrev scroll, which must be positive. Defaults
+    // to the item count.
     std::optional<int> bank_size;
   };
 
@@ -134,24 +134,25 @@ class View final {
   // anywhere else fails to be added. Each is described by its row in
   // kViewProperties (view_list.h), with what it needs of its view, which the
   // catalog reads.
-  static constexpr std::string_view kChildDec = kViewName<"child_dec">;
-  static constexpr std::string_view kChildInc = kViewName<"child_inc">;
-  static constexpr std::string_view kBankDec = kViewName<"bank_dec">;
-  static constexpr std::string_view kBankInc = kViewName<"bank_inc">;
-  static constexpr std::string_view kTrackParent = kViewName<"track_parent">;
-  static constexpr std::string_view kTrackRoot = kViewName<"track_root">;
-  static constexpr std::string_view kParentTrackChild =
-      kViewName<"parent_track_child">;
-  static constexpr std::string_view kParentTrackParent =
-      kViewName<"parent_track_parent">;
-  static constexpr std::string_view kParentTrackRoot =
-      kViewName<"parent_track_root">;
-  static constexpr std::string_view kParentRouteOtherTrack =
-      kViewName<"parent_route_other_track">;
-  static constexpr std::string_view kChildRouteToggle =
-      kViewName<"child_route_toggle">;
-  static constexpr std::string_view kChildRouteTypeName =
-      kViewName<"child_route_type_name">;
+  static constexpr std::string_view kScrollPrev = kViewName<"scroll_prev">;
+  static constexpr std::string_view kScrollNext = kViewName<"scroll_next">;
+  static constexpr std::string_view kBankPrev = kViewName<"bank_prev">;
+  static constexpr std::string_view kBankNext = kViewName<"bank_next">;
+  static constexpr std::string_view kToParentTrack =
+      kViewName<"to_parent_track">;
+  static constexpr std::string_view kToMasterTrack =
+      kViewName<"to_master_track">;
+  static constexpr std::string_view kParentToTrack =
+      kViewName<"parent_to_track">;
+  static constexpr std::string_view kParentToGrandparentTrack =
+      kViewName<"parent_to_grandparent_track">;
+  static constexpr std::string_view kParentToMasterTrack =
+      kViewName<"parent_to_master_track">;
+  static constexpr std::string_view kParentToOtherTrack =
+      kViewName<"parent_to_other_track">;
+  static constexpr std::string_view kToggleRoutes = kViewName<"toggle_routes">;
+  static constexpr std::string_view kRouteTypeName =
+      kViewName<"route_type_name">;
 
   //----------------------------------------------------------------------------
   // Construction / Destruction

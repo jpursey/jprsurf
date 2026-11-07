@@ -239,14 +239,14 @@ list it doesn't apply to.
   lays out at once, so noticing the subject change later doesn't reset it.
   Each `view:` property only exists where it applies:
 
-  | Property                                         | Applies to                                                     | Does                                                                        |
-  | ------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-  | `child_inc`, `child_dec`, `bank_inc`, `bank_dec` | A view with a list                                             | Scrolls by one, or by the bank size (defaulting to the item count)          |
-  | `track_parent`, `track_root`                     | A view with a child tracks list, bound to a writable reference | Moves the reference to the parent track (centering the one left), or master |
-  | `parent_track_child`                             | A track item of such a view                                    | Moves the parent's reference to this track, if it has children              |
-  | `parent_track_parent`, `parent_track_root`       | A track item of such a view                                    | As `track_parent` and `track_root` on the parent                            |
-  | `parent_route_other_track`                       | A route item of a routes list bound to a writable reference    | Moves the parent's reference across the route, with the other route type    |
-  | `child_route_toggle`, `child_route_type_name`    | A view with a routes list                                      | Toggles and names the route type                                            |
+  | Property                                                 | Applies to                                                     | Does                                                                        |
+  | -------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+  | `scroll_prev`, `scroll_next`, `bank_prev`, `bank_next`   | A view with a list                                             | Scrolls by one, or by the bank size (defaulting to the item count)          |
+  | `to_parent_track`, `to_master_track`                     | A view with a child tracks list, bound to a writable reference | Moves the reference to the parent track (centering the one left), or master |
+  | `parent_to_track`                                        | A track item of such a view                                    | Moves the parent's reference to this track, if it has children              |
+  | `parent_to_grandparent_track`, `parent_to_master_track`  | A track item of such a view                                    | As `to_parent_track` and `to_master_track` on the parent                    |
+  | `parent_to_other_track`                                  | A route item of a routes list bound to a writable reference    | Moves the parent's reference across the route, with the other route type    |
+  | `toggle_routes`, `route_type_name`                       | A view with a routes list                                      | Toggles and names the route type                                            |
 
 - **Reveal** (`ChildTracks::reveal`): the name of a track reference, whose
   track the list reveals when it changes while the view is active (compared by
@@ -277,7 +277,7 @@ most one frame later.
   route strips are route items, showing `route:other_track.name` and `.color`.
 - Entering Send/Receive mode sets `user:current_track`, and returning to Track
   mode relies on the track list revealing it when it becomes active. The Send
-  tap runs the Send/Receive view's `view:child_route_toggle`.
+  tap runs the Send/Receive view's `view:toggle_routes`.
 - `OnTracksChanged()` returns to Track mode when the Send/Receive track is
   deleted. It runs before the scene's run updates the reference, so it checks
   whether the reference's track exists rather than whether it has one.

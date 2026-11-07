@@ -89,10 +89,10 @@ mappings auto_mode_button(widget button, property command,
 
 # Scrolls the view's list: Channel by one item, and Bank by its bank size.
 mappings list_navigation {
-  channel_left -> view:child_dec
-  channel_right -> view:child_inc
-  bank_left -> view:bank_dec
-  bank_right -> view:bank_inc
+  channel_left -> view:scroll_prev
+  channel_right -> view:scroll_next
+  bank_left -> view:bank_prev
+  bank_right -> view:bank_next
 }
 
 #------------------------------------------------------------------------------
@@ -260,8 +260,8 @@ when user:surface_mode = track {
       # It is lit while there is a level to go up to.
       mappings {
         use list_navigation
-        global -> view:track_parent
-        global [long] -> view:track_root
+        global -> view:to_parent_track
+        global [long] -> view:to_master_track
         global <- track:has_parent
       }
 
@@ -300,7 +300,7 @@ when user:surface_mode = track {
         # held, whether it has routes (below).
         mappings {
           strip.select -> track:ui_selected
-          strip.select [double] -> view:parent_track_child
+          strip.select [double] -> view:parent_to_track
           strip.select [long] -> track:ui_selected
           strip.select [long, held] -> user:anchor_select
           strip.select [mod:select_anchor] -> track:ui_selected
@@ -350,9 +350,9 @@ when user:surface_mode = send_receive {
       use list_navigation
       use track_strip(strip = info_strip)
       when track:exists {
-        info_strip.scribble_bottom <- view:child_route_type_name
+        info_strip.scribble_bottom <- view:route_type_name
       }
-      assign_send [tap] -> view:child_route_toggle
+      assign_send [tap] -> view:toggle_routes
       assign_send <- true { mode blink }
       assign_track <- true
     }
@@ -362,7 +362,7 @@ when user:surface_mode = send_receive {
     # scribble line shows the volume, and is blank for an empty strip.
     view strip in route_strip {
       mappings {
-        strip.select -> view:parent_route_other_track
+        strip.select -> view:parent_to_other_track
         strip.mute <-> route:mute
         strip.pot <-> route:pan {
           mode center
