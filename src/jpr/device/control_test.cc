@@ -285,12 +285,16 @@ TEST_F(ControlTest, DoublePressIsDeliveredOnTheSecondPress) {
   Control* control = Create();
   AddPress(control, PressBehavior::kDoublePress);
 
+  // The second press is held until it is released.
   EXPECT_THAT(Tap(button), ElementsAre(0));
   Press(button);
   EXPECT_THAT(RunFor(kRunTime), ElementsAre(1));
-  EXPECT_THAT(GetPressed(), ElementsAre(false));
+  EXPECT_THAT(GetPressed(), ElementsAre(true));
+  EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0));
+  EXPECT_THAT(GetPressed(), ElementsAre(true));
   Release(button);
   EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false));
 
   // A second press too long after the first isn't a double press.
   EXPECT_THAT(Tap(button), ElementsAre(0));
@@ -348,25 +352,37 @@ TEST_F(ControlTest, PressAndDoublePressShareAButton) {
   AddPress(control, PressBehavior::kNormal);
   AddPress(control, PressBehavior::kDoublePress);
 
-  // A single press is a press, once no second press can follow.
+  // A single press is a press, once no second press can follow, and as it is
+  // delivered after the release, it is never held.
   EXPECT_THAT(Tap(button), ElementsAre(0, 0));
   EXPECT_THAT(RunFor(absl::Milliseconds(100)), ElementsAre(0, 0));
   EXPECT_THAT(RunFor(absl::Milliseconds(100)), ElementsAre(1, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false));
 
-  // Two are a double press, and not a press.
+  // Two are a double press, and not a press, held from the second press until
+  // it is released, however long that is.
   EXPECT_THAT(Tap(button), ElementsAre(0, 0));
   Press(button);
   EXPECT_THAT(RunFor(kRunTime), ElementsAre(0, 1));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, true));
+  EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, true));
   Release(button);
   EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false));
 
   // Held past the time for a second press, it is a press, delivered while the
-  // button is still down, but not held.
+  // button is still down, and held from then until it is released.
   Press(button);
-  EXPECT_THAT(RunFor(absl::Milliseconds(300)), ElementsAre(1, 0));
+  EXPECT_THAT(RunFor(absl::Milliseconds(100)), ElementsAre(0, 0));
   EXPECT_THAT(GetPressed(), ElementsAre(false, false));
+  EXPECT_THAT(RunFor(absl::Milliseconds(100)), ElementsAre(1, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(true, false));
+  EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(true, false));
   Release(button);
   EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false));
 }
 
 TEST_F(ControlTest, PressLongPressAndDoublePressShareAButton) {
@@ -378,18 +394,33 @@ TEST_F(ControlTest, PressLongPressAndDoublePressShareAButton) {
 
   EXPECT_THAT(Tap(button), ElementsAre(0, 0, 0));
   EXPECT_THAT(RunFor(absl::Milliseconds(300)), ElementsAre(1, 0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false, false));
 
   EXPECT_THAT(Tap(button), ElementsAre(0, 0, 0));
   Press(button);
   EXPECT_THAT(RunFor(kRunTime), ElementsAre(0, 0, 1));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false, true));
   Release(button);
   EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0, 0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false, false));
 
+  // With a long press beside it, a press held past the time for a second press
+  // still waits to see if it is a long press.
   Press(button);
-  EXPECT_THAT(RunFor(absl::Milliseconds(400)), ElementsAre(0, 1, 0));
+  EXPECT_THAT(RunFor(absl::Milliseconds(300)), ElementsAre(0, 0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false, false));
+  EXPECT_THAT(RunFor(absl::Milliseconds(100)), ElementsAre(0, 1, 0));
   EXPECT_THAT(GetPressed(), ElementsAre(false, true, false));
   Release(button);
   EXPECT_THAT(RunFor(absl::Seconds(1)), ElementsAre(0, 0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false, false));
+
+  // Released before it is a long press, it is a press, which isn't held.
+  Press(button);
+  EXPECT_THAT(RunFor(absl::Milliseconds(250)), ElementsAre(0, 0, 0));
+  Release(button);
+  EXPECT_THAT(RunFor(kRunTime), ElementsAre(1, 0, 0));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false, false));
 }
 
 // A tap never makes a press beside it wait, so a button can do one thing while
@@ -475,6 +506,7 @@ TEST_F(ControlTest, PressWithoutReleaseCanBeADoublePress) {
   EXPECT_THAT(RunFor(kRunTime), ElementsAre(0, 0));
   Press(button);
   EXPECT_THAT(RunFor(kRunTime), ElementsAre(0, 1));
+  EXPECT_THAT(GetPressed(), ElementsAre(false, false));
 
   // A single press is a press, once no second press can follow.
   Press(button);

@@ -635,8 +635,11 @@ order:
   Without one, a mapping reads a plain press, which waits for the release if
   the control also has a `long` or `double` mapping.
 - **`held`**: the property is on while the button is held, and off when it is
-  released. With `long`, it is on from when the long press fires. It reads
-  only a press, and never a pan or a volume.
+  released. With `long`, it is on from when the long press fires, and with
+  `double`, from the second press. A plain press beside a `double` mapping
+  fires once the button is held past the time for a second press (150ms), and
+  is on from then, but a plain press that waits for the release is never on.
+  It reads only a press, and never a pan or a volume.
 - **`touch`**: reads whether a hand is on the control, as a press, whatever
   inputs it has. With `held`, the property is on while the control is touched,
   such as `track:volume_touched` while a fader is.

@@ -510,7 +510,7 @@ void Control::OnPressInputChangedWithRelease() {
         group.state_start_time_secs = last_run_time_secs_;
         group.pending_press_count = 1;
       } else if (group.state == PressGroup::State::kPendingDouble) {
-        DeliverPress(group.double_press_ids);
+        DeliverPress(group.double_press_ids, /*hold=*/true);
         group.state = PressGroup::State::kIdle;
       }
     }
@@ -525,10 +525,8 @@ void Control::OnPressInputChangedWithRelease() {
         }
         group.tap_press_time_secs.reset();
       }
-      if (group.long_press_ids.empty() && group.double_press_ids.empty()) {
-        ReleasePressed(group.normal_ids);
-      } else if (group.state == PressGroup::State::kPendingLong ||
-                 group.state == PressGroup::State::kPendingRelease) {
+      if (group.state == PressGroup::State::kPendingLong ||
+          group.state == PressGroup::State::kPendingRelease) {
         if (!group.double_press_ids.empty() &&
             last_run_time_secs_ - group.state_start_time_secs <
                 kDoublePressWindowSecs) {
@@ -539,9 +537,11 @@ void Control::OnPressInputChangedWithRelease() {
           group.state = PressGroup::State::kIdle;
         }
       } else {
-        // A delivered long press leaves the group idle, but stays pressed until
-        // release.
+        // A press delivered while the button was down leaves the group idle,
+        // but stays pressed until release.
+        ReleasePressed(group.normal_ids);
         ReleasePressed(group.long_press_ids);
+        ReleasePressed(group.double_press_ids);
       }
     }
   }
@@ -707,8 +707,9 @@ void Control::UpdatePressTimers(double current_time_secs) {
       case PressGroup::State::kPendingRelease:
         if (current_time_secs - group.state_start_time_secs >=
             kDoublePressWindowSecs) {
-          // Held too long for a double press. Deliver as a normal press.
-          DeliverPress(group.normal_ids);
+          // Held too long for a double press. Deliver as a normal press, which
+          // stays pressed until release.
+          DeliverPress(group.normal_ids, /*hold=*/true);
           group.state = PressGroup::State::kIdle;
         }
         break;

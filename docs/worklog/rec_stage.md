@@ -405,7 +405,7 @@ Depends on: CL1b.
 - Standard checks.
 - Contract tests (`check_in_reaper`).
 
-### CL2 [ ] device: Held presses beside a double press
+### CL2 [x] device: Held presses beside a double press
 
 Depends on: nothing.
 

@@ -233,11 +233,13 @@ class Control final {
   // pressed, or false if the input ID is not valid or not a Press input, or it
   // is not currently pressed, or it does not support release signals.
   //
-  // A long press input is pressed from when its long press is delivered until
-  // the button is released. A normal press input only reports pressed if no
-  // long press or double press input shares its modifiers, as otherwise its
-  // press is deferred. A tap input is never pressed. A touch registration (see
-  // InputConfig::touch) is pressed while the control is touched.
+  // A press delivered while the button is down is pressed until the button is
+  // released: a normal press with no long or double press input sharing its
+  // modifiers, a long press, the second press of a double press, and a normal
+  // press beside a double press alone, once held past the double press window.
+  // A press delivered after the release is never pressed, nor is a tap. A
+  // touch registration (see InputConfig::touch) is pressed while the control
+  // is touched.
   bool IsPressed(InputId id) const;
 
   //----------------------------------------------------------------------------
