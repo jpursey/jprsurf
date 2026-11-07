@@ -40,15 +40,15 @@ needed a redo undo a change).
 
 ## Names
 
-| Name                    | What                                                                       | Might be confused with                                                  |
-| ----------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Contract test           | A test that acts only through REAPER's API, and runs under both            | Surface tests, which run under the fake only                            |
-| `ContractTest`          | The gtest fixture contract tests derive from                               | `SurfaceTest`, the fixture for a whole surface                          |
-| `RecordingSurface`      | A control surface that records every call it gets, as text                 | `TestControlSurface`, the fake's wrapper of the surface under test      |
-| `WriteProjectFile()`    | Writes a `FakeProject` as an RPP file REAPER opens                         | REAPER's own `Main_SaveProject()`                                       |
-| Test install            | A portable REAPER only for contract tests, with its own `UserPlugins`      | The user's REAPER, which the plugin deploys to                          |
-| `reaper_jpr_check`      | The DLL that runs the contract tests inside the test install               | `reaper_jprsurf`, the plugin                                            |
-| `check_in_reaper`       | The build target that runs `reaper_jpr_check` in the test install          | `ctest`, which runs the same tests under the fake                       |
+| Name                 | What                                                                  | Might be confused with                                             |
+| -------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Contract test        | A test that acts only through REAPER's API, and runs under both       | Surface tests, which run under the fake only                       |
+| `ContractTest`       | The gtest fixture contract tests derive from                          | `SurfaceTest`, the fixture for a whole surface                     |
+| `RecordingSurface`   | A control surface that records every call it gets, as text            | `TestControlSurface`, the fake's wrapper of the surface under test |
+| `WriteProjectFile()` | Writes a `FakeProject` as an RPP file REAPER opens                    | REAPER's own `Main_SaveProject()`                                  |
+| Test install         | A portable REAPER only for contract tests, with its own `UserPlugins` | The user's REAPER, which the plugin deploys to                     |
+| `reaper_jpr_check`   | The DLL that runs the contract tests inside the test install          | `reaper_jprsurf`, the plugin                                       |
+| `check_in_reaper`    | The build target that runs `reaper_jpr_check` in the test install     | `ctest`, which runs the same tests under the fake                  |
 
 ## Structure
 
@@ -159,15 +159,15 @@ modes in `timeline.h`; and `kEndEdit` in `fake_project.h`.
 
 ## Tests
 
-| File                                | What                                                                                                                                         |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| File                                | What                                                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `fake_reaper_contract_test.cc`      | Tracks, track changes (grouping, ganging, deferred refreshes), selection, routes, the project, undo, text formats, and GUID text, through the API only |
-| `reaper_actions_contract_test.cc`   | Each action's text and toggle state, the automation mode actions, `NamedCommandLookup()`, and the ruler's time units                          |
-| `surface_notifier_contract_test.cc` | What REAPER calls on a surface during each setter, in and out of a deferred refresh, for routes, groups, the override, actions, and Undo and Redo |
-| `project_file_test.cc`              | Each field's text, and the state a project can't open with failing the test                                                                 |
-| `recording_surface_test.cc`         | Only one exists at a time, and its run can be replaced from inside a run                                                                    |
-| `fake_reaper_test.cc`               | What needs the fake: its checks, `FakeProject`'s own methods, undo points as the fake lists them, and what it doesn't model failing the test |
-| `surface_notifier_test.cc`          | What needs the fake: changes in REAPER's own UI, and runs forgetting a refresh                                                               |
+| `reaper_actions_contract_test.cc`   | Each action's text and toggle state, the automation mode actions, `NamedCommandLookup()`, and the ruler's time units                                   |
+| `surface_notifier_contract_test.cc` | What REAPER calls on a surface during each setter, in and out of a deferred refresh, for routes, groups, the override, actions, and Undo and Redo      |
+| `project_file_test.cc`              | Each field's text, and the state a project can't open with failing the test                                                                            |
+| `recording_surface_test.cc`         | Only one exists at a time, and its run can be replaced from inside a run                                                                               |
+| `fake_reaper_test.cc`               | What needs the fake: its checks, `FakeProject`'s own methods, undo points as the fake lists them, and what it doesn't model failing the test           |
+| `surface_notifier_test.cc`          | What needs the fake: changes in REAPER's own UI, and runs forgetting a refresh                                                                         |
 
 ## Coverage
 

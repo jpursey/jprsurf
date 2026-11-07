@@ -27,16 +27,16 @@ the sign), not ones' complement.
 
 ## Names
 
-| Name                                        | What                                                                                   | Might be confused with                                                                         |
-| ------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `FakeXTouch`                                | The hardware end of an X-Touch's (or extender's) ports in the fake REAPER              | `DeviceXTouch`, the device JPRSurf drives; `FakeReaper`, which owns the ports                  |
-| `FakeXTouch::Button`, `StripButton`, `Led`  | The X-Touch's buttons: the global ones, the ones on each strip, and the lights alone   | `DeviceXTouch`'s control names (`kPlay`, `Mute(strip)`), strings naming `Control`s             |
-| `FakeXTouch::Light`                         | What a light shows: off, on, or blinking                                               | `ControlDValueOutputMidiNote::Mode`, the modes JPRSurf writes lights in                        |
-| `FakeXTouch::Ring`                          | What an encoder's light ring shows: its mode (0-7) and position                        | `ControlDValueOutputMidiCc::McuEncoder()`'s modes, the same 0-7, plus 8 for off                |
-| `FakeXTouch::ScribbleColor`                 | One of the scribble strip's eight colors                                               | `Color` (`jpr/common/color.h`), the full RGB color JPRSurf maps to one                         |
-| `FakeMidiOutput::Connect()`                 | Plugs hardware into the port: each message sent from it is passed to the hardware      | `MidiPorts::OpenOutput()`, which opens JPRSurf's end of the port                               |
-| `FakeMidiOutput::SetRecording()`            | Whether the port records what is sent from it, for `TakeReceived()`                    | `Connect()`, which is independent of it                                                        |
-| `FakePressInput`, `FakeValueInput`, ...     | Control inputs a test drives, and outputs that keep what they were last set to         | The MIDI inputs and outputs (`control_input_midi.h`), which a device builds controls from      |
+| Name                                       | What                                                                                 | Might be confused with                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `FakeXTouch`                               | The hardware end of an X-Touch's (or extender's) ports in the fake REAPER            | `DeviceXTouch`, the device JPRSurf drives; `FakeReaper`, which owns the ports             |
+| `FakeXTouch::Button`, `StripButton`, `Led` | The X-Touch's buttons: the global ones, the ones on each strip, and the lights alone | `DeviceXTouch`'s control names (`kPlay`, `Mute(strip)`), strings naming `Control`s        |
+| `FakeXTouch::Light`                        | What a light shows: off, on, or blinking                                             | `ControlDValueOutputMidiNote::Mode`, the modes JPRSurf writes lights in                   |
+| `FakeXTouch::Ring`                         | What an encoder's light ring shows: its mode (0-7) and position                      | `ControlDValueOutputMidiCc::McuEncoder()`'s modes, the same 0-7, plus 8 for off           |
+| `FakeXTouch::ScribbleColor`                | One of the scribble strip's eight colors                                             | `Color` (`jpr/common/color.h`), the full RGB color JPRSurf maps to one                    |
+| `FakeMidiOutput::Connect()`                | Plugs hardware into the port: each message sent from it is passed to the hardware    | `MidiPorts::OpenOutput()`, which opens JPRSurf's end of the port                          |
+| `FakeMidiOutput::SetRecording()`           | Whether the port records what is sent from it, for `TakeReceived()`                  | `Connect()`, which is independent of it                                                   |
+| `FakePressInput`, `FakeValueInput`, ...    | Control inputs a test drives, and outputs that keep what they were last set to       | The MIDI inputs and outputs (`control_input_midi.h`), which a device builds controls from |
 
 ## Structure
 
@@ -111,18 +111,18 @@ which doesn't link `jpr_device`):
 
 ## Tests
 
-| File                            | Tested against                       | What                                                                                                                                                         |
-| ------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `fake_midi_test.cc`             | The fake                             | Connecting hardware, recording, and both together                                                                                                            |
-| `fake_xtouch_test.cc`           | Raw bytes on the fake's ports        | Each input's message, each output's decoding, meters falling, released faders going back, and each strictness check, on both models                          |
-| `device_xtouch_test.cc`         | The fake X-Touch                     | Every control on both models: buttons, lights, faders (touch, master, extender's third), pots, rings, meters, scribble strips, timecode, raw messages        |
-| `control_test.cc`               | Fake inputs and outputs, own clock   | Press timing (with and without release), modifiers, values and deltas, outputs, bindings, and output writers                                                 |
-| `control_input_test.cc`         | Fake inputs                          | Listeners, presses and releases, deltas                                                                                                                      |
-| `control_output_test.cc`        | Fake outputs, the fake for the ruler | Clamping, timeline modes, default timeline text, cleared values                                                                                              |
-| `control_*_handle_test.cc`      | A control of fakes                   | Moving handles, and unregistering                                                                                                                            |
-| `device_test.cc`                | Fake outputs                         | Finding controls by name, their order, and taken names                                                                                                       |
-| `control_input_midi_test.cc`    | Raw MIDI on the fake's ports         | Press and release messages, sign-magnitude deltas, the MCU fader curve, and the MCU configs                                                                  |
-| `control_output_midi_test.cc`   | Raw MIDI on the fake's ports         | Notes in each mode, CC and channel pressure modes, every ring mode, the MCU fader curve, and the MCU configs                                                 |
+| File                          | Tested against                       | What                                                                                                                                                  |
+| ----------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fake_midi_test.cc`           | The fake                             | Connecting hardware, recording, and both together                                                                                                     |
+| `fake_xtouch_test.cc`         | Raw bytes on the fake's ports        | Each input's message, each output's decoding, meters falling, released faders going back, and each strictness check, on both models                   |
+| `device_xtouch_test.cc`       | The fake X-Touch                     | Every control on both models: buttons, lights, faders (touch, master, extender's third), pots, rings, meters, scribble strips, timecode, raw messages |
+| `control_test.cc`             | Fake inputs and outputs, own clock   | Press timing (with and without release), modifiers, values and deltas, outputs, bindings, and output writers                                          |
+| `control_input_test.cc`       | Fake inputs                          | Listeners, presses and releases, deltas                                                                                                               |
+| `control_output_test.cc`      | Fake outputs, the fake for the ruler | Clamping, timeline modes, default timeline text, cleared values                                                                                       |
+| `control_*_handle_test.cc`    | A control of fakes                   | Moving handles, and unregistering                                                                                                                     |
+| `device_test.cc`              | Fake outputs                         | Finding controls by name, their order, and taken names                                                                                                |
+| `control_input_midi_test.cc`  | Raw MIDI on the fake's ports         | Press and release messages, sign-magnitude deltas, the MCU fader curve, and the MCU configs                                                           |
+| `control_output_midi_test.cc` | Raw MIDI on the fake's ports         | Notes in each mode, CC and channel pressure modes, every ring mode, the MCU fader curve, and the MCU configs                                          |
 
 ## X-Touch facts
 

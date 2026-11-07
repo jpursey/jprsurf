@@ -19,14 +19,14 @@ held by plain pointer, as `TrackCache` keeps every one.
 
 ## Behavior
 
-| Control                         | Reports touched                                          |
-| ------------------------------- | -------------------------------------------------------- |
-| Strip fader                     | Its track's volume, while the fader is touched           |
-| Strip fader without touch       | Its track's volume, for 3 seconds after its last move    |
-| Master fader                    | The master track's volume, while it is touched           |
-| Strip pot                       | Its track's pan, for 3 seconds after its last turn       |
-| Info strip in Send/Receive      | Its track's volume and pan, as a strip in Track mode     |
-| Route faders and pots           | Nothing: REAPER never asks about routes                  |
+| Control                    | Reports touched                                       |
+| -------------------------- | ----------------------------------------------------- |
+| Strip fader                | Its track's volume, while the fader is touched        |
+| Strip fader without touch  | Its track's volume, for 3 seconds after its last move |
+| Master fader               | The master track's volume, while it is touched        |
+| Strip pot                  | Its track's pan, for 3 seconds after its last turn    |
+| Info strip in Send/Receive | Its track's volume and pan, as a strip in Track mode  |
+| Route faders and pots      | Nothing: REAPER never asks about routes               |
 
 - A strip whose track changes while its fader is held (a bank, a channel move,
   or the list scrolling) moves the touch to its new track. A strip that stops

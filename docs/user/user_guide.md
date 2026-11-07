@@ -116,10 +116,10 @@ works the same way in every mode.
 
 There are two modes:
 
-| Mode          | Shows                                                       |
-| ------------- | ----------------------------------------------------------- |
-| **Track**     | The tracks of your project, one per strip                   |
-| **Send**      | The sends or receives of a single track, one route per strip |
+| Mode      | Shows                                                        |
+| --------- | ------------------------------------------------------------ |
+| **Track** | The tracks of your project, one per strip                    |
+| **Send**  | The sends or receives of a single track, one route per strip |
 
 The **Track** and **Send** buttons in the assign section choose the mode. Their
 lights tell you both which mode you are in and which modes you can reach:
@@ -177,18 +177,18 @@ Everything in this section works the same way in both modes.
 These are the buttons in the transport section, at the bottom right of the
 X-Touch.
 
-| Button      | Short press                             | Long press        | Lit when              |
-| ----------- | --------------------------------------- | ----------------- | --------------------- |
-| **Rewind**  | Previous measure (see Nudge and Marker) |                   |                       |
-| **Forward** | Next measure (see Nudge and Marker)     |                   |                       |
-| **Stop**    | Stop                                    |                   |                       |
-| **Play**    | Play / pause                            |                   | The transport is rolling |
-| **Record**  | Start or stop recording                 |                   | Recording             |
-| **Nudge**   | Move by beat instead of measure         |                   | Turned on            |
-| **Marker**  | Move by marker instead of measure       |                   | Turned on            |
-| **Cycle**   | Toggle repeat                           |                   | Repeat is on          |
-| **Click**   | Toggle the metronome                    |                   | The metronome is on   |
-| **Solo**    | Toggle solo in front                    | Unsolo every track | Solo in front is on  |
+| Button      | Short press                             | Long press         | Lit when                 |
+| ----------- | --------------------------------------- | ------------------ | ------------------------ |
+| **Rewind**  | Previous measure (see Nudge and Marker) |                    |                          |
+| **Forward** | Next measure (see Nudge and Marker)     |                    |                          |
+| **Stop**    | Stop                                    |                    |                          |
+| **Play**    | Play / pause                            |                    | The transport is rolling |
+| **Record**  | Start or stop recording                 |                    | Recording                |
+| **Nudge**   | Move by beat instead of measure         |                    | Turned on                |
+| **Marker**  | Move by marker instead of measure       |                    | Turned on                |
+| **Cycle**   | Toggle repeat                           |                    | Repeat is on             |
+| **Click**   | Toggle the metronome                    |                    | The metronome is on      |
+| **Solo**    | Toggle solo in front                    | Unsolo every track | Solo in front is on      |
 
 **Record** follows REAPER's own transport buttons. It starts recording, and
 starts playback as well if the transport was stopped or paused. Pressing it
@@ -210,12 +210,12 @@ to.
 
 The **SMPTE/Beats** button steps through the four ruler modes, in this order:
 
-| Mode        | Display shows          | Light       |
-| ----------- | ---------------------- | ----------- |
-| **Beats**   | Bars and beats         | Beats       |
-| **Time**    | Minutes and seconds    | None        |
-| **Frames**  | SMPTE timecode         | SMPTE       |
-| **Samples** | Samples                | None        |
+| Mode        | Display shows       | Light |
+| ----------- | ------------------- | ----- |
+| **Beats**   | Bars and beats      | Beats |
+| **Time**    | Minutes and seconds | None  |
+| **Frames**  | SMPTE timecode      | SMPTE |
+| **Samples** | Samples             | None  |
 
 Pressing it again from Samples returns to Beats. The **SMPTE** and **Beats**
 lights only cover two of the four modes, so when neither is lit the ruler is
@@ -338,11 +338,11 @@ children in. Add Ctrl for REAPER's "everything in between" behavior.
 
 ### Navigating the track list
 
-| Button                     | Short press            | Long press                | Lit when                   |
-| -------------------------- | ---------------------- | ------------------------- | -------------------------- |
-| **Channel Left/Right**     | Move by one track      |                           |                            |
-| **Fader Bank Left/Right**  | Move by 8 tracks       |                           |                            |
-| **Global View**            | Go up one folder level | Go all the way to the top | There is a level to go up to |
+| Button                    | Short press            | Long press                | Lit when                     |
+| ------------------------- | ---------------------- | ------------------------- | ---------------------------- |
+| **Channel Left/Right**    | Move by one track      |                           |                              |
+| **Fader Bank Left/Right** | Move by 8 tracks       |                           |                              |
+| **Global View**           | Go up one folder level | Go all the way to the top | There is a level to go up to |
 
 A fader bank is always 8 tracks, whether or not you have an extender.
 
@@ -489,31 +489,31 @@ other, it does nothing.
 
 ### Global buttons
 
-| Button      | Short press             | Shift + press         | Ctrl + press        | Long press                    |
-| ----------- | ----------------------- | --------------------- | ------------------- | ----------------------------- |
-| Undo        | Undo                    | Redo                  |                     |                               |
-| Save        | Save                    | Save new version      |                     |                               |
-| Cancel      | Unselect all items      | Remove time selection |                     |                               |
-| Enter       | Insert MIDI item        | Insert empty item     | Insert click source |                               |
-| Trim        | Selected tracks: trim/read |                    |                     |                               |
-| Read        | Selected tracks: read   |                       |                     |                               |
-| Touch       | Selected tracks: touch  |                       |                     |                               |
-| Write       | Selected tracks: write  |                       |                     |                               |
-| Latch       | Selected tracks: latch  |                       |                     |                               |
-| Group       | Toggle automation override |                    |                     |                               |
-| Rewind      | Previous measure        |                       |                     |                               |
-| Forward     | Next measure            |                       |                     |                               |
-| Nudge       | Toggle moving by beat   |                       |                     |                               |
-| Marker      | Toggle moving by marker |                       |                     |                               |
-| Stop        | Stop                    |                       |                     |                               |
-| Play        | Play / pause            |                       |                     |                               |
-| Record      | Start or stop recording |                       |                     |                               |
-| Cycle       | Toggle repeat           |                       |                     |                               |
-| Click       | Toggle metronome        |                       |                     |                               |
-| Solo        | Solo in front           |                       |                     | Unsolo all tracks             |
-| SMPTE/Beats | Cycle the ruler mode    |                       |                     |                               |
-| Track       | Track mode              |                       |                     |                               |
-| Send        | Send mode               |                       |                     | Show routing on select lights |
+| Button      | Short press                | Shift + press         | Ctrl + press        | Long press                    |
+| ----------- | -------------------------- | --------------------- | ------------------- | ----------------------------- |
+| Undo        | Undo                       | Redo                  |                     |                               |
+| Save        | Save                       | Save new version      |                     |                               |
+| Cancel      | Unselect all items         | Remove time selection |                     |                               |
+| Enter       | Insert MIDI item           | Insert empty item     | Insert click source |                               |
+| Trim        | Selected tracks: trim/read |                       |                     |                               |
+| Read        | Selected tracks: read      |                       |                     |                               |
+| Touch       | Selected tracks: touch     |                       |                     |                               |
+| Write       | Selected tracks: write     |                       |                     |                               |
+| Latch       | Selected tracks: latch     |                       |                     |                               |
+| Group       | Toggle automation override |                       |                     |                               |
+| Rewind      | Previous measure           |                       |                     |                               |
+| Forward     | Next measure               |                       |                     |                               |
+| Nudge       | Toggle moving by beat      |                       |                     |                               |
+| Marker      | Toggle moving by marker    |                       |                     |                               |
+| Stop        | Stop                       |                       |                     |                               |
+| Play        | Play / pause               |                       |                     |                               |
+| Record      | Start or stop recording    |                       |                     |                               |
+| Cycle       | Toggle repeat              |                       |                     |                               |
+| Click       | Toggle metronome           |                       |                     |                               |
+| Solo        | Solo in front              |                       |                     | Unsolo all tracks             |
+| SMPTE/Beats | Cycle the ruler mode       |                       |                     |                               |
+| Track       | Track mode                 |                       |                     |                               |
+| Send        | Send mode                  |                       |                     | Show routing on select lights |
 
 ### Channel strip, by mode
 
@@ -523,20 +523,20 @@ other, it does nothing.
 | Pot             | Track pan                     | Route pan             | Track pan            |
 | Pot button      | Center pan                    | Center route pan      | Center pan           |
 | Mute            | Track mute                    | Route mute            | Track mute           |
-| Solo            | Track solo                    | -                     | Track solo           |
-| Rec             | Track record arm              | -                     | Track record arm     |
-| Select          | Select / into folder / anchor | Go to the other end   | -                    |
+| Solo            | Track solo                    | --------------------- | Track solo           |
+| Rec             | Track record arm              | --------------------- | Track record arm     |
+| Select          | Select / into folder / anchor | Go to the other end   | -------------------- |
 | Scribble top    | Track name                    | Other track's name    | Track name           |
 | Scribble bottom | Volume                        | Route volume          | Send / Recv          |
-| Meter           | Track level                   | -                     | Track level          |
+| Meter           | Track level                   | --------------------- | Track level          |
 
 ### Navigation, by mode
 
-| Button                | Track mode                  | Send mode           |
-| --------------------- | --------------------------- | ------------------- |
-| Channel Left/Right    | Move by one track           | Move by one route   |
-| Fader Bank Left/Right | Move by 8 tracks            | Page through routes |
-| Global View           | Up a level (long press: top) | -                  |
+| Button                | Track mode                   | Send mode           |
+| --------------------- | ---------------------------- | ------------------- |
+| Channel Left/Right    | Move by one track            | Move by one route   |
+| Fader Bank Left/Right | Move by 8 tracks             | Page through routes |
+| Global View           | Up a level (long press: top) | ------------------- |
 
 ---
 

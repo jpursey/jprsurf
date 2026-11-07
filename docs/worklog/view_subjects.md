@@ -239,14 +239,14 @@ list it doesn't apply to.
   lays out at once, so noticing the subject change later doesn't reset it.
   Each `view:` property only exists where it applies:
 
-  | Property                                                 | Applies to                                                     | Does                                                                        |
-  | -------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-  | `scroll_prev`, `scroll_next`, `bank_prev`, `bank_next`   | A view with a list                                             | Scrolls by one, or by the bank size (defaulting to the item count)          |
-  | `to_parent_track`, `to_master_track`                     | A view with a child tracks list, bound to a writable reference | Moves the reference to the parent track (centering the one left), or master |
-  | `parent_to_track`                                        | A track item of such a view                                    | Moves the parent's reference to this track, if it has children              |
-  | `parent_to_grandparent_track`, `parent_to_master_track`  | A track item of such a view                                    | As `to_parent_track` and `to_master_track` on the parent                    |
-  | `parent_to_other_track`                                  | A route item of a routes list bound to a writable reference    | Moves the parent's reference across the route, with the other route type    |
-  | `toggle_routes`, `route_type_name`                       | A view with a routes list                                      | Toggles and names the route type                                            |
+  | Property                                                | Applies to                                                     | Does                                                                        |
+  | ------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+  | `scroll_prev`, `scroll_next`, `bank_prev`, `bank_next`  | A view with a list                                             | Scrolls by one, or by the bank size (defaulting to the item count)          |
+  | `to_parent_track`, `to_master_track`                    | A view with a child tracks list, bound to a writable reference | Moves the reference to the parent track (centering the one left), or master |
+  | `parent_to_track`                                       | A track item of such a view                                    | Moves the parent's reference to this track, if it has children              |
+  | `parent_to_grandparent_track`, `parent_to_master_track` | A track item of such a view                                    | As `to_parent_track` and `to_master_track` on the parent                    |
+  | `parent_to_other_track`                                 | A route item of a routes list bound to a writable reference    | Moves the parent's reference across the route, with the other route type    |
+  | `toggle_routes`, `route_type_name`                      | A view with a routes list                                      | Toggles and names the route type                                            |
 
 - **Reveal** (`ChildTracks::reveal`): the name of a track reference, whose
   track the list reveals when it changes while the view is active (compared by

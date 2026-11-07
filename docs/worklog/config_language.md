@@ -58,23 +58,23 @@ child views, and `when`), and what only the top level has: exactly one
 `mappings` blocks (templates). **Order doesn't matter**, except for a view's
 components, across its blocks, as a component names those declared before it.
 
-| Where | Statement | Spec |
-| --- | --- | --- |
-| Top level, first | `jprsurf <version>` | Checked by the reader only |
-| Top level, once | `devices { ... }` | `SurfaceSpec::devices` |
-| Top level, once | `widgets { ... }` | `SurfaceSpec::widgets` |
-| Top level, at most once | `settings { track_filter <mixer \| track_panel \| all> }` | `SurfaceSpec::track_filter` |
-| Top level | `mappings <name>[(<params>)] { ... }` | `TemplateSpec` |
-| Top level and views | `components { ... }` | At the top level, `SurfaceSpec::components`; in a view, `ViewSpec::components` |
-| Top level and views | `mappings { ... }` | `MappingSpec`s and `TemplateUse`s |
-| Top level and views | `view <name>[(subject = <reference>, list = <list>)] { ... }` | A child `ViewSpec` |
-| Top level and views | `view <element> in <array> { ... }` | A repeated child `ViewSpec` |
-| Top level and views, `mappings`, a mapping's options | `when <condition> { ... }` | A view's condition, each mapping's, or a `ModeOverride` |
-| `devices` | `<name> = <type>(input = "<port>", output = "<port>"[, optional = true])`, with an optional body of `without <control> [<inputs and outputs>]` | `DeviceSpec` |
-| `widgets` | `include <path>`, with an optional body of `except <field>`, and `<name> = <path>`, `join(<slices>)`, or `{ ... }` for a nested struct | `WidgetStructDefinition` |
-| `components` | `<kind> <name>[(<param> = <value>, ...)]` | `ComponentSpec` |
-| `mappings` | `use <name>[(<param> = <argument>, ...)]` | `TemplateUse` |
-| `mappings` | A mapping (below) | `MappingSpec` |
+| Where                                                | Statement                                                                                                                                      | Spec                                                                           |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Top level, first                                     | `jprsurf <version>`                                                                                                                            | Checked by the reader only                                                     |
+| Top level, once                                      | `devices { ... }`                                                                                                                              | `SurfaceSpec::devices`                                                         |
+| Top level, once                                      | `widgets { ... }`                                                                                                                              | `SurfaceSpec::widgets`                                                         |
+| Top level, at most once                              | `settings { track_filter <mixer \| track_panel \| all> }`                                                                                      | `SurfaceSpec::track_filter`                                                    |
+| Top level                                            | `mappings <name>[(<params>)] { ... }`                                                                                                          | `TemplateSpec`                                                                 |
+| Top level and views                                  | `components { ... }`                                                                                                                           | At the top level, `SurfaceSpec::components`; in a view, `ViewSpec::components` |
+| Top level and views                                  | `mappings { ... }`                                                                                                                             | `MappingSpec`s and `TemplateUse`s                                              |
+| Top level and views                                  | `view <name>[(subject = <reference>, list = <list>)] { ... }`                                                                                  | A child `ViewSpec`                                                             |
+| Top level and views                                  | `view <element> in <array> { ... }`                                                                                                            | A repeated child `ViewSpec`                                                    |
+| Top level and views, `mappings`, a mapping's options | `when <condition> { ... }`                                                                                                                     | A view's condition, each mapping's, or a `ModeOverride`                        |
+| `devices`                                            | `<name> = <type>(input = "<port>", output = "<port>"[, optional = true])`, with an optional body of `without <control> [<inputs and outputs>]` | `DeviceSpec`                                                                   |
+| `widgets`                                            | `include <path>`, with an optional body of `except <field>`, and `<name> = <path>`, `join(<slices>)`, or `{ ... }` for a nested struct         | `WidgetStructDefinition`                                                       |
+| `components`                                         | `<kind> <name>[(<param> = <value>, ...)]`                                                                                                      | `ComponentSpec`                                                                |
+| `mappings`                                           | `use <name>[(<param> = <argument>, ...)]`                                                                                                      | `TemplateUse`                                                                  |
+| `mappings`                                           | A mapping (below)                                                                                                                              | `MappingSpec`                                                                  |
 
 **A mapping** is `<control> [<how it is read>] -> | <- | <-> <property or
 value> { <options> }`:

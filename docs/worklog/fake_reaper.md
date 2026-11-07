@@ -18,17 +18,17 @@ every run has one time, read from REAPER's clock once, and the process state in
 
 ## Names
 
-| Name                              | What                                                                       | Might be confused with                                                                             |
-| --------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `FakeReaper`                      | REAPER's state in memory, loaded as the API. One at a time.                | `ReaperTrace` and `ReaperProfiler`, which hook the API rather than implement it                    |
-| `FakeProject`                     | One open project tab: its tracks, routes, transport, and undo              | REAPER's `ReaProject*`, which points to one (`ToReaProject()`)                                     |
-| `FakeTrack`                       | A track's own values, which a test sets. A `MediaTrack*` points to one.    | `Track`, `common`'s cached view of a track; the file-local `FakeTrack` in `reaper_trace_test.cc`   |
-| `FakeRoute`                       | A send (and the receive at its other end), or a hardware output            | `TrackRoute`, `common`'s cached view of one                                                        |
-| `FakeCommand`                     | An action a test adds: its ID, text, name, toggle state, and handler       |                                                                                                    |
-| `FakeMidiInput`, `FakeMidiOutput` | The fake's `midi_Input` and `midi_Output`                                  | `MidiIn`, `MidiOut`, `common`'s ports; the profiler's `ProfiledMidiInput` and `ProfiledMidiOutput` |
-| `TestControlSurface`              | The surface a test drives, making the calls REAPER would                   | `ControlSurface`, which it wraps                                                                   |
-| `TestReset`                       | Registers a reset of process state, which only `FakeReaper` runs           | `MidiOut::ResetAllState()`, which resets a port's sent state                                       |
-| `RunTime::Now()`                  | Reads REAPER's clock as a `RunTime`                                        | `absl::Now()`, which is real time, for measurement only                                            |
+| Name                              | What                                                                    | Might be confused with                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `FakeReaper`                      | REAPER's state in memory, loaded as the API. One at a time.             | `ReaperTrace` and `ReaperProfiler`, which hook the API rather than implement it                    |
+| `FakeProject`                     | One open project tab: its tracks, routes, transport, and undo           | REAPER's `ReaProject*`, which points to one (`ToReaProject()`)                                     |
+| `FakeTrack`                       | A track's own values, which a test sets. A `MediaTrack*` points to one. | `Track`, `common`'s cached view of a track; the file-local `FakeTrack` in `reaper_trace_test.cc`   |
+| `FakeRoute`                       | A send (and the receive at its other end), or a hardware output         | `TrackRoute`, `common`'s cached view of one                                                        |
+| `FakeCommand`                     | An action a test adds: its ID, text, name, toggle state, and handler    |                                                                                                    |
+| `FakeMidiInput`, `FakeMidiOutput` | The fake's `midi_Input` and `midi_Output`                               | `MidiIn`, `MidiOut`, `common`'s ports; the profiler's `ProfiledMidiInput` and `ProfiledMidiOutput` |
+| `TestControlSurface`              | The surface a test drives, making the calls REAPER would                | `ControlSurface`, which it wraps                                                                   |
+| `TestReset`                       | Registers a reset of process state, which only `FakeReaper` runs        | `MidiOut::ResetAllState()`, which resets a port's sent state                                       |
+| `RunTime::Now()`                  | Reads REAPER's clock as a `RunTime`                                     | `absl::Now()`, which is real time, for measurement only                                            |
 
 ## Structure
 
@@ -66,13 +66,13 @@ class TestReset final {
 };
 ```
 
-| State                                           | Reset                                                                          |
-| ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| `TrackCache`, `ContinuousUndo`                  | Their `s_test_reset_` deletes the instance                                     |
-| `ControlSurface`'s registered type              | Its `s_test_reset_` forgets it, and CHECKs no instance exists                  |
-| `timeline.cc`'s `g_last_ruler_modes`            | `kResetRulerModes`                                                             |
-| `g_modifiers`                                   | `kResetModifiers`                                                              |
-| `MidiPorts`' flush wait (100ms, on destruction) | `MidiPorts::SetFlushWait(duration)`, a plain setting, zero under the fake      |
+| State                                           | Reset                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `TrackCache`, `ContinuousUndo`                  | Their `s_test_reset_` deletes the instance                                |
+| `ControlSurface`'s registered type              | Its `s_test_reset_` forgets it, and CHECKs no instance exists             |
+| `timeline.cc`'s `g_last_ruler_modes`            | `kResetRulerModes`                                                        |
+| `g_modifiers`                                   | `kResetModifiers`                                                         |
+| `MidiPorts`' flush wait (100ms, on destruction) | `MidiPorts::SetFlushWait(duration)`, a plain setting, zero under the fake |
 
 - **Each reset registers itself**, beside the state it resets, and the fake
   calls every registered one, so every library is treated the same, with no

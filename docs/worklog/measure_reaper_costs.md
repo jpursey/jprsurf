@@ -38,15 +38,15 @@ The plugin is unchanged. The process changed:
 
 ## Names
 
-| Name                     | What                                                                                         | Might be confused with                                    |
-| ------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Later work               | REAPER's time on its UI thread in the runs after a call, beyond what the same runs cost idle | A deferred refresh, which puts work off to its end        |
-| `CostMeasurement`        | One thing measured under one condition: a read or a change, on the project it builds         | `CallCost`, the category the table gives a function       |
-| `MeasuringSurface`       | The control surface whose runs step through the measurements                                 | `RecordingSurface`, which the contract tests run from     |
-| `MeasuringEnvironment`   | What the surface needs from where it runs: projects, clocks, and the results                 | `FakeEnvironment`, the contract tests' fake REAPER        |
-| `test_install.h`         | What any DLL that runs in the test install needs                                             | `run_in_test_install.cmake`, which runs such a DLL        |
-| `reaper_jpr_measure`     | The DLL that measures in the test install                                                    | `reaper_jpr_check`, which runs the contract tests         |
-| `measure_in_reaper`      | The build target that runs it                                                                | `check_in_reaper`, and the `benchmark` target             |
+| Name                   | What                                                                                         | Might be confused with                                |
+| ---------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Later work             | REAPER's time on its UI thread in the runs after a call, beyond what the same runs cost idle | A deferred refresh, which puts work off to its end    |
+| `CostMeasurement`      | One thing measured under one condition: a read or a change, on the project it builds         | `CallCost`, the category the table gives a function   |
+| `MeasuringSurface`     | The control surface whose runs step through the measurements                                 | `RecordingSurface`, which the contract tests run from |
+| `MeasuringEnvironment` | What the surface needs from where it runs: projects, clocks, and the results                 | `FakeEnvironment`, the contract tests' fake REAPER    |
+| `test_install.h`       | What any DLL that runs in the test install needs                                             | `run_in_test_install.cmake`, which runs such a DLL    |
+| `reaper_jpr_measure`   | The DLL that measures in the test install                                                    | `reaper_jpr_check`, which runs the contract tests     |
+| `measure_in_reaper`    | The build target that runs it                                                                | `check_in_reaper`, and the `benchmark` target         |
 
 ## Structure
 
@@ -206,14 +206,14 @@ later work; later work under about 0.5ms is within the noise.
 
 ## Tests
 
-| File                         | What                                                                                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `measuring_surface_test.cc`  | The runs that make a call, alternating windows, waits not in later work, percentiles, deferred refresh ends, reads, resets, preparing, reporting as it goes, and nothing after finishing |
-| `cost_measurement_test.cc`   | The filter                                                                                                                             |
-| `cost_measurements_test.cc`  | Every function on the API list is measured or says why not, and every measurement runs a sample under the fake                         |
-| `large_project_test.cc`      | The large project scales by its folders                                                                                                |
-| `reaper_profiler_test.cc`    | `FormatRunTime()` in nanoseconds, and negative times                                                                                   |
-| `call_cost_test.cc`          | Route setters are deferrable, text is cheap, and a rename moderate                                                                     |
+| File                        | What                                                                                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `measuring_surface_test.cc` | The runs that make a call, alternating windows, waits not in later work, percentiles, deferred refresh ends, reads, resets, preparing, reporting as it goes, and nothing after finishing |
+| `cost_measurement_test.cc`  | The filter                                                                                                                                                                               |
+| `cost_measurements_test.cc` | Every function on the API list is measured or says why not, and every measurement runs a sample under the fake                                                                           |
+| `large_project_test.cc`     | The large project scales by its folders                                                                                                                                                  |
+| `reaper_profiler_test.cc`   | `FormatRunTime()` in nanoseconds, and negative times                                                                                                                                     |
+| `call_cost_test.cc`         | Route setters are deferrable, text is cheap, and a rename moderate                                                                                                                       |
 
 ## Building blocks
 

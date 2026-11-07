@@ -34,13 +34,13 @@ profile.
 
 ## Names
 
-| Name                | What                                                         | Might be confused with                         |
-| ------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
-| `jpr_plugin`        | The plugin as a static library, which tests link             | `reaper_jprsurf`, now just the DLL             |
-| `Plugin::Options`   | The trace and profile paths `dll_main.cc` found              | `ControlSurface::Type`; the config string      |
-| `SurfaceNotifier`   | Makes REAPER's calls back to the surface                     | `ControlSurfaceListener`, which hears them     |
-| `SurfaceTest`       | The fixture for any config: fake, plugin, and surface        | `TestControlSurface`, which it holds           |
-| `DefaultConfigTest` | The fixture for `PluginSurface`'s config, with its X-Touches | `SurfaceTest`, which it derives from           |
+| Name                | What                                                         | Might be confused with                     |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------------ |
+| `jpr_plugin`        | The plugin as a static library, which tests link             | `reaper_jprsurf`, now just the DLL         |
+| `Plugin::Options`   | The trace and profile paths `dll_main.cc` found              | `ControlSurface::Type`; the config string  |
+| `SurfaceNotifier`   | Makes REAPER's calls back to the surface                     | `ControlSurfaceListener`, which hears them |
+| `SurfaceTest`       | The fixture for any config: fake, plugin, and surface        | `TestControlSurface`, which it holds       |
+| `DefaultConfigTest` | The fixture for `PluginSurface`'s config, with its X-Touches | `SurfaceTest`, which it derives from       |
 
 ## Structure
 
@@ -68,17 +68,17 @@ as long as it exists, hooks the fake's functions with `gb::FunctionHook`, and
 makes the calls REAPER makes from inside them, as traces showed (see "Seen in
 traces" in the design doc, and REAPER facts below):
 
-| JPRSurf calls                       | REAPER calls back                                  |
-| ----------------------------------- | -------------------------------------------------- |
-| `SetOnlyTrackSelected`              | `SetSurfaceSelected()` for each track that changed |
-| `SetTrackSelected`                  | `SetSurfaceSelected()` for the track               |
-| `SetTrackUIMute`, `SetTrackUISolo`  | The track's mute and solo, and the master's solo   |
-| `SetTrackUIRecArm`                  | `SetTrackListChange()`, then every track's state   |
-| `CSurf_OnVolumeChangeEx`            | The last touched track (`Extended()`)              |
-| `CSurf_OnPanChangeEx`               | The last touched track (`Extended()`)              |
-| `SetGlobalAutomationOverride`       | Every track's volume, pan, and selection           |
-| Automation modes (40400-40404, 42023) | `SetAutoMode()`, then as the override does       |
-| Undo and redo (40029, 40030)        | Everything                                         |
+| JPRSurf calls                         | REAPER calls back                                  |
+| ------------------------------------- | -------------------------------------------------- |
+| `SetOnlyTrackSelected`                | `SetSurfaceSelected()` for each track that changed |
+| `SetTrackSelected`                    | `SetSurfaceSelected()` for the track               |
+| `SetTrackUIMute`, `SetTrackUISolo`    | The track's mute and solo, and the master's solo   |
+| `SetTrackUIRecArm`                    | `SetTrackListChange()`, then every track's state   |
+| `CSurf_OnVolumeChangeEx`              | The last touched track (`Extended()`)              |
+| `CSurf_OnPanChangeEx`                 | The last touched track (`Extended()`)              |
+| `SetGlobalAutomationOverride`         | Every track's volume, pan, and selection           |
+| Automation modes (40400-40404, 42023) | `SetAutoMode()`, then as the override does         |
+| Undo and redo (40029, 40030)          | Everything                                         |
 
 - **When:** a track setter's calls come at the end of its deferred refresh
   (`PreventUIRefresh(-1)`), or in the call when there is none. The rest come in
@@ -166,16 +166,16 @@ or the X-Touch alone.
 
 ## Tests
 
-| File                                  | What                                                                                                                                                                  |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `surface_notifier_test.cc`            | Each row of the notifier's table, the batch rule, and each change in REAPER's own UI, with the ones no trace has shown failing                                        |
-| `plugin_test.cc`                      | Loading registers the surface type, and adding one opens the X-Touch's ports; loading twice, a version mismatch, and no `GetFunc` fail; the paths in `Options`        |
-| `surface_test_test.cc`                | The error guard, and `AddTracks()`' names and folders                                                                                                                 |
-| `default_config_test_test.cc`         | The X-Touches' order, the X-Touch alone, each press helper, and removing the surface clearing the hardware                                                            |
-| `track_strip_test.cc`                 | Faders, pots, pot buttons, mute, solo, and rec arm each way; meters; scribble names, volumes, and colors; folder and empty strips; the master fader; ranges           |
-| `track_list_test.cc`                  | Select's press, double press, long press, and range; Global; Bank and Channel at the ends; following the current track; a deleted and a hidden folder; X-Touch alone  |
-| `send_mode_test.cc`                   | Entering and leaving, and the lights; route strips; paging; the Info strip; sends and receives; walking routes; undo points; following REAPER; a deleted track        |
-| `global_test.cc`                      | Transport, Rewind and Forward by measure, beat, and marker; timecode and ruler modes; utility buttons; modifiers; automation modes and the override, with lights      |
+| File                          | What                                                                                                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `surface_notifier_test.cc`    | Each row of the notifier's table, the batch rule, and each change in REAPER's own UI, with the ones no trace has shown failing                                       |
+| `plugin_test.cc`              | Loading registers the surface type, and adding one opens the X-Touch's ports; loading twice, a version mismatch, and no `GetFunc` fail; the paths in `Options`       |
+| `surface_test_test.cc`        | The error guard, and `AddTracks()`' names and folders                                                                                                                |
+| `default_config_test_test.cc` | The X-Touches' order, the X-Touch alone, each press helper, and removing the surface clearing the hardware                                                           |
+| `track_strip_test.cc`         | Faders, pots, pot buttons, mute, solo, and rec arm each way; meters; scribble names, volumes, and colors; folder and empty strips; the master fader; ranges          |
+| `track_list_test.cc`          | Select's press, double press, long press, and range; Global; Bank and Channel at the ends; following the current track; a deleted and a hidden folder; X-Touch alone |
+| `send_mode_test.cc`           | Entering and leaving, and the lights; route strips; paging; the Info strip; sends and receives; walking routes; undo points; following REAPER; a deleted track       |
+| `global_test.cc`              | Transport, Rewind and Forward by measure, beat, and marker; timecode and ruler modes; utility buttons; modifiers; automation modes and the override, with lights     |
 
 Each file builds the least project that shows its behavior, and acts as the
 user does: through the fake X-Touches, REAPER's API, or the notifier's UI

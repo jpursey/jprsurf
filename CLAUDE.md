@@ -91,16 +91,16 @@ Code is unit tested (see Build system), including code that depends on REAPER, w
 
 Checks run in one of three places: under the fake, in **the test install** (a portable REAPER of its own, which Claude runs, and which never touches the user's), or in **the user's REAPER**, which only the user runs. "In REAPER" alone is ambiguous, so say which.
 
-| Check | Command | When | Needs |
-| --- | --- | --- | --- |
-| Release build | `cmake --build out/build/x64-Release` | Every change | |
-| Format | `clang-format --dry-run -Werror <files>` | Every change, on the files it touches | |
-| Unit tests | `ctest --test-dir out/build/x64-Release` | Every change, with tests of what it does | |
-| Contract tests | `cmake --build out/build/x64-Release --target check_in_reaper` | A change to the fake REAPER, `SurfaceNotifier`, or their contract tests | The test install |
-| Load check | `cmake --build out/build/x64-Release --target check_load_in_reaper` | A change to `dll_main.cc` or to what the plugin does as it loads and unloads, and the end of a feature | The test install |
-| Benchmark | The `benchmark` skill | When a change risks JPRSurf's own time (see Performance), not every change | A quiet machine |
-| Cost measurement | The `measure-reaper-costs` skill | A function added to the API list | The test install, and a quiet machine |
-| The user's REAPER | See Testing in the user's REAPER | Behavior nobody has checked, and the end of a feature | The user |
+| Check             | Command                                                             | When                                                                                                   | Needs                                 |
+| ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| Release build     | `cmake --build out/build/x64-Release`                               | Every change                                                                                           |                                       |
+| Format            | `clang-format --dry-run -Werror <files>`                            | Every change, on the files it touches                                                                  |                                       |
+| Unit tests        | `ctest --test-dir out/build/x64-Release`                            | Every change, with tests of what it does                                                               |                                       |
+| Contract tests    | `cmake --build out/build/x64-Release --target check_in_reaper`      | A change to the fake REAPER, `SurfaceNotifier`, or their contract tests                                | The test install                      |
+| Load check        | `cmake --build out/build/x64-Release --target check_load_in_reaper` | A change to `dll_main.cc` or to what the plugin does as it loads and unloads, and the end of a feature | The test install                      |
+| Benchmark         | The `benchmark` skill                                               | When a change risks JPRSurf's own time (see Performance), not every change                             | A quiet machine                       |
+| Cost measurement  | The `measure-reaper-costs` skill                                    | A function added to the API list                                                                       | The test install, and a quiet machine |
+| The user's REAPER | See Testing in the user's REAPER                                    | Behavior nobody has checked, and the end of a feature                                                  | The user                              |
 
 A feature adds checks of its own (see Feature workflow).
 

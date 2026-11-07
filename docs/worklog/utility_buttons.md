@@ -27,13 +27,13 @@ state that has to be polled shares one read-only property type.
 
 ### Lights
 
-| Light      | On while                                  | Mode     |
-| ---------- | ----------------------------------------- | -------- |
-| Undo       | There is anything to redo                 | Solid    |
-| Save       | The project has unsaved changes           | Blinking |
-| Cancel     | Any media items are selected              | Solid    |
-| Global     | Track mode, below the top level           | Solid    |
-| Solo (LED) | Any track is soloed (unchanged)           | Solid    |
+| Light      | On while                        | Mode     |
+| ---------- | ------------------------------- | -------- |
+| Undo       | There is anything to redo       | Solid    |
+| Save       | The project has unsaved changes | Blinking |
+| Cancel     | Any media items are selected    | Solid    |
+| Global     | Track mode, below the top level | Solid    |
+| Solo (LED) | Any track is soloed (unchanged) | Solid    |
 
 - Save needs "undo/prompt to save" enabled in REAPER's preferences, or REAPER
   never reports the project as dirty.
