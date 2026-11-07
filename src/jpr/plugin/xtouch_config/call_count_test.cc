@@ -55,7 +55,7 @@ class CallCountTest : public XTouchConfigTest {
 };
 
 TEST_F(CallCountTest, StartingUp) {
-  EXPECT_EQ(startup_, (CallCounts{.cheap = 3286, .moderate = 14}));
+  EXPECT_EQ(startup_, (CallCounts{.cheap = 3303, .moderate = 14}));
 }
 
 //------------------------------------------------------------------------------
@@ -111,7 +111,7 @@ TEST_F(CallCountTest, EnteringSendReceiveMode) {
   TapSelect(kBus);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kAssignSend);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1062, .moderate = 8}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1074, .moderate = 8}));
 }
 
 TEST_F(CallCountTest, ReturningToTrackMode) {
@@ -153,7 +153,7 @@ TEST_F(CallCountTest, TappingRecordArm) {
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 3444, .moderate = 9, .refreshes = 1, .undo_points = 1}));
+          .cheap = 3461, .moderate = 9, .refreshes = 1, .undo_points = 1}));
 }
 
 // Holding mute on T7, on the extender, and tapping it on T10, on the X-Touch.
@@ -218,7 +218,7 @@ TEST_F(CallCountTest, SelectingARange) {
 
 TEST_F(CallCountTest, GoingIntoAFolder) {
   DoublePressSelect(kFolder);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 813, .moderate = 10}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 822, .moderate = 10}));
 }
 
 //------------------------------------------------------------------------------
@@ -248,7 +248,7 @@ TEST_F(CallCountTest, HoldingGlobalGoesToTheTop) {
 TEST_F(CallCountTest, ClickingATrackInReaper) {
   notifier_.ClickTrack(reaper_.GetProject().FindTrackByName("T12.5"));
   RunUntilShown();
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 166, .moderate = 2}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 175, .moderate = 2}));
 }
 
 //------------------------------------------------------------------------------
@@ -259,7 +259,7 @@ TEST_F(CallCountTest, ClickingATrackInReaper) {
 
 TEST_F(CallCountTest, PickingWithSendHeld) {
   PickWithSendHeld(kFolder);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 948, .moderate = 11}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 957, .moderate = 11}));
 }
 
 // Includes the undo point added once the route stops moving.
@@ -315,14 +315,14 @@ TEST_F(CallCountTest, SelectingARoute) {
   EnterSendMode(kBus);
   calls_.TakeCounts();
   TapSelect(0);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 694, .moderate = 8}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 701, .moderate = 8}));
 }
 
 TEST_F(CallCountTest, PagingRoutes) {
   EnterSendMode(kBus);
   calls_.TakeCounts();
   Tap(xtouch_, Button::kBankRight);
-  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1113, .moderate = 8}));
+  EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 1125, .moderate = 8}));
 }
 
 // From a track with both: T5.1 receives from T5, and sends to a bus.

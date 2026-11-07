@@ -214,6 +214,12 @@ void ControlSurface::SetSurfaceSolo(MediaTrack* track_id, bool solo) {
 void ControlSurface::SetSurfaceRecArm(MediaTrack* track_id, bool rec_arm) {
   VLOG_REAPER() << "SetSurfaceRecArm(track_id=" << track_id
                 << ", rec_arm=" << rec_arm << ")";
+
+  // REAPER calls this for a track whenever its record mode changes, which it
+  // reports nowhere else, and for every track in a round of their states.
+  if (Track* track = TrackCache::Get().GetTrack(track_id); track != nullptr) {
+    track->OnRecModeChanged();
+  }
 }
 
 void ControlSurface::SetPlayState(bool play, bool pause, bool rec) {

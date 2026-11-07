@@ -107,6 +107,16 @@ class TrackCache final {
   // the cache is left out.
   std::vector<Track*> GetSelectedTracks() const;
 
+  // Returns the tracks a grouped rec arm of the track reaches in REAPER: every
+  // selected track if the track is selected, then each follower of a rec arm
+  // group one of those leads, and on through each follower that leads a group
+  // of its own. It includes the track, never has the master unless it is the
+  // track, and is empty if the track doesn't exist.
+  //
+  // This reads REAPER's selection and groups, which aren't cached, so it is for
+  // a press, not a run.
+  std::vector<Track*> GetRecArmGroup(Track* track) const;
+
   // Returns true if any selected track, including the master track, is in the
   // automation mode.
   bool HasSelectedAutoMode(AutoMode mode) {

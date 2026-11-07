@@ -89,6 +89,59 @@ TEST_F(TrackTest, ReadsREAPERsValues) {
   EXPECT_FALSE(track->GetRecArm());
 }
 
+TEST_F(TrackTest, ReadsTheMonitoringModeWithTheTracksState) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Track* track = Refresh(fake);
+  TestListener listener(track);
+  EXPECT_EQ(track->GetMonitorMode(), TrackMonitorMode::kOff);
+
+  fake->monitor_mode = 1;
+  track->Refresh();
+  EXPECT_EQ(track->GetMonitorMode(), TrackMonitorMode::kOn);
+  fake->monitor_mode = 2;
+  track->Refresh();
+  EXPECT_EQ(track->GetMonitorMode(), TrackMonitorMode::kAuto);
+  EXPECT_EQ(listener.change_count, 2);
+}
+
+// REAPER reports a change of the record mode only with SetSurfaceRecArm(), so
+// the mode is read again only after OnRecModeChanged().
+TEST_F(TrackTest, ReadsTheRecordModeOnlyAfterItChanges) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  fake->rec_mode = 7;
+  Track* track = Refresh(fake);
+  track->Refresh();
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kMidiOverdub);
+
+  TestListener listener(track);
+  fake->rec_mode = 2;
+  track->Refresh();
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kMidiOverdub);
+  EXPECT_EQ(listener.change_count, 0);
+
+  track->OnRecModeChanged();
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kMidiOverdub);
+  track->Refresh();
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kNone);
+  EXPECT_EQ(listener.change_count, 1);
+}
+
+// A track that comes back as another MediaTrack* may have another mode.
+TEST_F(TrackTest, ReadsTheRecordModeAgainWhenTheTrackIdChanges) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Track* track = Refresh(fake);
+  track->Refresh();
+  ASSERT_EQ(track->GetRecMode(), TrackRecMode::kInput);
+
+  project_.DeleteTrack(fake);
+  FakeTrack* restored = project_.RestoreTrack(fake);
+  restored->rec_mode = 2;
+  TrackCache::Get().Refresh();
+  ASSERT_EQ(track->GetTrackId(), ToMediaTrack(restored));
+  track->Refresh();
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kNone);
+}
+
 TEST_F(TrackTest, NoColorIsWhite) {
   Track* track = Refresh(project_.AddTrack("Drums"));
   EXPECT_EQ(track->GetColor(), (Color{255, 255, 255}));
@@ -172,7 +225,11 @@ TEST_F(TrackTest, SelectOnlyUnselectsEveryOtherTrack) {
 TEST_F(TrackTest, DeletedTrackHasNoValues) {
   FakeTrack* fake = project_.AddTrack("Drums");
   fake->mute = true;
+  fake->rec_mode = 2;
+  fake->monitor_mode = 1;
   Track* track = Refresh(fake);
+  track->Refresh();
+  ASSERT_EQ(track->GetRecMode(), TrackRecMode::kNone);
   TestListener listener(track);
 
   project_.DeleteTrack(fake);
@@ -180,11 +237,18 @@ TEST_F(TrackTest, DeletedTrackHasNoValues) {
   EXPECT_FALSE(track->Exists());
   EXPECT_EQ(track->GetName(), "");
   EXPECT_FALSE(track->GetMute());
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kInput);
+  EXPECT_EQ(track->GetMonitorMode(), TrackMonitorMode::kOff);
   EXPECT_EQ(listener.change_count, 1);
 
   // Setting a deleted track's values does nothing.
   track->SetMute(true);
   track->SetVolume(0.5);
+  {
+    TrackBatch batch;
+    batch.SetRecMode(track, TrackRecMode::kInput);
+    batch.SetMonitorMode(track, TrackMonitorMode::kOn);
+  }
   EXPECT_THAT(project_.GetUndoPoints(), IsEmpty());
 }
 
@@ -576,6 +640,167 @@ TEST_F(TrackTest, GroupingChangesTheGroup) {
   GetCachedTrack(drums)->SetPan(0.25, TrackGrouping::kGrouped);
   EXPECT_TRUE(kick->solo);
   EXPECT_EQ(kick->pan, 0.25);
+}
+
+//------------------------------------------------------------------------------
+// Record and monitoring modes
+//------------------------------------------------------------------------------
+
+TEST_F(TrackTest, BatchSetsTheRecordModeWithOneUndoPoint) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  TrackCache::Get().Refresh();
+  Track* track = GetCachedTrack(drums);
+  TestListener listener(track);
+  {
+    DeferredRefresh deferred_refresh;  // As a run holds.
+    TrackBatch batch;
+    batch.SetRecMode(track, TrackRecMode::kMidiOverdub);
+    batch.SetRecMode(GetCachedTrack(bass), TrackRecMode::kOutputStereo);
+  }
+  EXPECT_EQ(drums->rec_mode, 7);
+  EXPECT_EQ(bass->rec_mode, 1);
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kMidiOverdub);
+  EXPECT_EQ(listener.change_count, 1);
+  EXPECT_THAT(
+      project_.GetUndoPoints(),
+      ElementsAre(Field(&FakeUndoPoint::name, "JPR:Change Record Mode")));
+
+  // Setting a mode REAPER already has adds no undo point.
+  TrackBatch().SetRecMode(track, TrackRecMode::kMidiOverdub);
+  EXPECT_EQ(project_.GetUndoPoints().size(), 1);
+}
+
+TEST_F(TrackTest, SetRecModeFollowsREAPERsModeNotTheCachedOne) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Track* track = Refresh(fake);
+
+  // Set to none in REAPER, but not yet read.
+  fake->rec_mode = 2;
+  TrackBatch().SetRecMode(track, TrackRecMode::kNone);
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kNone);
+  EXPECT_EQ(track->GetReplacedRecMode(), std::nullopt);
+  EXPECT_THAT(project_.GetUndoPoints(), IsEmpty());
+}
+
+TEST_F(TrackTest, SettingNoRecordModeRemembersTheModeItReplaced) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  fake->rec_mode = 7;
+  Track* track = Refresh(fake);
+  EXPECT_EQ(track->GetReplacedRecMode(), std::nullopt);
+
+  TrackBatch().SetRecMode(track, TrackRecMode::kNone);
+  EXPECT_EQ(track->GetReplacedRecMode(), TrackRecMode::kMidiOverdub);
+
+  // Only none replacing another mode is remembered.
+  TrackBatch().SetRecMode(track, TrackRecMode::kNone);
+  TrackBatch().SetRecMode(track, TrackRecMode::kInput);
+  EXPECT_EQ(track->GetReplacedRecMode(), TrackRecMode::kMidiOverdub);
+  TrackBatch().SetRecMode(track, TrackRecMode::kNone);
+  EXPECT_EQ(track->GetReplacedRecMode(), TrackRecMode::kInput);
+}
+
+TEST_F(TrackTest, BatchSetsTheMonitoringModeWithOneUndoPoint) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  TrackCache::Get().Refresh();
+  Track* track = GetCachedTrack(drums);
+  TestListener listener(track);
+  {
+    DeferredRefresh deferred_refresh;  // As a run holds.
+    TrackBatch batch;
+    batch.SetMonitorMode(track, TrackMonitorMode::kAuto);
+    batch.SetMonitorMode(GetCachedTrack(bass), TrackMonitorMode::kOn);
+  }
+  EXPECT_EQ(drums->monitor_mode, 2);
+  EXPECT_EQ(bass->monitor_mode, 1);
+  EXPECT_EQ(track->GetMonitorMode(), TrackMonitorMode::kAuto);
+  EXPECT_EQ(listener.change_count, 1);
+  EXPECT_THAT(
+      project_.GetUndoPoints(),
+      ElementsAre(Field(&FakeUndoPoint::name, "JPR:Change Monitoring")));
+
+  // Setting a mode REAPER already has adds no undo point.
+  TrackBatch().SetMonitorMode(track, TrackMonitorMode::kAuto);
+  EXPECT_EQ(project_.GetUndoPoints().size(), 1);
+}
+
+TEST_F(TrackTest, BatchOfModesAndRecArmAddsOneUndoPoint) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Track* track = Refresh(fake);
+  {
+    DeferredRefresh deferred_refresh;  // As a run holds.
+    TrackBatch batch;
+    batch.SetRecArm(track, true);
+    batch.SetRecMode(track, TrackRecMode::kNone);
+    batch.SetMonitorMode(track, TrackMonitorMode::kOn);
+  }
+  EXPECT_TRUE(fake->rec_arm);
+  EXPECT_THAT(project_.GetUndoPoints(),
+              ElementsAre(Field(&FakeUndoPoint::name, "JPR:Change Tracks")));
+}
+
+TEST_F(TrackTest, MastersModesAreNeverSet) {
+  TrackCache::Get().Refresh();
+  Track* master = TrackCache::Get().GetMasterTrack();
+  const FakeTrack before = *project_.GetMasterTrack();
+  {
+    TrackBatch batch;
+    batch.SetRecMode(master, TrackRecMode::kNone);
+    batch.SetMonitorMode(master, TrackMonitorMode::kAuto);
+  }
+  EXPECT_EQ(project_.GetMasterTrack()->rec_mode, before.rec_mode);
+  EXPECT_EQ(project_.GetMasterTrack()->monitor_mode, before.monitor_mode);
+  EXPECT_THAT(project_.GetUndoPoints(), IsEmpty());
+}
+
+// REAPER has no groups for monitoring, but gangs the selected tracks.
+TEST_F(TrackTest, GroupedMonitoringModeSetsTheSelectedTracks) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  FakeTrack* keys = project_.AddTrack("Keys");
+  JoinGroup(drums, 1);
+  JoinGroup(keys, 1);
+  drums->selected = true;
+  bass->selected = true;
+  TrackCache::Get().Refresh();
+
+  TrackBatch().SetMonitorMode(GetCachedTrack(drums), TrackMonitorMode::kOn);
+  EXPECT_EQ(bass->monitor_mode, 0);
+
+  TrackBatch().SetMonitorMode(GetCachedTrack(drums), TrackMonitorMode::kAuto,
+                              TrackGrouping::kGrouped);
+  EXPECT_EQ(drums->monitor_mode, 2);
+  EXPECT_EQ(bass->monitor_mode, 2);
+  EXPECT_EQ(keys->monitor_mode, 0);
+}
+
+TEST_F(TrackTest, GroupedRecordModeSetsTheRecArmGroup) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* kick = project_.AddTrack("Kick");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  JoinGroup(drums, 1);
+  JoinGroup(kick, 1);
+  TrackCache::Get().Refresh();
+  DeferredRefresh deferred_refresh;  // As a run holds.
+
+  TrackBatch().SetRecMode(GetCachedTrack(drums), TrackRecMode::kMidiOverdub);
+  EXPECT_EQ(kick->rec_mode, 0);
+
+  TrackBatch().SetRecMode(GetCachedTrack(drums), TrackRecMode::kNone,
+                          TrackGrouping::kGrouped);
+  EXPECT_EQ(drums->rec_mode, 2);
+  EXPECT_EQ(kick->rec_mode, 2);
+  EXPECT_EQ(bass->rec_mode, 0);
+  EXPECT_EQ(GetCachedTrack(kick)->GetReplacedRecMode(), TrackRecMode::kInput);
+  EXPECT_EQ(project_.GetUndoPoints().size(), 2);
+
+  // As with the other properties, a track that already has the mode leaves its
+  // group alone.
+  kick->rec_mode = 0;
+  TrackBatch().SetRecMode(GetCachedTrack(drums), TrackRecMode::kNone,
+                          TrackGrouping::kGrouped);
+  EXPECT_EQ(kick->rec_mode, 0);
 }
 
 //------------------------------------------------------------------------------

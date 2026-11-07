@@ -20,6 +20,7 @@
 #include "jpr/common/file_system.h"
 #include "jpr/common/reaper_api.h"
 #include "jpr/common/runner.h"
+#include "jpr/common/testing/cached_track.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/testing/fake_track.h"
@@ -183,6 +184,22 @@ TEST_F(ControlSurfaceTest, RefreshesTrackCacheOnTheRunAfterTheTrackList) {
   Track* master = TrackCache::Get().GetMasterTrack();
   ASSERT_NE(master, nullptr);
   EXPECT_EQ(master->GetName(), reaper_.GetProject().GetMasterTrack()->name);
+}
+
+// REAPER reports a record mode change only with SetSurfaceRecArm(), so the
+// track reads it again on its next refresh.
+TEST_F(ControlSurfaceTest, ReadsTheRecordModeAgainOnceItChanges) {
+  FakeTrack* drums = reaper_.GetProject().AddTrack("Drums");
+  std::unique_ptr<TestControlSurface> surface = AddTestSurface();
+  surface->SetTrackListChange();
+  surface->Run();
+  Track* track = GetCachedTrack(drums);
+  track->Refresh();
+  ASSERT_EQ(track->GetRecMode(), TrackRecMode::kInput);
+
+  SetMediaTrackInfo_Value(ToMediaTrack(drums), "I_RECMODE", 2);
+  track->Refresh();
+  EXPECT_EQ(track->GetRecMode(), TrackRecMode::kNone);
 }
 
 // TrackCache keeps a project's tracks by GUID while another project tab is

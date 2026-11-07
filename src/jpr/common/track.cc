@@ -6,8 +6,10 @@
 #include "jpr/common/track.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/log/log.h"
@@ -22,6 +24,28 @@ namespace {
 
 // Undo point name for a TrackBatch that changed more than one kind of property.
 constexpr char kChangeTracksUndoName[] = "JPR:Change Tracks";
+
+// Undo point names for a TrackBatch that changed only the record or monitoring
+// modes.
+constexpr char kChangeRecModeUndoName[] = "JPR:Change Record Mode";
+constexpr char kChangeMonitorModeUndoName[] = "JPR:Change Monitoring";
+
+// Returns the monitoring mode GetTrackState()'s flags show.
+TrackMonitorMode GetMonitorModeFromFlags(int flags) {
+  if ((flags & kTrackStateMonitorOn) != 0) {
+    return TrackMonitorMode::kOn;
+  }
+  if ((flags & kTrackStateMonitorAuto) != 0) {
+    return TrackMonitorMode::kAuto;
+  }
+  return TrackMonitorMode::kOff;
+}
+
+// Returns REAPER's record mode of the track.
+TrackRecMode ReadRecMode(MediaTrack* track_id) {
+  return static_cast<TrackRecMode>(
+      static_cast<int>(GetMediaTrackInfo_Value(track_id, "I_RECMODE")));
+}
 
 }  // namespace
 
@@ -83,10 +107,13 @@ Track::Track(Private, const Guid& guid, MediaTrack* track_id) : guid_(guid) {
   DoRefresh(track_id);
 }
 
-void Track::Refresh() { DoRefresh(track_id_); }
+void Track::Refresh() { DoRefresh(track_id_, /*read_rec_mode=*/true); }
 
-void Track::DoRefresh(MediaTrack* track_id) {
+void Track::DoRefresh(MediaTrack* track_id, bool read_rec_mode) {
   bool changed = (track_id_ != track_id);
+  if (changed) {
+    rec_mode_stale_ = true;
+  }
   track_id_ = track_id;
   if (track_id == nullptr) {
     if (!changed) {
@@ -103,6 +130,8 @@ void Track::DoRefresh(MediaTrack* track_id) {
     mute_ = false;
     solo_ = false;
     rec_arm_ = false;
+    monitor_mode_ = TrackMonitorMode::kOff;
+    rec_mode_ = TrackRecMode::kInput;
     NotifyListeners();
     return;
   }
@@ -123,6 +152,15 @@ void Track::DoRefresh(MediaTrack* track_id) {
     bool& cached = this->*info.cached;
     changed = changed || (cached != value);
     cached = value;
+  }
+  const TrackMonitorMode monitor_mode = GetMonitorModeFromFlags(flags);
+  changed = changed || (monitor_mode_ != monitor_mode);
+  monitor_mode_ = monitor_mode;
+  if (read_rec_mode && rec_mode_stale_) {
+    rec_mode_stale_ = false;
+    const TrackRecMode rec_mode = ReadRecMode(track_id_);
+    changed = changed || (rec_mode_ != rec_mode);
+    rec_mode_ = rec_mode;
   }
 
   double volume = 0.0;
@@ -543,15 +581,7 @@ void TrackBatch::Set(Track* track, TrackBoolProperty property, bool value,
   // compare against REAPER's.
   if (((GetTrackStateFlags(track_id) & info.state_bit) != 0) != value) {
     if (info.undo_name != nullptr) {
-      if (undo_name_ == nullptr) {
-        // This batch creates its own undo point, which shouldn't include
-        // pending volume or pan changes.
-        ContinuousUndo::Get().Flush();
-        undo_name_ = info.undo_name;
-      } else if (undo_name_ != info.undo_name) {
-        // More than one kind of property changed.
-        undo_name_ = kChangeTracksUndoName;
-      }
+      OnChange(info.undo_name);
     }
     info.set(
         track_id, value,
@@ -563,6 +593,85 @@ void TrackBatch::Set(Track* track, TrackBoolProperty property, bool value,
   if (cached != value) {
     cached = value;
     track->NotifyListeners();
+  }
+}
+
+void TrackBatch::SetRecMode(Track* track, TrackRecMode mode,
+                            TrackGrouping grouping) {
+  // As with the other properties, a track that already has the mode is left
+  // alone, with its group. GetRecArmGroup() never has the master.
+  if (!SetOneRecMode(track, mode) || grouping == TrackGrouping::kNone) {
+    return;
+  }
+  for (Track* grouped : TrackCache::Get().GetRecArmGroup(track)) {
+    if (grouped != track) {
+      SetOneRecMode(grouped, mode);
+    }
+  }
+}
+
+bool TrackBatch::SetOneRecMode(Track* track, TrackRecMode mode) {
+  if (!HasModes(track)) {
+    return false;
+  }
+  MediaTrack* const track_id = track->track_id_;
+
+  // The cached modes are only kept up to date for tracks the surface shows, so
+  // the setters compare against REAPER's.
+  const TrackRecMode current = ReadRecMode(track_id);
+  const bool changed = (current != mode);
+  if (changed) {
+    if (mode == TrackRecMode::kNone) {
+      track->replaced_rec_mode_ = current;
+    }
+    OnChange(kChangeRecModeUndoName);
+    SetMediaTrackInfo_Value(track_id, "I_RECMODE", static_cast<int>(mode));
+  }
+
+  // REAPER now has the mode either way, so bring the cache into line with it.
+  // REAPER reports the change with SetSurfaceRecArm(), which only makes the
+  // next Refresh() read it again.
+  if (track->rec_mode_ != mode) {
+    track->rec_mode_ = mode;
+    track->NotifyListeners();
+  }
+  return changed;
+}
+
+void TrackBatch::SetMonitorMode(Track* track, TrackMonitorMode mode,
+                                TrackGrouping grouping) {
+  if (!HasModes(track)) {
+    return;
+  }
+  MediaTrack* const track_id = track->track_id_;
+  if (GetMonitorModeFromFlags(GetTrackStateFlags(track_id)) != mode) {
+    OnChange(kChangeMonitorModeUndoName);
+    CSurf_OnInputMonitorChangeEx(
+        track_id, static_cast<int>(mode),
+        /*allowgang=*/grouping == TrackGrouping::kGrouped);
+  }
+
+  // REAPER now has the mode either way, so bring the cache into line with it.
+  if (track->monitor_mode_ != mode) {
+    track->monitor_mode_ = mode;
+    track->NotifyListeners();
+  }
+}
+
+bool TrackBatch::HasModes(const Track* track) {
+  return track->track_id_ != nullptr &&
+         track != TrackCache::Get().GetMasterTrack();
+}
+
+void TrackBatch::OnChange(const char* undo_name) {
+  if (undo_name_ == nullptr) {
+    // This batch creates its own undo point, which shouldn't include pending
+    // volume or pan changes.
+    ContinuousUndo::Get().Flush();
+    undo_name_ = undo_name;
+  } else if (undo_name_ != undo_name) {
+    // More than one kind of property changed.
+    undo_name_ = kChangeTracksUndoName;
   }
 }
 

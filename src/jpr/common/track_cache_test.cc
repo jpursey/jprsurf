@@ -6,6 +6,8 @@
 #include "jpr/common/track_cache.h"
 
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -194,6 +196,81 @@ TEST_F(TrackCacheTest, NothingSelectedHasNoSelectedAutomationModes) {
         << mode;
   }
   EXPECT_FALSE(Cache().HasMixedSelectedAutoModes());
+}
+
+//------------------------------------------------------------------------------
+// GetRecArmGroup
+//------------------------------------------------------------------------------
+
+// Returns the names of `tracks`.
+std::vector<std::string> GetNames(const std::vector<Track*>& tracks) {
+  std::vector<std::string> names;
+  for (const Track* track : tracks) {
+    names.emplace_back(track->GetName());
+  }
+  return names;
+}
+
+TEST_F(TrackCacheTest, RecArmGroupOfAnUngroupedTrackIsTheTrack) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  project_.AddTrack("Bass")->selected = true;
+  Cache().Refresh();
+  EXPECT_THAT(GetNames(Cache().GetRecArmGroup(GetCachedTrack(drums))),
+              ElementsAre("Drums"));
+}
+
+TEST_F(TrackCacheTest, RecArmGroupOfASelectedTrackHasEverySelectedTrack) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  project_.AddTrack("Bass")->selected = true;
+  project_.AddTrack("Keys");
+  drums->selected = true;
+  Cache().Refresh();
+  EXPECT_THAT(GetNames(Cache().GetRecArmGroup(GetCachedTrack(drums))),
+              ElementsAre("Drums", "Bass"));
+}
+
+// A group reaches its followers from a track that leads it, and on through
+// each that leads a group of its own, but not through one that doesn't.
+TEST_F(TrackCacheTest, RecArmGroupReachesFollowersOfGroupsTheTrackLeads) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* kick = project_.AddTrack("Kick");
+  FakeTrack* snare = project_.AddTrack("Snare");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  FakeTrack* keys = project_.AddTrack("Keys");
+  drums->rec_arm_groups.lead = GroupMask(1);
+  kick->rec_arm_groups = {.lead = GroupMask(40), .follow = GroupMask(1)};
+  snare->rec_arm_groups.follow = GroupMask(40);
+  bass->rec_arm_groups = {.lead = GroupMask(2), .follow = GroupMask(1)};
+  keys->rec_arm_groups.follow = GroupMask(3);
+  Cache().Refresh();
+  EXPECT_THAT(GetNames(Cache().GetRecArmGroup(GetCachedTrack(drums))),
+              ElementsAre("Drums", "Kick", "Bass", "Snare"));
+
+  // A follower that doesn't lead reaches no one.
+  EXPECT_THAT(GetNames(Cache().GetRecArmGroup(GetCachedTrack(snare))),
+              ElementsAre("Snare"));
+}
+
+TEST_F(TrackCacheTest, RecArmGroupReachesTheGroupsOfTheSelectedTracks) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  FakeTrack* keys = project_.AddTrack("Keys");
+  JoinGroup(bass, 1);
+  JoinGroup(keys, 1);
+  drums->selected = true;
+  bass->selected = true;
+  Cache().Refresh();
+  EXPECT_THAT(GetNames(Cache().GetRecArmGroup(GetCachedTrack(drums))),
+              ElementsAre("Drums", "Bass", "Keys"));
+}
+
+TEST_F(TrackCacheTest, RecArmGroupOfADeletedTrackIsEmpty) {
+  FakeTrack* fake = project_.AddTrack("Drums");
+  Cache().Refresh();
+  Track* track = GetCachedTrack(fake);
+  project_.DeleteTrack(fake);
+  Cache().Refresh();
+  EXPECT_THAT(Cache().GetRecArmGroup(track), IsEmpty());
 }
 
 }  // namespace

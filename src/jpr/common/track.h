@@ -67,6 +67,34 @@ inline constexpr TrackBoolProperty kTrackBoolProperties[] = {
     TrackBoolProperty::kSelected, TrackBoolProperty::kMute,
     TrackBoolProperty::kSolo, TrackBoolProperty::kRecArm};
 
+// REAPER's record modes (I_RECMODE), with REAPER's numbers, named after its
+// "Set track record mode to" actions. REAPER has modes 12 to 15 too, the
+// forced input formats, which no action sets, so they aren't named here. A mode
+// read from REAPER may be one of those, or any other number, as REAPER holds
+// whatever it is set to.
+enum class TrackRecMode {
+  kInput = 0,
+  kOutputStereo = 1,
+  kNone = 2,  // Monitoring only.
+  kOutputStereoCompensated = 3,
+  kMidiOutput = 4,
+  kOutputMono = 5,
+  kOutputMonoCompensated = 6,
+  kMidiOverdub = 7,
+  kMidiReplace = 8,
+  kMidiTouchReplace = 9,
+  kOutputMultichannel = 10,
+  kOutputMultichannelCompensated = 11,
+  kMidiLatchReplace = 16,
+};
+
+// REAPER's record monitoring modes (I_RECMON), with REAPER's numbers.
+enum class TrackMonitorMode {
+  kOff = 0,
+  kOn = 1,
+  kAuto = 2,  // REAPER's "auto/tape": on, but not while playing.
+};
+
 // Whether a change to a track also changes the tracks REAPER groups with it.
 enum class TrackGrouping {
   kNone,     // Changes only the track, ignoring track groups and ganging.
@@ -246,6 +274,28 @@ class Track final {
   bool GetRecArm() const { return rec_arm_; }
   bool Get(TrackBoolProperty property) const;
 
+  // Returns the monitoring mode GetTrackState() shows, which for the master
+  // is always kOff, whatever its I_RECMON is, as REAPER shows it no flag.
+  TrackMonitorMode GetMonitorMode() const { return monitor_mode_; }
+
+  // Returns the cached record mode, which may be a mode TrackRecMode doesn't
+  // name. It isn't in the rest of the track's state, so Refresh() reads it
+  // only on the track's first Refresh(), and after OnRecModeChanged(). Until
+  // the first, it is kInput.
+  TrackRecMode GetRecMode() const { return rec_mode_; }
+
+  // Called when the track's record mode may have changed, which REAPER reports
+  // only with SetSurfaceRecArm() for the track, so the next Refresh() reads it
+  // again.
+  void OnRecModeChanged() { rec_mode_stale_ = true; }
+
+  // Returns the record mode TrackBatch::SetRecMode() last replaced with
+  // kNone, or nullopt if it hasn't since the extension loaded. This is kept in
+  // memory only, never in the project.
+  std::optional<TrackRecMode> GetReplacedRecMode() const {
+    return replaced_rec_mode_;
+  }
+
   // Sets the track's properties directly.
   //
   // Mute, solo, and record arm each add their own undo point, even while a
@@ -406,8 +456,10 @@ class Track final {
   };
 
   // Performs the actual refresh logic to update both the track ID and the
-  // corresponding cached state for this track.
-  void DoRefresh(MediaTrack* track_id);
+  // corresponding cached state for this track. The record mode is re-read only
+  // with `read_rec_mode`, if it is stale, which only Refresh() passes, so a
+  // track the surface never refreshes never reads it.
+  void DoRefresh(MediaTrack* track_id, bool read_rec_mode = false);
 
   // Re-reads this track's Track Manager settings from REAPER, returning true if
   // either changed. This is called only by the TrackCache, which owns
@@ -483,6 +535,14 @@ class Track final {
   bool mute_ = false;
   bool solo_ = false;
   bool rec_arm_ = false;
+  TrackMonitorMode monitor_mode_ = TrackMonitorMode::kOff;
+
+  // The record mode, which is re-read from REAPER while it is stale (see
+  // GetRecMode()), and the mode last replaced with kNone (see
+  // GetReplacedRecMode()).
+  TrackRecMode rec_mode_ = TrackRecMode::kInput;
+  bool rec_mode_stale_ = true;
+  std::optional<TrackRecMode> replaced_rec_mode_;
 
   // Track hierarchy. There is a single child track list holding every child,
   // and membership of a filtered list is derived from IsIncluded().
@@ -546,7 +606,33 @@ class TrackBatch final {
     Set(track, TrackBoolProperty::kRecArm, rec_arm, grouping);
   }
 
+  // Sets the record mode of the track, if it exists and isn't the master,
+  // which has none. Setting kNone over another mode remembers that mode (see
+  // Track::GetReplacedRecMode()). REAPER doesn't group the record mode, so
+  // with kGrouped, a change to the track also sets every track a grouped rec
+  // arm reaches (see TrackCache::GetRecArmGroup()).
+  void SetRecMode(Track* track, TrackRecMode mode,
+                  TrackGrouping grouping = TrackGrouping::kNone);
+
+  // Sets the monitoring mode of the track, if it exists and isn't the master.
+  // REAPER has no groups for monitoring, so with kGrouped, this sets every
+  // selected track if the track is selected, as REAPER's UI does.
+  void SetMonitorMode(Track* track, TrackMonitorMode mode,
+                      TrackGrouping grouping = TrackGrouping::kNone);
+
  private:
+  // Returns true if the track's modes can be set: it exists, and isn't the
+  // master.
+  static bool HasModes(const Track* track);
+
+  // Sets the record mode of the track alone, if HasModes(), and returns true
+  // if it changed.
+  bool SetOneRecMode(Track* track, TrackRecMode mode);
+
+  // Notes a change that adds the undo point named `undo_name`, before it is
+  // made.
+  void OnChange(const char* undo_name);
+
   // The name of the undo point to add when the batch ends, or null if nothing
   // that adds one has changed.
   const char* undo_name_ = nullptr;

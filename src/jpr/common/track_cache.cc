@@ -5,14 +5,30 @@
 
 #include "jpr/common/track_cache.h"
 
+#include <cstdint>
+#include <vector>
+
 #include "absl/algorithm/container.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "gb/profile/profile_point.h"
 #include "gb/profile/profile_timer.h"
 #include "jpr/common/reaper_api.h"
+#include "jpr/common/track_state.h"
 
 namespace jpr {
+
+namespace {
+
+// Returns the track's groups of the rec arm group property `name`
+// ("RECARM_LEAD" or "RECARM_FOLLOW"), as a mask of groups 1 to 64.
+uint64_t GetRecArmGroupMask(MediaTrack* track_id, const char* name) {
+  const uint64_t low = GetSetTrackGroupMembership(track_id, name, 0, 0);
+  const uint64_t high = GetSetTrackGroupMembershipHigh(track_id, name, 0, 0);
+  return low | (high << 32);
+}
+
+}  // namespace
 
 TrackCache* TrackCache::s_instance_ = nullptr;
 
@@ -127,6 +143,7 @@ void TrackCache::Refresh() {
     // If the underlying track pointer hasn't changed, we don't bother
     // refreshing the properties as an optimization.
     if (track_id_changed) {
+      new_track->OnRecModeChanged();
       new_track->DoRefresh(track_id);
     }
   }
@@ -323,6 +340,50 @@ std::vector<Track*> TrackCache::GetSelectedTracks() const {
     }
   }
   return tracks;
+}
+
+std::vector<Track*> TrackCache::GetRecArmGroup(Track* track) const {
+  std::vector<Track*> reached;
+  MediaTrack* const track_id = track->GetTrackId();
+  if (track_id == nullptr) {
+    return reached;
+  }
+
+  // The cached selection is only kept up to date for tracks the surface shows,
+  // so this reads REAPER's.
+  if (track != master_track_ &&
+      (GetTrackStateFlags(track_id) & kTrackStateSelected) != 0) {
+    reached = GetSelectedTracks();
+  }
+  if (absl::c_find(reached, track) == reached.end()) {
+    reached.push_back(track);
+  }
+
+  // Each reached track's leads are read as it is reached, and the follows of
+  // the track list only once one leads a group, as most tracks lead none.
+  // REAPER's master can't be in a group, so only the track list is read.
+  std::vector<uint64_t> follows;
+  for (int i = 0; i < static_cast<int>(reached.size()); ++i) {
+    const uint64_t lead =
+        GetRecArmGroupMask(reached[i]->GetTrackId(), "RECARM_LEAD");
+    if (lead == 0) {
+      continue;
+    }
+    if (follows.empty()) {
+      follows.reserve(all_tracks_.size());
+      for (Track* other : all_tracks_) {
+        follows.push_back(
+            GetRecArmGroupMask(other->GetTrackId(), "RECARM_FOLLOW"));
+      }
+    }
+    for (int j = 0; j < static_cast<int>(all_tracks_.size()); ++j) {
+      if ((lead & follows[j]) != 0 &&
+          absl::c_find(reached, all_tracks_[j]) == reached.end()) {
+        reached.push_back(all_tracks_[j]);
+      }
+    }
+  }
+  return reached;
 }
 
 AutoModes TrackCache::GetSelectedAutoModes() {

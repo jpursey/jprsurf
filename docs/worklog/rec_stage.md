@@ -135,9 +135,9 @@ class Track {
   // hasn't since REAPER started. Kept in memory only.
   std::optional<TrackRecMode> GetReplacedRecMode() const;
 
-  // Re-reads the record mode from REAPER, when REAPER calls the track's
-  // SetSurfaceRecArm(), which it does whenever the mode changes.
-  void RefreshRecMode();
+  // Called when REAPER calls the track's SetSurfaceRecArm(), which it does
+  // whenever the mode changes. The next Refresh() re-reads the mode (CL3).
+  void OnRecModeChanged();
 };
 
 class TrackBatch {
@@ -147,9 +147,11 @@ class TrackBatch {
                       TrackGrouping grouping = TrackGrouping::kNone);
 };
 
-// The tracks a grouped rec arm change to the track reaches: its rec arm
-// group, and the selected tracks if it is selected. Includes the track.
-std::vector<Track*> GetRecArmGroup(Track* track);
+class TrackCache {
+  // The tracks a grouped rec arm change to the track reaches: its rec arm
+  // group, and the selected tracks if it is selected. Includes the track.
+  std::vector<Track*> GetRecArmGroup(Track* track) const;
+};
 ```
 
 - The monitoring mode is in `GetTrackState()`'s flags (&128 on, &256 auto),
@@ -161,20 +163,31 @@ std::vector<Track*> GetRecArmGroup(Track* track);
   another mode. The memory is on `Track`, so it outlives scenes, and a config
   reload keeps it, which is harmless: it is only a better guess than `input`.
 - REAPER has no grouping for the record mode, so `SetRecMode()` with
-  `kGrouped` sets every track in `GetRecArmGroup()`. Whether the monitoring
-  mode's setter can use REAPER's own grouping (`CSurf_OnInputMonitorChangeEx`)
-  is To confirm.
+  `kGrouped` sets every track in `GetRecArmGroup()`, if the track's mode
+  changes, as the other setters leave a track that has the value alone with
+  its group. The monitoring mode's setter uses REAPER's own ganging
+  (`CSurf_OnInputMonitorChangeEx`), which sets the selected tracks if the
+  track is selected, and has no groups (see To confirm).
+- Neither setter sets the master's mode (CL3): REAPER's master has no record
+  mode, and its monitoring isn't shown.
 - `TrackBatch` adds one undo point for a batch that changes the record or
   monitoring mode, as for its other changes ("JPR:Change Record Mode" alone).
 
 **Performance:** the record mode is never polled. REAPER calls
 `SetSurfaceRecArm()` for a track whenever its record mode changes (see To
 confirm), so the track re-reads it then, which also covers the rounds of every
-track's state after a track list change or an undo. How a notification reaches
-the track's cache, and whether a round reads each track or marks it to read on
-its next use, is decided in CL3, with its calls bounded on the large project.
-`GetRecArmGroup()` reads group membership on a press only, and is bounded on
-the large project in the call count tests.
+track's state after a track list change or an undo. In CL3, the notification
+only marks the track's mode stale (`ControlSurface` calls
+`OnRecModeChanged()`), and `Track::Refresh()`, which the surface calls on each
+run for the tracks it shows, re-reads a stale mode. So a round of every
+track's state costs one cheap read for each track shown, not each track, and a
+track's first refresh reads it once. The call count bounds that rose in CL3
+are each that: startup (+17, the master and the 16 top level tracks the
+surface refreshes), and every gesture whose round of states reaches the shown
+tracks (+7 to +17). `GetRecArmGroup()` reads group membership on a press only,
+two reads for each track it reaches, and two for every track in the project
+if one of them leads a group. It is bounded on the large project in the call
+count tests with the first gesture that uses it (CL5).
 
 ### scene: Enumerated track values and their actions
 
@@ -420,7 +433,7 @@ Depends on: nothing.
   until release; `[double, held]` is on from the second press until release; a
   quick tap's deferred press is never held; long press behavior is unchanged.
 
-### CL3 [ ] common: Record mode and monitoring mode on Track
+### CL3 [x] common: Record mode and monitoring mode on Track
 
 Depends on: CL1c.
 
