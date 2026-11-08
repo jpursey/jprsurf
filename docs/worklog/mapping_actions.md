@@ -160,7 +160,7 @@ value is what the mapping reads today, whatever the control is.
 | Kind     | Parameters           | The new value                                    | How each track in the scope gets it                                                           |
 | -------- | -------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | `set`    | `value`              | `value`, or without one, the control's           | Exactly                                                                                       |
-| `scale`  | `value`              | `value`, or without one, the control's           | It moves by this track's change since the gesture began: the same amount for a pan or normalized value, and the same dB for a volume, kept within its range |
+| `scale`  | `value`              | `value`, or without one, the control's           | It moves by this track's change since their starts (below): the same amount for a pan or normalized value, and the same dB for a volume, kept within its range |
 | `toggle` | `min`, `max`, `each` | `max`, or `min` if this track is already `max`   | Exactly, or with `each`, each track decides from its own value                                |
 | `step`   | `min`, `max`, `each` | The one after this track's, from `min` to `max`, wrapping around | Exactly, or with `each`, each track steps from its own value                    |
 | `copy`   | `track`              | The value of the track `track` refers to (a track reference) | Exactly                                                                           |
@@ -173,19 +173,29 @@ value is what the mapping reads today, whatever the control is.
   its pot button `grouped, set(value = 0.0)`, which centers every grouped
   track. `grouped, scale(value = 0.0)` would center this track and move its
   group by the same amount, as the pot button does today.
-- **A gesture.** `scale` moves each track from where it was when the gesture
-  began, not from where the last move left it, as REAPER's grouped faders do:
-  while a fader is touched, REAPER remembers each track's value from before the
-  touch, so a fader taken to silence and back, without letting go, puts every
-  track back where it was, and one that pushes a track against the end of its
-  range gets it back off the end on the way back. A gesture is the control's
-  touch, for a control that has one, and each input otherwise (an encoder, or a
-  press). The scope's tracks are fixed when it begins.
+- **Starts.** `scale` moves each track from its start, not from where the
+  last move left it, exactly as REAPER moves grouped tracks (see To confirm):
+  a track's start is where it was when this track began leading it, so taking
+  this track to silence and back, or pushing another track against the end of
+  its range and back, puts every track back where it was. It has nothing to do
+  with the control or its touch.
+  - The starts are taken again, from where the tracks are, when another track
+    leads, or when this track was changed other than by its own `scale` (alone,
+    in REAPER, or by another mapping).
+  - A track that was changed some other way, or wasn't in the scope at the
+    last move (one selected since, say), takes a new start of its own, and the
+    others keep theirs.
+  - Each property has one set of starts, shared by every mapping that scales
+    it, as REAPER has one for a volume and one for a pan. A change is found by
+    value: a track that isn't at the value `scale` last gave it was changed.
+  - The starts are scene state, so loading a config again forgets them.
+    `grouped, scale` on a volume or a pan is REAPER's own, so REAPER keeps
+    those.
 - **A volume's change** is the same in dB, which is the same ratio of gains.
-  Taking this track to silence (-inf dB) takes the others with it, and they
-  come back with it within the gesture. A gesture that begins at silence has no
-  ratio to move the others by; what REAPER does then is in To confirm, and
-  `scale` does the same.
+  As in REAPER, silence counts as -200 dB: taking this track to silence takes
+  the others to tiny gains that read as -inf, and taking it up again brings
+  them back. One that starts at silence moves the others by its whole rise
+  from -200 dB.
 - **`toggle` with `others`.** A toggle sets `min` only if this track is at
   `max` and the `others` action would change nothing. Without an `others`
   action, that is just "at `max`". This is select's rule today: a press selects
@@ -472,8 +482,10 @@ struct ReadAction {
   record arm, and select take the same path as the enumerated values. Volume
   and pan take every scope: `grouped, scale` through the `TrackGrouping` they
   already have, and the others through `TrackBatch`'s setters, one track at a
-  time, `scale` computing each track's value from this track's change.
-  `grouped, set` finds the grouped tracks from REAPER's volume and pan group
+  time, `scale` computing each track's value from this track's change since
+  their starts. The starts are a small class of the scene's, one for each
+  property scaled: the lead, and each track's start and the value `scale` last
+  gave it, which a move checks, so nothing is polled. `grouped, set` finds the grouped tracks from REAPER's volume and pan group
   flags, as `TrackValue::GetGroup()` does for a record arm, which is for a
   press, not a run, as it reads REAPER's groups.
 - **Anchors** move from `TrackActions` to the `track_anchor` component, one
@@ -534,21 +546,38 @@ mappings on every run, which would be a backlog item to measure first.
 
 ### To confirm
 
-In the user's REAPER (CL1):
-- **Selection grouping.** Whether REAPER's UI selects grouped tracks together,
-  as its group flags have none for selection (`GetSetTrackGroupMembership()`
-  has media edit, volume, VCA, pan, width, mute, solo, record arm, polarity,
-  and automation mode). If it doesn't, `grouped` on `track:selected` reaches
-  the tracks that share any group with this one.
-- **A grouped fader's gesture.** What ends REAPER's memory of each grouped
-  track's value from before a fader move: the surface reporting the touch
-  released (`track:volume_touched` and `track:pan_touched`), or something
-  else, such as a pause. The fake moves each grouped track from where the last
-  move left it, so it models this once it is known, and `scale` ends its
-  gestures the same way.
-- **A grouped fader from silence.** What the grouped tracks do when this
-  track's volume moves up from -inf dB. The fake fails such a move today, as
-  nobody has checked.
+All checked (CL1):
+- **Selection grouping** (the user's REAPER). Selecting a grouped track
+  selects only that track: grouping doesn't affect selection at all, and its
+  group flags have none for it (`GetSetTrackGroupMembership()` has media edit,
+  volume, VCA, pan, width, mute, solo, record arm, polarity, and automation
+  mode). So `grouped` on `track:selected` reaches the tracks that share any
+  group with this one.
+- **A grouped fader's memory** (the user's REAPER, then a temporary contract
+  test in the test install, of `CSurf_OnVolumeChangeEx()` and
+  `CSurf_OnPanChangeEx()` with `allow_gang`). It isn't the touch: REAPER moves
+  each follower from a start, not from where the last move left it.
+  - While the same track leads, each follower is its start times the lead's
+    ratio since then (a volume), or its start plus the lead's change since
+    then (a pan). Clamped to its range (+12 dB, and -1 to 1), it comes back
+    from an end it went past, as it does from silence, however long between
+    the moves, and whether or not the fader was released.
+  - The starts are taken again, from where the tracks are, when another track
+    leads, or when the lead was changed some other way, such as alone. A
+    follower that was changed some other way takes a new start of its own,
+    and the others keep theirs.
+  - A volume and a pan have separate starts: a pan move by another track
+    leaves the volume's.
+  - Selected tracks (ganging) move the same way.
+  - The lead's own value isn't clamped: REAPER takes a volume of 1000.
+- **A grouped fader from silence** (the test install). Silence counts as -200
+  dB (a gain of 1e-10) in the ratio, for the lead and for a follower's start.
+  Taking the lead to silence leaves its followers at tiny gains (such as
+  -206 dB), which read as -inf, and taking it up again brings them back, so
+  a lead that starts at silence moves its followers by its whole rise from
+  -200 dB, to +12 dB at once. (Under -200 dB, REAPER's followers differ by
+  case, such as a group's and a selection's, but every value a control sends
+  is 0 or above it.)
 
 ## CLs
 
@@ -556,18 +585,24 @@ In the user's REAPER (CL1):
 
 Depends on: nothing.
 
-- The user checks what REAPER's UI does when a grouped track is selected (its
-  group settings, and clicking the track), and, with temporary logging of what
-  REAPER returns, a grouped fader on the surface: taken to silence and back,
-  with and without releasing it between, with a pause, and moved up from
-  silence.
-- Commits the findings in To confirm, the definition of `grouped` on
-  `track:selected` they settle, and the fake's grouped volume and pan moving
-  from the gesture's start, with tests.
+- Checked: what the user found in REAPER's UI (selection, and a grouped
+  fader's memory), and what a temporary contract test found in the test install
+  (see To confirm).
+- The fake's grouped and ganged volume and pan move each follower from its
+  start, as To confirm says: the starts, which are taken again when another
+  track leads or a track was changed some other way, the clamp to each range
+  and back, and silence as -200 dB. A volume and a pan keep separate starts.
+  The fake no longer fails a grouped move from silence, or a grouped pan that
+  clamps another track's.
+- Commits the findings in To confirm.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
-- The fake's tests of the grouped gesture, and of a grouped move from silence.
+- Contract tests (`check_in_reaper`), which pass in the test install as under
+  the fake: a grouped volume to silence and back, past the top and back, from
+  silence, and with another lead, a follower changed alone, and the lead
+  changed alone; a grouped pan past an end and back, with another lead; a pan
+  move leaving the volume's starts; and the same for selected tracks.
 
 ### CL2 [ ] device: Modifiers an input ignores
 
@@ -619,11 +654,13 @@ Depends on: CL1, CL3.
 **Verify**
 - Standard checks.
 - `TrackActions` tests of each scope and kind on each property, against the
-  fake: grouping (selection's as CL1 found), the selected tracks with and
-  without `each`, `others` (select's toggle rule included), `from` with and
-  without subfolders, `scale` on several tracks (a volume's in dB, a gesture
-  through silence and back, one against the end of a range and back, one
-  beginning at silence, and a gesture ending on the touch's release), `grouped,
+  fake: grouping (selection's, the tracks sharing any group), the selected
+  tracks with and without `each`, `others` (select's toggle rule included),
+  `from` with and without subfolders, `scale` on several tracks, matching the
+  fake's grouped moves (a volume's in dB, through silence and back, against
+  the end of a range and back, from silence, another track leading, a track
+  changed some other way, one joining the scope, and two mappings sharing a
+  property's starts), `grouped,
   set` on a volume and a pan (lead and follow, and a VCA follower left out), a
   held scope, and the last touched track's rule.
 - The `ui_` tests and the surface tests pass unchanged, and call counts don't
