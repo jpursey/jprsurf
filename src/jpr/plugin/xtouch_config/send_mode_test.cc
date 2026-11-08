@@ -316,6 +316,22 @@ TEST_F(SendModeTest, InfoStripControlsTheTrack) {
   EXPECT_EQ(GetName(0), "T4");
 }
 
+// Rec steps through the record stages, as on a track strip: a press arms the
+// track to monitor, and a double press to record.
+TEST_F(SendModeTest, InfoStripRecStepsThroughTheRecordStages) {
+  FakeTrack* source = tracks_[kSource];
+  EnterSendMode(kSource);
+  TapRec(kInfoStrip);
+  EXPECT_TRUE(source->rec_arm);
+  EXPECT_EQ(source->rec_mode, static_cast<int>(TrackRecMode::kNone));
+  EXPECT_EQ(GetLight(StripButton::kRec, kInfoStrip), Light::kOn);
+
+  DoublePressRec(kInfoStrip);
+  EXPECT_TRUE(source->rec_arm);
+  EXPECT_EQ(source->rec_mode, static_cast<int>(TrackRecMode::kInput));
+  EXPECT_EQ(GetLight(StripButton::kRec, kInfoStrip), Light::kBlinking);
+}
+
 //------------------------------------------------------------------------------
 // Undo
 //

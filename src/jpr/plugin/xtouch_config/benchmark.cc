@@ -286,8 +286,11 @@ TEST_F(Benchmark, SoloingARange) {
   TimeActions([&] { PressRange(StripButton::kSolo, 6, 9); });
 }
 
+// Arms the range to monitor, then disarms it. Before the record stages (see
+// docs/worklog/rec_stage.md), it armed the range to record, with the anchor
+// set as Rec was pressed, so a bar from then times a lighter gesture.
 TEST_F(Benchmark, ArmingARange) {
-  TimeActions([&] { PressRange(StripButton::kRec, 6, 9); });
+  TimeActions([&] { ArmRange(6, 9); });
 }
 
 TEST_F(Benchmark, SelectingARange) {
@@ -302,8 +305,11 @@ TEST_F(Benchmark, TappingSolo) {
   TimeActions([&] { Tap(xtouch_, StripButton::kSolo, 0); });
 }
 
+// Arms T9 to monitor, then disarms it. Before the record stages (see
+// docs/worklog/rec_stage.md), it armed T9 to record, which set no record mode,
+// so a bar from then times a lighter gesture.
 TEST_F(Benchmark, TappingRecordArm) {
-  TimeActions([&] { Tap(xtouch_, StripButton::kRec, 0); });
+  TimeActions([&] { TapRec(8); });
 }
 
 TEST_F(Benchmark, TappingSelect) {

@@ -172,6 +172,8 @@ class TrackCache {
   mode, and its monitoring isn't shown.
 - `TrackBatch` adds one undo point for a batch that changes the record or
   monitoring mode, as for its other changes ("JPR:Change Record Mode" alone).
+  A batch of rec arms and record modes alone, as a record stage press makes,
+  is "JPR:Change Record Arm" rather than "JPR:Change Tracks" (CL6).
 
 **Performance:** the record mode is never polled. REAPER calls
 `SetSurfaceRecArm()` for a track whenever its record mode changes (see To
@@ -315,11 +317,31 @@ mappings {
 }
 ```
 
-- `track_strip` keeps `strip.rec <-> track:ui_rec_arm` for the Info strip in
-  Send/Receive mode, which has no anchors. Whether the Info strip gets record
-  stages too is to decide in the CL.
+- The press, the double press, and the light are in `track_strip`, so the Info
+  strip in Send/Receive mode gets record stages too, as it has the same
+  controls as a Track mode strip. The anchors are in each Track mode strip's
+  view, as before (CL6).
 - `xtouch.md` documents Rec, its light, and the double press modifiers.
 - The user's `pursey.jprsurf` gets the same change, by hand.
+
+**Call counts** (CL6, on the large project): armed tracks add nothing to the
+steady state. A press on Rec costs 4 cheap calls and one moderate one more than
+the plain rec arm it replaces: the record mode's read and set, and the rec arm
+group's. A group the track leads reads every track's membership, 256 cheap
+calls. Alt refreshes every track, about 500 cheap calls (three reads a track,
+and the record modes of the tracks off the surface), where the round of every
+track's state that a rec arm makes REAPER send costs about 2600. Reading
+REAPER's value alone would save about half of Alt's, under a tenth of the
+gesture, so `UiPress()` keeps the refresh.
+
+**Benchmark** (CL6, back to back against 576d816, the commit before the
+feature, in both orders): a track list change is within noise. Track mode's
+idle runs are about 6% slower (0.4us of about 7us), and entering Send/Receive
+mode and back about 11%, as each strip has 4 more Rec mappings, 64 in all, and
+`View::SyncMappings()` syncs every mapping on each run, about 5ns each.
+Send/Receive mode's idle runs don't move, as only its Info strip has them. The
+user accepted the cost. Syncing only the mappings whose output or condition
+can change on a run would win it back, for every config.
 
 ### To confirm
 
@@ -518,7 +540,7 @@ Depends on: CL4.
   monitor sets `none`, record restores the replaced mode or `input`, grouping
   reaches `GetRecArmGroup()`, and a range copies the anchor's stage.
 
-### CL6 [ ] plugin: Record stages in the X-Touch example
+### CL6 [x] plugin: Record stages in the X-Touch example
 
 Depends on: CL2, CL5.
 

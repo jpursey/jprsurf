@@ -571,7 +571,10 @@ class Track final {
 
 // Changes to any number of tracks, made as one undo point: it adds one if
 // anything changed (none for selection alone), when the batch ends. Any change
-// to more than one track should use one.
+// to more than one track should use one. The undo point is named for the kind
+// of change, or "JPR:Change Tracks" for several kinds, except that rec arms and
+// record modes together, as arming a track to monitor or to record sets, are
+// "JPR:Change Record Arm".
 //
 // REAPER's UI refresh is deferred by the run (see ControlSurface), not the
 // batch, so a batch made outside a run is made inside a DeferredRefresh, for

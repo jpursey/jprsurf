@@ -25,10 +25,22 @@ namespace {
 // Undo point name for a TrackBatch that changed more than one kind of property.
 constexpr char kChangeTracksUndoName[] = "JPR:Change Tracks";
 
-// Undo point names for a TrackBatch that changed only the record or monitoring
-// modes.
+// Undo point names for a TrackBatch that changed only the rec arms, or only
+// the record or monitoring modes.
+constexpr char kToggleRecArmUndoName[] = "JPR:Toggle Record Arm";
 constexpr char kChangeRecModeUndoName[] = "JPR:Change Record Mode";
 constexpr char kChangeMonitorModeUndoName[] = "JPR:Change Monitoring";
+
+// Undo point name for a TrackBatch that changed only the rec arms and record
+// modes, as arming a track to monitor or to record does.
+constexpr char kChangeRecArmUndoName[] = "JPR:Change Record Arm";
+
+// Returns whether the undo point name is one of a rec arm change.
+bool IsRecArmUndoName(const char* undo_name) {
+  return undo_name == kToggleRecArmUndoName ||
+         undo_name == kChangeRecModeUndoName ||
+         undo_name == kChangeRecArmUndoName;
+}
 
 // Returns the monitoring mode GetTrackState()'s flags show.
 TrackMonitorMode GetMonitorModeFromFlags(int flags) {
@@ -86,7 +98,7 @@ const Track::BoolPropertyInfo& Track::GetBoolPropertyInfo(
        [](MediaTrack* track_id, bool value, int ingroupflags) {
          SetTrackUIRecArm(track_id, value ? 1 : 0, ingroupflags);
        },
-       "JPR:Toggle Record Arm"},
+       kToggleRecArmUndoName},
   };
   return kBoolPropertyInfo[static_cast<int>(property)];
 }
@@ -688,8 +700,11 @@ void TrackBatch::OnChange(const char* undo_name) {
     ContinuousUndo::Get().Flush();
     undo_name_ = undo_name;
   } else if (undo_name_ != undo_name) {
-    // More than one kind of property changed.
-    undo_name_ = kChangeTracksUndoName;
+    // More than one kind of property changed, which is still a rec arm change
+    // if they are rec arms and record modes.
+    undo_name_ = IsRecArmUndoName(undo_name_) && IsRecArmUndoName(undo_name)
+                     ? kChangeRecArmUndoName
+                     : kChangeTracksUndoName;
   }
 }
 

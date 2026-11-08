@@ -5,11 +5,15 @@
 
 #include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
+#include <initializer_list>
 #include <string>
 
+#include "absl/functional/function_ref.h"
 #include "absl/strings/ascii.h"
+#include "absl/time/time.h"
 #include "jpr/common/testing/fake_reaper.h"
 #include "jpr/common/undo.h"
+#include "jpr/device/control.h"
 
 namespace jpr {
 
@@ -58,6 +62,52 @@ void XTouchConfigTest::PressRange(FakeXTouch::StripButton button, int first,
   Tap(GetXTouch(last), button, GetXTouchStrip(last));
   GetXTouch(first).Release(button, GetXTouchStrip(first));
   surface_->Run();
+}
+
+void XTouchConfigTest::HoldingModifiers(
+    std::initializer_list<FakeXTouch::Button> modifiers,
+    absl::FunctionRef<void()> gesture) {
+  for (FakeXTouch::Button modifier : modifiers) {
+    xtouch_.Press(modifier);
+  }
+  surface_->Run();
+  gesture();
+  for (FakeXTouch::Button modifier : modifiers) {
+    xtouch_.Release(modifier);
+  }
+  RunUntilShown();
+}
+
+void XTouchConfigTest::ArmRange(int first, int last, bool double_press) {
+  constexpr FakeXTouch::StripButton kRec = FakeXTouch::StripButton::kRec;
+  FakeXTouch& xtouch = GetXTouch(first);
+  const int strip = GetXTouchStrip(first);
+  xtouch.Press(kRec, strip);
+  if (double_press) {
+    surface_->Run();
+    xtouch.Release(kRec, strip);
+    surface_->Run();
+    xtouch.Press(kRec, strip);
+    surface_->Run();
+  } else {
+    // The press acts in the first run past the double press window.
+    surface_->RunFor(absl::Seconds(Control::kDoublePressWindowSecs));
+    surface_->Run();
+  }
+  GetXTouch(last).Press(kRec, GetXTouchStrip(last));
+  surface_->Run();
+  GetXTouch(last).Release(kRec, GetXTouchStrip(last));
+  xtouch.Release(kRec, strip);
+  RunUntilShown();
+}
+
+void XTouchConfigTest::TapRec(int strip) {
+  Tap(GetXTouch(strip), FakeXTouch::StripButton::kRec, GetXTouchStrip(strip));
+}
+
+void XTouchConfigTest::DoublePressRec(int strip) {
+  DoublePress(GetXTouch(strip), FakeXTouch::StripButton::kRec,
+              GetXTouchStrip(strip));
 }
 
 void XTouchConfigTest::TapSelect(int strip) {

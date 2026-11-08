@@ -757,6 +757,25 @@ TEST_F(TrackTest, BatchSetsTheMonitoringModeWithOneUndoPoint) {
   EXPECT_EQ(project_.GetUndoPoints().size(), 1);
 }
 
+// Arming a track to monitor or to record sets its rec arm and record mode,
+// which is named for the rec arm, in either order.
+TEST_F(TrackTest, BatchOfRecArmsAndRecordModesAddsARecordArmUndoPoint) {
+  FakeTrack* drums = project_.AddTrack("Drums");
+  FakeTrack* bass = project_.AddTrack("Bass");
+  TrackCache::Get().Refresh();
+  {
+    DeferredRefresh deferred_refresh;  // As a run holds.
+    TrackBatch batch;
+    batch.SetRecMode(GetCachedTrack(drums), TrackRecMode::kNone);
+    batch.SetRecArm(GetCachedTrack(drums), true);
+    batch.SetRecArm(GetCachedTrack(bass), true);
+    batch.SetRecMode(GetCachedTrack(bass), TrackRecMode::kNone);
+  }
+  EXPECT_THAT(
+      project_.GetUndoPoints(),
+      ElementsAre(Field(&FakeUndoPoint::name, "JPR:Change Record Arm")));
+}
+
 TEST_F(TrackTest, BatchOfModesAndRecArmAddsOneUndoPoint) {
   FakeTrack* fake = project_.AddTrack("Drums");
   Track* track = Refresh(fake);

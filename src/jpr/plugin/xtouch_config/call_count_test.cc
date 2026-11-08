@@ -10,6 +10,7 @@
 #include "jpr/common/testing/call_counter.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_reaper.h"
+#include "jpr/common/testing/fake_track.h"
 #include "jpr/common/testing/large_project.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/xtouch_config/xtouch_config_test.h"
@@ -87,6 +88,13 @@ TEST_F(CallCountTest, TrackModeWhilePlaying) {
   EXPECT_EQ(calls_.TakeCounts(), (CallCounts{.cheap = 3586, .moderate = 30}));
 }
 
+// T9 monitors, and T10 records.
+TEST_F(CallCountTest, TrackModeWithArmedTracks) {
+  TapRec(8);
+  DoublePressRec(9);
+  EXPECT_EQ(CountASecond(), (CallCounts{.cheap = 3496, .moderate = 30}));
+}
+
 TEST_F(CallCountTest, SendReceiveModeOnABus) {
   EnterSendMode(kBus);
   EXPECT_EQ(CountASecond(), (CallCounts{.cheap = 4366, .moderate = 30}));
@@ -148,12 +156,70 @@ TEST_F(CallCountTest, TappingSolo) {
           .cheap = 867, .moderate = 9, .refreshes = 1, .undo_points = 1}));
 }
 
+// Arms T9 to monitor: its record mode is read, then set to none.
 TEST_F(CallCountTest, TappingRecordArm) {
-  Tap(xtouch_, StripButton::kRec, 0);
+  TapRec(8);
   EXPECT_EQ(
       calls_.TakeCounts(),
       (CallCounts{
-          .cheap = 3461, .moderate = 9, .refreshes = 1, .undo_points = 1}));
+          .cheap = 3465, .moderate = 10, .refreshes = 1, .undo_points = 1}));
+}
+
+// Arms T9 to record, in the record mode it has.
+TEST_F(CallCountTest, DoublePressingRecordArm) {
+  DoublePressRec(8);
+  EXPECT_EQ(
+      calls_.TakeCounts(),
+      (CallCounts{
+          .cheap = 3683, .moderate = 11, .refreshes = 1, .undo_points = 1}));
+}
+
+// T9 and T10 lead and follow a rec arm group, so finding the tracks the group
+// reaches reads every track's membership.
+TEST_F(CallCountTest, DoublePressingRecordArmOnAGroup) {
+  FakeProject& project = reaper_.GetProject();
+  JoinGroup(project.FindTrackByName("T9"), 1);
+  JoinGroup(project.FindTrackByName("T10"), 1);
+  DoublePressRec(8);
+  EXPECT_EQ(
+      calls_.TakeCounts(),
+      (CallCounts{
+          .cheap = 3944, .moderate = 12, .refreshes = 1, .undo_points = 1}));
+}
+
+// T1 and T2 record, and T3 monitors, so Alt + Ctrl on T9 sets T1 and T2 to
+// monitor, and T9 to record. Alt refreshes every track in the project first.
+TEST_F(CallCountTest, AltCtrlDoublePressingRecordArm) {
+  DoublePressRec(0);
+  DoublePressRec(1);
+  TapRec(2);
+  calls_.TakeCounts();
+  HoldingModifiers({Button::kAlt, Button::kControl},
+                   [&] { DoublePressRec(8); });
+  EXPECT_EQ(
+      calls_.TakeCounts(),
+      (CallCounts{
+          .cheap = 4507, .moderate = 16, .refreshes = 1, .undo_points = 1}));
+}
+
+// Holding Rec on T7, on the extender, and pressing it on T10, on the X-Touch,
+// which arms them to monitor. It costs more than a muted range, as each rec arm
+// sends a round of every track's state, as a tap does.
+TEST_F(CallCountTest, ArmingARange) {
+  ArmRange(6, 9);
+  EXPECT_EQ(
+      calls_.TakeCounts(),
+      (CallCounts{
+          .cheap = 6182, .moderate = 17, .refreshes = 2, .undo_points = 2}));
+}
+
+// The same, from a double press, which arms them to record.
+TEST_F(CallCountTest, ArmingARangeToRecord) {
+  ArmRange(6, 9, /*double_press=*/true);
+  EXPECT_EQ(
+      calls_.TakeCounts(),
+      (CallCounts{
+          .cheap = 5860, .moderate = 10, .refreshes = 2, .undo_points = 2}));
 }
 
 // Holding mute on T7, on the extender, and tapping it on T10, on the X-Touch.

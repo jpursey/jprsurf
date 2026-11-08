@@ -35,13 +35,23 @@ widgets {
 #------------------------------------------------------------------------------
 
 # A strip that shows a track the same way in every mode: mute, solo, record
-# arm, pan, volume, name, color, and meter, and the touch of the pot and fader.
-# The select button and the bottom scribble line are left to the view, as their
-# meaning depends on the mode.
+# stage, pan, volume, name, color, and meter, and the touch of the pot and
+# fader. The select button and the bottom scribble line are left to the view,
+# as their meaning depends on the mode.
+#
+# Rec steps through the record stages: a press arms the track to monitor its
+# input, or disarms it, and a double press arms it to record, or back to
+# monitor if it already records. Its light is solid while the track monitors,
+# and blinks while it records.
 mappings track_strip(widget strip) {
   strip.mute <-> track:ui_mute
   strip.solo <-> track:ui_solo
-  strip.rec <-> track:ui_rec_arm
+  strip.rec -> track:ui_rec_stage { toggle off .. monitor }
+  strip.rec [double] -> track:ui_rec_stage { toggle monitor .. record }
+  strip.rec <- track:rec_arm {
+    mode blink
+    when track:rec_stage = monitor { mode solid }
+  }
   strip.pot <-> track:ui_pan {
     mode center
     when track:exists = false { mode off }
@@ -100,6 +110,7 @@ mappings list_navigation {
 # - send_hold: on while the Send/Receive mode button is held.
 # - select_anchor: on while a select button is held as the anchor for a range
 #   of tracks.
+# - rec_anchor: the same, for a Rec button.
 # - transport_step: what Rewind and Forward move by.
 # - surface_mode: what the strips control. Each mode has a view that is active
 #   while it is the mode.
@@ -114,6 +125,7 @@ mappings list_navigation {
 components {
   modifier mod:send_hold
   modifier mod:select_anchor
+  modifier mod:rec_anchor
   enumerated_value user:transport_step(values = [measure, beat, marker])
   enumerated_value user:surface_mode(values = [track, send_receive])
   track_reference user:folder(fallback = state:master_track)
@@ -269,19 +281,29 @@ when user:surface_mode = track {
                                           modifier = mod:select_anchor)
           track_anchor user:anchor_mute(action = mute)
           track_anchor user:anchor_solo(action = solo)
-          track_anchor user:anchor_rec_arm(action = rec_arm)
+          track_anchor user:anchor_rec_stage(action = rec_stage,
+                                             modifier = mod:rec_anchor)
           track_pick user:pick_track(reference = user:current_track)
         }
 
-        # Holding mute, solo, or record arm anchors the track, so pressing the
-        # same button on another track sets the range between them to the
-        # held track's value. The bottom scribble line shows the volume, and
-        # is blank for an empty strip.
+        # Holding mute, solo, or Rec anchors the track, so pressing the same
+        # button on another track sets the range between them to the held
+        # track's value. The bottom scribble line shows the volume, and is
+        # blank for an empty strip.
+        #
+        # Rec anchors once its press acts: 150ms into the hold, or on the
+        # second press of a double press. Like select's, its anchor turns on a
+        # modifier, which puts the other Rec buttons in a group with no double
+        # press, so the range is set as soon as they are pressed.
         mappings {
           use track_strip(strip = strip)
           strip.mute [held] -> user:anchor_mute
           strip.solo [held] -> user:anchor_solo
-          strip.rec [held] -> user:anchor_rec_arm
+          strip.rec [held] -> user:anchor_rec_stage
+          strip.rec [double, held] -> user:anchor_rec_stage
+          strip.rec [mod:rec_anchor] -> track:ui_rec_stage {
+            toggle off .. monitor
+          }
           when track:exists { strip.scribble_bottom <- track:ui_volume }
         }
 

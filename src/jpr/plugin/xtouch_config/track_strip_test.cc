@@ -11,6 +11,7 @@
 #include "gtest/gtest.h"
 #include "jpr/common/testing/fake_project.h"
 #include "jpr/common/testing/fake_track.h"
+#include "jpr/common/track.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/xtouch_config/xtouch_config_test.h"
 
@@ -19,10 +20,12 @@ namespace {
 
 using ::testing::ElementsAre;
 using ::testing::Field;
+using ::testing::SizeIs;
 using ::testing::TestParamInfo;
 using ::testing::Values;
 using ::testing::WithParamInterface;
 
+using Button = FakeXTouch::Button;
 using Light = FakeXTouch::Light;
 using Ring = FakeXTouch::Ring;
 using StripButton = FakeXTouch::StripButton;
@@ -30,6 +33,12 @@ using StripButton = FakeXTouch::StripButton;
 // The ring mode the surface shows a folder's pan with: boost/cut, with the far
 // left and right lights lit.
 constexpr int kFolderRing = 5;
+
+// FakeTrack's record modes (see TrackRecMode).
+constexpr int kRecModeInput = static_cast<int>(TrackRecMode::kInput);
+constexpr int kRecModeNone = static_cast<int>(TrackRecMode::kNone);
+constexpr int kRecModeMidiOverdub =
+    static_cast<int>(TrackRecMode::kMidiOverdub);
 
 // Long enough for a meter to fall from the top, a level a run, unless it is
 // sent again.
@@ -99,7 +108,7 @@ TEST_F(TrackStripTest, ScribbleIsBlankForADeletedTrack) {
 }
 
 //------------------------------------------------------------------------------
-// Mute, solo, and record arm
+// Mute and solo
 //------------------------------------------------------------------------------
 
 // A strip button that turns a value of the track on and off.
@@ -121,9 +130,7 @@ INSTANTIATE_TEST_SUITE_P(
     Values(ToggleButton{StripButton::kMute, &FakeTrack::mute, "JPR:Toggle Mute",
                         "Mute"},
            ToggleButton{StripButton::kSolo, &FakeTrack::solo, "JPR:Toggle Solo",
-                        "Solo"},
-           ToggleButton{StripButton::kRec, &FakeTrack::rec_arm,
-                        "JPR:Toggle Record Arm", "RecArm"}),
+                        "Solo"}),
     [](const TestParamInfo<ToggleButton>& info) {
       return info.param.test_name;
     });
@@ -153,6 +160,129 @@ TEST_P(ToggleButtonTest, HoldingAndPressingAnotherSetsTheRange) {
   EXPECT_THAT(reaper_.GetProject().GetUndoPoints(),
               ElementsAre(Field(&FakeUndoPoint::name, GetParam().undo_name),
                           Field(&FakeUndoPoint::name, GetParam().undo_name)));
+}
+
+//------------------------------------------------------------------------------
+// Rec
+//
+// Rec steps through the record stages: off, monitor (armed, with the record
+// mode none), and record (armed, with any other mode).
+//------------------------------------------------------------------------------
+
+class RecTest : public TrackStripTest {
+ protected:
+  static constexpr int kStrip = 8;  // T9, on the X-Touch's first strip.
+};
+
+TEST_F(RecTest, PressingArmsToMonitorOrDisarms) {
+  FakeTrack* track = tracks_[kStrip];
+  TapRec(kStrip);
+  EXPECT_TRUE(track->rec_arm);
+  EXPECT_EQ(track->rec_mode, kRecModeNone);
+  EXPECT_EQ(GetLight(StripButton::kRec, kStrip), Light::kOn);
+  EXPECT_THAT(
+      reaper_.GetProject().GetUndoPoints(),
+      ElementsAre(Field(&FakeUndoPoint::name, "JPR:Change Record Arm")));
+
+  // Disarming leaves the record mode.
+  TapRec(kStrip);
+  EXPECT_FALSE(track->rec_arm);
+  EXPECT_EQ(track->rec_mode, kRecModeNone);
+  EXPECT_EQ(GetLight(StripButton::kRec, kStrip), Light::kOff);
+}
+
+TEST_F(RecTest, DoublePressingArmsToRecordOrMonitor) {
+  FakeTrack* track = tracks_[kStrip];
+  track->rec_mode = kRecModeMidiOverdub;
+  TapRec(kStrip);
+  DoublePressRec(kStrip);
+  EXPECT_TRUE(track->rec_arm);
+  EXPECT_EQ(track->rec_mode, kRecModeMidiOverdub);
+  EXPECT_EQ(GetLight(StripButton::kRec, kStrip), Light::kBlinking);
+
+  DoublePressRec(kStrip);
+  EXPECT_TRUE(track->rec_arm);
+  EXPECT_EQ(track->rec_mode, kRecModeNone);
+  EXPECT_EQ(GetLight(StripButton::kRec, kStrip), Light::kOn);
+
+  // A press from record monitors too.
+  DoublePressRec(kStrip);
+  TapRec(kStrip);
+  EXPECT_TRUE(track->rec_arm);
+  EXPECT_EQ(track->rec_mode, kRecModeNone);
+}
+
+TEST_F(RecTest, DoublePressingADisarmedTrackRecordsInItsMode) {
+  FakeTrack* track = tracks_[kStrip];
+  DoublePressRec(kStrip);
+  EXPECT_TRUE(track->rec_arm);
+  EXPECT_EQ(track->rec_mode, kRecModeInput);
+  EXPECT_EQ(GetLight(StripButton::kRec, kStrip), Light::kBlinking);
+  EXPECT_THAT(reaper_.GetProject().GetUndoPoints(), SizeIs(1));
+}
+
+// T1 and T2 record, and T3 monitors. Alt + Ctrl with a double press on T9
+// makes it the only track that records, and leaves the others armed to
+// monitor.
+TEST_F(RecTest, AltCtrlDoublePressMakesTheOnlyRecordingTrack) {
+  DoublePressRec(0);
+  DoublePressRec(1);
+  TapRec(2);
+  const int undo_points =
+      static_cast<int>(reaper_.GetProject().GetUndoPoints().size());
+  HoldingModifiers({Button::kAlt, Button::kControl},
+                   [&] { DoublePressRec(kStrip); });
+
+  for (int strip : {0, 1, 2}) {
+    EXPECT_TRUE(tracks_[strip]->rec_arm) << strip;
+    EXPECT_EQ(tracks_[strip]->rec_mode, kRecModeNone) << strip;
+    EXPECT_EQ(GetLight(StripButton::kRec, strip), Light::kOn) << strip;
+  }
+  EXPECT_TRUE(tracks_[kStrip]->rec_arm);
+  EXPECT_EQ(tracks_[kStrip]->rec_mode, kRecModeInput);
+  EXPECT_EQ(GetLight(StripButton::kRec, kStrip), Light::kBlinking);
+  EXPECT_THAT(reaper_.GetProject().GetUndoPoints(), SizeIs(undo_points + 1));
+}
+
+// Holding Rec on T7, on the extender, and pressing it on T10, on the X-Touch,
+// sets the tracks from one to the other to T7's new stage.
+TEST_F(RecTest, HoldingAndPressingAnotherSetsTheRange) {
+  ArmRange(6, 9);
+  for (int i = 0; i < kTrackCount; ++i) {
+    EXPECT_EQ(tracks_[i]->rec_arm, i >= 6) << tracks_[i]->name;
+    EXPECT_EQ(tracks_[i]->rec_mode, i >= 6 ? kRecModeNone : kRecModeInput)
+        << tracks_[i]->name;
+  }
+  EXPECT_EQ(GetLight(StripButton::kRec, 7), Light::kOn);
+  EXPECT_EQ(GetLight(StripButton::kRec, 9), Light::kOn);
+  EXPECT_THAT(reaper_.GetProject().GetUndoPoints(), SizeIs(2));
+}
+
+TEST_F(RecTest, DoublePressHoldingAndPressingAnotherSetsTheRangeToRecord) {
+  for (int i = 6; i < kTrackCount; ++i) {
+    tracks_[i]->rec_mode = kRecModeNone;
+  }
+  ArmRange(6, 9, /*double_press=*/true);
+  for (int i = 0; i < kTrackCount; ++i) {
+    EXPECT_EQ(tracks_[i]->rec_arm, i >= 6) << tracks_[i]->name;
+    EXPECT_EQ(tracks_[i]->rec_mode, kRecModeInput) << tracks_[i]->name;
+  }
+  EXPECT_EQ(GetLight(StripButton::kRec, 7), Light::kBlinking);
+  EXPECT_EQ(GetLight(StripButton::kRec, 9), Light::kBlinking);
+  EXPECT_THAT(reaper_.GetProject().GetUndoPoints(), SizeIs(2));
+}
+
+// A track armed in REAPER shows its stage.
+TEST_F(XTouchConfigTest, RecLightShowsTheStageSetInReaper) {
+  std::vector<FakeTrack*> tracks = AddTracks(3);
+  tracks[1]->rec_arm = true;
+  tracks[1]->rec_mode = kRecModeNone;
+  tracks[2]->rec_arm = true;
+  tracks[2]->rec_mode = kRecModeMidiOverdub;
+  AddSurface();
+  EXPECT_EQ(GetLight(StripButton::kRec, 0), Light::kOff);
+  EXPECT_EQ(GetLight(StripButton::kRec, 1), Light::kOn);
+  EXPECT_EQ(GetLight(StripButton::kRec, 2), Light::kBlinking);
 }
 
 }  // namespace

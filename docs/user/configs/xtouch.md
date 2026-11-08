@@ -258,7 +258,7 @@ Track mode is the default. Each channel strip shows one track of your project.
 | **Pot button**      | Reset pan to center |
 | **Mute**            | Mute                |
 | **Solo**            | Solo                |
-| **Rec**             | Record arm          |
+| **Rec**             | Monitor or record   |
 | **Meter**           | Track level         |
 | **Scribble top**    | Track name          |
 | **Scribble bottom** | Track volume, in dB |
@@ -269,6 +269,31 @@ shows its pan as a single lit position. A **folder track** lights the
 far-left and far-right ring LEDs together instead, which is how the X-Touch
 stands in for the dedicated indicator on the original Mackie surface. A strip
 with **no track** has its ring completely off.
+
+### Rec
+
+Rec arms a track either to **monitor** its input, so you can hear it without
+recording it, or to **record** it. Its light shows which:
+
+| Action       | Disarmed | Monitoring | Recording |
+| ------------ | -------- | ---------- | --------- |
+| Press        | Monitor  | Disarm     | Monitor   |
+| Double press | Record   | Record     | Monitor   |
+| Light        | Off      | Solid      | Blinking  |
+
+- Monitoring arms the track with REAPER's record mode "Record: disable (input
+  monitoring only)". You hear the input only if the track's monitoring is on
+  (or auto), which Rec leaves as it is.
+- Recording puts back the record mode monitoring replaced, such as MIDI
+  overdub, or "Record: input" if there is none to put back (the mode was set to
+  disable in REAPER, or REAPER has restarted since).
+- Disarming leaves the record mode alone, so a track armed in REAPER honors it,
+  and its light shows which stage that is.
+- A press acts once you let go, or 150ms into a hold, as it waits to see
+  whether it is a double press.
+
+A press reaches the tracks REAPER's own grouped record arm does, and sets their
+record mode too, so a group monitors or records together.
 
 ### Select
 
@@ -303,7 +328,7 @@ is dark at the top level, where there is nowhere further to go.
 
 ### Modifiers on track controls
 
-Held while pressing **mute**, **solo**, or **rec arm**:
+Held while pressing **mute**, **solo**, or **Rec**:
 
 | Modifier         | Result                                                      |
 | ---------------- | ----------------------------------------------------------- |
@@ -320,6 +345,17 @@ Alt clears every track in the whole project, not just the ones on the surface,
 so a mute you can neither see nor reach cannot be left behind. Alt + Ctrl is
 the quickest way to solo exactly one track from anywhere.
 
+Rec follows the same rules with its stages. A press toggles between disarmed
+and monitoring, and a double press between monitoring and recording (see
+[Rec](#rec)), so "clear" is the first of the two, and "set" the second:
+- With a press, **Alt** disarms every track, and **Alt + Ctrl** then arms this
+  one to monitor.
+- With a double press, **Alt** moves every recording track back to monitoring,
+  leaving it armed, and **Alt + Ctrl** then makes this the only track that
+  records, without disarming the ones you monitor.
+- **Option** does the press to each track on its own, as the table in
+  [Rec](#rec) says.
+
 Held while moving a **fader** or **pot**:
 
 | Modifier | Result                                 |
@@ -328,17 +364,22 @@ Held while moving a **fader** or **pot**:
 
 ### Ranged actions: hold and press
 
-Hold **select**, **mute**, **solo**, or **rec arm** on one track, and press the
+Hold **select**, **mute**, **solo**, or **Rec** on one track, and press the
 same button on another track. Everything between the two is affected:
 
 - **Select** selects exactly that range, and unselects everything else.
-- **Mute**, **solo**, and **rec arm** set the whole range to the held track's
+- **Mute**, **solo**, and **Rec** set the whole range to the held track's
   current value. Holding mute on a muted track and pressing another mute mutes
-  the range; holding it on an unmuted track unmutes the range.
+  the range; holding it on an unmuted track unmutes the range. Rec gives the
+  range the held track's stage: disarmed, monitoring, or recording.
 
-Mute, solo, and rec arm anchor as soon as you press them, and the press still
-does its normal job. Select anchors after a short hold, because a quick press
-of two selects in a row has to stay a double press.
+Mute and solo anchor as soon as you press them, and the press still does its
+normal job. Rec anchors once its press acts (see [Rec](#rec)), so hold it a
+moment before pressing the other end. To set a range to record, double press
+the first Rec and hold the second press, which anchors at once. Select anchors
+after a short hold, because a quick press of two selects in a row has to stay a
+double press. While Select or Rec is held as an anchor, the other buttons of
+its kind act at once, with no double press.
 
 Each button has its own anchor, so holding mute on one track and select on
 another gives you two independent ranges. Keep holding, and each further press
@@ -420,7 +461,8 @@ through a full screen of them at a time.
 The rightmost strip on the X-Touch (strip 8, or strip 16 with an extender) does
 not show a route. It shows the **track whose routing you are looking at**, with
 the same controls as a Track mode strip: fader, pot, pot button, mute, solo,
-rec arm, meter, name, and color.
+Rec, meter, name, and color. Its buttons don't anchor ranges, as there is no
+other track to range to.
 
 Its bottom scribble line shows **Send** or **Recv**, so you always know which
 you are looking at. Its select button is unused.
@@ -474,7 +516,7 @@ other, it does nothing.
 | Pot button      | Center pan                    | Center route pan      | Center pan           |
 | Mute            | Track mute                    | Route mute            | Track mute           |
 | Solo            | Track solo                    | -                     | Track solo           |
-| Rec             | Track record arm              | -                     | Track record arm     |
+| Rec             | Monitor / record / anchor     | -                     | Monitor / record     |
 | Select          | Select / into folder / anchor | Go to the other end   | -                    |
 | Scribble top    | Track name                    | Other track's name    | Track name           |
 | Scribble bottom | Volume                        | Route volume          | Send / Recv          |
@@ -560,12 +602,13 @@ What the surface keeps track of itself (see
 | -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mod:send_hold`            | `modifier`         | On while Send is held, which changes the select buttons in Track mode.                                                                            |
 | `mod:select_anchor`        | `modifier`         | On while a select button is held as a range's anchor.                                                                                             |
+| `mod:rec_anchor`           | `modifier`         | On while a Rec button is held as a range's anchor.                                                                                                |
 | `user:transport_step`      | `enumerated_value` | What Rewind and Forward move by: `measure`, `beat` (Nudge), or `marker` (Marker).                                                                 |
 | `user:surface_mode`        | `enumerated_value` | The mode: `track` or `send_receive`.                                                                                                              |
 | `user:folder`              | `track_reference`  | The folder whose tracks Track mode shows, which starts as the master track.                                                                       |
 | `user:current_track`       | `track_reference`  | The track whose routes Send mode shows. It follows the last touched track, and Track mode keeps it on the strips.                                 |
 | `user:pick_selected_track` | `track_pick`       | Picks the selected track as the current track, for a tap of Send.                                                                                 |
-| `user:anchor_*`            | `track_anchor`     | On each Track mode strip, the anchors held by its select, mute, solo, and rec arm buttons (see [Ranged actions](#ranged-actions-hold-and-press)). |
+| `user:anchor_*`            | `track_anchor`     | On each Track mode strip, the anchors held by its select, mute, solo, and Rec buttons (see [Ranged actions](#ranged-actions-hold-and-press)).     |
 | `user:pick_track`          | `track_pick`       | On each Track mode strip, picks its track as the current track, for select while Send is held.                                                    |
 
 ### Named mappings

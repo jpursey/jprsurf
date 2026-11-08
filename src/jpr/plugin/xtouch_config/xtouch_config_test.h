@@ -5,9 +5,11 @@
 
 #pragma once
 
+#include <initializer_list>
 #include <optional>
 #include <string>
 
+#include "absl/functional/function_ref.h"
 #include "jpr/device/testing/fake_xtouch.h"
 #include "jpr/plugin/testing/surface_test.h"
 
@@ -58,9 +60,21 @@ class XTouchConfigTest : public SurfaceTest {
   // Taps `button` on the X-Touch while holding `modifier`.
   void TapWith(FakeXTouch::Button modifier, FakeXTouch::Button button);
 
+  // Holds each of `modifiers` on the X-Touch while making `gesture`, then
+  // releases them, and runs until the result is shown.
+  void HoldingModifiers(std::initializer_list<FakeXTouch::Button> modifiers,
+                        absl::FunctionRef<void()> gesture);
+
   // Presses `button` on `first`, and taps it on `last` before releasing it,
   // which sets the tracks from one to the other as the press set `first`.
   void PressRange(FakeXTouch::StripButton button, int first, int last);
+
+  // Holds Rec on `first` until its press acts, 150ms into the hold, or as the
+  // second press of a double press if `double_press`, and presses it on `last`
+  // before releasing it, which sets the tracks from one to the other to the
+  // stage the press set `first` to. The anchor leaves the press on `last` no
+  // double press, so it acts at once.
+  void ArmRange(int first, int last, bool double_press = false);
 
   // Taps select on `strip`, which selects only its track.
   void TapSelect(int strip);
@@ -68,6 +82,11 @@ class XTouchConfigTest : public SurfaceTest {
   // Double presses select on `strip`, which goes into its track if it is a
   // folder.
   void DoublePressSelect(int strip);
+
+  // Taps or double presses Rec on `strip`, which arms its track to monitor or
+  // record (see the X-Touch example config).
+  void TapRec(int strip);
+  void DoublePressRec(int strip);
 
   // Holds select on `first`, and taps it on `last`, which selects the tracks
   // from one to the other.
