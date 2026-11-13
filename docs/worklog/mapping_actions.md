@@ -17,25 +17,31 @@ changes (an action after `others`, such as `others limit(max = monitor)`). A
 it overrides the mode today. Every behavior a `ui_` bundle has is one such
 mapping, so a bundle becomes mappings in the config, one for each modifier set,
 shared through a template. The `ui_` properties and their modifier rules then
-go away, as do the options `set`, `range`, and `toggle`, which become action
-kinds. A track anchor becomes a reference that a scope starts from. The X-Touch
-example keeps every behavior it has today, except Rec, which gets the new
+go away, as do the options `set` and `toggle`, which become action kinds. A
+track anchor becomes a reference that a scope starts from. The X-Touch example
+keeps every behavior it has today, except Rec, which gets the new
 workflow.
 
 ## Behavior
 
 ### Rec in the X-Touch example
 
-| Gesture                          | Today                                                            | After                                                                     |
-| -------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Press                            | Off to monitor, or back to off, with the group                   | The same                                                                  |
-| Double press                     | Monitor to record, or record back to monitor, with the group     | Record, with the group; every other recording track goes back to monitor |
-| Ctrl + double press              | Record or monitor, this track alone                              | Record, with the group; the other tracks are left alone                   |
-| Ctrl + press                     | Off or monitor, this track alone                                 | The same                                                                  |
-| Shift, Ctrl+Shift + press        | The range from the last touched track                            | The same                                                                  |
-| Alt + press                      | Every track off                                                  | The same                                                                  |
-| Opt, Ctrl+Alt, Shift+Alt + press | The selected tracks; this track alone recording; its group alone | Nothing                                                                   |
-| Hold, and press another          | The range, at the held track's stage                             | The same                                                                  |
+| Gesture                          | Today                                                            | After                                                                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Press                            | Off to monitor, or back to off, with the group                   | The same                                                                                                                                |
+| Double press                     | Monitor to record, or record back to monitor, with the group     | Record, with the group, and every other recording track goes back to monitor; or off, with the group, if it records and no track outside the group does |
+| Ctrl + double press              | Record or monitor, this track alone                              | Record, or off if it records, this track alone                                                                                          |
+| Ctrl + press                     | Off or monitor, this track alone                                 | The same                                                                                                                                |
+| Shift, Ctrl+Shift + press        | The range from the last touched track                            | The same                                                                                                                                |
+| Alt + press                      | Every track off                                                  | Every recording track back to monitor, still armed                                                                                      |
+| Alt + double press               | Every recording track back to monitor, still armed               | Every track off                                                                                                                         |
+| Opt, Ctrl+Alt, Shift+Alt + press | The selected tracks; this track alone recording; its group alone | Nothing                                                                                                                                 |
+| Hold, and press another          | The range, at the held track's stage                             | The same                                                                                                                                |
+
+A double press on a recording track with other tracks recording sends them back
+to monitor and keeps recording, by `toggle`'s rule with `others` (see Action
+kinds), as a press of select selects only its track before unselecting it. The
+next double press turns it off.
 
 ### Other changes from today
 
@@ -54,11 +60,8 @@ workflow.
   its grouped tracks by the same amount. After, it is `grouped, set(value =
   0.0)`, which centers every grouped track, and Ctrl still centers this track
   alone.
-- **A range on a read goes.** A fader's `range a .. b` (the values the control
-  maps to) is gone until a backlog item brings it back, and a press between
-  custom ends is `toggle(min, max)`, which goes to the max unless the value is
-  already there, where today's `range a .. b` on a press goes to the nearer
-  end. Nothing in the X-Touch example uses either.
+- **A range on a read stays**, as `range(min = a, max = b)`, with every
+  behavior today's `range a .. b` has. Nothing in the X-Touch example uses it.
 - Everything else in the X-Touch example behaves as it does today. The new
   scopes on select, volume, and pan are there for configs to use; the example
   uses only the ones its buttons have today.
@@ -79,13 +82,14 @@ parentheses if it has any, so the kind alone says what the statement is:
 | A scope kind                       | yes  | no   | yes   | Which tracks get the new value. Without one, this track.      |
 | An action kind                     | yes  | no   | yes   | How they get it. Without one, `set`.                          |
 | `others` and an action kind        | yes  | no   | yes   | How every other track's value changes. Without one, nothing.  |
+| `range(min, max)`                  | yes  | no   | yes   | The values the control maps to. Without one, the whole range. |
 | `mode <name>`                      | no   | yes  | yes   | The output mode. Without one, the control's first.            |
 | `when <condition> { <options> }`   | yes  | yes  | yes   | Overrides the statements it holds while its condition is met  |
 
 - **One of each.** Outside a `when`, a mapping has at most one scope, one
-  action, one `others` action, and one mode, and a second of any is an error.
-  Inside one `when`, the same.
-- **`when` overrides.** For each of the four parts, the first `when` that holds
+  action, one `others` action, one range, and one mode, and a second of any is
+  an error. Inside one `when`, the same.
+- **`when` overrides.** For each of the five parts, the first `when` that holds
   one and whose condition is met gives it, and otherwise the mapping's own
   applies. That is the rule for mode overrides today, applied to every part. A
   `when` in a `when` is an error, as today. A read override is checked only
@@ -98,8 +102,9 @@ parentheses if it has any, so the kind alone says what the statement is:
 - **Separators.** A comma may follow any statement, in every `{ }` body, not
   only a mapping's options, and is good style between statements on one line.
   Requiring it there needs a parser feature (see config: The syntax).
-- **Names.** Scope kinds and action kinds share one set of names, so no name is
-  ever both. Parentheses are left out when a kind has no parameters given, as
+- **Names.** Scope kinds, action kinds, and the statement words (`others`,
+  `range`, `mode`, `when`) share one set of names, so no name is ever two of
+  them. Parentheses are left out when a kind has no parameters given, as
   for `view <name>[(<params>)]`.
 - **Flags.** In any parameter list, a parameter's name alone is short for
   `= true`, as `when <property>` is short for `= true`: `toggle(each)`, or
@@ -108,7 +113,7 @@ parentheses if it has any, so the kind alone says what the statement is:
 
 ```
 strip.rec [double] -> track:rec_stage {
-  grouped, set(value = record)
+  grouped, toggle(on = record, off = off)
   others limit(max = monitor)
 }
 strip.fader <-> track:volume { grouped, scale }
@@ -146,14 +151,37 @@ strip.fader [mod:opt] -> track:volume { selected, scale }
 strip.fader [touch, held, mod:opt] -> track:volume_touched { selected }
 ```
 
+**The range** is how the control's value maps onto the property, which is
+today's `range a .. b`, unchanged except for its syntax. Scope and action are
+about the property, and the range about the control, so it is a statement of
+its own:
+- A value input maps onto `min` to `max`, and a delta stays within them.
+- A press is the type's own press (see Action kinds) between them: a pan,
+  volume, or normalized value at either end goes to the other, and from
+  between them to the nearer end, and a pan whose range spans the center steps
+  through `min`, the center, and `max`. Text and color go to `max` unless they
+  are already there, and an enumerated value steps through them, wrapping
+  around. If `min` and `max` are the same, a press sets that value.
+- A `held` mapping is `max` while held, and `min` when released.
+- Either end may be left out, for the property's own.
+
+The range decides only this track's new value, before the scope and action put
+it on other tracks. So `grouped, scale` on a volume or pan still hands the
+ranged value to REAPER's grouped setter, and REAPER moves the group exactly as
+it does without a range. A range with an action that doesn't read the control
+(`toggle`, `step`, `copy`, `limit`, or `set` or `scale` with a `value`) is an
+error. On an enumerated press, `range(min = a, max = b)` and `step(min = a, max
+= b)` do the same: the range means the same on every input and type, and
+`step` is for when nothing is said about the control.
+
 ### Action kinds
 
 A read gives this track a new value, and the action puts it on every track in
 the scope. The action is about the property only, not the input: the control's
 value is what the mapping reads today, whatever the control is.
-- **The control's value:** a value input maps onto the property's whole range,
-  a delta moves this track's value within it, and a press is the type's own
-  press (below).
+- **The control's value:** a value input maps onto the range (the property's
+  whole range without one), a delta moves this track's value within it, and a
+  press is the type's own press (below), within it.
 - **The action** either takes the control's value, or a `value` it is given,
   or decides one itself from this track's value.
 
@@ -161,7 +189,7 @@ value is what the mapping reads today, whatever the control is.
 | -------- | -------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | `set`    | `value`              | `value`, or without one, the control's           | Exactly                                                                                       |
 | `scale`  | `value`              | `value`, or without one, the control's           | It moves by this track's change since their starts (below): the same amount for a pan or normalized value, and the same dB for a volume, kept within its range |
-| `toggle` | `min`, `max`, `each` | `max`, or `min` if this track is already `max`   | Exactly, or with `each`, each track decides from its own value                                |
+| `toggle` | `on`, `off`, `each`  | `on`, or `off` if this track is already `on`     | Exactly, or with `each`, each track decides from its own value                                |
 | `step`   | `min`, `max`, `each` | The one after this track's, from `min` to `max`, wrapping around | Exactly, or with `each`, each track steps from its own value                    |
 | `copy`   | `track`              | The value of the track `track` refers to (a track reference) | Exactly                                                                           |
 | `limit`  | `max`                | None                                             | A value past `max` goes to `max`, and the rest stay                                           |
@@ -196,14 +224,20 @@ value is what the mapping reads today, whatever the control is.
   the others to tiny gains that read as -inf, and taking it up again brings
   them back. One that starts at silence moves the others by its whole rise
   from -200 dB.
-- **`toggle` with `others`.** A toggle sets `min` only if this track is at
-  `max` and the `others` action would change nothing. Without an `others`
-  action, that is just "at `max`". This is select's rule today: a press selects
+- **`toggle` has no order.** `on` and `off` are any two values: it goes to
+  `on` unless this track is already there, and then to `off`, whichever comes
+  first in the type's order. So `toggle(on = off, off = record)` is as valid
+  as the other way around, and means the opposite.
+- **`toggle` with `others`.** A toggle goes to `off` only if this track is
+  `on` and the `others` action would change nothing. Without an `others`
+  action, that is just "is `on`". This is select's rule today: a press selects
   only this track, or unselects it if it was already the only one selected.
 - **`others`** takes `set`, with a `value`, and `limit`.
-- **Values.** `value`, `min`, and `max` are values of the property's type, as a
-  `range` end is today. `min` and `max` default to the type's whole range:
-  false and true, and every enumerated value. `value` has no default. "Past" is
+- **Values.** `value`, `on`, `off`, `min`, and `max` are values of the
+  property's type, as a `range` end is. `on` and `off` default to true and
+  false, or an enumerated type's last and first values. `min` and `max`, which
+  have an order (`step`'s values between them, and what is past `limit`'s
+  `max`), default to the type's whole range. `value` has no default. "Past" is
   in the value order: true is past false, an enumerated value is past the ones
   before it, and a number is past the smaller ones.
 
@@ -216,7 +250,7 @@ What each type takes, and a press's own value:
 | enumerated         | `set`, `toggle`, `step`, `copy`, `limit`        | The next value, wrapping around                                                     |
 | pan                | `set`, `scale`, `toggle`, `step`, `copy`, `limit` | -1.0, the center, and 1.0 in turn, as a pan's press does today                    |
 | volume, normalized | `set`, `scale`, `toggle`, `copy`, `limit`       | The other end of its range, as today                                                |
-| text, color        | `set`, `toggle`                                 | None: a press needs a `value`, or `toggle`'s `min` and `max`                        |
+| text, color        | `set`, `toggle`                                 | None: a press needs a `value`, `toggle`'s `on` and `off`, or a range's              |
 | timeline position  | `set`                                           | None: it reads only a delta                                                         |
 
 `copy` takes a track reference, so only a track property takes it. `step` on a
@@ -270,8 +304,8 @@ from the property's subject.
 | -------------------------------------------------- | --------------------------------------------------------------------- |
 | `-> track:ui_pan { set 0.0 }`                      | `-> track:pan { grouped, set(value = 0.0) }`, and `[mod:ctrl] -> track:pan { set(value = 0.0) }` |
 | `-> user:surface_mode { set track }`               | `-> user:surface_mode { set(value = track) }`                         |
-| `-> user:transport_step { toggle measure .. beat }`| `-> user:transport_step { toggle(min = measure, max = beat) }`        |
-| An enumerated press's `{ range a .. b }`           | `{ step(min = a, max = b) }`                                          |
+| `-> user:transport_step { toggle measure .. beat }`| `-> user:transport_step { toggle(on = beat, off = measure) }`        |
+| `{ range a .. b }`                                 | `{ range(min = a, max = b) }`                                         |
 | `<-> track:ui_volume`                              | `<-> track:volume { grouped, scale }`, and `[mod:ctrl] -> track:volume` |
 
 Mute and solo share a template in the X-Touch example, which is Mute's
@@ -305,8 +339,8 @@ mappings track_toggle(widget button, property flag) {
 Rec, in `track_strip`:
 
 ```
-strip.rec -> track:rec_stage { grouped, toggle(min = off, max = monitor) }
-strip.rec [mod:ctrl] -> track:rec_stage { toggle(min = off, max = monitor) }
+strip.rec -> track:rec_stage { grouped, toggle(on = monitor, off = off) }
+strip.rec [mod:ctrl] -> track:rec_stage { toggle(on = monitor, off = off) }
 strip.rec [mod:shift] -> track:rec_stage {
   from(track = state:last_touched_track)
   copy(track = state:last_touched_track)
@@ -315,14 +349,15 @@ strip.rec [mod:shift, mod:ctrl] -> track:rec_stage {
   from(track = state:last_touched_track, subfolders)
   copy(track = state:last_touched_track)
 }
-strip.rec [mod:alt] -> track:rec_stage { all, set(value = off) }
+strip.rec [mod:alt] -> track:rec_stage { all, limit(max = monitor) }
 strip.rec [double] -> track:rec_stage {
-  grouped, set(value = record)
+  grouped, toggle(on = record, off = off)
   others limit(max = monitor)
 }
 strip.rec [double, mod:ctrl] -> track:rec_stage {
-  grouped, set(value = record)
+  toggle(on = record, off = off)
 }
+strip.rec [double, mod:alt] -> track:rec_stage { all, set(value = off) }
 strip.rec <- track:rec_arm {
   mode blink
   when track:rec_stage = monitor { mode solid }
@@ -445,9 +480,15 @@ struct ValueAction {
   enum class Kind { kSet, kScale, kToggle, kStep, kCopy, kLimit };
 
   Kind kind = Kind::kSet;
-  std::optional<ViewProperty::Value> value, min, max;
+  std::optional<ViewProperty::Value> value, on, off, min, max;
   std::string track;  // kCopy: the track reference's name.
   bool each = false;
+};
+
+// The values a read maps its control to (see The range), each end unset for
+// the property's own.
+struct ReadRange {
+  std::optional<ViewProperty::Value> min, max;
 };
 
 // What a read does, each part unset for its default (or, in an override,
@@ -456,16 +497,20 @@ struct ReadAction {
   std::optional<ActionScope> scope;
   std::optional<ValueAction> action;
   std::optional<ValueAction> others;
+  std::optional<ReadRange> range;
 };
 ```
 
 - `ReadConfig` gains `action` (a `ReadAction`), `overrides` (a condition and a
   `ReadAction` each, in order), and `ignored_modifiers`. `action` replaces
-  `property_min`, `property_max`, and `press_toggles`.
+  `press_toggles`, and its `range` holds `property_min` and `property_max`, so
+  a `when` can override it like any other part.
 - **Any property:** the mapping reads the control's value as today, over the
-  property's whole range, and decides `set`, `toggle`, `step`, and `limit`
-  itself, from the property's value. It picks the parts from its overrides
-  when an input arrives.
+  range, and decides `set`, `toggle`, `step`, and `limit` itself, from the
+  property's value. It picks the parts from its overrides when an input
+  arrives. Today's read functions, which take the range when they are made,
+  are made once for the mapping's own range and once for each override that
+  holds one, so picking one costs nothing more.
 - **Track properties:** a property that takes scopes is given the new value,
   this track's old one, and the `ReadAction` to run (generalizing
   `ViewProperty::PressInt()` and `EnumeratedPress`, which it replaces).
@@ -497,8 +542,8 @@ struct ReadAction {
 
 **Brittleness:** the last touched track's rule is a list of exceptions, kept in
 one function with a test for each, rather than a parameter, so no mapping has
-to remember to set it. A scope kind and an action kind must never share a name,
-which the catalog checks with a test.
+to remember to set it. No scope kind, action kind, or statement word may share a
+name, which the catalog checks with a test.
 
 ### config: The syntax
 
@@ -516,7 +561,8 @@ param {
 ```
 
 - Each statement, in every body, may be followed by a comma. The reader looks a
-  kind's name up in the scene's catalog to tell a scope from an action.
+  kind's name up in the scene's catalog to tell a scope from an action, and
+  `range` is a name of its own, which no scope or action kind may take.
 - The brackets gain `$ignore=("ignore" "(" $modifiers=%qualified_name,+ ")")`.
 - **Requiring the comma** between statements on one line can't be checked from
   each statement's first line, as a statement can span lines, and tokenizing
@@ -622,21 +668,23 @@ Depends on: nothing.
 
 Depends on: CL2.
 
-- `ValueAction`, `ReadAction` (without scopes yet), and read overrides in
-  `ReadConfig`, replacing `property_min`, `property_max`, and `press_toggles`;
-  `ReadConfig::ignored_modifiers`, passed to the input.
+- `ValueAction`, `ReadRange`, `ReadAction` (without scopes yet), and read
+  overrides in `ReadConfig`, replacing `press_toggles`, with `property_min`
+  and `property_max` moving into the range; `ReadConfig::ignored_modifiers`,
+  passed to the input.
 - The kinds in `ViewMapping`, by type, with the control's value and a press's
   own value as above, and the overrides picked when an input arrives.
 - The catalog of action kinds, and `docs/user/scene/actions.md`.
 - `config` builds the same mappings from today's syntax, mechanically, so
-  nothing visible changes, except a fader's `range`, which nothing uses.
+  nothing visible changes.
 
 **Verify**
 - Standard checks.
 - `ViewMapping` tests of each kind on each type and input, a press's own value
   on each type, overrides (first met per part, and the mapping's own
-  otherwise), and ignored modifiers. The existing range and toggle tests move
-  to the kinds.
+  otherwise, a range included), a range with each action kind, and ignored
+  modifiers. The existing toggle tests move to the kinds, and the range tests
+  stay.
 - Call counts don't move.
 - Build `update_user_docs`.
 
@@ -690,18 +738,19 @@ Depends on: CL5.
 
 - Scope and action kinds, `others`, and any statement in a `when`, in a
   mapping's options; `ignore(...)` in its brackets; optional commas after
-  statements in every body; a parameter's name alone for `= true`. `set`,
-  `range`, and `toggle` are removed as options.
+  statements in every body; a parameter's name alone for `= true`. `set` and
+  `toggle` are removed as options, and `range a .. b` becomes `range(min = a,
+  max = b)`.
 - Errors: an unknown kind, a parameter the kind doesn't take, a part the
   property doesn't take, a value of the wrong type, two of one part, an action
-  on a write mapping or a held one, a scope on a write mapping, a mode on a
-  read mapping, and a `when` in a `when`.
+  on a write mapping or a held one, a scope or range on a write mapping, a
+  range with an action that doesn't read the control, a mode on a read
+  mapping, and a `when` in a `when`.
 - `config_spec.md`: Options and Modifier sets rewritten, the statements table,
   and commas and flags in The file. The example config's options converted
   mechanically, still on the `ui_` properties.
 - The backlog: "Modifiers a mapping ignores" comes out; "Reversed read ranges"
-  becomes an item for a read's range (the values a value or delta input maps
-  to, reversed or not); and a new item requires the comma between statements
+  stays, with its syntax updated; and a new item requires the comma between statements
   on one line, depending on Game Bits' item for matching a line break, which
   is added to Game Bits' backlog with **Requested by**.
 
@@ -716,14 +765,15 @@ Depends on: CL6.
 - The example on `track:` properties with scopes and actions, and anchors
   without `action`, as in the design, with Rec's new workflow. `xtouch.md`'s
   Rec section.
-- Surface tests: Rec's new double presses, and an anchor with Ctrl held. The
-  rest pass unchanged.
+- Surface tests: Rec's new double presses (plain, with others recording and
+  without, Ctrl, and Alt), Alt + press, and an anchor with Ctrl held. The rest
+  pass unchanged.
 
 **Verify**
 - Standard checks.
 - Call counts: Rec's gestures (the double press now sends other tracks back to
-  monitor, which `AltCtrlDoublePressingRecordArm` measures today); the others
-  don't move.
+  monitor, which `AltCtrlDoublePressingRecordArm` measures today, and Alt + press
+  and Alt + double press swap); the others don't move.
 - The benchmark, against the bar: the mapping count is per-run work.
 
 ### CL8 [ ] scene: Remove the ui_ properties
@@ -754,8 +804,11 @@ Depends on: every CL above, and the user saying the feature is done.
 Copy the example's mappings into `pursey.jprsurf` (its strips, templates, and
 modifiers), then:
 - Rec, as in the table above: a double press records with the group, and every
-  other recording track goes back to monitor, still armed; Ctrl + double press
-  leaves the others recording; Opt does nothing.
+  other recording track goes back to monitor, still armed; another double
+  press turns the group off once nothing else records; Ctrl + double press
+  records or turns off this track alone, leaving the others; Alt + press sends
+  every recording track back to monitor, and Alt + double press turns every
+  track off; Opt does nothing.
 - Mute, solo, select, the fader, and the pot with each modifier: as before.
 - The pot button centers every track in the group, and with Ctrl, this track
   alone.
