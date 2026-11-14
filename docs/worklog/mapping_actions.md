@@ -203,16 +203,17 @@ value is what the mapping reads today, whatever the control is.
   group by the same amount, as the pot button does today.
 - **Starts.** `scale` moves each track from its start, not from where the
   last move left it, exactly as REAPER moves grouped tracks (see To confirm):
-  a track's start is where it was when this track began leading it, so taking
-  this track to silence and back, or pushing another track against the end of
-  its range and back, puts every track back where it was. It has nothing to do
-  with the control or its touch.
-  - The starts are taken again, from where the tracks are, when another track
-    leads, or when this track was changed other than by its own `scale` (alone,
-    in REAPER, or by another mapping).
-  - A track that was changed some other way, or wasn't in the scope at the
-    last move (one selected since, say), takes a new start of its own, and the
-    others keep theirs.
+  a track's start is where it was, with where the lead was, when it was taken,
+  so taking this track to silence and back, or pushing another track against
+  the end of its range and back, puts every track back where it was. It has
+  nothing to do with the control or its touch.
+  - Each track keeps its start while it is where the last move that moved it
+    left it, and this track is where that move left its lead, whichever track
+    led, as REAPER keeps them. Otherwise it takes a new one, from where it and
+    this track are: when another track leads from elsewhere, when either was
+    changed other than by `scale` (alone, in REAPER, or by another mapping),
+    or when a move left it out (one selected since, say). The others keep
+    theirs, and a move that doesn't reach a track leaves its start.
   - Each property has one set of starts, shared by every mapping that scales
     it, as REAPER has one for a volume and one for a pan. A change is found by
     value: a track that isn't at the value `scale` last gave it was changed.
@@ -529,8 +530,8 @@ struct ReadAction {
   already have, and the others through `TrackBatch`'s setters, one track at a
   time, `scale` computing each track's value from this track's change since
   their starts. The starts are a small class of the scene's, one for each
-  property scaled: the lead, and each track's start and the value `scale` last
-  gave it, which a move checks, so nothing is polled. `grouped, set` finds the grouped tracks from REAPER's volume and pan group
+  property scaled: each track's start, and where the last move that moved it
+  left it and its lead, which a move checks, so nothing is polled. `grouped, set` finds the grouped tracks from REAPER's volume and pan group
   flags, as `TrackValue::GetGroup()` does for a record arm, which is for a
   press, not a run, as it reads REAPER's groups.
 - **Anchors** move from `TrackActions` to the `track_anchor` component, one
@@ -603,31 +604,42 @@ All checked (CL1):
   test in the test install, of `CSurf_OnVolumeChangeEx()` and
   `CSurf_OnPanChangeEx()` with `allow_gang`). It isn't the touch: REAPER moves
   each follower from a start, not from where the last move left it.
-  - While the same track leads, each follower is its start times the lead's
-    ratio since then (a volume), or its start plus the lead's change since
-    then (a pan). Clamped to its range (+12 dB, and -1 to 1), it comes back
-    from an end it went past, as it does from silence, however long between
-    the moves, and whether or not the fader was released.
-  - The starts are taken again, from where the tracks are, when another track
-    leads, or when the lead was changed some other way, such as alone. A
-    follower that was changed some other way takes a new start of its own,
-    and the others keep theirs.
+  - Each follower is its start times the lead's ratio since then (a volume),
+    or its start plus the lead's change since then (a pan). Clamped to its
+    range (+12 dB, and -1 to 1), it comes back from an end it went past, as it
+    does from silence, however long between the moves, and whether or not the
+    fader was released.
+  - Each follower keeps its own start while it is where the last move that
+    moved it left it, and the lead is where that move left its lead,
+    whichever track leads: another track at the same value continues the
+    move. Otherwise it takes a new start, from where it and the lead are:
+    when another track leads from elsewhere, the lead or the follower was
+    changed some other way, such as alone, or a move left it out (one
+    deselected, then selected again). The others keep theirs, and moves that
+    don't reach a follower, such as a track in no group or in another group,
+    leave its start. (CL1 found these in the test install, after a test's two
+    tracks that moved together showed starts aren't kept per lead.)
   - A volume and a pan have separate starts: a pan move by another track
     leaves the volume's.
-  - Selected tracks (ganging) move the same way.
+  - Selected tracks (ganging) move the same way, the master too, which is
+    clamped at +12 dB as a follower.
   - The lead's own value isn't clamped: REAPER takes a volume of 1000.
+  - Unchecked: whether the starts are kept for each project, as the fake
+    keeps them. A contract test has one project open at a time.
 - **A grouped fader from silence** (the test install). Silence counts as -200
   dB (a gain of 1e-10) in the ratio, for the lead and for a follower's start.
   Taking the lead to silence leaves its followers at tiny gains (such as
   -206 dB), which read as -inf, and taking it up again brings them back, so
   a lead that starts at silence moves its followers by its whole rise from
-  -200 dB, to +12 dB at once. (Under -200 dB, REAPER's followers differ by
-  case, such as a group's and a selection's, but every value a control sends
-  is 0 or above it.)
+  -200 dB, to +12 dB at once. Under -200 dB, the first move from a start
+  counts the lead's new volume as -200 dB, and later moves leave each follower
+  at -200 dB or above (seen for a group, and faked for a selection too). Every
+  value a control sends is 0 or above -200 dB, so this only decides how tiny
+  a silent follower is.
 
 ## CLs
 
-### CL1 [ ] common: REAPER's grouping, checked
+### CL1 [x] common: REAPER's grouping, checked
 
 Depends on: nothing.
 
@@ -635,20 +647,22 @@ Depends on: nothing.
   fader's memory), and what a temporary contract test found in the test install
   (see To confirm).
 - The fake's grouped and ganged volume and pan move each follower from its
-  start, as To confirm says: the starts, which are taken again when another
-  track leads or a track was changed some other way, the clamp to each range
-  and back, and silence as -200 dB. A volume and a pan keep separate starts.
-  The fake no longer fails a grouped move from silence, or a grouped pan that
-  clamps another track's.
+  start, as To confirm says: each follower's start, which it takes again when
+  another track leads from elsewhere, it or the lead was changed some other
+  way, or a move left it out, the clamp to each range and back, and silence
+  as -200 dB. A volume and a pan keep separate starts. The fake no longer fails a grouped move from silence, or a
+  grouped pan that clamps another track's.
 - Commits the findings in To confirm.
 
 **Verify**
 - Standard checks (Release build, clang-format, ctest).
 - Contract tests (`check_in_reaper`), which pass in the test install as under
   the fake: a grouped volume to silence and back, past the top and back, from
-  silence, and with another lead, a follower changed alone, and the lead
-  changed alone; a grouped pan past an end and back, with another lead; a pan
-  move leaving the volume's starts; and the same for selected tracks.
+  silence, and with another lead from elsewhere and from where the last move
+  left its lead, a follower changed alone, the lead changed alone, and moves
+  that don't reach a follower; a grouped pan past an end and back, with
+  another lead both ways; a pan move leaving the volume's starts; and the
+  same for selected tracks, with one a move left out.
 
 ### CL2 [ ] device: Modifiers an input ignores
 

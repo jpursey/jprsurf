@@ -41,6 +41,10 @@ struct FakeTrackGroups {
   bool operator==(const FakeTrackGroups&) const = default;
 };
 
+// The loudest a grouped volume move takes another track, +12dB, as REAPER
+// does (see "Track changes" in fake_reaper.cc). The track moved isn't clamped.
+inline constexpr double kMaxGroupedVolume = 3.9810717055349727;
+
 struct FakeTrackUndoValues {
   // The master's is MASTER, which P_NAME can't read or set.
   std::string name;

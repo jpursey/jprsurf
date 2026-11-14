@@ -57,6 +57,9 @@ constexpr double kMinVolume = 0x1p-25;
 // The quietest decibels mkvolstr() writes, which volumes between are raised to.
 constexpr double kMinDecibels = -150.0;
 
+// What silence counts as in a grouped volume move: -200dB (see Track changes).
+constexpr double kGroupedSilence = 1e-10;
+
 // The project's time signature and rates, which are REAPER's defaults, as its
 // tempo is (FakeProject::kBeatsPerMinute).
 constexpr int kBeatsPerMeasure = 4;
@@ -290,11 +293,26 @@ class FakeReaper::Api final {
   // change. A rec arm that changes the track sets the others to its new
   // value, except a follower that leads the group it was reached through,
   // which the track it was reached from follows too: it is toggled. One that
-  // doesn't change the track changes nothing. A volume or pan moves the
-  // others by the same change: volume by its ratio, and pan by its
-  // difference. REAPER measures that change from where each track was when
-  // the gesture began, which the fake doesn't model, so a grouped change that
-  // clamps another track's pan, or moves a volume from -inf, isn't faked yet.
+  // doesn't change the track changes nothing.
+  //
+  // A volume or pan moves the others by the same change: volume by its ratio,
+  // and pan by its difference. Each moves from its start, not from where the
+  // last move left it, so one kept at an end of its range (+12dB, or -1 and
+  // 1) comes back from it as the lead does. The lead's own volume isn't
+  // clamped. A start is where the track was, with where the lead was, when it
+  // was taken. Each track keeps its own while it is where the last move that
+  // moved it left it, and the lead is where that move left its lead,
+  // whichever track leads. Otherwise it takes a new one, from where it and
+  // the lead are: when another track leads from elsewhere, the lead or the
+  // track was changed some other way, such as alone, or a move left it out
+  // (one deselected, say). Moves that don't reach a track leave its start,
+  // and a volume and a pan have separate starts.
+  //
+  // Silence counts as -200dB (kGroupedSilence) in a volume's ratio, for the
+  // lead's start and a follower's. So does the lead's new volume on the first
+  // move from a start, and on later moves, each follower stays at -200dB or
+  // above. Taking the lead to silence leaves its followers there or below, as
+  // tiny gains that read as -inf, and taking it up again brings them back.
   //
   // Only rec arm's groups are faked in full. The others are faked only where
   // each track leads and follows the same group, and no more than one.
@@ -440,19 +458,7 @@ class FakeReaper::Api final {
     }
     FakeProject& project = s_instance_->GetProjectOf(track);
     project.BeforeChange();
-    const double old_volume = track.volume;
-    for (FakeTrack* changed :
-         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging,
-                          &FakeTrack::volume_groups)
-             .All()) {
-      if (changed == &track) {
-        changed->volume = volume;
-      } else if (old_volume == 0.0) {
-        ADD_FAILURE() << "A grouped volume change from -inf isn't faked yet";
-      } else {
-        changed->volume *= volume / old_volume;
-      }
-    }
+    MoveGrouped(project, track, volume, allow_gang, kGroupedVolume);
     project.HoldSurfaceChange(kSurfaceVolumeUndo);
     return volume;
   }
@@ -468,22 +474,7 @@ class FakeReaper::Api final {
     FakeProject& project = s_instance_->GetProjectOf(track);
     project.BeforeChange();
     const double new_pan = std::clamp(pan, -1.0, 1.0);
-    const double change = new_pan - track.pan;
-    for (FakeTrack* changed :
-         GetChangedTracks(track, allow_gang ? 0 : kPreventGroupingAndGanging,
-                          &FakeTrack::pan_groups)
-             .All()) {
-      if (changed == &track) {
-        changed->pan = new_pan;
-        continue;
-      }
-      const double other_pan = changed->pan + change;
-      if (other_pan < -1.0 || other_pan > 1.0) {
-        ADD_FAILURE() << "A grouped pan change that clamps another track's "
-                         "pan isn't faked yet";
-      }
-      changed->pan = std::clamp(other_pan, -1.0, 1.0);
-    }
+    MoveGrouped(project, track, new_pan, allow_gang, kGroupedPan);
     project.HoldSurfaceChange(kSurfacePanUndo);
     return new_pan;
   }
@@ -921,6 +912,68 @@ class FakeReaper::Api final {
       return tracks;
     }
   };
+
+  // A property a grouped change moves (see Track changes): its value, its
+  // groups, its project's starts, and where a follower goes from its start
+  // when the lead goes to `value`, where `first` is true if the start was
+  // just taken.
+  struct GroupedProperty {
+    double FakeTrackUndoValues::*value;
+    FakeGroupsMember groups;
+    FakeProject::GroupedStarts FakeProject::*starts;
+    double (*follow)(const FakeProject::GroupedStart& start, double value,
+                     bool first);
+  };
+
+  static double FollowVolume(const FakeProject::GroupedStart& start,
+                             double volume, bool first) {
+    const double moved = std::max(start.value, kGroupedSilence) *
+                         (first ? std::max(volume, kGroupedSilence) : volume) /
+                         std::max(start.lead_value, kGroupedSilence);
+    return std::clamp(moved, first ? 0.0 : kGroupedSilence, kMaxGroupedVolume);
+  }
+
+  static double FollowPan(const FakeProject::GroupedStart& start, double pan,
+                          bool /*first*/) {
+    return std::clamp(start.value + (pan - start.lead_value), -1.0, 1.0);
+  }
+
+  static constexpr GroupedProperty kGroupedVolume = {
+      &FakeTrackUndoValues::volume, &FakeTrackUndoValues::volume_groups,
+      &FakeProject::volume_starts_, &FollowVolume};
+  static constexpr GroupedProperty kGroupedPan = {
+      &FakeTrackUndoValues::pan, &FakeTrackUndoValues::pan_groups,
+      &FakeProject::pan_starts_, &FollowPan};
+
+  // Sets `track`'s `property` to `value`, and with `allow_gang`, moves every
+  // other track a change to it changes from its start in `project` (see Track
+  // changes). A change without `allow_gang` is one made some other way.
+  static void MoveGrouped(FakeProject& project, FakeTrack& track, double value,
+                          bool allow_gang, const GroupedProperty& property) {
+    const double lead_value = track.*property.value;
+    track.*property.value = value;
+    if (!allow_gang) {
+      return;
+    }
+    FakeProject::GroupedStarts& starts = project.*property.starts;
+    for (FakeTrack* changed :
+         GetChangedTracks(track, 0, property.groups).All()) {
+      if (changed == &track) {
+        continue;
+      }
+      double& changed_value = changed->*property.value;
+      auto [it, inserted] = starts.try_emplace(changed);
+      FakeProject::GroupedStart& start = it->second;
+      const bool first = inserted || changed_value != start.last ||
+                         lead_value != start.lead_last;
+      if (first) {
+        start = {.value = changed_value, .lead_value = lead_value};
+      }
+      changed_value = property.follow(start, value, first);
+      start.last = changed_value;
+      start.lead_last = value;
+    }
+  }
 
   // Returns true if `track` is its project's master.
   static bool IsMaster(const FakeTrack& track) {

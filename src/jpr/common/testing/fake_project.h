@@ -295,6 +295,19 @@ class FakeProject final {
     UndoState state;
   };
 
+  // Where a grouped volume or pan move moves a track from, and where the last
+  // move that moved it left it and its lead (see "Track changes" in
+  // fake_reaper.cc).
+  struct GroupedStart {
+    double value = 0.0;       // The track's, when the start was taken.
+    double lead_value = 0.0;  // The lead's, when the start was taken.
+    double last = 0.0;
+    double lead_last = 0.0;
+  };
+
+  // Each track's start for a volume's or a pan's grouped moves.
+  using GroupedStarts = absl::flat_hash_map<const FakeTrack*, GroupedStart>;
+
   // `number` is the project's number in FakeReaper, starting from 1.
   explicit FakeProject(int number);
 
@@ -360,6 +373,12 @@ class FakeProject final {
   std::vector<FakeTrack*> tracks_;  // In order, not including the master.
 
   std::vector<std::unique_ptr<FakeRoute>> routes_;
+
+  // The starts of grouped volume and pan moves, kept for each project, which
+  // is assumed: the contract tests open one at a time. A track's pointer is
+  // never reused, so a deleted track's start is never taken for another's.
+  GroupedStarts volume_starts_;
+  GroupedStarts pan_starts_;
 
   int play_state_ = 0;
   double play_position_ = 0.0;

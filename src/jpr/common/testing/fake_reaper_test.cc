@@ -452,24 +452,29 @@ TEST(FakeReaperTest, RouteEditsItDoesntModelFailTheTest) {
                           "isend -2");
 }
 
-// REAPER moves a group from where it was when the gesture began, so the fake
-// only moves it from where it is when that is the same.
-TEST(FakeReaperTest, GroupedChangesItCantMoveFailTheTest) {
+// The contract tests check grouped moves through the API. A test's own change
+// to a track is a change some other way too.
+TEST(FakeReaperTest, ATestsOwnChangeTakesANewGroupedStart) {
   FakeReaper reaper;
   FakeProject& project = reaper.GetProject();
   FakeTrack* drums = project.AddTrack("Drums");
   FakeTrack* kick = project.AddTrack("Kick");
+  FakeTrack* snare = project.AddTrack("Snare");
   JoinGroup(drums, 1);
   JoinGroup(kick, 1);
-  drums->volume = 0.0;
-  kick->pan = 0.5;
-  EXPECT_NONFATAL_FAILURE(
-      ::CSurf_OnVolumeChangeEx(ToMediaTrack(drums), 0.5, false, true),
-      "from -inf");
-  EXPECT_NONFATAL_FAILURE(
-      ::CSurf_OnPanChangeEx(ToMediaTrack(drums), 1.0, false, true),
-      "clamps another track's pan");
-  EXPECT_EQ(kick->pan, 1.0);
+  JoinGroup(snare, 1);
+  ::CSurf_OnVolumeChangeEx(ToMediaTrack(drums), 2.0, false, true);
+  EXPECT_DOUBLE_EQ(kick->volume, 2.0);
+  kick->volume = 1.0;
+  ::CSurf_OnVolumeChangeEx(ToMediaTrack(drums), 1.0, false, true);
+  EXPECT_DOUBLE_EQ(kick->volume, 0.5);
+  EXPECT_DOUBLE_EQ(snare->volume, 1.0);
+
+  // The lead's too.
+  drums->volume = 0.5;
+  ::CSurf_OnVolumeChangeEx(ToMediaTrack(drums), 1.0, false, true);
+  EXPECT_DOUBLE_EQ(kick->volume, 1.0);
+  EXPECT_DOUBLE_EQ(snare->volume, 2.0);
 }
 
 TEST(FakeReaperTest, SelectedTracksListTheMasterFirst) {

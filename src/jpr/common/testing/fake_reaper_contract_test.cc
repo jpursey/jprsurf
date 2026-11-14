@@ -73,6 +73,13 @@ double GetPan(MediaTrack* track) {
   return pan;
 }
 
+// Returns what mkvolstr() writes for `volume`.
+std::string GetVolumeText(double volume) {
+  std::array<char, 64> text = {};
+  mkvolstr(text.data(), volume);
+  return text.data();
+}
+
 // Returns the text guidToString() writes for `guid`.
 std::string GetGuidText(const GUID* guid) {
   std::array<char, 64> text = {};
@@ -708,6 +715,263 @@ TEST_F(TrackChangeContractTest, GroupedVolumeAndPanMoveTheGroupAsMuch) {
   EXPECT_DOUBLE_EQ(GetPan(b), 0.25);
 }
 
+// Returns true if `track`'s volume reads as -inf dB.
+bool IsSilent(MediaTrack* track) {
+  return GetVolumeText(GetVolume(track)) == "-inf dB";
+}
+
+// A, B, and C lead and follow group 1. Their volumes are 1, 0.5, and 0.25, and
+// their pans 0, 0.5, and 0.
+void BuildGroupOfThree(FakeProject& project) {
+  JoinGroup(project.AddTrack("A"), 1);
+  FakeTrack* b = project.AddTrack("B");
+  JoinGroup(b, 1);
+  b->volume = 0.5;
+  b->pan = 0.5;
+  FakeTrack* c = project.AddTrack("C");
+  JoinGroup(c, 1);
+  c->volume = 0.25;
+}
+
+TEST_F(TrackChangeContractTest, GroupedVolumeComesBackFromSilence) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.25);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.125);
+
+  // The followers are left at tiny gains, not silence, and come back.
+  CSurf_OnVolumeChangeEx(a, 0.0, false, true);
+  EXPECT_TRUE(IsSilent(b));
+  EXPECT_TRUE(IsSilent(c));
+  EXPECT_GT(GetVolume(b), 0.0);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.25);
+
+  // A first move from new starts takes the lead's silence as -200dB, so its
+  // followers keep their ratios at those tiny gains, and A brings B back from
+  // its own. C, at silence, counts as -200dB.
+  CSurf_OnVolumeChangeEx(c, 0.0, false, true);
+  EXPECT_TRUE(IsSilent(a));
+  EXPECT_TRUE(IsSilent(b));
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.25);
+}
+
+TEST_F(TrackChangeContractTest, GroupedVolumeComesBackFromTheTop) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 4.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 2.0);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 1.0);
+  CSurf_OnVolumeChangeEx(a, 16.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  EXPECT_DOUBLE_EQ(GetVolume(c), kMaxGroupedVolume);
+
+  // The lead isn't clamped.
+  EXPECT_EQ(CSurf_OnVolumeChangeEx(a, 1000.0, false, true), 1000.0);
+  EXPECT_EQ(GetVolume(a), 1000.0);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.25);
+}
+
+// Silence counts as -200dB, so a lead that starts there moves its followers by
+// its whole rise from -200dB.
+TEST_F(TrackChangeContractTest, GroupedVolumeFromSilenceRisesFromMinus200Db) {
+  OpenProject([](FakeProject& project) {
+    BuildGroupOfThree(project);
+    project.GetTrack(0)->volume = 0.0;
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 1e-10, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.25);
+  CSurf_OnVolumeChangeEx(a, 1e-9, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 2.5);
+  CSurf_OnVolumeChangeEx(a, 0.0, false, true);
+  EXPECT_TRUE(IsSilent(b));
+  EXPECT_TRUE(IsSilent(c));
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  EXPECT_DOUBLE_EQ(GetVolume(c), kMaxGroupedVolume);
+}
+
+TEST_F(TrackChangeContractTest, AnotherLeadFromElsewhereTakesNewGroupedStarts) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 4.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 2.0);
+  CSurf_OnVolumeChangeEx(a, 8.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 2.0);
+
+  // C leads from elsewhere, so B starts again from the top.
+  CSurf_OnVolumeChangeEx(c, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(a), 2.0);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume / 4.0);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume / 8.0);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.25);
+}
+
+TEST_F(TrackChangeContractTest, AFollowerChangedAloneTakesANewGroupedStart) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 8.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  CSurf_OnVolumeChangeEx(b, 3.0, false, false);
+
+  // B moves from 3, where A was at 8, and C keeps its start.
+  CSurf_OnVolumeChangeEx(a, 2.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.75);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.5);
+}
+
+TEST_F(TrackChangeContractTest, TheLeadChangedAloneTakesNewGroupedStarts) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 8.0, false, true);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, false);
+
+  // B and C move from where they are, with A from 1.
+  CSurf_OnVolumeChangeEx(a, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume / 2.0);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 1.0);
+}
+
+TEST_F(TrackChangeContractTest, GroupedPanComesBackFromAnEnd) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnPanChangeEx(a, 0.75, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 1.0);
+  EXPECT_DOUBLE_EQ(GetPan(c), 0.75);
+  CSurf_OnPanChangeEx(a, -1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), -0.5);
+  EXPECT_DOUBLE_EQ(GetPan(c), -1.0);
+  CSurf_OnPanChangeEx(a, 0.0, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.5);
+  EXPECT_DOUBLE_EQ(GetPan(c), 0.0);
+
+  // C leads from where A left its own pan, so the starts are kept, and B comes
+  // back from the end.
+  CSurf_OnPanChangeEx(a, 0.75, false, true);
+  CSurf_OnPanChangeEx(c, 0.0, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(a), 0.0);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.5);
+
+  // C leads from elsewhere, so they are taken again, B's at the end.
+  CSurf_OnPanChangeEx(c, 0.75, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 1.0);
+  CSurf_OnPanChangeEx(c, 0.25, false, false);
+  CSurf_OnPanChangeEx(c, 0.0, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(a), 0.5);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.75);
+}
+
+TEST_F(TrackChangeContractTest,
+       ALeadWhereTheLastMoveLeftItsLeadKeepsTheGroupedStarts) {
+  OpenProject([](FakeProject& project) {
+    BuildGroupOfThree(project);
+    project.GetTrack(1)->volume = 2.0;
+    project.GetTrack(2)->volume = 1.0;
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 3.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 3.0);
+
+  // C is where A was left, so B comes back from its start, not from the top.
+  CSurf_OnVolumeChangeEx(c, 1.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(a), 1.5);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 3.0);
+  CSurf_OnVolumeChangeEx(a, 3.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 3.0);
+}
+
+TEST_F(TrackChangeContractTest, ATrackAMoveLeftOutTakesANewGroupedStart) {
+  // A, B, and C are selected, at 1, 0.5, and 2.
+  OpenProject([](FakeProject& project) {
+    project.AddTrack("A")->selected = true;
+    FakeTrack* b = project.AddTrack("B");
+    b->selected = true;
+    b->volume = 0.5;
+    FakeTrack* c = project.AddTrack("C");
+    c->selected = true;
+    c->volume = 2.0;
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 8.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  SetTrackSelected(b, false);
+  EndEntryPoint();
+  CSurf_OnVolumeChangeEx(a, 2.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  SetTrackSelected(b, true);
+  EndEntryPoint();
+
+  // B starts again from the top, where A was at 2, and C keeps its start.
+  CSurf_OnVolumeChangeEx(a, 3.0, false, true);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume / 2.0);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 2.0);
+}
+
+TEST_F(TrackChangeContractTest, MovesThatDontReachATrackLeaveItsGroupedStart) {
+  // D is in no group, and E and F are in group 2.
+  OpenProject([](FakeProject& project) {
+    BuildGroupOfThree(project);
+    project.AddTrack("D");
+    JoinGroup(project.AddTrack("E"), 2);
+    JoinGroup(project.AddTrack("F"), 2);
+  });
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  CSurf_OnVolumeChangeEx(a, 8.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  CSurf_OnVolumeChangeEx(FindTrack("D"), 0.5, false, true);
+  CSurf_OnVolumeChangeEx(FindTrack("E"), 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(FindTrack("F")), 0.5);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+}
+
+TEST_F(TrackChangeContractTest, APanMoveLeavesTheVolumesGroupedStarts) {
+  OpenProject(BuildGroupOfThree);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  MediaTrack* c = FindTrack("C");
+  CSurf_OnVolumeChangeEx(a, 8.0, false, true);
+  CSurf_OnPanChangeEx(c, 0.5, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(a), 0.5);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+  EXPECT_DOUBLE_EQ(GetVolume(c), 0.25);
+}
+
 // The master, A, and B are selected, and C isn't. B's volume and pan are 0.5.
 void BuildSelection(FakeProject& project) {
   project.GetMasterTrack()->selected = true;
@@ -789,6 +1053,29 @@ TEST_F(TrackChangeContractTest, GangedVolumeAndPanMoveEverySelectedTrack) {
   // A track that isn't selected changes only itself.
   CSurf_OnVolumeChangeEx(c, 0.5, false, true);
   EXPECT_DOUBLE_EQ(GetVolume(a), 0.5);
+}
+
+TEST_F(TrackChangeContractTest, GangedVolumeAndPanMoveFromStartsAsGroupsDo) {
+  OpenProject(BuildSelection);
+  MediaTrack* a = FindTrack("A");
+  MediaTrack* b = FindTrack("B");
+  CSurf_OnVolumeChangeEx(a, 16.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume);
+  CSurf_OnVolumeChangeEx(a, 0.0, false, true);
+  EXPECT_TRUE(IsSilent(b));
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), 0.5);
+  CSurf_OnPanChangeEx(a, 0.75, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 1.0);
+  CSurf_OnPanChangeEx(a, 0.0, false, true);
+  EXPECT_DOUBLE_EQ(GetPan(b), 0.5);
+
+  // With another lead, A starts again from where B took it.
+  CSurf_OnVolumeChangeEx(a, 16.0, false, true);
+  CSurf_OnVolumeChangeEx(b, kMaxGroupedVolume / 8.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(a), 2.0);
+  CSurf_OnVolumeChangeEx(a, 1.0, false, true);
+  EXPECT_DOUBLE_EQ(GetVolume(b), kMaxGroupedVolume / 16.0);
 }
 
 TEST_F(TrackChangeContractTest, GangedTracksChangeTheirGroupsButNotTheReverse) {
@@ -1619,13 +1906,6 @@ TEST_F(UndoContractTest, AutomationModeActionsAddAPointIfAModeChanges) {
 // Positions are in the open project's tempo and rates, which are REAPER's
 // defaults in every project the tests open, and the one REAPER starts with.
 using TextContractTest = ContractTest;
-
-// Returns what mkvolstr() writes for `volume`.
-std::string GetVolumeText(double volume) {
-  std::array<char, 64> text = {};
-  mkvolstr(text.data(), volume);
-  return text.data();
-}
 
 // Returns what mkpanstr() writes for `pan`.
 std::string GetPanText(double pan) {
